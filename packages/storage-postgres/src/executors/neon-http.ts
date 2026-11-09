@@ -2,7 +2,7 @@ import { neon } from '@neondatabase/serverless'
 import type { PgExecutor } from '../executor'
 
 export function createNeonHttpExecutor(connectionString: string): PgExecutor {
-  const sql = neon(connectionString)
+  const sql = neon(connectionString, { disableWarningInBrowsers: true })
   return {
     async query<Row = Record<string, unknown>>(s: { text: string; params: unknown[] }) {
       return (await sql.query(s.text, s.params)) as Row[]

@@ -22,18 +22,17 @@ declare const process: { env: Record<string, string | undefined> }
 const url = process.env.GM_NEON_TEST_URL
 
 describe.skipIf(!url)('Neon conformance', () => {
-  beforeAll(async () => {
+  // Wiped before each driver's scenario so every driver runs the migrator itself.
+  async function resetSchema() {
     assertTestDatabase(url!)
     const exec = createNeonWsExecutor(url!)
     try {
-      await exec.batch([
-        { text: 'DROP SCHEMA public CASCADE', params: [] },
-        { text: 'CREATE SCHEMA public', params: [] },
-      ])
+      await exec.batch([{ text: 'DROP SCHEMA public CASCADE', params: [] }])
+      await exec.batch([{ text: 'CREATE SCHEMA public', params: [] }])
     } finally {
       await exec.close()
     }
-  })
+  }
 
   const drivers: [string, () => PgExecutor][] = [
     ['websocket', () => createNeonWsExecutor(url!)],
@@ -43,7 +42,8 @@ describe.skipIf(!url)('Neon conformance', () => {
   for (const [name, make] of drivers) {
     describe(name, () => {
       let exec: PgExecutor
-      beforeAll(() => {
+      beforeAll(async () => {
+        await resetSchema()
         exec = make()
       })
       afterAll(() => exec.close())

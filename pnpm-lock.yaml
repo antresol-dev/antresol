@@ -29,22 +29,22 @@ importers:
 
   packages/storage-postgres:
     dependencies:
-      '@electric-sql/pglite':
-        specifier: ^0.5.15
-        version: 0.5.15
       '@graymatter/core':
         specifier: workspace:*
         version: link:../core
       '@neondatabase/serverless':
         specifier: ^1.2.0
         version: 1.2.0
-      drizzle-orm:
-        specifier: ^0.45.4
-        version: 0.45.4(@electric-sql/pglite@0.5.15)(@neondatabase/serverless@1.2.0)
     devDependencies:
+      '@electric-sql/pglite':
+        specifier: ^0.5.15
+        version: 0.5.15
       drizzle-kit:
         specifier: ^0.31.11
         version: 0.31.11
+      drizzle-orm:
+        specifier: ^0.45.4
+        version: 0.45.4(@electric-sql/pglite@0.5.15)(@neondatabase/serverless@1.2.0)
 
 packages:
 

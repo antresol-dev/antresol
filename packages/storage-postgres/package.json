@@ -10,12 +10,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@electric-sql/pglite": "^0.5.15",
     "@graymatter/core": "workspace:*",
-    "@neondatabase/serverless": "^1.2.0",
-    "drizzle-orm": "^0.45.4"
+    "@neondatabase/serverless": "^1.2.0"
   },
   "devDependencies": {
-    "drizzle-kit": "^0.31.11"
+    "@electric-sql/pglite": "^0.5.15",
+    "drizzle-kit": "^0.31.11",
+    "drizzle-orm": "^0.45.4"
   }
 }

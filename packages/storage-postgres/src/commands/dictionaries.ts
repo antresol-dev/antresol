@@ -1,0 +1,56 @@
+import type { Actor, Command } from '@graymatter/core'
+import { sql, updateSet, type Statement } from '../sql'
+
+type DictionaryCommand = Extract<
+  Command,
+  {
+    type:
+      | 'tag.create' | 'tag.rename' | 'tag.delete'
+      | 'attribute.create' | 'attribute.update' | 'attribute.delete'
+      | 'unit.create' | 'unit.update' | 'unit.delete'
+  }
+>
+
+export function dictionaryStatements(c: DictionaryCommand, actor: Actor): Statement[] {
+  const by = actor.device
+  switch (c.type) {
+    case 'tag.create':
+      return [
+        sql`insert into tags (id, inventory_id, name, created_by, updated_by)
+            values (${c.id}, ${c.inventoryId}, ${c.name}, ${by}, ${by})`,
+      ]
+    case 'tag.rename':
+      return [
+        sql`update tags set ${updateSet({ name: c.name, updated_by: by })}, updated_at = now() where id = ${c.id}`,
+      ]
+    case 'tag.delete':
+      return [sql`delete from tags where id = ${c.id}`]
+    case 'attribute.create':
+      return [
+        sql`insert into attributes (id, inventory_id, name, kind, options, created_by, updated_by)
+            values (${c.id}, ${c.inventoryId}, ${c.name}, ${c.kind}, ${c.options}::text[], ${by}, ${by})`,
+      ]
+    case 'attribute.update':
+      return [
+        sql`update attributes
+            set ${updateSet({ name: c.name, options: c.options, updated_by: by })}, updated_at = now()
+            where id = ${c.id}`,
+      ]
+    case 'attribute.delete':
+      return [sql`delete from attributes where id = ${c.id}`]
+    case 'unit.create':
+      return [
+        sql`insert into custom_units (id, inventory_id, name, symbol, prefix_powers, created_by, updated_by)
+            values (${c.id}, ${c.inventoryId}, ${c.name}, ${c.symbol}, ${c.prefixPowers}::smallint[], ${by}, ${by})`,
+      ]
+    case 'unit.update':
+      return [
+        sql`update custom_units
+            set ${updateSet({ name: c.name, symbol: c.symbol, prefix_powers: c.prefixPowers, updated_by: by })},
+                updated_at = now()
+            where id = ${c.id}`,
+      ]
+    case 'unit.delete':
+      return [sql`delete from custom_units where id = ${c.id}`]
+  }
+}

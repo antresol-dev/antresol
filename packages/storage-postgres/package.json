@@ -12,6 +12,7 @@
   "dependencies": {
     "@electric-sql/pglite": "^0.5.15",
     "@graymatter/core": "workspace:*",
+    "@neondatabase/serverless": "^1.2.0",
     "drizzle-orm": "^0.45.4"
   },
   "devDependencies": {

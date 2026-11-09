@@ -9,7 +9,7 @@ const U = (n: string) => `00000000-0000-7000-8000-${n.padStart(12, '0')}`
 
 function snap(): InventorySnapshot {
   return makeSnapshot({
-    folders: [folder('F', 'F'), folder('G', 'G', 'F'), folder('AF', 'Archived', null, ARCH), folder('AC', 'Child', 'AF')],
+    folders: [folder('F', 'F'), folder('G', 'G', 'F'), folder('AF', 'Archived', null, ARCH), folder('AC', 'Child', 'AF', ARCH)],
     items: [
       item('i1', 'TL072', 'F'),
       item('i2', 'Old', null, ARCH),
@@ -133,7 +133,7 @@ describe('validateCommand', () => {
     expect(code({ type: 'deletePermanently', target: 'item', id: 'i1' })).toBe('not_archived')
     expect(code({ type: 'deletePermanently', target: 'item', id: 'i3' })).toBe('not_archived')
     expect(code({ type: 'deletePermanently', target: 'item', id: 'i2' })).toBeNull()
-    expect(code({ type: 'deletePermanently', target: 'folder', id: 'AF' })).toBeNull()
+    expect(code({ type: 'deletePermanently', target: 'folder', id: 'AF' })).toBe('not_archived')
     expect(code({ type: 'deletePermanently', target: 'item', id: 'zz' })).toBe('not_found')
   })
 
@@ -167,6 +167,77 @@ describe('validateCommand', () => {
     expect(code(c([4]))).toBe('invalid_option')
     expect(code(c([1.5]))).toBe('invalid_option')
     expect(code({ type: 'unit.update', id: 'u1', prefixPowers: [5] })).toBe('invalid_option')
+  })
+})
+
+describe('final review fixes', () => {
+  const photo = (id: string, itemId: string, variantId: string | null = null) => ({
+    id, itemId, variantId, provider: 'p', fileId: id, url: 'https://x', position: 0, createdAt: '', createdBy: '',
+  })
+  const withPhotos = () => ({ ...snap(), photos: [photo('p1', 'i1'), photo('p2', 'i1'), photo('p3', 'i1', 'v1')] })
+
+  it('dedupes tagIds, keeping order', () => {
+    const n = normalizeCommand(newItem({ tagIds: ['b', 'a', 'b', 'a'] })) as Extract<Command, { type: 'item.create' }>
+    expect(n.tagIds).toEqual(['b', 'a'])
+    expect(normalizeCommand({ type: 'item.update', id: 'i1', tagIds: ['t1', 't1'] })).toMatchObject({ tagIds: ['t1'] })
+    expect(normalizeCommand({ type: 'item.update', id: 'i1', name: 'x' })).not.toHaveProperty('tagIds')
+  })
+
+  it('archiving something already archived is refused', () => {
+    expect(code({ type: 'archive', target: 'item', id: 'i2', archiveId: 'n' })).toBe('archived')
+    expect(code({ type: 'archive', target: 'item', id: 'i3', archiveId: 'n' })).toBe('archived')
+    expect(code({ type: 'archive', target: 'folder', id: 'AC', archiveId: 'n' })).toBe('archived')
+    expect(code({ type: 'archive', target: 'variant', id: 'v2', archiveId: 'n' })).toBe('archived')
+    expect(code({ type: 'archive', target: 'item', id: 'i1', archiveId: 'n' })).toBeNull()
+  })
+
+  it('quantities and prices must fit the columns', () => {
+    expect(code(receive({ quantity: '100000000000000' }))).toBe('invalid_quantity')
+    expect(code(receive({ quantity: '99999999999999.999999' }))).toBeNull()
+    expect(code({ type: 'stock.set', movementId: 'm', itemId: 'i1', variantId: null, target: '100000000000000', note: null })).toBe('invalid_quantity')
+    expect(code(receive({ totalPrice: 1e20 }))).toBe('invalid_price')
+    expect(code(receive({ totalPrice: Number.MAX_SAFE_INTEGER }))).toBeNull()
+  })
+
+  it('an archived inventory accepts no writes except restore and deletePermanently', () => {
+    const s = snap()
+    s.inventory = { ...s.inventory, ...ARCH }
+    expect(code(receive(), s)).toBe('archived')
+    expect(code(newItem(), s)).toBe('archived')
+    expect(code({ type: 'tag.create', id: 'n', inventoryId: 'inv', name: 'x' }, s)).toBe('archived')
+    expect(code({ type: 'folder.move', id: 'G', parentId: null }, s)).toBe('archived')
+    expect(code({ type: 'photo.remove', id: 'p1' }, { ...s, photos: [photo('p1', 'i1')] })).toBe('archived')
+    expect(code({ type: 'restore', archiveId: 'arch' }, s)).toBeNull()
+    expect(code({ type: 'deletePermanently', target: 'inventory', id: 'inv' }, s)).toBeNull()
+  })
+
+  it('photo.reorder must list exactly the item photos', () => {
+    const s = withPhotos()
+    const reorder = (orderedIds: string[]): Command => ({ type: 'photo.reorder', itemId: 'i1', orderedIds })
+    expect(code(reorder(['p2', 'p3', 'p1']), s)).toBeNull()
+    expect(code(reorder(['p1', 'p2']), s)).toBe('invalid_option')
+    expect(code(reorder(['p1', 'p1', 'p2']), s)).toBe('invalid_option')
+    expect(code(reorder(['p1', 'p2', 'p3', 'zz']), s)).toBe('not_found')
+  })
+
+  it('a variant may have only one photo', () => {
+    const s = withPhotos()
+    const add = (variantId: string | null): Command => ({ type: 'photo.add', id: 'n', itemId: 'i1', variantId, provider: 'p', fileId: 'f', url: 'https://x' })
+    expect(code(add('v1'), s)).toBe('invalid_option')
+    expect(code(add(null), s)).toBeNull()
+    expect(code(add('v1'), snap())).toBeNull()
+  })
+
+  it('deletePermanently of a folder refuses when anything below is still active', () => {
+    const s = snap()
+    s.items = s.items.map((i) => (i.id === 'i3' ? { ...i, ...ARCH } : i)) // archived properly with its folder
+    expect(code({ type: 'deletePermanently', target: 'folder', id: 'AF' }, s)).toBeNull()
+    s.items = [...s.items, item('i5', 'Stale', 'AC')]
+    expect(code({ type: 'deletePermanently', target: 'folder', id: 'AF' }, s)).toBe('not_archived')
+    s.items = s.items.map((i) => (i.id === 'i5' ? { ...i, ...ARCH } : i))
+    expect(code({ type: 'deletePermanently', target: 'folder', id: 'AF' }, s)).toBeNull()
+    s.folders = [...s.folders, folder('AG', 'Stale folder', 'AC')]
+    expect(code({ type: 'deletePermanently', target: 'folder', id: 'AF' }, s)).toBe('not_archived')
   })
 })
 

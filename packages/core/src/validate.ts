@@ -61,6 +61,9 @@ export function normalizeCommand(c: Command): Command {
   if (c.type === 'item.create' && c.initialReceipt) {
     out.initialReceipt = { ...c.initialReceipt, quantity: canon(c.initialReceipt.quantity) }
   }
+  if (c.type === 'item.create' || c.type === 'item.update') {
+    set('tagIds', c.tagIds && [...new Set(c.tagIds)])
+  }
   if (c.type === 'variant.createMany') {
     out.variants = c.variants.map((v) => ({ ...v, name: v.name.trim() }))
   }
@@ -97,8 +100,13 @@ function checkName(name: string | undefined) {
   if (t.length > MAX_NAME) fail('name_too_long')
 }
 
+/** numeric(20,6) holds absolute values below 10^14. */
+const QUANTITY_LIMIT = '100000000000000'
+
 function parseQ(q: Quantity): Quantity {
-  return parseQuantity(q) ?? fail('invalid_quantity')
+  const canon = parseQuantity(q) ?? fail('invalid_quantity')
+  if (cmpQ(canon.startsWith('-') ? canon.slice(1) : canon, QUANTITY_LIMIT) >= 0) fail('invalid_quantity')
+  return canon
 }
 /** Returns the canonical quantity; throws invalid_quantity if unparseable or not > 0. */
 function checkPositive(q: Quantity): Quantity {
@@ -107,7 +115,7 @@ function checkPositive(q: Quantity): Quantity {
   return canon
 }
 function checkPrice(p: number | null) {
-  if (p !== null && (!Number.isInteger(p) || p < 0)) fail('invalid_price')
+  if (p !== null && (!Number.isSafeInteger(p) || p < 0)) fail('invalid_price')
 }
 function checkUrl(u: string | null) {
   if (u !== null && !/^https?:\/\//i.test(u)) fail('invalid_url')
@@ -185,6 +193,8 @@ function check(c: Command, s: Snap | null): void {
     return
   }
   if (s === null) return fail('not_found')
+  // An archived inventory is read-only; only restore and permanent deletion may touch it.
+  if (c.type !== 'restore' && c.type !== 'deletePermanently' && s.inventory.archivedAt !== null) fail('archived')
 
   switch (c.type) {
     case 'inventory.update':
@@ -324,6 +334,7 @@ function check(c: Command, s: Snap | null): void {
       return
     case 'photo.add':
       activeBucket(s, c.itemId, c.variantId)
+      if (c.variantId !== null && s.photos.some((p) => p.variantId === c.variantId)) fail('invalid_option')
       return
     case 'photo.remove':
       if (!s.photos.some((p) => p.id === c.id)) fail('not_found')
@@ -333,9 +344,14 @@ function check(c: Command, s: Snap | null): void {
       for (const id of c.orderedIds) {
         if (!s.photos.some((p) => p.id === id && p.itemId === c.itemId)) fail('not_found')
       }
+      {
+        const own = s.photos.filter((p) => p.itemId === c.itemId).length
+        if (new Set(c.orderedIds).size !== c.orderedIds.length || c.orderedIds.length !== own) fail('invalid_option')
+      }
       return
     case 'archive':
       targetOf(s, c.target, c.id)
+      if (isArchived(s, c.target, c.id)) fail('archived')
       return
     case 'restore': {
       const id = c.archiveId
@@ -349,8 +365,34 @@ function check(c: Command, s: Snap | null): void {
     }
     case 'deletePermanently':
       if (targetOf(s, c.target, c.id).archivedAt === null) fail('not_archived')
+      if (c.target === 'folder' && hasActiveInSubtree(s, c.id)) fail('not_archived')
       return
   }
+}
+
+function isArchived(s: Snap, target: 'inventory' | 'folder' | 'item' | 'variant', id: Id): boolean {
+  if (target === 'inventory') return s.inventory.archivedAt !== null
+  if (target === 'folder') return folderArchived(s, id)
+  if (target === 'item') return itemArchived(s, needItem(s, id))
+  return variantArchived(s, needVariant(s, id))
+}
+
+/** True if the folder's subtree holds a folder or an item that is not itself archived. */
+function hasActiveInSubtree(s: Snap, folderId: Id): boolean {
+  const ids = new Set<Id>([folderId])
+  for (let grew = true; grew; ) {
+    grew = false
+    for (const f of s.folders) {
+      if (f.parentId !== null && ids.has(f.parentId) && !ids.has(f.id)) {
+        ids.add(f.id)
+        grew = true
+      }
+    }
+  }
+  return (
+    s.folders.some((f) => ids.has(f.id) && f.archivedAt === null) ||
+    s.items.some((i) => i.folderId !== null && ids.has(i.folderId) && i.archivedAt === null)
+  )
 }
 
 function targetOf(s: Snap, target: 'inventory' | 'folder' | 'item' | 'variant', id: Id): { archivedAt: string | null } {

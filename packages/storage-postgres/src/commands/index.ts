@@ -1,5 +1,6 @@
 import type { Actor, Command } from '@graymatter/core'
 import type { Statement } from '../sql'
+import { archiveStatements } from './archive'
 import { dictionaryStatements } from './dictionaries'
 import { folderStatements } from './folders'
 import { inventoryStatements } from './inventory'
@@ -8,7 +9,7 @@ import { photoStatements } from './photos'
 import { stockStatements } from './stock'
 import { variantStatements } from './variants'
 
-/** Translate a command into SQL statements that run as one atomic batch. Later tasks add their cases. */
+/** Translate a command into SQL statements that run as one atomic batch. */
 export function toStatements(c: Command, actor: Actor): Statement[] {
   switch (c.type) {
     case 'inventory.create':
@@ -47,7 +48,9 @@ export function toStatements(c: Command, actor: Actor): Statement[] {
     case 'stock.set':
     case 'stock.transfer':
       return stockStatements(c, actor)
-    default:
-      throw new Error(`not implemented: ${c.type}`)
+    case 'archive':
+    case 'restore':
+    case 'deletePermanently':
+      return archiveStatements(c, actor)
   }
 }

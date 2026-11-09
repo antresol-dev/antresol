@@ -17,10 +17,20 @@ export function folderStatements(c: FolderCommand, actor: Actor): Statement[] {
             where id = ${c.id}`,
       ]
     case 'folder.move':
+      // Guarded against cycles created by stale snapshots: does nothing if the new parent is the
+      // folder itself or one of its descendants.
       return [
         sql`update folders
             set ${updateSet({ parent_id: c.parentId, updated_by: actor.device })}, updated_at = now()
-            where id = ${c.id}`,
+            where id = ${c.id}
+              and not exists (
+                with recursive sub(id) as (
+                  select id from folders where id = ${c.id}
+                  union
+                  select f.id from folders f join sub on f.parent_id = sub.id
+                )
+                select 1 from sub where id = ${c.parentId}
+              )`,
       ]
   }
 }

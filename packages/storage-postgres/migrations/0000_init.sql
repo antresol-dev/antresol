@@ -168,5 +168,8 @@ CREATE INDEX "items_folder_id_idx" ON "items" USING btree ("folder_id");--> stat
 CREATE INDEX "items_archive_id_idx" ON "items" USING btree ("archive_id");--> statement-breakpoint
 CREATE INDEX "movements_inventory_id_idx" ON "movements" USING btree ("inventory_id");--> statement-breakpoint
 CREATE INDEX "movements_item_variant_idx" ON "movements" USING btree ("item_id","variant_id");--> statement-breakpoint
+CREATE INDEX "movements_variant_id_idx" ON "movements" USING btree ("variant_id");--> statement-breakpoint
+CREATE INDEX "photos_item_id_idx" ON "photos" USING btree ("item_id");--> statement-breakpoint
 CREATE INDEX "tags_inventory_id_idx" ON "tags" USING btree ("inventory_id");--> statement-breakpoint
-CREATE INDEX "variants_archive_id_idx" ON "variants" USING btree ("archive_id");
+CREATE INDEX "variants_archive_id_idx" ON "variants" USING btree ("archive_id");--> statement-breakpoint
+CREATE INDEX "variants_item_id_idx" ON "variants" USING btree ("item_id");

@@ -159,7 +159,7 @@ export const variants = pgTable(
     ...audit(),
     ...archive(),
   },
-  (t) => [index('variants_archive_id_idx').on(t.archiveId)],
+  (t) => [index('variants_archive_id_idx').on(t.archiveId), index('variants_item_id_idx').on(t.itemId)],
 )
 
 export const itemAttributes = pgTable(
@@ -205,6 +205,7 @@ export const photos = pgTable(
     createdAt: createdAt(),
     createdBy: createdBy(),
   },
+  (t) => [index('photos_item_id_idx').on(t.itemId)],
 )
 
 export const movements = pgTable(
@@ -232,5 +233,6 @@ export const movements = pgTable(
     check('movements_kind_check', sql`${t.kind} in ('receipt', 'usage', 'return', 'adjustment', 'transfer')`),
     index('movements_inventory_id_idx').on(t.inventoryId),
     index('movements_item_variant_idx').on(t.itemId, t.variantId),
+    index('movements_variant_id_idx').on(t.variantId),
   ],
 )

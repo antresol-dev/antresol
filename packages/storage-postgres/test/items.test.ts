@@ -120,3 +120,15 @@ describe('attribute values', () => {
     expect(snap.variantAttributeValues).toEqual([])
   })
 })
+
+describe('duplicate tag ids', () => {
+  it('are stored once on create and update', async () => {
+    const { storage, inv, t1, t2 } = await setup()
+    const id = newId()
+    await storage.apply(createItem(inv, id, { tagIds: [t1, t1] }), TEST_ACTOR)
+    const tags = async () => (await storage.loadInventory(inv)).items.find((i) => i.id === id)!.tagIds
+    expect(await tags()).toEqual([t1])
+    await storage.apply({ type: 'item.update', id, tagIds: [t2, t2, t1, t2] }, TEST_ACTOR)
+    expect([...(await tags())].sort()).toEqual([t1, t2].sort())
+  })
+})

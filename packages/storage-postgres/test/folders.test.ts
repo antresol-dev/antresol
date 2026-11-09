@@ -24,4 +24,18 @@ describe('folders', () => {
     snap = await storage.loadInventory(inv)
     expect(snap.folders.find((f) => f.id === b)).toMatchObject({ name: 'ICs', parentId: null, description: null, updatedBy: 'Other' })
   })
+
+  it('ignores a move into itself or into a descendant (crossing moves from stale snapshots)', async () => {
+    const { storage, inv } = await setup()
+    const [f, g] = [newId(), newId()]
+    for (const id of [f, g]) {
+      await storage.apply({ type: 'folder.create', id, inventoryId: inv, parentId: null, name: id, description: null }, TEST_ACTOR)
+    }
+    await storage.apply({ type: 'folder.move', id: f, parentId: g }, TEST_ACTOR)
+    await storage.apply({ type: 'folder.move', id: g, parentId: f }, TEST_ACTOR) // would close a cycle
+    await storage.apply({ type: 'folder.move', id: f, parentId: f }, TEST_ACTOR)
+    const folders = (await storage.loadInventory(inv)).folders
+    expect(folders.find((x) => x.id === g)!.parentId).toBeNull()
+    expect(folders.find((x) => x.id === f)!.parentId).toBe(g)
+  })
 })

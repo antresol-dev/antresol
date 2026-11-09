@@ -65,12 +65,14 @@ export function archiveStatements(c: ArchiveCommand, actor: Actor): Statement[] 
     }
     case 'deletePermanently': {
       if (c.target === 'folder') {
+        // Only archived rows are removed. An active item or folder left in the subtree makes the
+        // folder delete violate its NO ACTION foreign key, which rolls the whole batch back.
         const guard = sql`exists (select 1 from folders where id = ${c.id} and archived_at is not null)`
         return [
           sql`with recursive ${subtree(c.id)}
-              delete from items where folder_id in (select id from subtree) and ${guard}`,
+              delete from items where folder_id in (select id from subtree) and archived_at is not null and ${guard}`,
           sql`with recursive ${subtree(c.id)}
-              delete from folders where id in (select id from subtree) and ${guard}`,
+              delete from folders where id in (select id from subtree) and archived_at is not null and ${guard}`,
         ]
       }
       return [

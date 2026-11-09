@@ -1,4 +1,4 @@
-import { newId, type Command, type InventoryStorage } from '@graymatter/core'
+import { newId, StorageError, type Command, type InventoryStorage } from '@graymatter/core'
 import { describe, expect, it } from 'vitest'
 import type { PgExecutor } from '../src/executor'
 import { openPostgresStorage } from '../src/storage'
@@ -88,6 +88,20 @@ describe('archive and restore', () => {
     expect(s.folders.get(F)).toEqual({ archiveId: null, archived: false })
     expect(s.folders.get(G)).toEqual({ archiveId: A, archived: true })
     for (const id of [i1, i2]) expect(s.items.get(id)).toEqual({ archiveId: A, archived: true })
+  })
+
+  it('restores the whole archived ancestor chain of an item restored on its own', async () => {
+    const c = await setup()
+    const F = await folder(c, null, 'F')
+    const G = await folder(c, F, 'G')
+    const i = await item(c, G, 'i')
+    const [A, B] = [newId(), newId()]
+    await run(c, { type: 'archive', target: 'item', id: i, archiveId: B })
+    await run(c, { type: 'archive', target: 'folder', id: F, archiveId: A })
+    await run(c, { type: 'restore', archiveId: B })
+    const s = await state(c)
+    expect(s.items.get(i)).toEqual({ archiveId: null, archived: false })
+    for (const id of [F, G]) expect(s.folders.get(id)).toEqual({ archiveId: null, archived: false })
   })
 
   it('archives and restores a variant, and its archived parent item', async () => {
@@ -182,6 +196,35 @@ describe('deletePermanently', () => {
     expect(s.items.map((i) => i.id)).toEqual([otherItem])
     expect(ids).toHaveLength(3)
     expect(await count(c, 'movements')).toBe(0)
+  })
+
+  describe('folder with rows that were never archived (stale writes)', () => {
+    async function expectRefused(c: Ctx, F: string) {
+      const before = [await count(c, 'folders'), await count(c, 'items'), await count(c, 'movements')]
+      const err = await run(c, { type: 'deletePermanently', target: 'folder', id: F }).catch((e: unknown) => e)
+      expect(err).toBeInstanceOf(StorageError)
+      expect((err as StorageError).code).toBe('failed')
+      expect([await count(c, 'folders'), await count(c, 'items'), await count(c, 'movements')]).toEqual(before)
+    }
+
+    it('refuses and removes nothing when an active item sits in the archived folder', async () => {
+      const c = await setup()
+      const F = await folder(c, null, 'F')
+      const archivedItem = await item(c, F, 'a', '1')
+      await run(c, { type: 'archive', target: 'folder', id: F, archiveId: newId() })
+      await item(c, F, 'stale', '2') // created from a stale snapshot, after the archive
+      await expectRefused(c, F)
+      expect((await state(c)).items.get(archivedItem)).toMatchObject({ archived: true })
+    })
+
+    it('refuses and removes nothing when an active subfolder sits in the archived folder', async () => {
+      const c = await setup()
+      const F = await folder(c, null, 'F')
+      await item(c, F, 'a', '1')
+      await run(c, { type: 'archive', target: 'folder', id: F, archiveId: newId() })
+      await folder(c, F, 'stale')
+      await expectRefused(c, F)
+    })
   })
 
   it('deletes an archived inventory with everything in it', async () => {

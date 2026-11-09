@@ -7,7 +7,7 @@ type ItemCommand = Extract<
 >
 
 function insertTags(itemId: string, tagIds: string[]): Statement {
-  return sql`insert into item_tags (item_id, tag_id) select ${itemId}, t from unnest(${tagIds}::uuid[]) as t`
+  return sql`insert into item_tags (item_id, tag_id) select distinct ${itemId}::uuid, t from unnest(${tagIds}::uuid[]) as t`
 }
 
 export function itemStatements(c: ItemCommand, actor: Actor): Statement[] {

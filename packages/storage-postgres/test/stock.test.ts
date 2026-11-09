@@ -95,3 +95,11 @@ describe('stock journal', () => {
     expect(line.lastPriced).toMatchObject({ totalPrice: 800, quantity: '4' })
   })
 })
+
+describe('un-normalized input', () => {
+  it('canonicalizes a comma quantity instead of throwing', async () => {
+    const { storage, inv, item } = await setup()
+    await storage.apply(receive(item, '1,5', null), TEST_ACTOR)
+    expect((await bucket(storage, inv, null))!.quantity).toBe('1.5')
+  })
+})

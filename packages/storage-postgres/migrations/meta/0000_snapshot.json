@@ -1,5 +1,5 @@
 {
-  "id": "b87de816-5a5a-43ed-80f6-17e9058d7330",
+  "id": "a19b3d5b-ac8a-42c4-bb64-ee472f40a675",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -872,6 +872,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "movements_variant_id_idx": {
+          "name": "movements_variant_id_idx",
+          "columns": [
+            {
+              "expression": "variant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -986,7 +1001,23 @@
           "notNull": true
         }
       },
-      "indexes": {},
+      "indexes": {
+        "photos_item_id_idx": {
+          "name": "photos_item_id_idx",
+          "columns": [
+            {
+              "expression": "item_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "photos_item_id_items_id_fk": {
           "name": "photos_item_id_items_id_fk",
@@ -1253,6 +1284,21 @@
           "columns": [
             {
               "expression": "archive_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "variants_item_id_idx": {
+          "name": "variants_item_id_idx",
+          "columns": [
+            {
+              "expression": "item_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

@@ -5,6 +5,7 @@ import { folderStatements } from './folders'
 import { inventoryStatements } from './inventory'
 import { itemStatements } from './items'
 import { photoStatements } from './photos'
+import { stockStatements } from './stock'
 import { variantStatements } from './variants'
 
 /** Translate a command into SQL statements that run as one atomic batch. Later tasks add their cases. */
@@ -40,6 +41,12 @@ export function toStatements(c: Command, actor: Actor): Statement[] {
     case 'photo.remove':
     case 'photo.reorder':
       return photoStatements(c, actor)
+    case 'stock.receive':
+    case 'stock.use':
+    case 'stock.return':
+    case 'stock.set':
+    case 'stock.transfer':
+      return stockStatements(c, actor)
     default:
       throw new Error(`not implemented: ${c.type}`)
   }

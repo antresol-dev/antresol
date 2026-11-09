@@ -48,15 +48,36 @@ describe('search', () => {
   it('excludes items in archived folders and archived variants', () => {
     const s = makeSnapshot({
       folders: [folder('f1', 'F', null, { archivedAt: 'x', archiveId: 'a' }), folder('f2', 'G', 'f1')],
-      items: [item('i1', 'Sprocket', 'f2'), item('i2', 'Gadget')],
+      items: [item('i1', 'Widget', 'f2'), item('i2', 'Gadget')],
       variants: [variant('v1', 'i2', 'Blue', { archivedAt: 'x', archiveId: 'a' })],
     })
     const r = createSearch(s)
-    expect(r.search('sprocket')).toEqual([])
+    expect(r.search('widget')).toEqual([])
+    expect(r.search('gadget').map((h) => h.itemId)).not.toContain('i1')
     expect(r.search('blue')).toEqual([])
     expect(r.search('gadget')).toEqual([{ itemId: 'i2', variantId: null }])
   })
   it('respects limit', () => {
     expect(search('tl072', 1)).toHaveLength(1)
+  })
+})
+
+describe('ranking', () => {
+  const s = makeSnapshot({
+    items: ['TL072', 'TL074', 'TL071', 'TL082', 'TL072CP', 'TLC272', 'LM13700', 'LM386', 'Резистор'].map((n) => item(n, n)),
+    variants: [variant('v1k', 'Резистор', '1k'), variant('v10k', 'Резистор', '10k')],
+  })
+  const r = createSearch(s)
+  it.each(['tl072', 'TL-072'])('exact then prefix then fuzzy for %s', (q) => {
+    const ids = r.search(q).map((h) => h.itemId)
+    expect(ids.slice(0, 2)).toEqual(['TL072', 'TL072CP'])
+    expect(ids.slice(2).sort()).toEqual(['TL071', 'TL074', 'TL082', 'TLC272'].filter((x) => ids.includes(x)).sort())
+  })
+  it('keeps one-edit typos but not two-edit neighbours', () => {
+    expect(r.search('lm13600').map((h) => h.itemId)).toContain('LM13700')
+    expect(r.search('lm358').map((h) => h.itemId)).not.toContain('LM386')
+  })
+  it('reports the matched variant when the item also matches', () => {
+    expect(r.search('резистор 10k')[0]).toEqual({ itemId: 'Резистор', variantId: 'v10k' })
   })
 })

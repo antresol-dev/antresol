@@ -21,7 +21,15 @@ const DEFAULT_LIMIT = 50
 /** Lowercase, keep only letters and digits: "TL-072" -> "tl072". */
 const compact = (s: string): string => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')
 
-const SEARCH_OPTIONS = { prefix: true, fuzzy: 0.3 } as const
+/** Ranking tiers: exact beats prefix beats fuzzy; score only orders hits within a tier. */
+const TIERS = [
+  { prefix: false, fuzzy: false },
+  { prefix: true, fuzzy: false },
+  // Part numbers one or two characters apart are different parts: at most one edit, long terms only.
+  { prefix: false, fuzzy: (term: string) => (term.length >= 5 ? 1 : false) },
+] as const
+/** A match on the whole compact query is stronger than a match on one raw token. */
+const COMPACT_BOOST = 2
 
 export function createSearch(s: InventorySnapshot): { search(query: string, limit?: number): SearchHit[] } {
   const archivedFolders = new Set(s.folders.filter((f) => f.archivedAt !== null).map((f) => f.id))
@@ -77,7 +85,7 @@ export function createSearch(s: InventorySnapshot): { search(query: string, limi
   const index = new MiniSearch<Doc>({
     fields: ['name', 'compact', 'extra'],
     storeFields: ['itemId', 'variantId'],
-    searchOptions: { ...SEARCH_OPTIONS, boost: { name: 2 } },
+    searchOptions: { boost: { name: 2 } },
   })
   index.addAll(docs)
 
@@ -85,28 +93,35 @@ export function createSearch(s: InventorySnapshot): { search(query: string, limi
     search(query, limit = DEFAULT_LIMIT) {
       if (query.trim() === '' || limit <= 0) return []
       const compactQuery = compact(query)
-      const scored = new Map<string, { score: number; itemId: Id; variantId: Id | null }>()
-      const collect = (q: string, fields?: string[]) => {
+      type Rank = { tier: number; score: number }
+      const better = (a: Rank, b: Rank) => a.tier < b.tier || (a.tier === b.tier && a.score > b.score)
+      const ranks = new Map<string, Rank & { itemId: Id; variantId: Id | null }>()
+      const collect = (q: string, fields: string[], boost: number) => {
         if (q === '') return
-        for (const r of index.search(q, fields ? { fields } : {})) {
-          const prev = scored.get(r.id)
-          if (!prev || r.score > prev.score) {
-            scored.set(r.id, { score: r.score, itemId: r.itemId as Id, variantId: r.variantId as Id | null })
+        TIERS.forEach((opts, tier) => {
+          for (const r of index.search(q, { fields, ...opts })) {
+            const cand = { tier, score: r.score * boost }
+            const prev = ranks.get(r.id)
+            if (!prev || better(cand, prev)) {
+              ranks.set(r.id, { ...cand, itemId: r.itemId as Id, variantId: r.variantId as Id | null })
+            }
           }
-        }
+        })
       }
-      collect(query, ['name', 'extra'])
-      collect(compactQuery, ['compact'])
+      collect(query, ['name', 'extra'], 1)
+      collect(compactQuery, ['compact'], COMPACT_BOOST)
 
-      const best = new Map<Id, { score: number; variantId: Id | null }>()
-      for (const r of scored.values()) {
-        const prev = best.get(r.itemId)
-        if (!prev || r.score > prev.score) best.set(r.itemId, { score: r.score, variantId: r.variantId })
+      const byItem = new Map<Id, { rank: Rank; variant: (Rank & { id: Id }) | null }>()
+      for (const r of ranks.values()) {
+        const e = byItem.get(r.itemId) ?? { rank: r, variant: null }
+        if (better(r, e.rank)) e.rank = r
+        if (r.variantId !== null && (!e.variant || better(r, e.variant))) e.variant = { ...r, id: r.variantId }
+        byItem.set(r.itemId, e)
       }
-      return [...best.entries()]
-        .sort((a, b) => b[1].score - a[1].score)
+      return [...byItem.entries()]
+        .sort((a, b) => (better(a[1].rank, b[1].rank) ? -1 : better(b[1].rank, a[1].rank) ? 1 : 0))
         .slice(0, limit)
-        .map(([itemId, b]) => ({ itemId, variantId: b.variantId }))
+        .map(([itemId, e]) => ({ itemId, variantId: e.variant?.id ?? null }))
     },
   }
 }

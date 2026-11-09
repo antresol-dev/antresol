@@ -18,7 +18,11 @@ importers:
         specifier: ^5.1.0
         version: 5.1.0(vite@8.3.6)
 
-  packages/core: {}
+  packages/core:
+    dependencies:
+      uuidv7:
+        specifier: ^1.2.1
+        version: 1.2.1
 
   packages/storage-postgres:
     dependencies:
@@ -445,6 +449,10 @@ packages:
     engines: {node: '>=16.20.0'}
     hasBin: true
 
+  uuidv7@1.2.1:
+    resolution: {integrity: sha512-4kPkK3/XTQW9Hbm4CaqfICn+kY9LJtDVEOfgsRRra/+n2Ofg4NqzRFceAkxvQ/Ud/6BpHOPzj8cirqM7TzTN5Q==}
+    hasBin: true
+
   vite@8.3.6:
     resolution: {integrity: sha512-UI7dK29NnS54Fk+mmo7o+jI6U8Fp7hDl+X5Q1k45WH+d4dSlbLVUETGQ+hfkNgvLQGyoElPj837nZyv4MBc0VA==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -818,6 +826,8 @@ snapshots:
       '@typescript/typescript-sunos-x64': 7.0.2
       '@typescript/typescript-win32-arm64': 7.0.2
       '@typescript/typescript-win32-x64': 7.0.2
+
+  uuidv7@1.2.1: {}
 
   vite@8.3.6:
     dependencies:

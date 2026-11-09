@@ -1,16 +1,9 @@
 import type { Id } from './ids'
+import type { CustomUnit } from './model'
 import { fromMicro, parseQuantity, toMicro, type Quantity } from './quantity'
 
 export interface UnitDef {
   key: string
-  name: string
-  symbol: string
-  prefixPowers: number[]
-}
-
-/** Minimal shape until Task 4 defines CustomUnit in model.ts. */
-interface CustomUnit {
-  id: Id
   name: string
   symbol: string
   prefixPowers: number[]

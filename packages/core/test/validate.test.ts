@@ -170,6 +170,33 @@ describe('validateCommand', () => {
   })
 })
 
+describe('quantity canonicalization', () => {
+  const use = (q: string): Command => ({ type: 'stock.use', movementId: 'm', itemId: 'i1', variantId: 'v1', quantity: q, note: null })
+  const transfer = (q: string): Command => ({
+    type: 'stock.transfer', transferId: 't', outMovementId: 'o', inMovementId: 'n', itemId: 'i1', fromVariantId: 'v1', toVariantId: null, quantity: q,
+  })
+  const raw = (c: Command) => validateCommand(c, snap())?.code ?? null
+
+  it('normalizeCommand canonicalizes quantities', () => {
+    expect(normalizeCommand(use(' 1,5 '))).toMatchObject({ quantity: '1.5' })
+    expect(normalizeCommand({ type: 'stock.set', movementId: 'm', itemId: 'i1', variantId: null, target: '2,50', note: null })).toMatchObject({ target: '2.5' })
+    expect(
+      normalizeCommand(newItem({ initialReceipt: { movementId: 'm', quantity: '1,5', totalPrice: null, sourceUrl: null } })),
+    ).toMatchObject({ initialReceipt: { quantity: '1.5' } })
+    expect(normalizeCommand(use('abc'))).toMatchObject({ quantity: 'abc' })
+  })
+  it('validateCommand never throws on un-normalized quantities', () => {
+    expect(raw(use('1,5'))).toBeNull()
+    expect(raw(use('2,5'))).toBe('insufficient_stock')
+    expect(raw(transfer('1,5'))).toBeNull()
+    expect(raw(transfer('2,5'))).toBe('insufficient_stock')
+    for (const q of ['+5', 'abc', '5.']) {
+      expect(raw(use(q))).toBe('invalid_quantity')
+      expect(raw(transfer(q))).toBe('invalid_quantity')
+    }
+  })
+})
+
 describe('splitVariantNames', () => {
   it('splits, trims and dedupes case-insensitively', () => {
     expect(splitVariantNames('1k, 10k,\n100k, 10K')).toEqual(['1k', '10k', '100k'])

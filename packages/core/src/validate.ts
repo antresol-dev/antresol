@@ -55,6 +55,12 @@ export function normalizeCommand(c: Command): Command {
   if (c.type === 'attribute.create' || c.type === 'attribute.update') {
     set('options', c.options?.map((o) => o.trim()))
   }
+  const canon = (q: Quantity) => parseQuantity(q) ?? q
+  if ('quantity' in c && typeof c.quantity === 'string') out.quantity = canon(c.quantity)
+  if (c.type === 'stock.set') out.target = canon(c.target)
+  if (c.type === 'item.create' && c.initialReceipt) {
+    out.initialReceipt = { ...c.initialReceipt, quantity: canon(c.initialReceipt.quantity) }
+  }
   if (c.type === 'variant.createMany') {
     out.variants = c.variants.map((v) => ({ ...v, name: v.name.trim() }))
   }
@@ -94,8 +100,11 @@ function checkName(name: string | undefined) {
 function parseQ(q: Quantity): Quantity {
   return parseQuantity(q) ?? fail('invalid_quantity')
 }
-function checkPositive(q: Quantity) {
-  if (cmpQ(parseQ(q), '0') <= 0) fail('invalid_quantity')
+/** Returns the canonical quantity; throws invalid_quantity if unparseable or not > 0. */
+function checkPositive(q: Quantity): Quantity {
+  const canon = parseQ(q)
+  if (cmpQ(canon, '0') <= 0) fail('invalid_quantity')
+  return canon
 }
 function checkPrice(p: number | null) {
   if (p !== null && (!Number.isInteger(p) || p < 0)) fail('invalid_price')
@@ -295,9 +304,11 @@ function check(c: Command, s: Snap | null): void {
     case 'stock.use':
     case 'stock.return':
       activeBucket(s, c.itemId, c.variantId)
-      checkPositive(c.quantity)
-      if (c.type === 'stock.use' && cmpQ(c.quantity, bucketStock(s, c.itemId, c.variantId).quantity) > 0) {
-        fail('insufficient_stock')
+      {
+        const q = checkPositive(c.quantity)
+        if (c.type === 'stock.use' && cmpQ(q, bucketStock(s, c.itemId, c.variantId).quantity) > 0) {
+          fail('insufficient_stock')
+        }
       }
       return
     case 'stock.set':
@@ -307,8 +318,9 @@ function check(c: Command, s: Snap | null): void {
     case 'stock.transfer':
       activeBucket(s, c.itemId, c.fromVariantId)
       activeBucket(s, c.itemId, c.toVariantId)
-      checkPositive(c.quantity)
-      if (cmpQ(c.quantity, bucketStock(s, c.itemId, c.fromVariantId).quantity) > 0) fail('insufficient_stock')
+      if (cmpQ(checkPositive(c.quantity), bucketStock(s, c.itemId, c.fromVariantId).quantity) > 0) {
+        fail('insufficient_stock')
+      }
       return
     case 'photo.add':
       activeBucket(s, c.itemId, c.variantId)

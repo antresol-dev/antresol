@@ -1,1 +1,4 @@
-export {}
+export { sql, updateSet, type Statement } from './sql'
+export type { PgExecutor } from './executor'
+export { createPgliteExecutor } from './executors/pglite'
+export { APP_SCHEMA_VERSION, ensureSchema } from './migrator'

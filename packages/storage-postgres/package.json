@@ -10,6 +10,11 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@graymatter/core": "workspace:*"
+    "@electric-sql/pglite": "^0.5.15",
+    "@graymatter/core": "workspace:*",
+    "drizzle-orm": "^0.45.4"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^0.31.11"
   }
 }

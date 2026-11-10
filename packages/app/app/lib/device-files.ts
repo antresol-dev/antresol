@@ -1,4 +1,4 @@
-import { newId, type FileStore, type StoredFile } from '@graymatter/core'
+import { FileError, newId, type FileStore, type StoredFile } from '@graymatter/core'
 import { createStore, get, set, type UseStore } from 'idb-keyval'
 
 const PROVIDER = 'device'
@@ -18,7 +18,11 @@ export function createDeviceFileStore(): FileStore {
     provider: PROVIDER,
     async upload(file: Blob): Promise<StoredFile> {
       const fileId = newId()
-      await set(fileId, file, files())
+      try {
+        await set(fileId, file, files())
+      } catch {
+        throw new FileError('unavailable')
+      }
       return { provider: PROVIDER, fileId, url: `${PREFIX}${fileId}` }
     },
   }
@@ -30,10 +34,11 @@ export function resolveDeviceUrl(url: string): Promise<string | null> {
   const cached = cache.get(id)
   if (cached) return cached
   const gen = generation
-  const pending = get<Blob>(id, files()).then((blob) => {
+  // Deferred, so a missing IndexedDB (sync throw) becomes a rejection handled below.
+  const pending = Promise.resolve().then(() => get<Blob>(id, files())).then((blob) => {
     if (!blob) {
       // Do not cache a miss: the photo may be stored later.
-      if (cache.get(id) === pending) cache.delete(id)
+      if (cache.get(id) === safe) cache.delete(id)
       return null
     }
     const objectUrl = URL.createObjectURL(blob)
@@ -44,11 +49,12 @@ export function resolveDeviceUrl(url: string): Promise<string | null> {
     made.add(objectUrl)
     return objectUrl
   })
-  pending.catch(() => {
-    if (cache.get(id) === pending) cache.delete(id)
+  const safe = pending.catch(() => {
+    if (cache.get(id) === safe) cache.delete(id)
+    return null
   })
-  cache.set(id, pending)
-  return pending
+  cache.set(id, safe)
+  return safe
 }
 
 /** Revokes all cached object URLs (on source removal / tests). */

@@ -42,6 +42,7 @@ pnpm dev
 - Demo data exists only in development. Run `pnpm dev` and open `/welcome`. Production builds have no demo.
 - Checks: `pnpm test`, `pnpm typecheck`, `pnpm lint`.
 - Some tests need a real Neon database. Put its connection string in `GM_NEON_TEST_URL` in `.env.local`. The database name must end in `_test`, so the tests never touch real data. Without the variable, those tests skip themselves.
+- Devices skip reloading an inventory when the revision in `gm_meta` is unchanged, and only writes through the app change it. After editing data with SQL (for example in the Neon console), run `insert into gm_meta (key, value) values ('rev', gen_random_uuid()::text) on conflict (key) do update set value = excluded.value`, or other devices will not notice the change.
 - To try the dev server on a phone over USB, run `adb reverse tcp:3000 tcp:3000` and open `http://localhost:3000` on the phone.
 
 ## Deploy your own

@@ -1,1 +1,1 @@
-INSERT INTO "gm_meta" ("key", "value") VALUES ('rev', '0') ON CONFLICT DO NOTHING;
+INSERT INTO "gm_meta" ("key", "value") VALUES ('rev', gen_random_uuid()::text) ON CONFLICT ("key") DO NOTHING;

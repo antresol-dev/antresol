@@ -15,7 +15,8 @@ export async function listInventories(exec: PgExecutor): Promise<{ inventories: 
   ])
   return {
     inventories: (list as Record<string, unknown>[]).map(rows.toInventory),
-    rev: String((rev?.[0] as { value?: unknown } | undefined)?.value ?? '0'),
+    // A missing row (hand-edited database) is "unknown": a value that never equals one a device cached.
+    rev: String((rev?.[0] as { value?: unknown } | undefined)?.value ?? `unknown:${Math.random().toString(36).slice(2)}`),
   }
 }
 

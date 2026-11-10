@@ -2,11 +2,12 @@ import { normalizeCommand, StorageError, type InventoryStorage, type SchemaStatu
 import { toStatements } from './commands'
 import type { PgExecutor } from './executor'
 import { inspectSchema } from './inspect'
-import { ensureSchema } from './migrator'
+import { ensureSchema, REV_BUMP } from './migrator'
 import * as queries from './queries'
-import { sql } from './sql'
 
-const bumpRev = sql`update gm_meta set value = (value::bigint + 1)::text where key = 'rev'`
+/** The revision is an opaque unique value, not a counter: a point-in-time restore cannot make a new state repeat a
+ *  revision that a device cached. An upsert, so a missing row is recreated rather than leaving the bump a no-op. */
+const bumpRev = REV_BUMP
 
 /** Lets StorageError through; wraps anything else as StorageError('failed') keeping the cause. */
 async function wrapFailure<T>(run: () => Promise<T>): Promise<T> {

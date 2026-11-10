@@ -1421,6 +1421,20 @@ describe('workspace photos', () => {
       expect(again.state.snapshotOrigin).toBe('live')
     })
 
+    it('a cached copy stored by another app format is reloaded even at the current rev', async () => {
+      const h = setup()
+      const { ws } = await start(h)
+      const ref = ws.state.current!
+      const cached = (await h.db.getSnapshot(ref))!
+      expect(cached.rev).toMatch(/^\d+:\d+:/)
+      await h.db.putSnapshot(ref, { ...cached, rev: `0:0:${cached.rev!.split(':').slice(2).join(':')}` })
+      const loads = h.flags.loadCalls
+      const again = h.workspace()
+      await again.startFromCache()
+      await again.refresh()
+      expect(h.flags.loadCalls).toBe(loads + 1)
+    })
+
     it('a cached copy at an older rev is reloaded', async () => {
       const h = setup()
       const { id } = await start(h)

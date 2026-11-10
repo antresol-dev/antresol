@@ -79,18 +79,53 @@ describe('inventories', () => {
   })
 })
 
-describe('revision counter', () => {
-  it('starts at 0, grows by one per apply and is not touched by reads', async () => {
+describe('revision', () => {
+  it('changes on every apply and is not touched by reads', async () => {
     const storage = await makeStorage()
-    expect((await storage.listInventories()).rev).toBe('0')
+    const seen = new Set<string>([(await storage.listInventories()).rev])
     const id = newId()
     await storage.apply({ type: 'inventory.create', id, name: 'A', description: null, currency: 'USD' }, TEST_ACTOR)
-    expect((await storage.listInventories()).rev).toBe('1')
+    seen.add((await storage.listInventories()).rev)
     await storage.apply({ type: 'inventory.update', id, name: 'B' }, TEST_ACTOR)
-    expect((await storage.listInventories()).rev).toBe('2')
+    const rev = (await storage.listInventories()).rev
+    seen.add(rev)
+    expect(seen.size).toBe(3)
     await storage.loadInventory(id)
     await storage.loadAllMovements(id)
     await storage.listInventories()
-    expect((await storage.listInventories()).rev).toBe('2')
+    expect((await storage.listInventories()).rev).toBe(rev)
+  })
+
+  it('is not changed by an apply that fails', async () => {
+    const storage = await makeStorage()
+    const before = (await storage.listInventories()).rev
+    await expect(
+      storage.apply({ type: 'folder.create', id: newId(), inventoryId: newId(), parentId: null, name: 'F', description: null }, TEST_ACTOR),
+    ).rejects.toBeDefined()
+    expect((await storage.listInventories()).rev).toBe(before)
+  })
+
+  it('is recreated by the next apply when the row is missing, and reads as unknown meanwhile', async () => {
+    const exec = await makeExecutor()
+    const { storage } = await openPostgresStorage(exec)
+    await exec.batch([sql`delete from gm_meta where key = 'rev'`])
+    const a = (await storage.listInventories()).rev
+    expect(a).not.toBe((await storage.listInventories()).rev)
+    await storage.apply({ type: 'inventory.create', id: newId(), name: 'A', description: null, currency: 'USD' }, TEST_ACTOR)
+    const b = (await storage.listInventories()).rev
+    expect(b).toBe((await storage.listInventories()).rev)
+    expect(b).not.toMatch(/^unknown:/)
+  })
+
+  it('is changed by a migration batch', async () => {
+    const exec = await makeExecutor()
+    await ensureSchema(exec)
+    await exec.batch([
+      sql`update gm_meta set value = 'fixed' where key = 'rev'`,
+      sql`update gm_meta set value = '1' where key = 'schema_version'`,
+    ])
+    await ensureSchema(exec)
+    const rows = await exec.query<{ value: string }>(sql`select value from gm_meta where key = 'rev'`)
+    expect(rows[0]!.value).not.toBe('fixed')
   })
 })

@@ -33,6 +33,13 @@ export function isConcurrentMigration(e: unknown): boolean {
   return code === CONCURRENT_MIGRATION_SQLSTATE && e.message.includes(CONCURRENT_MIGRATION_MESSAGE)
 }
 
+/** Gives `gm_meta.rev` a new unique value (see storage.ts for why it is opaque); creates the row if it is missing. */
+export const REV_BUMP: Statement = {
+  text: `insert into gm_meta (key, value) values ('rev', gen_random_uuid()::text)
+  on conflict (key) do update set value = excluded.value`,
+  params: [],
+}
+
 /** Lock, then fail unless schema_version is still `expected`. Plain statements: fits one Neon HTTP transaction. */
 function migrationPrologue(expected: number): Statement[] {
   return [
@@ -75,6 +82,8 @@ export async function ensureSchema(exec: PgExecutor): Promise<SchemaStatus> {
       await exec.batch([
         ...migrationPrologue(dbVersion),
         ...(migrations[version - 1] as Statement[]),
+        // A migration may change data without any write passing through `apply`: devices must reload.
+        REV_BUMP,
         sql`insert into gm_meta (key, value) values ('schema_version', ${String(version)})
             on conflict (key) do update set value = excluded.value`,
       ])

@@ -33,6 +33,15 @@ export type {
   WorkspaceState,
 } from './workspace-types'
 
+/** Bumped when the shape of a cached snapshot changes. With the schema version it prefixes the revision stored in the
+ *  cache: a snapshot cached by an older app (other shape, or before a data migration) never matches the source's
+ *  revision, so it is reloaded once instead of being kept. */
+export const SNAPSHOT_FORMAT = 1
+const REV_PREFIX = `${SNAPSHOT_FORMAT}:${APP_SCHEMA_VERSION}:`
+const cacheRev = (rev: string | null): string | null => (rev === null ? null : REV_PREFIX + rev)
+const uncacheRev = (stored: string | null | undefined): string | null =>
+  stored?.startsWith(REV_PREFIX) ? stored.slice(REV_PREFIX.length) : null
+
 /** refreshIfStale retries a failing source that is not the current one at most this often. */
 export const FAILED_RETRY_MS = 5 * 60_000
 
@@ -279,7 +288,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   /**
    * Loads the current inventory's snapshot and shows and caches it.
    *
-   * `skipIfUnchanged`: do nothing but mark the shown copy live when it is already at the source's revision. Only the
+   * `skipIfUnchanged`: do nothing but mark the shown copy live (its saved time stays as persisted) when it is already at the source's revision. Only the
    * refresh paths ask for this; a load after our own write never does (it must reload).
    *
    * Ordering argument: the revision stored with a snapshot is `sourceRevs`, captured BEFORE `loadInventory` starts. That
@@ -297,7 +306,6 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     const rev = sourceRevs.get(ref.sourceId) ?? null
     if (skipIfUnchanged && rev !== null && shownRev === rev && state.snapshot?.inventory.id === ref.inventoryId) {
       state.snapshotOrigin = 'live'
-      state.snapshotSavedAt = nowIso()
       return
     }
     const token = ++loadSeq
@@ -325,7 +333,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     state.snapshotOrigin = 'live'
     state.snapshotSavedAt = savedAt
     shownRev = rev
-    await db.putSnapshot(ref, { snapshot, savedAt, rev })
+    await db.putSnapshot(ref, { snapshot, savedAt, rev: cacheRev(rev) })
   }
 
   /** The current inventory vanished from its (reachable) source: forget it and move to the first remaining one. */
@@ -383,7 +391,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       state.snapshot = cached ? markRaw(cached.snapshot) : null
       state.snapshotOrigin = cached ? 'cache' : null
       state.snapshotSavedAt = cached?.savedAt ?? null
-      shownRev = cached?.rev ?? null
+      shownRev = uncacheRev(cached?.rev)
     }
     if (isConnected(statusOf(ref.sourceId))) await loadCurrent(true)
   }
@@ -406,7 +414,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       state.snapshot = markRaw(cached.snapshot)
       state.snapshotOrigin = 'cache'
       state.snapshotSavedAt = cached.savedAt
-      shownRev = cached.rev ?? null
+      shownRev = uncacheRev(cached.rev)
     }
     state.started = true
   }

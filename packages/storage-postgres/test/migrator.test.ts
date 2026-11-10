@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { PgExecutor } from '../src/executor'
 import { APP_SCHEMA_VERSION, MIGRATION_LOCK_KEY, ensureSchema, isConcurrentMigration } from '../src/migrator'
 import { sql } from '../src/sql'
+import journal from '../migrations/meta/_journal.json'
 import { makeExecutor } from './helpers'
 
 describe('ensureSchema', () => {
@@ -153,5 +154,18 @@ describe('PgExecutor.batch', () => {
       ]),
     ).rejects.toThrow(/duplicate key/)
     expect(await exec.query(sql`select 1 from gm_meta where key = 'a'`)).toEqual([])
+  })
+})
+
+describe('migration files', () => {
+  it('match the drizzle journal one to one, in order', () => {
+    const files = Object.keys(
+      import.meta.glob('../migrations/*.sql', { query: '?raw', import: 'default', eager: true }),
+    )
+      .map((p) => p.replace('../migrations/', '').replace('.sql', ''))
+      .sort()
+    expect(journal.entries.map((e) => e.tag)).toEqual(files)
+    expect(journal.entries.map((e) => e.idx)).toEqual(files.map((_, i) => i))
+    expect(APP_SCHEMA_VERSION).toBe(files.length)
   })
 })

@@ -57,7 +57,10 @@ describe.skipIf(!url)('Neon conformance', () => {
         const { storage } = await openPostgresStorage(exec)
         const inv = newId()
         const item = newId()
+        const rev0 = (await storage.listInventories()).rev
         await storage.apply({ type: 'inventory.create', id: inv, name: `inv-${name}`, description: null, currency: 'USD' }, TEST_ACTOR)
+        const rev1 = (await storage.listInventories()).rev
+        expect(rev1).not.toBe(rev0)
         await storage.apply(
           {
             type: 'item.create', id: item, inventoryId: inv, folderId: null, name: 'R', description: null, unitKey: 'pcs', tagIds: [],
@@ -69,8 +72,11 @@ describe.skipIf(!url)('Neon conformance', () => {
           { type: 'stock.set', movementId: newId(), itemId: item, variantId: null, target: '37' as Quantity, note: null },
           TEST_ACTOR,
         )
+        const rev2 = (await storage.listInventories()).rev
+        expect(rev2).not.toBe(rev1)
         const { stock } = await storage.loadInventory(inv)
         expect(stock.find((l) => l.variantId === null)!.quantity).toBe('37')
+        expect((await storage.listInventories()).rev).toBe(rev2)
         expect((await inspectSchema(exec)).state).toBe('current')
       })
 

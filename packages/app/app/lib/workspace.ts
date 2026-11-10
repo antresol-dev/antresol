@@ -57,11 +57,13 @@ function isRelistCommand(c: Command): boolean {
 }
 
 /** Demo source: the device store. Neon with a public key: Uploadcare. Anything else: none. */
-export function defaultFileStore(config: SourceConfig): FileStore | null {
+export function defaultFileStore(config: SourceConfig, fetchImpl?: typeof fetch): FileStore | null {
   if (config.kind === 'dev-pglite') return createDeviceFileStore()
   const key = config.uploadcarePublicKey?.trim()
   if (config.kind === 'neon' && key) {
-    return createUploadcareStore({ publicKey: key, cdnBase: config.uploadcareCdnBase ?? undefined })
+    return createUploadcareStore({ publicKey: key, cdnBase: config.uploadcareCdnBase ?? undefined,
+      ...(fetchImpl ? { fetch: fetchImpl } : {}),
+    })
   }
   return null
 }
@@ -496,11 +498,22 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   function fileStoreFor(sourceId: string): FileStore | null {
     const config = state.sources.find((s) => s.config.id === sourceId)?.config
     if (!config) return null
-    if (deps.fileStores) return deps.fileStores(config)
+    if (deps.fileStores) {
+      try {
+        return deps.fileStores(config)
+      } catch {
+        return null
+      }
+    }
     const key = `${config.kind}|${config.uploadcarePublicKey ?? ''}|${config.uploadcareCdnBase ?? ''}`
     const known = stores.get(sourceId)
     if (known?.key === key) return known.store
-    const store = defaultFileStore(config)
+    let store: FileStore | null
+    try {
+      store = defaultFileStore(config)
+    } catch {
+      store = null
+    }
     stores.set(sourceId, { key, store })
     return store
   }
@@ -522,22 +535,40 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   }
 
   async function addPhotos(itemId: Id, files: File[], onProgress?: (done: number) => void): Promise<void> {
-    const { store } = photoTarget()
+    // The target is fixed before the first upload: switching inventory meanwhile must not redirect the writes.
+    const { cur, store } = photoTarget()
     let done = 0
     for (const file of files) {
       const stored = await uploadOne(store, file)
-      await apply({ type: 'photo.add', id: newId(), itemId, variantId: null, ...stored })
+      await applyTo(cur, { type: 'photo.add', id: newId(), itemId, variantId: null, ...stored })
       onProgress?.(++done)
     }
   }
 
+  /** Two writes, because core allows one photo per variant and a storage apply takes one command: a failure between
+   *  them leaves the variant without a photo. A failed add rejects with its own error and is not retried. */
   async function setVariantPhoto(itemId: Id, variantId: Id, file: File): Promise<void> {
-    const { store } = photoTarget()
+    const { cur, store } = photoTarget()
     // Upload first: a failed upload leaves the old photo in place.
     const stored = await uploadOne(store, file)
-    const old = state.snapshot?.photos.find((p) => p.variantId === variantId)
-    if (old) await apply({ type: 'photo.remove', id: old.id })
-    await apply({ type: 'photo.add', id: newId(), itemId, variantId, ...stored })
+    // Looked up only now, after the upload and the writes queued before this one, in the freshest snapshot of the target.
+    await queueIdle()
+    const snapshot = await snapshotOf(cur)
+    const old = snapshot?.photos.find((p) => p.variantId === variantId)
+    if (old) await applyTo(cur, { type: 'photo.remove', id: old.id })
+    await applyTo(cur, { type: 'photo.add', id: newId(), itemId, variantId, ...stored })
+  }
+
+  /** Resolves when the writes queued so far are done (their snapshot reloads included). */
+  const queueIdle = (): Promise<void> => queue
+
+  /** The shown snapshot when it is the target's, otherwise the target read from its source. */
+  async function snapshotOf(ref: InventoryRef): Promise<InventorySnapshot | null> {
+    const shown = state.snapshot
+    if (sameRef(state.current, ref) && shown?.inventory.id === ref.inventoryId) return shown
+    const conn = conns.get(ref.sourceId)
+    if (!conn) return null
+    return guarded(ref.sourceId, conn, () => conn.storage.loadInventory(ref.inventoryId))
   }
 
   async function removePhoto(photoId: Id): Promise<void> {

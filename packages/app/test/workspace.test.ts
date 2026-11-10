@@ -8,7 +8,7 @@ import { defaultDeviceName } from '../app/lib/device-name'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import { createNeonDriver, type SourceDriver } from '../app/lib/sources'
 import type { InventoryRef, SourceConfig } from '../app/lib/types'
-import { createWorkspace, FAILED_RETRY_MS } from '../app/lib/workspace'
+import { createWorkspace, defaultFileStore, FAILED_RETRY_MS } from '../app/lib/workspace'
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Safari/605.1.15'
 const CS = (name: string): string => `postgresql://u:pw-${name}@h/${name}`
@@ -1108,19 +1108,38 @@ describe('workspace photos', () => {
     await db.putSource(demoConfig)
     const uploads: string[] = []
     const prepared: string[] = []
-    const control = { failOn: null as number | null, count: 0 }
+    const control = { failOn: null as number | null, count: 0, hold: null as Promise<void> | null }
     const store: FileStore = {
       provider: 'fake',
       async upload(_blob, name) {
         control.count++
         uploads.push(name)
+        const hold = control.hold
+        control.hold = null
+        if (hold) await hold
         if (control.failOn === control.count) throw new FileError('unavailable')
         return { provider: 'fake', fileId: `f-${control.count}`, url: `https://cdn.test/${control.count}` }
       },
     }
+    const inner = freshDriver()
+    const commands: Command[] = []
+    const storages: { loadInventory: (id: Id) => Promise<unknown> }[] = []
+    const spied: SourceDriver = {
+      probe: inner.probe,
+      async connect(cfg) {
+        const conn = await inner.connect(cfg)
+        const storage = Object.create(conn.storage) as typeof conn.storage
+        storage.apply = async (command, actor) => {
+          commands.push(command)
+          return conn.storage.apply(command, actor)
+        }
+        storages.push(storage)
+        return { ...conn, storage }
+      },
+    }
     const ws = createWorkspace({
       db,
-      drivers: { 'dev-pglite': freshDriver() },
+      drivers: { 'dev-pglite': spied },
       userAgent: UA,
       prepareImage: async (f) => {
         prepared.push(f.name)
@@ -1131,7 +1150,7 @@ describe('workspace photos', () => {
     await ws.start()
     const snap = ws.state.snapshot!
     const item = snap.items.find((i) => i.name === 'TL072')!
-    return { db, ws, uploads, prepared, control, item }
+    return { db, ws, uploads, prepared, control, item, commands, storages }
   }
 
   const photosOf = (ws: ReturnType<typeof createWorkspace>, itemId: Id) =>
@@ -1187,7 +1206,7 @@ describe('workspace photos', () => {
   })
 
   it('setVariantPhoto removes the old photo, then adds the new one', async () => {
-    const { ws, uploads } = await photoHarness()
+    const { ws, uploads, commands } = await photoHarness()
     const snap = ws.state.snapshot!
     const variant = snap.variants.find((v) => v.name === '10k')!
     await ws.setVariantPhoto(variant.itemId, variant.id, file('one'))
@@ -1198,6 +1217,11 @@ describe('workspace photos', () => {
     expect(now[0]!.id).not.toBe(first.id)
     expect(now[0]!.fileId).toBe('f-2')
     expect(uploads).toEqual(['one.jpg', 'two.jpg'])
+    const photoCommands = commands.filter((c) => c.type.startsWith('photo.')).map((c) => c.type)
+    expect(photoCommands).toEqual(['photo.add', 'photo.remove', 'photo.add'])
+    const removeAt = commands.findIndex((c) => c.type === 'photo.remove')
+    expect(commands[removeAt]).toMatchObject({ id: first.id })
+    expect(commands[removeAt + 1]).toMatchObject({ type: 'photo.add', variantId: variant.id })
   })
 
   it('removePhoto removes one photo', async () => {
@@ -1209,12 +1233,58 @@ describe('workspace photos', () => {
   })
 
   it('makeCover puts the chosen photo first', async () => {
-    const { ws, item } = await photoHarness()
+    const { ws, item, commands } = await photoHarness()
     await ws.addPhotos(item.id, [file('a'), file('b'), file('c')])
     const [a, b, c] = photosOf(ws, item.id)
     await ws.makeCover(item.id, c!.id)
+    const reorder = commands.find((cmd) => cmd.type === 'photo.reorder')
+    expect(reorder).toMatchObject({ itemId: item.id, orderedIds: [c!.id, a!.id, b!.id] })
     expect(photosOf(ws, item.id).map((p) => p.id)).toEqual([c!.id, a!.id, b!.id])
     expect(b).toBeDefined()
+  })
+
+  it('writes to the inventory the upload started on, even if another one is selected meanwhile', async () => {
+    const { ws, item, control, commands, storages } = await photoHarness()
+    const original = ws.state.current!
+    const other = ws.state.inventories.find((e) => e.ref.inventoryId !== original.inventoryId)!
+    const g = Promise.withResolvers<undefined>()
+    control.hold = g.promise
+    const pending = ws.addPhotos(item.id, [file('a')])
+    await vi.waitFor(() => expect(control.count).toBe(1))
+    await ws.selectInventory(other.ref)
+    g.resolve(undefined)
+    await pending
+    const adds = commands.filter((c) => c.type === 'photo.add')
+    expect(adds).toHaveLength(1)
+    const target = (await storages[0]!.loadInventory(original.inventoryId)) as { photos: { itemId: Id }[] }
+    expect(target.photos.filter((p) => p.itemId === item.id)).toHaveLength(1)
+    const elsewhere = (await storages[0]!.loadInventory(other.ref.inventoryId)) as { photos: unknown[] }
+    expect(elsewhere.photos).toHaveLength(0)
+  })
+
+  it('fileStoreFor never throws; Neon with key and cdn base uploads to that base', async () => {
+    const throwing = createWorkspace({
+      db: createMemoryDeviceDb(),
+      drivers: {},
+      userAgent: UA,
+      fileStores: () => {
+        throw new Error('boom')
+      },
+    })
+    expect(throwing.fileStoreFor('x')).toBeNull()
+    const seen: string[] = []
+    const fakeFetch = (async (url: string) => {
+      seen.push(url)
+      return new Response(JSON.stringify({ file: 'uuid-1' }), { status: 200 })
+    }) as unknown as typeof fetch
+    const store = defaultFileStore(
+      { ...config('n3', CS('z')), uploadcarePublicKey: 'pub', uploadcareCdnBase: 'https://abc.ucarecd.net' },
+      fakeFetch,
+    )!
+    expect(store.provider).toBe('uploadcare')
+    const stored = await store.upload(new Blob(['x']), 'x.jpg')
+    expect(stored.url).toBe('https://abc.ucarecd.net/uuid-1/')
+    expect(seen).toHaveLength(1)
   })
 
   it('fileStoreFor: demo is the device store, Neon without a key is null', async () => {

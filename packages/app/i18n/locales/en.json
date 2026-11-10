@@ -386,7 +386,7 @@
       "failed": "The source reported an error. Try again."
     },
     "file": {
-      "no_store": "Photos can’t be saved for this source. Add an Uploadcare key in the source settings.",
+      "no_store": "Photos aren’t set up for this source. Check the Uploadcare key and photo address in Settings.",
       "unsupported": "This photo can’t be opened — the format isn’t supported or the image is too large.",
       "too_large": "This photo is too large.",
       "rejected": "The photo service rejected this photo. Check the Uploadcare key in the source settings.",

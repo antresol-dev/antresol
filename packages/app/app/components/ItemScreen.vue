@@ -63,6 +63,8 @@ async function step(kind: 'plus' | 'minus', variantId: string | null): Promise<v
 // Variants: add in bulk (and offer the loose stock to the first of them), rename, archive.
 const locked = computed(() => !!state.readOnly || state.saving)
 const addOpen = ref(false)
+const addBusy = ref(false)
+const renameBusy = ref(false)
 const looseOffer = ref<{ offer: LooseOffer; variants: { id: Id; name: string }[] } | null>(null)
 function added(a: VariantsAdded): void {
   addOpen.value = false
@@ -156,8 +158,8 @@ const linkClass =
         <Plus class="size-5" aria-hidden="true" />
         {{ $t('variantsForm.open') }}
       </Button>
-      <AppSheet v-model:open="addOpen" :title="$t('variantsForm.title')" initial-focus="#variants-names">
-        <VariantsForm v-if="addOpen" :item-id="itemId" @done="added" />
+      <AppSheet v-model:open="addOpen" :title="$t('variantsForm.title')" :locked="addBusy" initial-focus="#variants-names">
+        <VariantsForm v-if="addOpen" v-model:busy="addBusy" :item-id="itemId" @done="added" />
       </AppSheet>
       <LooseTransferSheet
         :item-id="itemId"
@@ -165,8 +167,8 @@ const linkClass =
         :variants="looseOffer?.variants ?? []"
         @close="looseOffer = null"
       />
-      <AppSheet v-model:open="renameOpen" :title="$t('variantMenu.renameTitle')" initial-focus="#variant-name">
-        <VariantForm v-if="renaming" :key="renaming.id" :variant="renaming" @done="renameId = null" />
+      <AppSheet v-model:open="renameOpen" :title="$t('variantMenu.renameTitle')" :locked="renameBusy" initial-focus="#variant-name">
+        <VariantForm v-if="renaming" :key="renaming.id" v-model:busy="renameBusy" :variant="renaming" @done="renameId = null" />
       </AppSheet>
       <ConfirmSheet
         v-model:open="archiveOpen"

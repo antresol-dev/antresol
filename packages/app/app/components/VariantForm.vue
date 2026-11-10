@@ -13,7 +13,8 @@ const { state } = workspace
 
 const name = ref(props.variant.name)
 const description = ref(props.variant.description ?? '')
-const busy = ref(false)
+// The sheet around the form locks while this is set.
+const busy = defineModel<boolean>('busy', { default: false })
 const errorKey = ref<string | null>(null)
 const canSubmit = computed(() => !busy.value && !state.readOnly)
 
@@ -40,7 +41,7 @@ async function submit(): Promise<void> {
 <template>
   <form class="mt-3.5 grid gap-3.5" novalidate @submit.prevent="submit">
     <div class="grid gap-1.5">
-      <Label for="variant-name">{{ $t('variantForm.name') }}</Label>
+      <Label for="variant-name">{{ $t('form.name') }}</Label>
       <Input
         id="variant-name"
         v-model="name"
@@ -52,8 +53,8 @@ async function submit(): Promise<void> {
     </div>
     <div class="grid gap-1.5">
       <Label for="variant-description">
-        {{ $t('variantForm.description') }}
-        <span class="font-normal text-subtle-foreground">· {{ $t('variantForm.optional') }}</span>
+        {{ $t('form.description') }}
+        <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
       </Label>
       <Input id="variant-description" v-model="description" autocomplete="off" class="h-11 rounded-field bg-surface" />
     </div>

@@ -65,6 +65,7 @@ async function move(): Promise<void> {
 <template>
   <AppSheet
     v-model:open="open"
+    :locked="busy"
     :title="$t('looseTransfer.title', { number: shown?.offer.number ?? '', unit: shown?.offer.unit ?? '' })"
   >
     <div class="mt-3.5 grid gap-3.5">

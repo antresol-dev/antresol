@@ -102,7 +102,7 @@
     "hint": "One per line or separated by commas: 1k, 10k, 100k",
     "add": "Add"
   },
-  "variantForm": { "name": "Name", "description": "Description", "optional": "Optional", "save": "Save" },
+  "variantForm": { "save": "Save" },
   "variantMenu": {
     "rename": "Rename",
     "archive": "Archive variant",

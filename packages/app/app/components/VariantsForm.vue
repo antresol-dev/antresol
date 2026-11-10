@@ -25,7 +25,8 @@ const workspace = useWorkspace()
 const { state } = workspace
 
 const text = ref('')
-const busy = ref(false)
+// The sheet around the form locks while this is set.
+const busy = defineModel<boolean>('busy', { default: false })
 const errorKey = ref<string | null>(null)
 const canSubmit = computed(() => !busy.value && !state.readOnly && !!state.snapshot)
 

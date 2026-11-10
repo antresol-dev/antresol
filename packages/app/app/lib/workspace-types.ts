@@ -73,7 +73,7 @@ export interface Workspace {
    *  meanwhile, resolves without applying its outcome. */
   updateSource(
     id: string,
-    patch: Partial<Pick<SourceConfig, 'name' | 'connectionString' | 'uploadcarePublicKey'>>,
+    patch: Partial<Pick<SourceConfig, 'name' | 'connectionString' | 'uploadcarePublicKey' | 'uploadcareCdnBase'>>,
   ): Promise<void>
   removeSource(id: string): Promise<void>
   setDeviceName(name: string): Promise<void>

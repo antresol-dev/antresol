@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@graymatter/core": "workspace:*",
+    "@graymatter/files-uploadcare": "workspace:*",
     "@graymatter/storage-postgres": "workspace:*",
     "@lucide/vue": "^1.70.0",
     "@neondatabase/serverless": "^1.2.0",

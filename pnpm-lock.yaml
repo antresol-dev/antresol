@@ -26,6 +26,9 @@ importers:
       '@graymatter/core':
         specifier: workspace:*
         version: link:../core
+      '@graymatter/files-uploadcare':
+        specifier: workspace:*
+        version: link:../files-uploadcare
       '@graymatter/storage-postgres':
         specifier: workspace:*
         version: link:../storage-postgres
@@ -126,6 +129,12 @@ importers:
       uuidv7:
         specifier: ^1.2.1
         version: 1.2.1
+
+  packages/files-uploadcare:
+    dependencies:
+      '@graymatter/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/storage-postgres:
     dependencies:

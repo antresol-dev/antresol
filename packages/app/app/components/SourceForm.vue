@@ -17,6 +17,7 @@ const driver = createNeonDriver()
 const name = ref(props.source?.name ?? t('sourceForm.defaultName'))
 const connectionString = ref(props.source?.connectionString ?? '')
 const uploadcareKey = ref(props.source?.uploadcarePublicKey ?? '')
+const uploadcareCdn = ref(props.source?.uploadcareCdnBase ?? '')
 const reveal = ref(false)
 const problem = ref<ReturnType<typeof checkConnectionString>>(null)
 const probe = ref<SourceProbe | null>(null)
@@ -30,6 +31,7 @@ const draft = (): Omit<SourceConfig, 'id' | 'createdAt'> => ({
   name: name.value.trim() || t('sourceForm.defaultName'),
   connectionString: connectionString.value.trim(),
   uploadcarePublicKey: uploadcareKey.value.trim() || null,
+  uploadcareCdnBase: uploadcareCdn.value.trim() || null,
 })
 
 watch(connectionString, () => {
@@ -125,6 +127,24 @@ async function save(): Promise<void> {
       </Label>
       <Input id="source-key" v-model="uploadcareKey" autocomplete="off" class="h-11 rounded-field bg-surface" />
       <p class="text-sm text-subtle-foreground">{{ $t('sourceForm.uploadcareKeyHint') }}</p>
+    </div>
+
+    <div class="grid gap-1.5">
+      <Label for="source-cdn">
+        {{ $t('sourceForm.uploadcareCdn') }}
+        <span class="font-normal text-subtle-foreground">· {{ $t('sourceForm.optional') }}</span>
+      </Label>
+      <Input
+        id="source-cdn"
+        v-model="uploadcareCdn"
+        type="url"
+        autocomplete="off"
+        autocapitalize="off"
+        spellcheck="false"
+        placeholder="https://abc123.ucarecd.net"
+        class="h-11 rounded-field bg-surface"
+      />
+      <p class="text-sm text-subtle-foreground">{{ $t('sourceForm.uploadcareCdnHint') }}</p>
     </div>
 
     <Button type="submit" variant="outline" class="h-11 rounded-field bg-surface" :disabled="checking || saving">

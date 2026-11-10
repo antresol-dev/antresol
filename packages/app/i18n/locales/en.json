@@ -224,6 +224,8 @@
     "hide": "Hide connection string",
     "uploadcareKey": "Uploadcare public key",
     "uploadcareKeyHint": "Needed later to add photos",
+    "uploadcareCdn": "Photo address",
+    "uploadcareCdnHint": "Copy it from your Uploadcare project's delivery settings. Leave empty if your project was created before September 2025.",
     "optional": "Optional",
     "check": "Check",
     "checking": "Checking…",

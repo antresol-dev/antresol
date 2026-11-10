@@ -1,0 +1,1030 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GrayMatter UI proposals</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  /* ---------- page (presentation only) ---------- */
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #1C1C1F; color: #E4E4E7; font-family: Manrope, system-ui, sans-serif; }
+  .page { max-width: 1440px; margin: 0 auto; padding: 32px 24px 72px; }
+  .page-head h1 { margin: 0 0 6px; font-size: 26px; letter-spacing: -.02em; }
+  .page-head p { margin: 0; color: #A1A1AA; max-width: 900px; line-height: 1.55; font-size: 14px; }
+  .toggle { display: inline-flex; gap: 2px; padding: 3px; border-radius: 12px; background: #26262B; margin-top: 16px; }
+  .toggle button { font: 700 13px Manrope, sans-serif; color: #D4D4D8; background: none; border: 0; padding: 7px 12px; border-radius: 9px; cursor: pointer; }
+  .toggle button.on { background: #3A3A42; color: #fff; }
+  .toc { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 18px 0 0; padding: 0; list-style: none; font-size: 13px; }
+  .toc a { color: #C7D2FE; text-decoration: none; } .toc a:hover { text-decoration: underline; }
+  .prop { margin-top: 56px; scroll-margin-top: 16px; }
+  .prop-h { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .prop-h h2 { margin: 0; font-size: 20px; letter-spacing: -.01em; }
+  .ids { font: 700 12px Manrope, sans-serif; color: #C7D2FE; background: #2E2B55; padding: 3px 8px; border-radius: 999px; }
+  .prop-lead { color: #A1A1AA; margin: 6px 0 18px; max-width: 920px; line-height: 1.55; font-size: 14px; }
+  .pair { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+  .pair > div:first-child { flex: 0 0 360px; min-width: 0; }
+  .cap { font-size: 12px; font-weight: 700; color: #A1A1AA; padding-left: 6px; margin-bottom: 8px; }
+  .notes { list-style: none; margin: 12px 0 0; padding: 0 6px; display: grid; gap: 6px; max-width: 360px; font-size: 12.5px; color: #B4B4BC; line-height: 1.45; }
+  .notes li::before { content: "— "; color: #71717A; }
+  .desk-col .notes { max-width: 990px; }
+  .desk-col > .gm { zoom: .84; }
+
+  /* ---------- tokens: current app tokens (light) + proposed dark polish (G1) ---------- */
+  .gm { --bg:#F7F7F8; --surface:#FFFFFF; --raised:#FFFFFF; --border:#EDEDF0; --divider:#F0F0F2; --fg:#18181B; --muted:#71717A; --subtle:#63636B;
+        --chip:#ECECEF; --hover:#F1F1F4; --primary:#4F46E5; --primary-h:#4338CA; --soft:#EEF2FF; --soft-fg:#4F46E5; --thumb:#F4F4F5;
+        --thumb-fg:#A1A1AA; --icon:#3F3F46; --line:#DCDCE2; --rail:#EFEFF2; --mark:#FDE68A; --pending:rgba(79,70,229,.10);
+        --snack-bg:#18181B; --snack-fg:#FAFAFA; --snack-act:#A5B4FC; --led-off:#C9CDD3; --r-card:16px; --r-field:14px; --r-thumb:12px;
+        --spring: linear(0, .53 9%, .96 18%, 1.07 24%, 1.04 31%, 1 41%, .99 60%, 1); --ease: cubic-bezier(.2,.8,.2,1);
+        font-family: Manrope, system-ui, sans-serif; color: var(--fg); font-size: 14px; line-height: 1.35; }
+  .gm.dark { --bg:#0E0E10; --surface:#18181B; --raised:#1F1F23; --border:#27272A; --divider:#222225; --fg:#F4F4F5; --muted:#A1A1AA; --subtle:#A1A1AA;
+        --chip:#232327; --hover:#1F1F23; --primary:#818CF8; --primary-h:#A5B4FC; --soft:rgba(129,140,248,.16); --soft-fg:#A5B4FC; --thumb:#232327;
+        --thumb-fg:#71717A; --icon:#D4D4D8; --line:#2E2E33; --rail:#131316; --mark:rgba(250,204,21,.28); --pending:rgba(129,140,248,.18);
+        --snack-bg:#2A2A30; --snack-fg:#F4F4F5; --snack-act:#A5B4FC; --led-off:#3A3F46; }
+  .gm * { box-sizing: border-box; }
+  .gm svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+  .gm svg.i.s { width: 15px; height: 15px; } .gm svg.i.xs { width: 13px; height: 13px; }
+  :where(.gm button) { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+  .gm .t { transition: background-color .15s ease, color .15s ease, opacity .15s ease, transform .15s ease, border-color .15s ease; }
+  .gm :focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+  .gm .tab { font-variant-numeric: tabular-nums; }
+  .gm mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 1px; }
+  kbd { font: 600 11px Manrope, sans-serif; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 6px; padding: 1px 5px; color: var(--subtle); background: var(--surface); white-space: nowrap; }
+
+  /* ---------- phone ---------- */
+  .phone { position: relative; width: 360px; height: 740px; border-radius: 36px; border: 10px solid #050506; background: var(--bg); overflow: hidden; display: flex; flex-direction: column; }
+  .sb { height: 26px; flex-shrink: 0; display: flex; justify-content: space-between; padding: 6px 20px 0; font-size: 12px; font-weight: 700; }
+  .mhead { flex-shrink: 0; padding: 0 8px 10px; border-bottom: 1px solid var(--border); background: var(--bg); }
+  .mtop { display: flex; align-items: center; gap: 2px; padding: 4px 0; }
+  .ib { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; color: var(--icon); position: relative; }
+  .ib:hover { background: var(--hover); } .ib.off { opacity: .35; pointer-events: none; }
+  .ib svg.i { width: 20px; height: 20px; }
+  .sp { flex: 1; }
+  .mtitle { padding: 2px 8px 0; }
+  .mcrumb { font-size: 13px; color: var(--muted); font-weight: 600; display: flex; gap: 4px; align-items: center; min-height: 26px; }
+  .mcrumb svg.i { width: 12px; height: 12px; }
+  h1.ft { margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -.02em; }
+  .ft-sub { color: var(--muted); font-weight: 600; font-size: 13px; margin-top: 2px; }
+  .mscroll { flex: 1; min-height: 0; overflow: auto; padding: 14px 16px 112px; display: flex; flex-direction: column; gap: 14px; scrollbar-width: none; }
+  .dock { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 14px 16px; display: flex; gap: 10px; align-items: center; z-index: 8;
+          background: linear-gradient(to top, var(--bg) 72%, transparent); }
+  .sbar { flex: 1; height: 52px; border-radius: 18px; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 6px 20px rgba(0,0,0,.08);
+          display: flex; align-items: center; gap: 10px; padding: 0 16px; color: var(--muted); font-weight: 600; font-size: 15px; }
+  .fab { width: 52px; height: 52px; border-radius: 18px; background: var(--primary); color: #fff; display: grid; place-items: center; box-shadow: 0 8px 20px rgba(79,70,229,.30); }
+  .gm.dark .fab { color: #0E0E10; }
+  .fab svg.i { width: 24px; height: 24px; stroke-width: 2.2; }
+
+  /* ---------- lists ---------- */
+  .sec-h { font-size: 13px; font-weight: 600; color: var(--subtle); padding: 0 4px; margin-bottom: -6px; display: flex; align-items: center; gap: 8px; }
+  .lst { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card); overflow: hidden; padding: 4px 0; }
+  .li { position: relative; display: flex; align-items: center; gap: 12px; padding: 0 14px; min-height: 62px; }
+  .li + .li::before, .li.dt::before { content: ""; position: absolute; top: 0; right: 0; left: 68px; height: 1px; background: var(--divider); }
+  .li.f { min-height: 50px; } .li.f + .li.f::before { left: 58px; }
+  .li.hov { background: var(--hover); }
+  .th { width: 42px; height: 42px; border-radius: var(--r-thumb); background: var(--thumb); color: var(--subtle); display: grid; place-items: center; flex-shrink: 0;
+        font-weight: 800; font-size: 13px; letter-spacing: -.01em; }
+  .fth { width: 32px; height: 32px; border-radius: 10px; background: var(--soft); color: var(--soft-fg); display: grid; place-items: center; flex-shrink: 0; }
+  .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .nm { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nm.f { font-weight: 600; }
+  .sub { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sub b { color: var(--fg); font-weight: 700; } .sub .z { color: var(--thumb-fg); }
+  .q { font-weight: 800; font-size: 16px; font-variant-numeric: tabular-nums; white-space: nowrap; display: flex; align-items: center; }
+  .q small { font-size: 12px; color: var(--muted); font-weight: 600; margin-left: 3px; }
+  .cnt { font-size: 13px; color: var(--muted); font-weight: 600; }
+  .dim .nm, .dim .q { color: var(--muted); }
+  .out { font-size: 11px; font-weight: 700; color: var(--subtle); background: var(--chip); padding: 2px 7px; border-radius: 999px; margin-right: 7px; }
+
+  /* ---------- stock card (B1 + B3) ---------- */
+  .stock { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card); padding: 16px; display: grid; gap: 10px; }
+  .stock-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .big { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; min-width: 0; }
+  .big .num { font-size: 32px; font-weight: 700; letter-spacing: -.02em; line-height: 1; font-variant-numeric: tabular-nums; display: inline-block; }
+  .big .num.saving { opacity: .55; }
+  .big .num.roll { animation: roll .32s var(--spring); }
+  .big .u { font-size: 14px; font-weight: 600; color: var(--muted); }
+  .pend { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px 0 6px; border-radius: 999px; background: var(--pending); color: var(--soft-fg);
+          font-weight: 800; font-size: 13px; font-variant-numeric: tabular-nums; align-self: center; animation: pop .22s var(--spring); }
+  .pend[hidden] { display: none; }
+  .pend .to { font-weight: 600; opacity: .85; }
+  .ring { width: 16px; height: 16px; transform: rotate(-90deg); flex-shrink: 0; }
+  .ring circle { fill: none; stroke: currentColor; stroke-width: 2.2; }
+  .ring .bg { opacity: .22; } .ring .fg { stroke-dasharray: 44; stroke-dashoffset: 0; }
+  .ring.run .fg { animation: drain 2s linear forwards; } .ring.frozen .fg { stroke-dashoffset: 16; }
+  .pill-step { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: var(--r-field); background: var(--surface); height: 44px; flex-shrink: 0; }
+  .pill-step button { width: 44px; height: 42px; display: grid; place-items: center; color: var(--icon); border-radius: 13px; transition: background-color .15s ease, transform .18s var(--spring); }
+  .pill-step button:hover { background: var(--hover); color: var(--fg); } .pill-step button:active { transform: scale(.92); }
+  .pill-step button svg.i { width: 18px; height: 18px; stroke-width: 2; }
+  .pill-step .div { width: 1px; height: 22px; background: var(--border); }
+  .pill-step .v { min-width: 50px; text-align: center; font-weight: 800; font-size: 15px; font-variant-numeric: tabular-nums; padding: 0 2px; white-space: nowrap; }
+  .pill-step .v small { font-size: 11px; font-weight: 600; color: var(--muted); margin-left: 2px; }
+  .pill-step.sm { height: 38px; border-radius: 12px; } .pill-step.sm button { width: 36px; height: 36px; border-radius: 11px; }
+  .pill-step.pending { border-color: transparent; background: var(--pending); } .pill-step.pending .v { color: var(--soft-fg); }
+  .prices { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .acts3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; }
+  .btn-o { height: 44px; border-radius: var(--r-field); border: 1px solid var(--border); background: var(--surface); font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 7px; color: var(--fg); padding: 0 12px; white-space: nowrap; }
+  .btn-o:hover { background: var(--hover); } .btn-o svg.i { color: var(--icon); }
+  .btn-o.sm { height: 36px; border-radius: 11px; font-size: 13px; padding: 0 11px; }
+  .desc { margin: 0; font-size: 15px; color: var(--muted); }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: -4px; }
+  .tag { background: var(--chip); border-radius: 999px; padding: 4px 10px; font-size: 13px; font-weight: 600; }
+
+  /* ---------- snackbar (A1) ---------- */
+  .snack { position: absolute; left: 14px; right: 14px; bottom: 84px; z-index: 12; display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 6px 6px 14px;
+           border-radius: 14px; background: var(--snack-bg); color: var(--snack-fg); font-weight: 600; font-size: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.20);
+           transform: translateY(14px); opacity: 0; pointer-events: none; transition: transform .26s var(--spring), opacity .16s ease; }
+  .snack.open, .snack.static { transform: none; opacity: 1; pointer-events: auto; }
+  .snack .tx { flex: 1; min-width: 0; }
+  .snack .undo { height: 36px; padding: 0 12px; border-radius: 10px; color: var(--snack-act); font-weight: 800; }
+  .snack .undo:hover { background: rgba(255,255,255,.08); } .snack .undo[hidden] { display: none; }
+  .snack .ring { color: var(--snack-act); }
+  .snack kbd { background: transparent; color: #A1A1AA; border-color: #3F3F46; }
+  .snack.desk-snack { left: 50%; right: auto; bottom: 20px; transform: translateX(-50%); width: 420px; }
+
+  /* ---------- journal (G2) ---------- */
+  .jg { font-size: 12px; font-weight: 700; color: var(--muted); padding: 8px 14px 2px; }
+  .jr { display: flex; align-items: baseline; gap: 10px; padding: 8px 14px; position: relative; }
+  .jr .tm { font-size: 12px; color: var(--muted); width: 38px; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+  .jr .k { font-weight: 700; font-size: 14px; flex: 1; min-width: 0; }
+  .jr .k small { display: block; font-weight: 500; font-size: 12px; color: var(--muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .jr .k a { color: var(--fg); font-weight: 700; text-decoration: underline; text-decoration-color: var(--border); text-underline-offset: 2px; }
+  .jr .d { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .jr .bal { font-size: 12px; color: var(--muted); width: 40px; text-align: right; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+  .jr.fresh { animation: rowin .36s var(--spring); }
+
+  /* ---------- variants (B4, D3) ---------- */
+  .vr { display: flex; align-items: center; gap: 10px; padding: 9px 10px 9px 14px; min-height: 62px; position: relative; }
+  .vr + .vr::before { content: ""; position: absolute; top: 0; right: 0; left: 14px; height: 1px; background: var(--divider); }
+  .vr .grow .nm { font-size: 15px; } .vr .grow .sub { white-space: normal; }
+  .vr.tap .grow { cursor: pointer; }
+  .attr { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 11px 14px; position: relative; font-size: 15px; }
+  .attr + .attr::before { content: ""; position: absolute; top: 0; right: 0; left: 14px; height: 1px; background: var(--divider); }
+  .attr dt { color: var(--muted); } .attr dd { margin: 0; text-align: right; font-weight: 600; }
+  .attr dd small { display: block; font-size: 12px; color: var(--muted); font-weight: 500; }
+
+  /* ---------- swipe row (A5) ---------- */
+  .sw { position: relative; overflow: hidden; }
+  .sw::before { content: ""; position: absolute; top: 0; right: 0; left: 68px; height: 1px; background: var(--divider); z-index: 2; }
+  .sw-acts { position: absolute; top: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 6px; padding: 0 10px; }
+  .sw-acts button { height: 44px; padding: 0 12px; border-radius: 12px; background: var(--chip); font-weight: 700; display: inline-flex; gap: 6px; align-items: center; color: var(--fg); }
+  .li.swp { background: var(--hover); gap: 10px; padding-right: 8px; }
+  .li.swp .th { margin-left: -60px; }
+  .li.swp .sw-in { display: flex; gap: 6px; }
+  .li.swp .sw-in button { height: 44px; padding: 0 11px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); font-weight: 700; display: inline-flex; gap: 6px; align-items: center; color: var(--fg); }
+  .li.swp .sw-in button.ic { width: 44px; padding: 0; justify-content: center; }
+
+  /* ---------- sort chips (D4) ---------- */
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .chip { height: 32px; padding: 0 11px; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); font-weight: 650; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; color: var(--fg); }
+  .chip.on { background: var(--soft); color: var(--soft-fg); border-color: transparent; }
+  .chip svg.i { width: 14px; height: 14px; }
+  .seg { display: inline-flex; padding: 2px; border-radius: 11px; background: var(--chip); gap: 2px; }
+  .seg button { height: 30px; padding: 0 10px; border-radius: 9px; font-weight: 650; font-size: 13px; color: var(--subtle); display: inline-flex; align-items: center; gap: 6px; }
+  .seg button.on { background: var(--surface); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+  .seg button.na { opacity: .45; cursor: default; }
+
+  /* ---------- desktop shell ---------- */
+  .desk { position: relative; display: grid; grid-template-columns: 188px 232px minmax(0,1fr); width: 1180px; height: 760px;
+          border: 1px solid #2A2A2F; border-radius: 14px; overflow: hidden; background: var(--bg); }
+  .rail { background: var(--rail); display: flex; flex-direction: column; padding: 14px 10px; gap: 14px; min-width: 0; }
+  .logo { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 15px; letter-spacing: -.02em; padding: 4px 6px; }
+  .logo b { width: 24px; height: 24px; border-radius: 8px; background: var(--primary); color: #fff; display: grid; place-items: center; font-size: 12px; }
+  .gm.dark .logo b { color: #0E0E10; }
+  .inv-btn { width: 100%; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); text-align: left; }
+  .inv-btn .n { font-weight: 800; font-size: 13.5px; } .inv-btn .k { font-size: 11px; color: var(--muted); font-weight: 600; }
+  .inv-btn .grow { gap: 0; }
+  .nav { display: flex; flex-direction: column; gap: 2px; }
+  .nav a { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; font-weight: 650; color: var(--icon); text-decoration: none; font-size: 13.5px; }
+  .nav a.on { background: var(--surface); color: var(--primary); }
+  .gm.dark .nav a.on { background: var(--hover); }
+  .rail .bottom { margin-top: auto; }
+  .tree-panel { background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .search-trigger { margin: 14px 12px 8px; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 12px; background: var(--bg);
+                    border: 1px solid var(--border); color: var(--muted); font-weight: 600; text-align: left; }
+  .search-trigger .grow { flex: 1; }
+  .tree-head { display: flex; align-items: center; justify-content: space-between; padding: 4px 12px 6px 16px; font-size: 11px; font-weight: 800; color: var(--muted); letter-spacing: .04em; }
+  .tree-head .ib { width: 26px; height: 26px; border-radius: 8px; } .tree-head .ib svg.i { width: 15px; height: 15px; }
+  .tree { list-style: none; margin: 0; padding: 0 8px 12px; overflow: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 2px; }
+  .tree ul { list-style: none; margin: 2px 0 0 13px; padding: 0 0 0 4px; border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
+  .row { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 8px 0 2px; border-radius: 9px; font-weight: 600; color: var(--icon); font-size: 13px; }
+  .row:hover { background: var(--hover); }
+  .row.on { background: var(--soft); color: var(--soft-fg); }
+  .row .chev { width: 16px; height: 16px; display: grid; place-items: center; color: var(--muted); }
+  .row .chev svg.i { width: 12px; height: 12px; } .row .chev.open svg.i { transform: rotate(90deg); } .row .chev.none { visibility: hidden; }
+  .row .fi { width: 15px; height: 15px; color: var(--primary); } .row.root .fi { color: var(--icon); }
+  .row .nm2 { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .c { font-size: 11.5px; color: var(--subtle); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .row.on .c { color: var(--soft-fg); }
+  .main { min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
+  .main-head { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var(--bg); }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 0 26px; } .wrap.wide { max-width: 1040px; }
+  .main-head .wrap { padding-top: 12px; padding-bottom: 12px; display: grid; gap: 10px; }
+  .topbar { display: flex; align-items: center; gap: 2px; margin-left: -10px; }
+  .topbar .ib { width: 32px; height: 32px; border-radius: 9px; } .topbar .ib svg.i { width: 17px; height: 17px; }
+  .crumbs { display: flex; align-items: center; gap: 3px; margin-left: 6px; color: var(--muted); font-weight: 600; font-size: 13px; }
+  .crumbs svg.i { width: 12px; height: 12px; } .crumbs .cur { color: var(--fg); }
+  .title-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+  .acts-bar { display: flex; align-items: center; gap: 6px; }
+  .btn { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 12px; border-radius: 11px; font-weight: 700; font-size: 13.5px; }
+  .btn.pri { background: var(--primary); color: #fff; } .gm.dark .btn.pri { color: #0E0E10; }
+  .btn.out { background: var(--surface); border: 1px solid var(--border); color: var(--fg); }
+  .btn.out svg.i { color: var(--icon); }
+  .ibo { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; background: var(--surface); border: 1px solid var(--border); color: var(--icon); }
+  .ibo svg.i { width: 15px; height: 15px; }
+  .main-body { flex: 1; min-height: 0; overflow: auto; scrollbar-width: thin; }
+  .main-body .wrap { padding-top: 16px; padding-bottom: 28px; display: grid; gap: 14px; }
+  .cols { display: grid; grid-template-columns: minmax(0,1.2fr) minmax(0,1fr); gap: 16px; align-items: start; }
+  .col { display: grid; gap: 14px; min-width: 0; }
+  .more { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: var(--icon); }
+  .more.on { background: var(--chip); }
+
+  /* dropdown menu */
+  .menu { position: absolute; z-index: 15; width: 210px; background: var(--raised); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.14);
+          padding: 6px; display: flex; flex-direction: column; gap: 2px; animation: pop .16s ease; }
+  .menu .mi { display: flex; align-items: center; gap: 9px; padding: 8px 9px; border-radius: 8px; font-weight: 600; font-size: 13.5px; }
+  .menu .mi:hover, .menu .mi.sel { background: var(--hover); }
+  .menu .mi kbd { margin-left: auto; }
+  .menu .sep { height: 1px; background: var(--divider); margin: 3px 2px; }
+
+  /* table (D5) */
+  .tbl { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card); overflow: hidden; }
+  .tr { display: grid; grid-template-columns: minmax(0,2.3fr) minmax(0,1.7fr) 84px 84px 78px; align-items: center; gap: 12px; padding: 0 14px; height: 42px; position: relative; font-size: 13.5px; }
+  .tr + .tr::before { content: ""; position: absolute; top: 0; left: 14px; right: 0; height: 1px; background: var(--divider); }
+  .tr.h { height: 34px; font-size: 10.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .tr.h .sorted { color: var(--fg); display: inline-flex; align-items: center; gap: 3px; }
+  .tr .r { text-align: right; font-variant-numeric: tabular-nums; }
+  .tr:not(.h):hover, .tr.hov { background: var(--hover); }
+  .tr .nmc { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .tr .nmc .grow { gap: 0; } .tr .nmc .nm { font-size: 13.5px; } .tr .nmc .sub { font-size: 11.5px; }
+  .mt { width: 26px; height: 26px; border-radius: 8px; background: var(--thumb); color: var(--subtle); display: grid; place-items: center; font-weight: 800; font-size: 10px; flex-shrink: 0; }
+  .tr .vs { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12.5px; }
+  .tr .vs b { color: var(--fg); font-weight: 700; }
+  .tr .qq { font-weight: 800; } .tr .qq small { font-size: 11px; color: var(--muted); font-weight: 600; margin-left: 2px; }
+  .vt .tr { grid-template-columns: minmax(0,1.2fr) minmax(0,1fr) minmax(0,1fr) 150px 30px; height: 46px; }
+
+  /* palette (E2) */
+  .scrim { position: absolute; inset: 0; background: rgba(24,24,27,.30); z-index: 20; }
+  .gm.dark .scrim { background: rgba(0,0,0,.55); }
+  .pal { position: absolute; left: 50%; top: 54px; transform: translateX(-50%); width: 700px; max-width: calc(100% - 32px); background: var(--raised); border: 1px solid var(--border);
+         border-radius: 16px; box-shadow: 0 24px 60px rgba(0,0,0,.24); overflow: hidden; animation: popc .16s ease; }
+  .pal-in { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--divider); }
+  .pal-in .val { flex: 1; font: 600 16px Manrope, sans-serif; }
+  .pal-in .val::after { content: ""; display: inline-block; width: 1.5px; height: 18px; background: var(--primary); vertical-align: -3px; margin-left: 1px; }
+  .pal-scope { font-size: 12px; font-weight: 700; color: var(--soft-fg); background: var(--soft); padding: 3px 8px; border-radius: 999px; }
+  .pal-split { display: grid; grid-template-columns: minmax(0,1fr) 252px; min-height: 320px; }
+  .pal-body { padding: 6px; display: flex; flex-direction: column; gap: 2px; border-right: 1px solid var(--divider); }
+  .pg { padding: 8px 10px 4px; font-size: 11px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .pr { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 10px; }
+  .pr.sel { background: var(--soft); }
+  .pr .grow { gap: 0; } .pr .nm { font-size: 14px; } .pr .sub { font-size: 12px; font-weight: 600; }
+  .pr .q { font-size: 14px; } .pr .th { width: 32px; height: 32px; border-radius: 9px; font-size: 11px; }
+  .pr .ac { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; background: var(--chip); color: var(--icon); }
+  .pr .tabhint { font-size: 11px; font-weight: 700; color: var(--soft-fg); display: inline-flex; gap: 4px; align-items: center; }
+  .ap { padding: 8px; display: flex; flex-direction: column; gap: 2px; }
+  .ap-h { display: flex; gap: 10px; align-items: center; padding: 6px 6px 10px; border-bottom: 1px solid var(--divider); margin-bottom: 4px; }
+  .ap-h .grow { gap: 1px; } .ap-h .nm { font-size: 14px; } .ap-h .sub { font-size: 12px; }
+  .ap .a { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 10px; font-weight: 650; font-size: 13.5px; }
+  .ap .a:hover, .ap .a.sel { background: var(--hover); }
+  .ap .a svg.i { color: var(--icon); width: 15px; height: 15px; }
+  .ap .a kbd { margin-left: auto; }
+  .ap .stp { display: flex; align-items: center; gap: 8px; padding: 4px 6px 8px; }
+  .pal-foot { display: flex; gap: 14px; padding: 9px 14px; border-top: 1px solid var(--divider); color: var(--muted); font-size: 12px; font-weight: 600; }
+  /* phone palette */
+  .mpal { flex: 1; min-height: 0; display: flex; flex-direction: column; background: var(--raised); }
+  .mpal-res { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; padding: 8px; }
+  .mpal .pr { padding: 9px 10px; }
+  .xp { background: var(--soft); border-radius: 12px; padding-bottom: 10px; }
+  .xp .pr.sel { background: none; }
+  .xp-acts { display: flex; align-items: center; gap: 8px; padding: 2px 10px 0; flex-wrap: wrap; }
+  .xp .pill-step { background: var(--surface); }
+  .mpal-bar { display: flex; align-items: center; gap: 6px; margin: 0 8px 8px 10px; }
+  .mpal-in { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 14px; height: 50px; border-radius: 16px; border: 2px solid var(--primary); }
+  .mpal-in .val { flex: 1; font: 600 16px Manrope, sans-serif; } .mpal-in .val::after { content: ""; display: inline-block; width: 1.5px; height: 18px; background: var(--primary); vertical-align: -3px; margin-left: 1px; }
+  .cancel { height: 44px; padding: 0 8px; font-weight: 700; color: var(--primary); border-radius: 10px; }
+  .kbd { height: 228px; background: #D1D3D9; flex-shrink: 0; display: grid; place-items: center; color: #6b6f78; font-weight: 700; font-size: 13px; }
+  .gm.dark .kbd { background: #2B2C30; color: #8A8D96; }
+
+  /* directions */
+  .dirs { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; }
+  .dir { border: 1px solid #2A2A2F; border-radius: 14px; overflow: hidden; background: #232327; }
+  .dir-h { padding: 14px 16px 10px; } .dir-h h3 { margin: 0 0 4px; font-size: 15px; } .dir-h p { margin: 0; font-size: 12.5px; color: #A1A1AA; line-height: 1.45; }
+  .dir .half { padding: 14px; background: var(--bg); display: grid; gap: 10px; }
+  .sw8 { display: flex; gap: 4px; } .sw8 span { width: 22px; height: 22px; border-radius: 6px; border: 1px solid rgba(127,127,127,.25); }
+  .gm.dirB { --bg:#F5F3EF; --surface:#FFFEFB; --raised:#FFFEFB; --border:#E7E3DB; --divider:#EEEAE3; --fg:#1E1C18; --muted:#6F685D; --subtle:#6F685D; --chip:#ECE8E0;
+             --hover:#F0EDE6; --primary:#4840C8; --soft:#EEECFA; --soft-fg:#4840C8; --thumb:#F1EEE7; --icon:#3A362F; --r-card:18px; --r-thumb:12px; }
+  .gm.dirB.dark { --bg:#12110F; --surface:#1B1A17; --raised:#22201C; --border:#2A2824; --divider:#24221E; --fg:#F2EEE6; --muted:#A59D90; --subtle:#A59D90; --chip:#26241F;
+             --hover:#22201C; --primary:#A29CF7; --soft:rgba(162,156,247,.15); --soft-fg:#BDB9FA; --thumb:#24221E; --icon:#DCD6CB; }
+  .gm.dirC { --bg:#F3F4F5; --surface:#FFFFFF; --raised:#FFFFFF; --border:#E1E4E8; --divider:#ECEEF1; --fg:#101214; --muted:#687079; --subtle:#687079; --chip:#EAECEF;
+             --hover:#F0F2F4; --primary:#4F46E5; --soft:#EEF0FF; --soft-fg:#4F46E5; --thumb:#EEF0F2; --icon:#2F3338; --led-off:#C9CDD3; --r-card:12px; --r-thumb:8px; }
+  .gm.dirC.dark { --bg:#0A0B0D; --surface:#121417; --raised:#181B1F; --border:#23262B; --divider:#1B1E22; --fg:#E6E8EB; --muted:#8A929C; --subtle:#8A929C; --chip:#1C1F23;
+             --hover:#1A1D21; --primary:#8B93FF; --soft:rgba(139,147,255,.14); --soft-fg:#AEB4FF; --thumb:#1C1F23; --icon:#C9CED6; --led-off:#3A3F46; }
+  .gm.dirC .q, .gm.dirC .pn { font-family: 'JetBrains Mono', ui-monospace, monospace; font-weight: 600; letter-spacing: -.01em; }
+  .gm.dirC .q small { font-family: Manrope, sans-serif; }
+  .gm.dirC .th { font-family: 'JetBrains Mono', ui-monospace, monospace; font-weight: 600; font-size: 12px;
+                 background-image: repeating-linear-gradient(135deg, transparent 0 5px, rgba(127,127,127,.08) 5px 6px); }
+  .gm.dirC .lbl { font-size: 10.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .led { width: 6px; height: 6px; border-radius: 50%; background: var(--primary); display: inline-block; margin-right: 8px; flex-shrink: 0; }
+  .led.off { background: transparent; box-shadow: inset 0 0 0 1.5px var(--led-off); }
+  .gm.dark.dirC .led:not(.off) { box-shadow: 0 0 6px rgba(139,147,255,.6); }
+
+  @keyframes pop { from { opacity: 0; transform: scale(.94); } }
+  @keyframes popc { from { opacity: 0; transform: translateX(-50%) scale(.97); } }
+  @keyframes roll { from { transform: translateY(45%); opacity: 0; } }
+  @keyframes drain { to { stroke-dashoffset: 44; } }
+  @keyframes rowin { from { opacity: 0; transform: translateY(-6px); } }
+  @media (prefers-reduced-motion: reduce) {
+    .gm *, .gm *::before { animation-duration: 1ms !important; transition-duration: 1ms !important; }
+    .ring.run .fg { animation: none !important; }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+    <symbol id="i-folder-plus" viewBox="0 0 24 24"><path d="M12 10v6"/><path d="M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+    <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-updown" viewBox="0 0 24 24"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+    <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></symbol>
+    <symbol id="i-move" viewBox="0 0 24 24"><path d="M2 9V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1"/><path d="M2 13h10"/><path d="m9 16 3-3-3-3"/></symbol>
+    <symbol id="i-archive" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/></symbol>
+    <symbol id="i-box" viewBox="0 0 24 24"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="M3.29 7 12 12l8.71-5"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 12h16"/><path d="M4 18h16"/><path d="M4 6h16"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 15V3"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m17 8-5-5-5 5"/><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/></symbol>
+    <symbol id="i-count" viewBox="0 0 24 24"><path d="M13 21h8"/><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+    <symbol id="i-sort" viewBox="0 0 24 24"><path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/></symbol>
+    <symbol id="i-enter" viewBox="0 0 24 24"><polyline points="9 10 4 15 9 20"/><path d="M20 4v7a4 4 0 0 1-4 4H4"/></symbol>
+    <symbol id="i-open" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/></symbol>
+    <symbol id="i-rows" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></symbol>
+    <symbol id="i-table" viewBox="0 0 24 24"><path d="M12 3v18"/><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z"/><path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12"/><path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"/></symbol>
+  </defs>
+</svg>
+
+<div class="page">
+  <header class="page-head">
+    <h1>GrayMatter: предложения по интерфейсу</h1>
+    <p>Пять главных предложений из отчёта <b>05-ui-ux.md</b>, телефон и компьютер рядом. Цвета, шрифт и скругления взяты из текущих токенов <code>main.css</code>. В тёмной теме уже применена правка G1: выделение полупрозрачным индиго вместо тёмно-синей плашки, поверхность слоёв светлее фона, заметная подсветка совпадений. Интерфейс на английском, как в приложении, подписи на русском. Данные выдуманные.</p>
+    <div class="toggle" role="group" aria-label="Тема макетов">
+      <button type="button" class="on" data-theme="light">Светлая</button>
+      <button type="button" data-theme="dark">Тёмная</button>
+    </div>
+    <ul class="toc">
+      <li><a href="#p1">1 · Степпер с накоплением и отменой</a></li>
+      <li><a href="#p2">2 · Варианты и значения атрибутов</a></li>
+      <li><a href="#p3">3 · Действия прямо из палитры</a></li>
+      <li><a href="#p4">4 · Архив без подтверждения, свайп по строке</a></li>
+      <li><a href="#p5">5 · Списки: монограммы, сводка, сортировка, таблица</a></li>
+      <li><a href="#p6">Три визуальных направления</a></li>
+    </ul>
+  </header>
+
+  <!-- =================================================================== 1 -->
+  <section class="prop" id="p1">
+    <div class="prop-h"><h2>1 · Степпер с накоплением нажатий и отменой до записи</h2><span class="ids">B1 + B3 + A1 + G2 + E4</span></div>
+    <p class="prop-lead">Нажатия «−» и «+» копятся на устройстве и показываются отдельной отметкой «ждёт записи». Через 2 секунды после последнего нажатия уходит одна запись в журнал. Пока запись не ушла, её можно отменить из плашки над нижней панелью. Подтверждённое число меняется только после ответа базы: это не оптимистичное обновление. «Count» (поставить число) теперь на виду. На телефоне можно нажимать: это работающий пример.</p>
+    <div class="pair">
+      <div>
+        <div class="cap">Телефон · карточка предмета (попробуйте нажать − и +)</div>
+        <div class="gm" id="demo1">
+          <div class="phone">
+            <div class="sb"><span>9:41</span><span>▮▮▮ 82%</span></div>
+            <div class="mhead">
+              <div class="mtop">
+                <button class="ib t" aria-label="Menu"><svg class="i"><use href="#i-menu"/></svg></button>
+                <button class="ib t" aria-label="Back"><svg class="i"><use href="#i-left"/></svg></button>
+                <button class="ib t off" aria-label="Forward"><svg class="i"><use href="#i-right"/></svg></button>
+                <span class="sp"></span>
+                <button class="ib t" aria-label="Edit"><svg class="i"><use href="#i-pencil"/></svg></button>
+                <button class="ib t" aria-label="Move"><svg class="i"><use href="#i-move"/></svg></button>
+                <button class="ib t" aria-label="Archive"><svg class="i"><use href="#i-archive"/></svg></button>
+              </div>
+              <div class="mtitle">
+                <div class="mcrumb">Electronics <svg class="i"><use href="#i-right"/></svg> ICs <svg class="i"><use href="#i-right"/></svg> Op-amps</div>
+                <h1 class="ft">TL072</h1>
+              </div>
+            </div>
+            <div class="mscroll">
+              <p class="desc">Dual JFET-input op-amp, low noise.</p>
+              <div class="tags"><span class="tag">audio</span><span class="tag">dip-8</span></div>
+              <section class="stock" aria-label="Stock">
+                <div class="stock-top">
+                  <div class="big">
+                    <span class="num" data-num>45</span><span class="u">pcs</span>
+                    <span class="pend" data-pend hidden><svg class="ring" viewBox="0 0 18 18" data-ring><circle class="bg" cx="9" cy="9" r="7"/><circle class="fg" cx="9" cy="9" r="7"/></svg><span data-delta>+1</span><span class="to">→ <span data-to>46</span></span></span>
+                  </div>
+                  <div class="pill-step" role="group" aria-label="TL072, 45 pcs">
+                    <button type="button" data-d="-1" aria-label="Use one"><svg class="i"><use href="#i-minus"/></svg></button>
+                    <span class="div"></span>
+                    <button type="button" data-d="1" aria-label="Add one"><svg class="i"><use href="#i-plus"/></svg></button>
+                  </div>
+                </div>
+                <div class="prices">avg $0.054 ea · last $0.025</div>
+                <div class="acts3">
+                  <button class="btn-o t"><svg class="i s"><use href="#i-download"/></svg>Receive</button>
+                  <button class="btn-o t"><svg class="i s"><use href="#i-upload"/></svg>Use</button>
+                  <button class="btn-o t"><svg class="i s"><use href="#i-count"/></svg>Count</button>
+                </div>
+              </section>
+              <div class="sec-h">History</div>
+              <div class="lst" data-journal>
+                <div class="jg">Today</div>
+                <div class="jr"><span class="tm">18:40</span><span class="k">Used<small>VCO module</small></span><span class="d">−2</span><span class="bal">45</span></div>
+                <div class="jg">Nov 10</div>
+                <div class="jr"><span class="tm">21:53</span><span class="k">Received<small>$0.25 · <a href="javascript:void 0">Where bought</a> · spare</small></span><span class="d">+10</span><span class="bal">47</span></div>
+                <div class="jr"><span class="tm">21:52</span><span class="k">Received<small>$2.30</small></span><span class="d">+37</span><span class="bal">37</span></div>
+              </div>
+            </div>
+            <div class="snack" data-snack role="status">
+              <svg class="ring" viewBox="0 0 18 18" data-ring2><circle class="bg" cx="9" cy="9" r="7"/><circle class="fg" cx="9" cy="9" r="7"/></svg>
+              <span class="tx" data-text>Receiving 1 pc of TL072</span>
+              <button class="undo t" type="button" data-undo>Undo</button>
+            </div>
+            <div class="dock">
+              <div class="sbar"><svg class="i"><use href="#i-search"/></svg>Search Electronics</div>
+              <button class="fab" aria-label="Add item"><svg class="i"><use href="#i-plus"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <ul class="notes">
+          <li>Пять быстрых нажатий дают одну запись «+5», а не пять. Никакие кнопки не блокируются, пока идёт запись.</li>
+          <li>Кольцо отсчитывает 2 с. «Undo» отменяет без записи. Уход с экрана записывает сразу.</li>
+          <li>Плашка стоит над строкой поиска и «+», а не поверх них.</li>
+          <li>История: группы по дням, время без даты, справа остаток после движения.</li>
+        </ul>
+      </div>
+
+      <div class="desk-col">
+        <div class="cap">Компьютер · карточка в две колонки (E4), состояние «ждёт записи»</div>
+        <div class="gm">
+          <div class="desk" data-sel="Op-amps">
+            <section class="main">
+              <div class="main-head"><div class="wrap wide">
+                <div class="topbar">
+                  <button class="ib t"><svg class="i"><use href="#i-left"/></svg></button><button class="ib t off"><svg class="i"><use href="#i-right"/></svg></button>
+                  <div class="crumbs">Electronics <svg class="i"><use href="#i-right"/></svg> ICs <svg class="i"><use href="#i-right"/></svg> <span class="cur">Op-amps</span></div>
+                </div>
+                <div class="title-row">
+                  <div><h1 class="ft">TL072</h1><div class="ft-sub">Dual JFET-input op-amp, low noise</div></div>
+                  <div class="acts-bar">
+                    <button class="btn out"><svg class="i s"><use href="#i-pencil"/></svg>Edit</button>
+                    <button class="ibo" title="Move"><svg class="i"><use href="#i-move"/></svg></button>
+                    <button class="ibo" title="Archive"><svg class="i"><use href="#i-archive"/></svg></button>
+                  </div>
+                </div>
+              </div></div>
+              <div class="main-body"><div class="wrap wide">
+                <div class="cols">
+                  <div class="col">
+                    <section class="stock">
+                      <div class="stock-top">
+                        <div class="big"><span class="num">45</span><span class="u">pcs</span>
+                          <span class="pend"><svg class="ring frozen" viewBox="0 0 18 18"><circle class="bg" cx="9" cy="9" r="7"/><circle class="fg" cx="9" cy="9" r="7"/></svg>−3<span class="to">→ 42</span></span>
+                        </div>
+                        <div class="pill-step"><button><svg class="i"><use href="#i-minus"/></svg></button><span class="div"></span><button><svg class="i"><use href="#i-plus"/></svg></button></div>
+                      </div>
+                      <div class="prices">avg $0.054 ea · last $0.025 · value ≈ $2.43</div>
+                      <div class="acts3">
+                        <button class="btn-o t">Receive <kbd>R</kbd></button>
+                        <button class="btn-o t">Use <kbd>U</kbd></button>
+                        <button class="btn-o t">Count <kbd>C</kbd></button>
+                      </div>
+                    </section>
+                    <div class="sec-h">Attributes</div>
+                    <dl class="lst" style="margin:0">
+                      <div class="attr"><dt>Package</dt><dd>DIP-8</dd></div>
+                      <div class="attr"><dt>Channels</dt><dd>2</dd></div>
+                    </dl>
+                    <div class="tags"><span class="tag">audio</span><span class="tag">dip-8</span></div>
+                  </div>
+                  <div class="col">
+                    <div class="sec-h">History</div>
+                    <div class="lst">
+                      <div class="jg">Today</div>
+                      <div class="jr"><span class="tm">18:40</span><span class="k">Used<small>VCO module · Pixel 8</small></span><span class="d">−2</span><span class="bal">45</span></div>
+                      <div class="jg">Nov 10</div>
+                      <div class="jr"><span class="tm">21:53</span><span class="k">Received<small>$0.25 · <a href="javascript:void 0">Where bought</a> · spare for the VCO</small></span><span class="d">+10</span><span class="bal">47</span></div>
+                      <div class="jr"><span class="tm">21:52</span><span class="k">Received<small>$2.30 · Demo</small></span><span class="d">+37</span><span class="bal">37</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div></div>
+              <div class="snack static desk-snack"><svg class="ring frozen" viewBox="0 0 18 18"><circle class="bg" cx="9" cy="9" r="7"/><circle class="fg" cx="9" cy="9" r="7"/></svg><span class="tx">Using 3 pcs of TL072</span><kbd>⌘Z</kbd><button class="undo">Undo</button></div>
+            </section>
+          </div>
+        </div>
+        <ul class="notes">
+          <li>С 1280 px карточка в две колонки: запас и атрибуты слева, история справа. Обе видны без прокрутки.</li>
+          <li>У кнопок подсказаны клавиши (E1): − / + шаг, U / R / C листы, ⌘Z отмена, пока плашка видна.</li>
+          <li>Отметка «−3 → 42» индиго-тоном показывает, что запись ещё не ушла. Подтверждённое «45» не меняется до ответа базы.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================================================================== 2 -->
+  <section class="prop" id="p2">
+    <div class="prop-h"><h2>2 · Варианты: число внутри степпера, значения атрибутов на виду</h2><span class="ids">B4 + D3</span></div>
+    <p class="prop-lead">Значение стоит между своими «−» и «+», а имя варианта получает место и не обрезается. Нажатие на имя открывает лист варианта со всеми действиями, поэтому «⋯» на телефоне не нужно. Вместо «Differs by variant» видны сами значения. На компьютере варианты — маленькая таблица со столбцом на каждый атрибут, степпер появляется при наведении.</p>
+    <div class="pair">
+      <div>
+        <div class="cap">Телефон · резистор с вариантами</div>
+        <div class="gm">
+          <div class="phone">
+            <div class="sb"><span>9:41</span><span>▮▮▮ 82%</span></div>
+            <div class="mhead">
+              <div class="mtop">
+                <button class="ib"><svg class="i"><use href="#i-menu"/></svg></button><button class="ib"><svg class="i"><use href="#i-left"/></svg></button><button class="ib off"><svg class="i"><use href="#i-right"/></svg></button>
+                <span class="sp"></span>
+                <button class="ib"><svg class="i"><use href="#i-pencil"/></svg></button><button class="ib"><svg class="i"><use href="#i-move"/></svg></button><button class="ib"><svg class="i"><use href="#i-archive"/></svg></button>
+              </div>
+              <div class="mtitle">
+                <div class="mcrumb">Electronics <svg class="i"><use href="#i-right"/></svg> Passive <svg class="i"><use href="#i-right"/></svg> Resistors</div>
+                <h1 class="ft">Резистор 0,25 Вт</h1>
+              </div>
+            </div>
+            <div class="mscroll">
+              <section class="stock">
+                <div class="big"><span class="num">105</span><span class="u">pcs</span><span class="u" style="margin-left:4px">in 3 variants</span></div>
+                <div class="prices">avg $0.02 ea · last $0.02</div>
+              </section>
+              <div class="sec-h">Variants</div>
+              <div class="lst">
+                <div class="vr tap"><span class="grow"><span class="nm">No variant</span><span class="sub">not sorted yet</span></span>
+                  <span class="pill-step sm"><button><svg class="i"><use href="#i-minus"/></svg></button><span class="v">2<small>pcs</small></span><button><svg class="i"><use href="#i-plus"/></svg></button></span></div>
+                <div class="vr tap"><span class="grow"><span class="nm">1k</span><span class="sub">1 kΩ · 0805</span></span>
+                  <span class="pill-step sm pending"><button><svg class="i"><use href="#i-minus"/></svg></button><span class="v">3 → 1</span><button><svg class="i"><use href="#i-plus"/></svg></button></span></div>
+                <div class="vr tap"><span class="grow"><span class="nm">10k</span><span class="sub">10 kΩ · SOIC-8 footprint</span></span>
+                  <span class="pill-step sm"><button><svg class="i"><use href="#i-minus"/></svg></button><span class="v">100<small>pcs</small></span><button><svg class="i"><use href="#i-plus"/></svg></button></span></div>
+                <div class="vr tap dim"><span class="grow"><span class="nm">100k</span><span class="sub">100 kΩ · DIP</span></span>
+                  <span class="pill-step sm"><button style="opacity:.35"><svg class="i"><use href="#i-minus"/></svg></button><span class="v" style="color:var(--muted)">0<small>pcs</small></span><button><svg class="i"><use href="#i-plus"/></svg></button></span></div>
+              </div>
+              <div class="sec-h">Attributes</div>
+              <dl class="lst" style="margin:0">
+                <div class="attr"><dt>Resistance</dt><dd>1 kΩ · 10 kΩ · 100 kΩ<small>per variant</small></dd></div>
+                <div class="attr"><dt>Package</dt><dd>0805 · SOIC-8 · DIP<small>per variant</small></dd></div>
+                <div class="attr"><dt>Power</dt><dd>0.25 W</dd></div>
+              </dl>
+            </div>
+            <div class="snack static"><svg class="ring frozen" viewBox="0 0 18 18"><circle class="bg" cx="9" cy="9" r="7"/><circle class="fg" cx="9" cy="9" r="7"/></svg><span class="tx">Using 2 pcs of 1k</span><button class="undo">Undo</button></div>
+            <div class="dock"><div class="sbar"><svg class="i"><use href="#i-search"/></svg>Search Electronics</div><button class="fab"><svg class="i"><use href="#i-plus"/></svg></button></div>
+          </div>
+        </div>
+        <ul class="notes">
+          <li>Степпер-пилюля [− 100 pcs +]: число стоит между своими кнопками, как советует NN/g.</li>
+          <li>Нажатие на имя открывает лист варианта: Use… / Receive… / Count, перенос остатка, атрибуты, переименование, архив.</li>
+          <li>Ожидающая запись — тон внутри пилюли «3 → 1».</li>
+        </ul>
+      </div>
+
+      <div class="desk-col">
+        <div class="cap">Компьютер · варианты таблицей со столбцами атрибутов</div>
+        <div class="gm">
+          <div class="desk" data-sel="Resistors">
+            <section class="main">
+              <div class="main-head"><div class="wrap">
+                <div class="topbar"><button class="ib"><svg class="i"><use href="#i-left"/></svg></button><button class="ib off"><svg class="i"><use href="#i-right"/></svg></button>
+                  <div class="crumbs">Electronics <svg class="i"><use href="#i-right"/></svg> Passive components <svg class="i"><use href="#i-right"/></svg> <span class="cur">Resistors</span></div></div>
+                <div class="title-row"><div><h1 class="ft">Резистор 0,25 Вт</h1><div class="ft-sub">105 pcs in 3 variants · avg $0.02 ea</div></div>
+                  <div class="acts-bar"><button class="btn out"><svg class="i s"><use href="#i-pencil"/></svg>Edit</button><button class="ibo"><svg class="i"><use href="#i-move"/></svg></button><button class="ibo"><svg class="i"><use href="#i-archive"/></svg></button></div></div>
+              </div></div>
+              <div class="main-body"><div class="wrap">
+                <div class="sec-h">Variants</div>
+                <div class="tbl vt">
+                  <div class="tr h"><span class="sorted">Variant <svg class="i xs"><use href="#i-down"/></svg></span><span>Resistance</span><span>Package</span><span class="r">Quantity</span><span></span></div>
+                  <div class="tr"><span class="nm" style="font-size:14px">No variant</span><span class="vs">—</span><span class="vs">—</span><span class="r qq">2<small>pcs</small></span><span></span></div>
+                  <div class="tr"><span class="nm" style="font-size:14px">1k</span><span>1 kΩ</span><span>0805</span><span class="r qq">3<small>pcs</small></span><span></span></div>
+                  <div class="tr hov"><span class="nm" style="font-size:14px">10k</span><span>10 kΩ</span><span>SOIC-8</span>
+                    <span class="r" style="display:flex;justify-content:flex-end"><span class="pill-step sm"><button><svg class="i"><use href="#i-minus"/></svg></button><span class="v">100<small>pcs</small></span><button><svg class="i"><use href="#i-plus"/></svg></button></span></span>
+                    <button class="more on"><svg class="i s"><use href="#i-more"/></svg></button></div>
+                  <div class="tr dim"><span class="nm" style="font-size:14px;color:var(--muted)">100k</span><span>100 kΩ</span><span>DIP</span><span class="r qq" style="color:var(--muted)"><span class="out">Out</span>0<small>pcs</small></span><span></span></div>
+                </div>
+                <button class="btn out" style="justify-self:start"><svg class="i s"><use href="#i-plus"/></svg>Add variants</button>
+                <div class="sec-h">Attributes</div>
+                <dl class="lst" style="margin:0">
+                  <div class="attr"><dt>Resistance</dt><dd>1 kΩ – 100 kΩ <small>3 values, per variant</small></dd></div>
+                  <div class="attr"><dt>Power</dt><dd>0.25 W</dd></div>
+                </dl>
+              </div></div>
+            </section>
+          </div>
+        </div>
+        <ul class="notes">
+          <li>Атрибут «на вариант» становится столбцом. Удобно заводить и сверять номиналы пачкой.</li>
+          <li>Количество выровнено вправо и не прыгает: степпер появляется на месте числа при наведении и фокусе, «⋯» в своём резерве.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================================================================== 3 -->
+  <section class="prop" id="p3">
+    <div class="prop-h"><h2>3 · Действия прямо из палитры: «есть ли TL072?» → «потратил 2» без перехода</h2><span class="ids">E2 + E1 + D1</span></div>
+    <p class="prop-lead">Главный сценарий закрывается в одном окне. На компьютере Tab на выбранном предмете открывает панель действий справа, как в Raycast, с клавишами. На телефоне долгое нажатие на результат раскрывает его на месте: степпер и «Use… / Receive… / Open» прямо над полем поиска, под большим пальцем.</p>
+    <div class="pair">
+      <div>
+        <div class="cap">Телефон · палитра, результат раскрыт долгим нажатием</div>
+        <div class="gm">
+          <div class="phone">
+            <div class="sb"><span>9:41</span><span>▮▮▮ 82%</span></div>
+            <div class="mpal">
+              <div class="mpal-res">
+                <div class="pg">Actions</div>
+                <div class="pr"><span class="ac"><svg class="i s"><use href="#i-plus"/></svg></span><span class="grow"><span class="nm">Add item “tl072”</span></span></div>
+                <div class="pg">Items</div>
+                <div class="pr dim"><span class="th">TL</span><span class="grow"><span class="nm"><mark>TL07</mark>1</span><span class="sub">ICs › Op-amps</span></span><span class="q"><span class="out">Out</span>0<small>pcs</small></span></div>
+                <div class="pr"><span class="th">TL</span><span class="grow"><span class="nm"><mark>TL07</mark>4 quad</span><span class="sub">ICs › Op-amps</span></span><span class="q">8<small>pcs</small></span></div>
+                <div class="xp">
+                  <div class="pr sel"><span class="th" style="background:var(--surface)">TL</span><span class="grow"><span class="nm"><mark>TL072</mark></span><span class="sub">ICs › Op-amps</span></span><span class="q">45<small>pcs</small></span></div>
+                  <div class="xp-acts">
+                    <span class="pill-step sm"><button><svg class="i"><use href="#i-minus"/></svg></button><span class="v">45<small>pcs</small></span><button><svg class="i"><use href="#i-plus"/></svg></button></span>
+                    <button class="btn-o sm">Use…</button><button class="btn-o sm">Receive…</button>
+                  </div>
+                </div>
+              </div>
+              <div class="mpal-bar">
+                <div class="mpal-in"><svg class="i" style="color:var(--muted)"><use href="#i-search"/></svg><span class="val">tl072</span><button class="ib" style="width:32px;height:32px"><svg class="i s"><use href="#i-x"/></svg></button></div>
+                <button class="cancel">Cancel</button>
+              </div>
+              <div class="kbd">клавиатура</div>
+            </div>
+          </div>
+        </div>
+        <ul class="notes">
+          <li>Обычное нажатие открывает карточку, как сейчас. Долгое раскрывает строку с действиями.</li>
+          <li>Монограммы «TL» вместо одинаковой иконки чипа (D1). Подсветка совпадения читается в обеих темах (G1).</li>
+        </ul>
+      </div>
+
+      <div class="desk-col">
+        <div class="cap">Компьютер · ⌘K, «tl072», Tab — панель действий</div>
+        <div class="gm">
+          <div class="desk" data-sel="Op-amps">
+            <section class="main">
+              <div class="main-head"><div class="wrap"><div class="topbar"><button class="ib"><svg class="i"><use href="#i-left"/></svg></button><button class="ib off"><svg class="i"><use href="#i-right"/></svg></button><div class="crumbs">Electronics <svg class="i"><use href="#i-right"/></svg> ICs <svg class="i"><use href="#i-right"/></svg> <span class="cur">Op-amps</span></div></div>
+                <div class="title-row"><div><h1 class="ft">Op-amps</h1><div class="ft-sub">0 folders · 6 items</div></div></div></div></div>
+              <div class="main-body"><div class="wrap"><div class="lst" data-items="opamps"></div></div></div>
+            </section>
+            <div class="scrim">
+              <div class="pal" role="dialog" aria-label="Search">
+                <div class="pal-in"><svg class="i" style="color:var(--muted)"><use href="#i-search"/></svg><span class="val">tl072</span><span class="pal-scope">Electronics</span></div>
+                <div class="pal-split">
+                  <div class="pal-body">
+                    <div class="pg">Items</div>
+                    <div class="pr sel"><span class="th" style="background:var(--surface)">TL</span><span class="grow"><span class="nm"><mark>TL072</mark></span><span class="sub">ICs › Op-amps</span></span><span class="q">45<small>pcs</small></span></div>
+                    <div class="pr"><span class="th">TL</span><span class="grow"><span class="nm"><mark>TL07</mark>4 quad</span><span class="sub">ICs › Op-amps</span></span><span class="q">8<small>pcs</small></span></div>
+                    <div class="pr dim"><span class="th">TL</span><span class="grow"><span class="nm"><mark>TL07</mark>1</span><span class="sub">ICs › Op-amps</span></span><span class="q"><span class="out">Out</span>0<small>pcs</small></span></div>
+                    <div class="pg">Actions</div>
+                    <div class="pr"><span class="ac"><svg class="i s"><use href="#i-plus"/></svg></span><span class="grow"><span class="nm">Add item “tl072”</span></span></div>
+                  </div>
+                  <div class="ap" aria-label="Actions for TL072">
+                    <div class="ap-h"><span class="th">TL</span><span class="grow"><span class="nm">TL072</span><span class="sub">Op-amps · 45 pcs</span></span></div>
+                    <div class="stp"><span class="pill-step sm"><button><svg class="i"><use href="#i-minus"/></svg></button><span class="v">45<small>pcs</small></span><button><svg class="i"><use href="#i-plus"/></svg></button></span><span style="font-size:12px;color:var(--muted);font-weight:600">− / + keys</span></div>
+                    <div class="a sel"><svg class="i"><use href="#i-enter"/></svg>Open<kbd>↵</kbd></div>
+                    <div class="a"><svg class="i"><use href="#i-upload"/></svg>Use…<kbd>U</kbd></div>
+                    <div class="a"><svg class="i"><use href="#i-download"/></svg>Receive…<kbd>R</kbd></div>
+                    <div class="a"><svg class="i"><use href="#i-count"/></svg>Count…<kbd>C</kbd></div>
+                    <div class="a"><svg class="i"><use href="#i-move"/></svg>Move…<kbd>M</kbd></div>
+                    <div class="a"><svg class="i"><use href="#i-copy"/></svg>Copy name<kbd>⌘C</kbd></div>
+                  </div>
+                </div>
+                <div class="pal-foot"><span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>↵</kbd> open</span><span><kbd>Tab</kbd> actions</span><span><kbd>esc</kbd> close</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <ul class="notes">
+          <li>Путь «⌘K → tl072 → Tab → − − → Esc» записывает одно движение «−2» (через накопление из B1).</li>
+          <li>Клавиши подписаны прямо у действий: палитра сама учит горячим клавишам.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================================================================== 4 -->
+  <section class="prop" id="p4">
+    <div class="prop-h"><h2>4 · Архив без подтверждения — с отменой; свайп по строке</h2><span class="ids">C1 + A1 + A5</span></div>
+    <p class="prop-lead">Архив обратим по устройству данных (<code>restore</code> по <code>archiveId</code>), поэтому вместо листа «Вы уверены?» действие выполняется сразу, а в плашке есть «Undo». Подтверждение остаётся только для необратимого: удаление навсегда, удаление атрибута со значениями. Свайп влево по строке открывает «Use 1» и «More». Это только ускоритель: те же действия есть в долгом нажатии и в карточке. Свайп вправо по-прежнему открывает меню.</p>
+    <div class="pair">
+      <div>
+        <div class="cap">Телефон · папка, строка сдвинута влево, плашка «Archived · Undo»</div>
+        <div class="gm">
+          <div class="phone">
+            <div class="sb"><span>9:41</span><span>▮▮▮ 82%</span></div>
+            <div class="mhead">
+              <div class="mtop">
+                <button class="ib"><svg class="i"><use href="#i-menu"/></svg></button><button class="ib"><svg class="i"><use href="#i-left"/></svg></button><button class="ib off"><svg class="i"><use href="#i-right"/></svg></button>
+                <span class="sp"></span>
+                <button class="ib"><svg class="i"><use href="#i-folder-plus"/></svg></button><button class="ib"><svg class="i"><use href="#i-pencil"/></svg></button><button class="ib"><svg class="i"><use href="#i-move"/></svg></button><button class="ib"><svg class="i"><use href="#i-archive"/></svg></button>
+              </div>
+              <div class="mtitle"><div class="mcrumb">Electronics</div><h1 class="ft">ICs</h1></div>
+            </div>
+            <div class="mscroll">
+              <div class="lst">
+                <div class="li f"><span class="fth"><svg class="i s"><use href="#i-folder"/></svg></span><span class="grow"><span class="nm f">Op-amps</span></span><span class="cnt">6</span></div>
+                <div class="li f"><span class="fth"><svg class="i s"><use href="#i-folder"/></svg></span><span class="grow"><span class="nm f">Logic</span></span><span class="cnt">4</span></div>
+              </div>
+              <div class="sec-h">Items · 3</div>
+              <div class="lst">
+                <div class="li"><span class="th">CD</span><span class="grow"><span class="nm">CD4017</span><span class="sub">Decade counter</span></span><span class="q">12<small>pcs</small></span></div>
+                <div class="sw">
+                  <div class="li swp"><span class="th">LM</span><span class="grow"><span class="nm">LM13700</span><span class="sub">Dual OTA</span></span><span class="q">6<small>pcs</small></span>
+                    <span class="sw-in"><button><svg class="i s"><use href="#i-minus"/></svg>Use 1</button><button class="ic" aria-label="More"><svg class="i s"><use href="#i-more"/></svg></button></span></div>
+                </div>
+                <div class="li dt"><span class="th">74</span><span class="grow"><span class="nm">74HC595</span><span class="sub">Shift register</span></span><span class="q">20<small>pcs</small></span></div>
+              </div>
+            </div>
+            <div class="snack static"><span class="tx">“NE555” archived</span><button class="undo">Undo</button></div>
+            <div class="dock"><div class="sbar"><svg class="i"><use href="#i-search"/></svg>Search Electronics</div><button class="fab"><svg class="i"><use href="#i-plus"/></svg></button></div>
+          </div>
+        </div>
+        <ul class="notes">
+          <li>При свайпе уезжает только миниатюра, имя и число остаются видны (NN/g). Полный свайп ничего не делает, порог отмечен лёгкой вибрацией (A2).</li>
+          <li>«Undo» возвращает ровно то, что архивировали этим действием, по его <code>archiveId</code>.</li>
+        </ul>
+      </div>
+
+      <div class="desk-col">
+        <div class="cap">Компьютер · меню «⋯» без многоточий у Archive, плашка с ⌘Z</div>
+        <div class="gm">
+          <div class="desk" data-sel="ICs">
+            <section class="main">
+              <div class="main-head"><div class="wrap">
+                <div class="topbar"><button class="ib"><svg class="i"><use href="#i-left"/></svg></button><button class="ib off"><svg class="i"><use href="#i-right"/></svg></button><div class="crumbs">Electronics <svg class="i"><use href="#i-right"/></svg> <span class="cur">ICs</span></div></div>
+                <div class="title-row"><div><h1 class="ft">ICs</h1><div class="ft-sub">2 folders · 3 items</div></div>
+                  <div class="acts-bar"><button class="btn pri"><svg class="i s"><use href="#i-plus"/></svg>Add item</button><button class="btn out"><svg class="i s"><use href="#i-folder-plus"/></svg>New folder</button><button class="ibo"><svg class="i"><use href="#i-pencil"/></svg></button><button class="ibo"><svg class="i"><use href="#i-move"/></svg></button><button class="ibo"><svg class="i"><use href="#i-archive"/></svg></button></div></div>
+              </div></div>
+              <div class="main-body"><div class="wrap">
+                <div class="lst">
+                  <div class="li f"><span class="fth"><svg class="i s"><use href="#i-folder"/></svg></span><span class="grow"><span class="nm f">Op-amps</span></span><span class="cnt">6</span><span style="width:30px"></span></div>
+                  <div class="li f"><span class="fth"><svg class="i s"><use href="#i-folder"/></svg></span><span class="grow"><span class="nm f">Logic</span></span><span class="cnt">4</span><span style="width:30px"></span></div>
+                </div>
+                <div class="sec-h">Items · 3</div>
+                <div class="lst" style="overflow:visible;position:relative">
+                  <div class="li hov"><span class="th">CD</span><span class="grow"><span class="nm">CD4017</span><span class="sub">Decade counter</span></span><span class="q">12<small>pcs</small></span><button class="more on"><svg class="i s"><use href="#i-more"/></svg></button>
+                    <div class="menu" style="right:6px;top:52px">
+                      <div class="mi"><svg class="i s"><use href="#i-minus"/></svg>Use one<kbd>−</kbd></div>
+                      <div class="mi"><svg class="i s"><use href="#i-upload"/></svg>Use…<kbd>U</kbd></div>
+                      <div class="sep"></div>
+                      <div class="mi"><svg class="i s"><use href="#i-pencil"/></svg>Edit<kbd>E</kbd></div>
+                      <div class="mi"><svg class="i s"><use href="#i-move"/></svg>Move…<kbd>M</kbd></div>
+                      <div class="mi sel"><svg class="i s"><use href="#i-archive"/></svg>Archive<kbd>⇧⌫</kbd></div>
+                    </div>
+                  </div>
+                  <div class="li"><span class="th">LM</span><span class="grow"><span class="nm">LM13700</span><span class="sub">Dual OTA</span></span><span class="q">6<small>pcs</small></span><span style="width:30px"></span></div>
+                  <div class="li"><span class="th">74</span><span class="grow"><span class="nm">74HC595</span><span class="sub">Shift register</span></span><span class="q">20<small>pcs</small></span><span style="width:30px"></span></div>
+                </div>
+              </div></div>
+              <div class="snack static desk-snack" style="width:360px"><span class="tx">“NE555” archived</span><kbd>⌘Z</kbd><button class="undo">Undo</button></div>
+            </section>
+          </div>
+        </div>
+        <ul class="notes">
+          <li>У «Archive» нет «…»: действие сразу, без листа. «Delete permanently» в Архиве по-прежнему с подтверждением.</li>
+          <li>В меню строки появились «Use one» и «Use…»: самые частые действия со списком.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================================================================== 5 -->
+  <section class="prop" id="p5">
+    <div class="prop-h"><h2>5 · Списки: монограммы, сводка по вариантам, сортировка, плотная таблица</h2><span class="ids">D1 + D2 + D4 + D5</span></div>
+    <p class="prop-lead">Пока нет фото, у предметов есть монограммы, и строки различаются по форме. У предметов с вариантами в подстроке видно, каких номиналов сколько, а пустые помечены «—». «Out» — нейтральная метка у числа. Над списком — тихая сортировка и «сначала в наличии». На компьютере есть режим таблицы и «включая подпапки», как «All items» в Sortly. Сетка с фото включится после плана 4.</p>
+    <div class="pair">
+      <div>
+        <div class="cap">Телефон · папка со сводкой вариантов</div>
+        <div class="gm">
+          <div class="phone">
+            <div class="sb"><span>9:41</span><span>▮▮▮ 82%</span></div>
+            <div class="mhead">
+              <div class="mtop"><button class="ib"><svg class="i"><use href="#i-menu"/></svg></button><button class="ib"><svg class="i"><use href="#i-left"/></svg></button><button class="ib off"><svg class="i"><use href="#i-right"/></svg></button><span class="sp"></span>
+                <button class="ib"><svg class="i"><use href="#i-folder-plus"/></svg></button><button class="ib"><svg class="i"><use href="#i-pencil"/></svg></button><button class="ib"><svg class="i"><use href="#i-move"/></svg></button><button class="ib"><svg class="i"><use href="#i-archive"/></svg></button></div>
+              <div class="mtitle"><div class="mcrumb">Electronics</div><h1 class="ft">Passive components</h1></div>
+            </div>
+            <div class="mscroll">
+              <div class="chips"><button class="chip"><svg class="i"><use href="#i-sort"/></svg>Name</button><button class="chip on">In stock first</button><button class="chip">Subfolders</button></div>
+              <div class="sec-h">Items · 6</div>
+              <div class="lst">
+                <div class="li"><span class="th">Рз</span><span class="grow"><span class="nm">Резистор 0,25 Вт</span><span class="sub">1k <b>3</b> · 10k <b>100</b> · 100k <span class="z">—</span></span></span><span class="q">105<small>pcs</small></span></div>
+                <div class="li"><span class="th">EL</span><span class="grow"><span class="nm">Electrolytic capacitor</span><span class="sub">10µF <b>40</b> · 100µF <b>12</b> · 470µF <span class="z">—</span></span></span><span class="q">52<small>pcs</small></span></div>
+                <div class="li"><span class="th">CE</span><span class="grow"><span class="nm">Ceramic capacitor 100nF</span><span class="sub">0805 · smd</span></span><span class="q">500<small>pcs</small></span></div>
+                <div class="li"><span class="th">1N</span><span class="grow"><span class="nm">1N4148</span><span class="sub">Signal diode</span></span><span class="q">200<small>pcs</small></span></div>
+                <div class="li"><span class="th">Wi</span><span class="grow"><span class="nm">Hook-up wire 24 AWG</span><span class="sub">red · black · yellow</span></span><span class="q">12.5<small>m</small></span></div>
+                <div class="li dim"><span class="th">TP</span><span class="grow"><span class="nm">Trimmer 10k</span><span class="sub">Bourns 3296</span></span><span class="q"><span class="out">Out</span>0<small>pcs</small></span></div>
+              </div>
+            </div>
+            <div class="dock"><div class="sbar"><svg class="i"><use href="#i-search"/></svg>Search Electronics</div><button class="fab"><svg class="i"><use href="#i-plus"/></svg></button></div>
+          </div>
+        </div>
+        <ul class="notes">
+          <li>«Есть ли у меня 10k?» видно прямо в списке, карточку открывать не нужно.</li>
+          <li>Янтарный цвет оставлен под будущее «мало». Сейчас для «нет в наличии» только серая метка.</li>
+        </ul>
+      </div>
+
+      <div class="desk-col">
+        <div class="cap">Компьютер · таблица, «включая подпапки», сортировка по количеству</div>
+        <div class="gm">
+          <div class="desk" data-sel="Passive components">
+            <section class="main">
+              <div class="main-head"><div class="wrap wide">
+                <div class="topbar"><button class="ib"><svg class="i"><use href="#i-left"/></svg></button><button class="ib off"><svg class="i"><use href="#i-right"/></svg></button><div class="crumbs">Electronics <svg class="i"><use href="#i-right"/></svg> <span class="cur">Passive components</span></div></div>
+                <div class="title-row"><div><h1 class="ft">Passive components</h1><div class="ft-sub">2 folders · 9 items incl. subfolders</div></div>
+                  <div class="acts-bar"><button class="btn pri"><svg class="i s"><use href="#i-plus"/></svg>Add item</button><button class="btn out"><svg class="i s"><use href="#i-folder-plus"/></svg>New folder</button></div></div>
+              </div></div>
+              <div class="main-body"><div class="wrap wide">
+                <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+                  <div class="chips"><button class="chip on">Include subfolders</button><button class="chip on">In stock first</button></div>
+                  <div class="seg" role="group" aria-label="View"><button><svg class="i s"><use href="#i-list"/></svg>List</button><button><svg class="i s"><use href="#i-rows"/></svg>Compact</button><button class="on"><svg class="i s"><use href="#i-table"/></svg>Table</button><button class="na" title="After photos (Plan 4)"><svg class="i s"><use href="#i-grid"/></svg>Grid</button></div>
+                </div>
+                <div class="tbl">
+                  <div class="tr h"><span>Name</span><span>Variants</span><span class="r"><span class="sorted">Qty <svg class="i xs"><use href="#i-down"/></svg></span></span><span class="r">Avg price</span><span class="r">Changed</span></div>
+                  <div class="tr"><span class="nmc"><span class="mt">CE</span><span class="grow"><span class="nm">Ceramic capacitor 100nF</span><span class="sub">Capacitors</span></span></span><span class="vs">—</span><span class="r qq">500<small>pcs</small></span><span class="r">$0.004</span><span class="r" style="color:var(--muted)">Nov 2</span></div>
+                  <div class="tr hov"><span class="nmc"><span class="mt">1N</span><span class="grow"><span class="nm">1N4148</span><span class="sub">Diodes</span></span></span><span class="vs">—</span><span class="r qq">200<small>pcs</small></span><span class="r">$0.01</span><span class="r" style="color:var(--muted)">Oct 28</span></div>
+                  <div class="tr"><span class="nmc"><span class="mt">Рз</span><span class="grow"><span class="nm">Резистор 0,25 Вт</span><span class="sub">Resistors</span></span></span><span class="vs">1k <b>3</b> · 10k <b>100</b> · 100k —</span><span class="r qq">105<small>pcs</small></span><span class="r">$0.02</span><span class="r" style="color:var(--muted)">Today</span></div>
+                  <div class="tr"><span class="nmc"><span class="mt">EL</span><span class="grow"><span class="nm">Electrolytic capacitor</span><span class="sub">Capacitors</span></span></span><span class="vs">10µF <b>40</b> · 100µF <b>12</b> · 470µF —</span><span class="r qq">52<small>pcs</small></span><span class="r">$0.03</span><span class="r" style="color:var(--muted)">Nov 9</span></div>
+                  <div class="tr"><span class="nmc"><span class="mt">Wi</span><span class="grow"><span class="nm">Hook-up wire 24 AWG</span><span class="sub">Passive components</span></span></span><span class="vs">red · black · yellow</span><span class="r qq">12.5<small>m</small></span><span class="r">$0.40</span><span class="r" style="color:var(--muted)">Sep 14</span></div>
+                  <div class="tr"><span class="nmc"><span class="mt">FB</span><span class="grow"><span class="nm">Ferrite bead 0805</span><span class="sub">Passive components</span></span></span><span class="vs">—</span><span class="r qq">10<small>pcs</small></span><span class="r">—</span><span class="r" style="color:var(--muted)">Aug 3</span></div>
+                  <div class="tr dim"><span class="nmc"><span class="mt">TP</span><span class="grow"><span class="nm" style="color:var(--muted)">Trimmer 10k</span><span class="sub">Passive components</span></span></span><span class="vs">—</span><span class="r qq" style="color:var(--muted)"><span class="out">Out</span>0<small>pcs</small></span><span class="r">$0.35</span><span class="r" style="color:var(--muted)">Nov 10</span></div>
+                </div>
+              </div></div>
+            </section>
+          </div>
+        </div>
+        <ul class="notes">
+          <li>Плотная таблица — для настройки на компьютере, в духе Sortly. j/k ходят по строкам, Enter открывает (E1).</li>
+          <li>Сортировка, «сначала в наличии» и «включая подпапки» запоминаются на устройстве для каждого инвентаря, как раскрытие дерева.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================================================================== directions -->
+  <section class="prop" id="p6">
+    <div class="prop-h"><h2>Три визуальных направления</h2><span class="ids">раздел 4 отчёта</span></div>
+    <p class="prop-lead">Одна и та же строка списка в каждом направлении, светлая и тёмная. Структура, шрифт Manrope и нейтральные действия везде одинаковы. Меняются температура нейтральных цветов, скругления и то, как выглядят числа. Рекомендация: A сейчас, детали C (моноширинные числа и «светодиоды») — как тема после MVP.</p>
+    <div class="dirs" data-dirs></div>
+  </section>
+</div>
+
+<script>
+  // Theme toggle for every mockup (direction swatches keep their own theme).
+  document.querySelectorAll('.toggle button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('.toggle button').forEach(function (x) { x.classList.toggle('on', x === b) })
+      var dark = b.dataset.theme === 'dark'
+      document.querySelectorAll('.gm:not(.fixed)').forEach(function (g) { g.classList.toggle('dark', dark) })
+    })
+  })
+
+  // Open with #dark to start in the dark theme.
+  if (location.hash === '#dark') document.querySelector('.toggle [data-theme="dark"]').click()
+
+  function svg(id, cls) { return '<svg class="i ' + (cls || '') + '"><use href="#' + id + '"/></svg>' }
+
+  // Desktop chrome: the app rail and the tree panel, shared by every desktop frame.
+  var TREE = [
+    ['Electronics', 31, 'root'],
+    ['ICs', 13, 'open', [['Op-amps', 6], ['Logic', 4]]],
+    ['Passive components', 9, 'open', [['Resistors', 1], ['Capacitors', 2]]],
+    ['Cables', 4, null, [['USB', 3], ['Audio', 1]]],
+    ['Hardware', 5], ['Projects', 2]
+  ]
+  function treeHtml(nodes, sel) {
+    return nodes.map(function (n) {
+      var kids = n[3], flag = n[2], root = flag === 'root'
+      var chev = kids ? '<span class="chev' + (flag === 'open' ? ' open' : '') + '">' + svg('i-right') + '</span>' : '<span class="chev none"></span>'
+      var row = '<div class="row' + (n[0] === sel ? ' on' : '') + (root ? ' root' : '') + '">' + chev + svg(root ? 'i-box' : 'i-folder', 'fi') + '<span class="nm2">' + n[0] + '</span><span class="c">' + n[1] + '</span></div>'
+      return '<li>' + row + (kids && flag === 'open' ? '<ul>' + treeHtml(kids, sel) + '</ul>' : '') + '</li>'
+    }).join('')
+  }
+  document.querySelectorAll('.desk[data-sel]').forEach(function (d) {
+    var sel = d.dataset.sel
+    d.insertAdjacentHTML('afterbegin',
+      '<aside class="rail"><div class="logo"><b>G</b>GrayMatter</div>' +
+      '<button class="inv-btn"><span class="grow"><span class="k">Inventory</span><span class="n">Electronics</span></span>' + svg('i-updown', 's') + '</button>' +
+      '<nav class="nav"><a class="on" href="javascript:void 0">' + svg('i-box') + 'Items</a><a href="javascript:void 0">' + svg('i-tag') + 'Tags &amp; fields</a><a href="javascript:void 0">' + svg('i-archive') + 'Archive</a></nav>' +
+      '<nav class="nav bottom"><a href="javascript:void 0">' + svg('i-settings') + 'Settings</a></nav></aside>' +
+      '<section class="tree-panel"><div class="search-trigger">' + svg('i-search', 's') + '<span class="grow">Search</span><kbd>⌘K</kbd></div>' +
+      '<div class="tree-head"><span>FOLDERS</span><span class="ib">' + svg('i-folder-plus') + '</span></div>' +
+      '<ul class="tree">' + treeHtml(TREE, sel) + '</ul></section>')
+  })
+
+  // Op-amps list behind the palette.
+  var OPAMPS = [['TL', 'TL072', 'Dual JFET op-amp', 45], ['TL', 'TL074 quad', 'Quad JFET op-amp', 8], ['TL', 'TL071', 'Single JFET op-amp', 0],
+                ['LM', 'LM13700', 'Dual OTA', 6], ['OP', 'OPA2134PA', 'Audio op-amp', 4], ['NE', 'NE5532', 'Low-noise dual', 10]]
+  document.querySelectorAll('[data-items="opamps"]').forEach(function (l) {
+    l.innerHTML = OPAMPS.map(function (it) {
+      return '<div class="li' + (it[3] === 0 ? ' dim' : '') + '"><span class="th">' + it[0] + '</span><span class="grow"><span class="nm">' + it[1] + '</span><span class="sub">' + it[2] + '</span></span><span class="q">' + (it[3] === 0 ? '<span class="out">Out</span>' : '') + it[3] + '<small>pcs</small></span></div>'
+    }).join('')
+  })
+
+  // Visual directions: the same row in A, B and C, light and dark.
+  var DIRS = [
+    ['', 'A · Тихая утилита', 'Текущие токены и правки тёмной темы (G1). Рекомендация для MVP.', ['#F7F7F8', '#FFFFFF', '#EDEDF0', '#18181B', '#71717A', '#4F46E5'], ['#0E0E10', '#18181B', '#27272A', '#F4F4F5', '#A1A1AA', '#818CF8']],
+    ['dirB', 'B · Тёплая бумага', 'Тёплые нейтральные цвета, крафтовые ярлыки, скругление карточек 18. Ощущение личной записной книжки.', ['#F5F3EF', '#FFFEFB', '#E7E3DB', '#1E1C18', '#6F685D', '#4840C8'], ['#12110F', '#1B1A17', '#2A2824', '#F2EEE6', '#A59D90', '#A29CF7']],
+    ['dirC', 'C · Приборная панель', 'Графит, тонкие линии, скругление 12. Числа и названия-артикулы моноширинным шрифтом, «светодиоды» наличия. Для синтезаторщика.', ['#F3F4F5', '#FFFFFF', '#E1E4E8', '#101214', '#687079', '#4F46E5'], ['#0A0B0D', '#121417', '#23262B', '#E6E8EB', '#8A929C', '#8B93FF']]
+  ]
+  function sample(cls, dark) {
+    var c = cls === 'dirC'
+    var led = function (on) { return c ? '<span class="led' + (on ? '' : ' off') + '"></span>' : '' }
+    return '<div class="gm fixed half ' + cls + (dark ? ' dark' : '') + '">' +
+      (c ? '<div class="lbl">Items · 3</div>' : '<div class="sec-h" style="margin:0">Items · 3</div>') +
+      '<div class="lst">' +
+      '<div class="li"><span class="th">TL</span><span class="grow"><span class="nm pn">TL072</span><span class="sub">Dual JFET op-amp</span></span><span class="q">' + led(true) + '45<small>pcs</small></span></div>' +
+      '<div class="li"><span class="th">Рз</span><span class="grow"><span class="nm">Резистор 0,25 Вт</span><span class="sub">1k <b>3</b> · 10k <b>100</b> · 100k <span class="z">—</span></span></span><span class="q">' + led(true) + '105<small>pcs</small></span></div>' +
+      '<div class="li dim"><span class="th">NE</span><span class="grow"><span class="nm pn">NE555</span><span class="sub">Timer</span></span><span class="q">' + (c ? led(false) : '<span class="out">Out</span>') + '0<small>pcs</small></span></div>' +
+      '</div></div>'
+  }
+  document.querySelector('[data-dirs]').innerHTML = DIRS.map(function (d) {
+    var sw = function (list) { return '<div class="sw8">' + list.map(function (h) { return '<span style="background:' + h + '" title="' + h + '"></span>' }).join('') + '</div>' }
+    return '<div class="dir"><div class="dir-h"><h3>' + d[1] + '</h3><p>' + d[2] + '</p><div style="display:flex;gap:14px;margin-top:10px">' + sw(d[3]) + sw(d[4]) + '</div></div>' + sample(d[0], false) + sample(d[0], true) + '</div>'
+  }).join('')
+
+  // Proposal 1: the working stepper. Taps add up to a pending delta; 2 s after the last tap one movement is "written";
+  // Undo before that writes nothing. The confirmed number only changes after the (simulated) database answer.
+  ;(function () {
+    var root = document.getElementById('demo1')
+    var committed = 45, pending = 0, timer = null, hideTimer = null
+    var num = root.querySelector('[data-num]'), pend = root.querySelector('[data-pend]')
+    var ring = root.querySelector('[data-ring]'), ring2 = root.querySelector('[data-ring2]')
+    var snack = root.querySelector('[data-snack]'), text = root.querySelector('[data-text]'), undo = root.querySelector('[data-undo]')
+    var journal = root.querySelector('[data-journal]'), pill = root.querySelector('.pill-step')
+    var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    function pcs(n) { return n === 1 ? 'pc' : 'pcs' }
+    function restart(r) { r.classList.remove('run'); void r.getBoundingClientRect(); r.classList.add('run') }
+    function render() {
+      if (pending === 0) { pend.hidden = true; return }
+      pend.hidden = false
+      pend.querySelector('[data-delta]').textContent = (pending > 0 ? '+' : '−') + Math.abs(pending)
+      pend.querySelector('[data-to]').textContent = committed + pending
+    }
+    function step(d) {
+      if (committed + pending + d < 0) return
+      pending += d
+      render()
+      clearTimeout(hideTimer); clearTimeout(timer)
+      if (pending === 0) { text.textContent = 'Nothing to write'; undo.hidden = true; ring2.style.visibility = 'hidden'; hideTimer = setTimeout(close, 1000); return }
+      ring2.style.visibility = ''
+      restart(ring); restart(ring2)
+      text.textContent = (pending > 0 ? 'Receiving ' : 'Using ') + Math.abs(pending) + ' ' + pcs(Math.abs(pending)) + ' of TL072'
+      undo.hidden = false
+      snack.classList.add('open')
+      timer = setTimeout(commit, 2000)
+      try { if (navigator.vibrate) navigator.vibrate(8) } catch (e) {}
+    }
+    function close() { snack.classList.remove('open') }
+    function commit() {
+      var d = pending
+      if (!d) return close()
+      pending = 0
+      render()
+      num.classList.add('saving')
+      undo.hidden = true
+      ring2.style.visibility = 'hidden'
+      text.textContent = 'Saving…'
+      setTimeout(function () {
+        committed += d
+        num.textContent = committed
+        num.classList.remove('saving')
+        if (!reduce) { num.classList.remove('roll'); void num.getBoundingClientRect(); num.classList.add('roll') }
+        pill.setAttribute('aria-label', 'TL072, ' + committed + ' pcs')
+        var row = document.createElement('div')
+        row.className = 'jr fresh'
+        row.innerHTML = '<span class="tm">now</span><span class="k">' + (d > 0 ? 'Received' : 'Used') + '<small>this phone</small></span><span class="d">' + (d > 0 ? '+' : '−') + Math.abs(d) + '</span><span class="bal">' + committed + '</span>'
+        journal.insertBefore(row, journal.children[1])
+        text.textContent = (d > 0 ? 'Received ' : 'Used ') + Math.abs(d) + ' ' + pcs(Math.abs(d)) + ' · saved'
+        try { if (navigator.vibrate) navigator.vibrate([6, 40, 6]) } catch (e) {}
+        hideTimer = setTimeout(close, 1800)
+      }, 450)
+    }
+    undo.addEventListener('click', function () {
+      clearTimeout(timer)
+      pending = 0
+      render()
+      undo.hidden = true
+      ring2.style.visibility = 'hidden'
+      text.textContent = 'Cancelled, nothing written'
+      hideTimer = setTimeout(close, 1400)
+    })
+    root.querySelectorAll('[data-d]').forEach(function (b) { b.addEventListener('click', function () { step(+b.dataset.d) }) })
+  })()
+</script>
+</body>
+</html>

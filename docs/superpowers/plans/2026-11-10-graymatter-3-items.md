@@ -924,17 +924,18 @@ it('does nothing without CloseWatcher', async () => { /* delete globalThis.Close
 
 ---
 
-### Task 6: Палитра поиска и нижняя панель на телефоне
+### Task 6: Палитра поиска, нижняя панель и свайпы меню на телефоне
 
-Дизайн: раздел 7 и 6.2 (нижняя панель) из `2026-11-10-graymatter-shell-design.md`. Палитра заменяет поле поиска над списком и показ результатов через `?q=`.
+Дизайн: раздел 7 и 6.2 (нижняя панель, свайпы меню) из `2026-11-10-graymatter-shell-design.md`. Палитра заменяет поле поиска над списком и показ результатов через `?q=`.
 
 **Files:**
 - Create:
   - `app/lib/palette.ts`, `test/palette.test.ts`;
+  - `app/lib/swipe.ts`, `test/swipe.test.ts`;
   - `app/components/SearchPalette.vue`, `MobileDock.vue`.
 - Modify:
   - `app/composables/useShell.ts` — `paletteOpen`;
-  - `app/layouts/default.vue` — палитра, нижняя панель, ⌘K / Ctrl+K;
+  - `app/layouts/default.vue` — палитра, нижняя панель, ⌘K / Ctrl+K, свайпы меню;
   - `TreePanel.vue` — кнопка «Search»;
   - `FolderScreen.vue` — без поля и результатов поиска;
   - `en.json`.
@@ -977,6 +978,12 @@ export function paletteActions(ctx: PaletteContext, labelOf: (a: PaletteAction) 
 
 // useShell.ts
 export function useShell(): { drawerOpen: Ref<boolean>; paletteOpen: Ref<boolean> }
+
+// swipe.ts
+export const SWIPE = { minDistance: 60, dominance: 1.5, edgeGuard: 24 } as const
+/** A finished touch swipe → what to do with the phone menu. 'open': rightward from x ≥ edgeGuard while closed;
+ *  'close': leftward while open; null otherwise (short, diagonal or vertical moves; rightward from the edge zone). */
+export function swipeAction(start: { x: number; y: number }, end: { x: number; y: number }, drawerOpen: boolean): 'open' | 'close' | null
 ```
 
 - [ ] **Step 1: Write the failing tests** (`test/palette.test.ts`):
@@ -1056,7 +1063,17 @@ it('offers actions for the query', () => {
 
     Task 7 добавит справа «+».
   - **`FolderScreen`:** поле поиска, `SearchResults` и работа с `?q=` убираются.
-- [ ] **Step 7: Verify.**
+- [ ] **Step 7: Свайпы меню** (дизайн 6.2).
+  - **Тесты `test/swipe.test.ts`:**
+    - `swipeAction({x:40,y:300},{x:120,y:310},false)` → `'open'`;
+    - `({x:10,y:300},{x:200,y:300},false)` → `null` (зона жеста «назад»);
+    - `({x:40,y:300},{x:90,y:300},false)` → `null` (короче 60 px);
+    - `({x:40,y:300},{x:120,y:360},false)` → `null` (диагональ: 80 против 60);
+    - `({x:300,y:300},{x:200,y:305},true)` → `'close'`;
+    - свайп влево при закрытом меню и вправо при открытом → `null`.
+  - **Подключение в layout ниже 1024 px.** `touchstart`/`touchend` на `window` (passive). Решение по `swipeAction` → `drawerOpen`.
+  - **Игнорировать**, если открыты палитра, шторка или меню «⋯» (кроме самого выдвижного меню), или касание началось в `input`, `textarea`, `select` или `[contenteditable]`. Состояние «открыт ли слой» берётся из `useShell` и `useFolderDialog`, а меню и шторки Reka проверяются по `document.querySelector('[role=dialog][data-state=open], [role=menu][data-state=open]')`, исключая выдвижное меню.
+- [ ] **Step 8: Verify.**
   - Тесты, типы, линтер — зелёные.
   - На демо-данных:
     - ⌘K → «tl072» → Enter открывает карточку `TL072`;
@@ -1065,7 +1082,7 @@ it('offers actions for the query', () => {
     - «new folder» создаёт папку в текущей.
   - DevTools, 360×640: палитра от нижней панели, поле над экранной клавиатурой, «Cancel» закрывает.
   - Контроллер проверяет на телефоне владельца через `adb` (Review Focus 3): поле над клавиатурой, жест «назад» закрывает палитру и не уводит со страницы.
-- [ ] **Step 8: Commit:** `feat(app): search palette with items, folders and actions; bottom search bar on the phone`
+- [ ] **Step 9: Commit:** `feat(app): search palette with items, folders and actions; bottom search bar and menu swipes on the phone`
 
 ---
 

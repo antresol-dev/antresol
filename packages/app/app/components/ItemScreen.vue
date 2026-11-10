@@ -109,6 +109,22 @@ async function archiveVariant(): Promise<void> {
   }
 }
 
+// Attributes: add one or edit its value in a sheet, remove at once; a variant's own values in another sheet.
+const attributeOpen = ref(false)
+const attributeId = ref<Id | null>(null)
+const valuesId = ref<Id | null>(null)
+function openAttribute(id: Id | null): void {
+  attributeId.value = id
+  attributeOpen.value = true
+}
+async function removeAttribute(id: Id): Promise<void> {
+  try {
+    await workspace.apply({ type: 'item.removeAttribute', itemId: props.itemId, attributeId: id })
+  } catch (e) {
+    toast.error(t(errorMessageKey(e)))
+  }
+}
+
 const highlight = computed(() => (view.value?.hasVariants ? props.variantId : null))
 const linkClass =
   'min-h-11 content-center rounded-md text-sm font-semibold text-primary underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring'
@@ -152,6 +168,7 @@ const linkClass =
         @step="step"
         @open="openStock"
         @rename="(id) => (renameId = id)"
+        @attributes="(id) => (valuesId = id)"
         @archive="askArchive"
       />
       <Button variant="outline" class="h-11 justify-self-start rounded-field bg-surface px-4 font-bold" :disabled="locked" @click="addOpen = true">
@@ -179,7 +196,14 @@ const linkClass =
         destructive
         @confirm="archiveVariant"
       />
-      <ItemAttributes v-if="view.attributes.length > 0" :attributes="view.attributes" />
+      <ItemAttributes
+        :attributes="view.attributes"
+        @add="openAttribute(null)"
+        @edit="openAttribute"
+        @remove="removeAttribute"
+      />
+      <AttributeValueSheet :view="view" :open="attributeOpen" :attribute-id="attributeId" @close="attributeOpen = false" />
+      <VariantValuesSheet :view="view" :variant-id="valuesId" @close="valuesId = null" />
       <JournalList :item-id="itemId" />
     </template>
     <EmptyState v-else-if="snapshot || blocker?.kind === 'gone'" :text="$t('empty.itemGone')">

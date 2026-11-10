@@ -1,3 +1,4 @@
+import { createSearch } from '@graymatter/core'
 import { describe, expect, it, vi } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import type { SourceConfig } from '../app/lib/types'
@@ -50,6 +51,22 @@ describe('demo source', () => {
     expect(snap.folders.find((f) => f.name === 'Old projects')!.archivedAt).not.toBeNull()
     expect(snap.items.find((i) => i.name === 'CD4017')!.archivedAt).not.toBeNull()
     expect(snap.variants.find((v) => v.name === '100k')!.archivedAt).not.toBeNull()
+  })
+
+  it('seeds tags and attributes with extras, found by search', async () => {
+    const conn = await createDemoDriver({ memory: true }).connect(cfg)
+    const all = await conn.storage.listInventories()
+    const snap = await conn.storage.loadInventory(all.find((i) => i.name === 'Electronics')!.id)
+    expect(snap.tags.map((x) => x.name).sort()).toEqual(['audio', 'smd'])
+    expect(snap.attributes.map((a) => [a.name, a.kind, a.options])).toEqual(
+      expect.arrayContaining([['Package', 'enum', ['DIP-8', 'SOIC-8']], ['Resistance', 'text', []]]),
+    )
+    const tl072 = snap.items.find((i) => i.name === 'TL072')!
+    const resistor = snap.items.find((i) => i.name === 'Резистор 0,25 Вт')!
+    const { search } = createSearch(snap)
+    expect(search('DIP-8').map((h) => h.itemId)).toContain(tl072.id)
+    expect(search('10 kΩ').map((h) => h.itemId)).toContain(resistor.id)
+    expect(search('audio').map((h) => h.itemId)).toContain(tl072.id)
   })
 
   it('probe reports empty and never writes', async () => {

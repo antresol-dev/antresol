@@ -63,7 +63,29 @@
     "noVariant": "No variant",
     "attributes": "Attributes",
     "differsByVariant": "Differs by variant",
-    "noValue": "—"
+    "noValue": "—",
+    "addAttribute": "Add attribute",
+    "editValue": "Edit value",
+    "removeAttribute": "Remove"
+  },
+  "attributeSheet": {
+    "addTitle": "Add attribute",
+    "editTitle": "{name}",
+    "variantTitle": "Attribute values: {name}",
+    "attribute": "Attribute",
+    "newAttribute": "New attribute…",
+    "value": "Value",
+    "save": "Save"
+  },
+  "attributeForm": {
+    "type": "Type",
+    "text": "Text",
+    "list": "List",
+    "options": "Options",
+    "hint": "One per line or separated by commas: DIP-8, SOIC-8",
+    "optionsRequired": "Add at least one option.",
+    "create": "Create",
+    "save": "Save"
   },
   "journal": {
     "title": "History",
@@ -105,6 +127,7 @@
   "variantForm": { "save": "Save" },
   "variantMenu": {
     "rename": "Rename",
+    "attributes": "Attribute values",
     "archive": "Archive variant",
     "renameTitle": "Rename variant",
     "archiveTitle": "Archive variant?",

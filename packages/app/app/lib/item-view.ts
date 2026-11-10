@@ -6,6 +6,7 @@ import {
   negQ,
   resolveUnit,
   unitPrice,
+  type Attribute,
   type Folder,
   type Id,
   type InventorySnapshot,
@@ -84,6 +85,12 @@ const unitOf = (s: InventorySnapshot, item: Item | undefined): UnitDef =>
 
 /** An empty or blank value counts as no value. */
 const valueOf = (v: string | null): string | null => (v === null || v.trim() === '' ? null : v)
+
+/** Inventory attributes not yet attached to the item, by name. */
+export function attributeChoices(s: InventorySnapshot, itemId: Id): Attribute[] {
+  const attached = new Set(s.itemAttributes.filter((a) => a.itemId === itemId).map((a) => a.attributeId))
+  return s.attributes.filter((a) => !attached.has(a.id)).sort(byName)
+}
 
 /** null when the item is missing, archived, or its folder chain is archived or missing. */
 export function itemView(s: InventorySnapshot, itemId: Id): ItemView | null {

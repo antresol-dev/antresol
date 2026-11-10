@@ -91,7 +91,7 @@ export async function seedDemo(storage: InventoryStorage, actor: Actor, options:
     return id
   }
 
-  await item('TL072', opamps, { quantity: '37', totalPrice: 230 })
+  const tl072 = await item('TL072', opamps, { quantity: '37', totalPrice: 230 })
   await item('LM13700', ics, { quantity: '6', totalPrice: null })
   const ne555 = await item('NE555', ics, { quantity: '5', totalPrice: null })
   await run({ type: 'stock.use', movementId: newId(), itemId: ne555, variantId: null, quantity: '5', note: null })
@@ -115,6 +115,18 @@ export async function seedDemo(storage: InventoryStorage, actor: Actor, options:
   if (options.extras ?? true) {
     const archive = (target: 'folder' | 'item' | 'variant' | 'inventory', id: string): Promise<void> =>
       run({ type: 'archive', target, id, archiveId: newId() })
+    const audio = newId()
+    await run({ type: 'tag.create', id: audio, inventoryId: inv, name: 'audio' })
+    await run({ type: 'tag.create', id: newId(), inventoryId: inv, name: 'smd' })
+    await run({ type: 'item.update', id: tl072, tagIds: [audio] })
+    const pkg = newId()
+    await run({ type: 'attribute.create', id: pkg, inventoryId: inv, name: 'Package', kind: 'enum', options: ['DIP-8', 'SOIC-8'] })
+    await run({ type: 'item.setAttribute', itemId: tl072, attributeId: pkg, value: 'DIP-8' })
+    const resistance = newId()
+    await run({ type: 'attribute.create', id: resistance, inventoryId: inv, name: 'Resistance', kind: 'text', options: [] })
+    await run({ type: 'item.setAttribute', itemId: resistor, attributeId: resistance, value: null })
+    await run({ type: 'variant.setAttribute', variantId: variants[0]!.id, attributeId: resistance, value: '1 kΩ' })
+    await run({ type: 'variant.setAttribute', variantId: variants[1]!.id, attributeId: resistance, value: '10 kΩ' })
     const old = await folder('Old projects')
     await item('LM741', old, { quantity: '2', totalPrice: null })
     await archive('folder', old)

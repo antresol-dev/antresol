@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useMediaQuery } from '@vueuse/core'
 import type { Component } from 'vue'
-import { Archive, ArrowRightLeft, Download, Minus, Pencil, PencilLine, Plus, Upload } from '@lucide/vue'
+import { Archive, ArrowRightLeft, Download, Minus, Pencil, PencilLine, Plus, SlidersHorizontal, Upload } from '@lucide/vue'
 import type { Id } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -18,6 +18,7 @@ const emit = defineEmits<{
   step: [step: 'plus' | 'minus', variantId: Id | null]
   open: [mode: StockMode, variantId: Id | null]
   rename: [variantId: Id]
+  attributes: [variantId: Id]
   archive: [variantId: Id]
 }>()
 
@@ -25,7 +26,7 @@ const { t } = useI18n()
 const { state } = useWorkspace()
 const locked = computed(() => !!state.readOnly || state.saving)
 
-type MenuKey = StockMode | 'rename' | 'archive'
+type MenuKey = StockMode | 'rename' | 'archive' | 'attributes'
 
 function actionsOf(row: BucketRow): { key: MenuKey; label: string; icon: Component; destructive?: boolean; disabled: boolean }[] {
   const all: { key: MenuKey; label: string; icon: Component; destructive?: boolean }[] = [
@@ -36,6 +37,7 @@ function actionsOf(row: BucketRow): { key: MenuKey; label: string; icon: Compone
     // The stock kept without a variant is not a variant: nothing to rename or archive.
     ...(row.variantId !== null
       ? [
+          ...(row.values.length > 0 ? [{ key: 'attributes' as const, label: t('variantMenu.attributes'), icon: SlidersHorizontal }] : []),
           { key: 'rename' as const, label: t('variantMenu.rename'), icon: Pencil },
           { key: 'archive' as const, label: t('variantMenu.archive'), icon: Archive, destructive: true },
         ]
@@ -47,6 +49,8 @@ function actionsOf(row: BucketRow): { key: MenuKey; label: string; icon: Compone
 function choose(key: string, row: BucketRow): void {
   if (key === 'rename') {
     if (row.variantId !== null) emit('rename', row.variantId)
+  } else if (key === 'attributes') {
+    if (row.variantId !== null) emit('attributes', row.variantId)
   } else if (key === 'archive') {
     if (row.variantId !== null) emit('archive', row.variantId)
   } else emit('open', key as StockMode, row.variantId)

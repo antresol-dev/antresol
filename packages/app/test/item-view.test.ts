@@ -1,7 +1,7 @@
 import { itemStock, newId, type Command, type InventorySnapshot, type InventoryStorage, type Movement } from '@graymatter/core'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
-import { itemView, journalRows, looseTransferOffer } from '../app/lib/item-view'
+import { attributeChoices, itemView, journalRows, looseTransferOffer } from '../app/lib/item-view'
 import type { SourceConfig } from '../app/lib/types'
 
 const cfg: SourceConfig = {
@@ -317,5 +317,22 @@ describe('looseTransferOffer', () => {
     expect(looseTransferOffer(s, item.id)).toBeNull()
     await archive('variant', item.v.a!)
     expect(looseTransferOffer(s, item.id)).toEqual({ quantity: '5', number: '5', unit: 'pcs' })
+  })
+})
+
+describe('attributeChoices', () => {
+  it('lists the inventory attributes not yet on the item, sorted by name', async () => {
+    const item = await newItem()
+    const ids = { size: newId(), color: newId(), weight: newId() }
+    await run({ type: 'attribute.create', id: ids.weight, inventoryId, name: 'Weight', kind: 'text', options: [] })
+    await run({ type: 'attribute.create', id: ids.size, inventoryId, name: 'Size', kind: 'enum', options: ['S', 'L'] })
+    await run({ type: 'attribute.create', id: ids.color, inventoryId, name: 'Color', kind: 'text', options: [] })
+    const names = () => attributeChoices(s, item.id).filter((a) => Object.values(ids).includes(a.id)).map((a) => a.name)
+    expect(names()).toEqual(['Color', 'Size', 'Weight'])
+    await run({ type: 'item.setAttribute', itemId: item.id, attributeId: ids.size, value: null })
+    expect(names()).toEqual(['Color', 'Weight'])
+    expect(attributeChoices(s, item.id).some((a) => a.id === ids.size)).toBe(false)
+    // Another item still sees it.
+    expect(attributeChoices(s, ne555).some((a) => a.id === ids.size)).toBe(true)
   })
 })

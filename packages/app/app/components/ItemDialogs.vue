@@ -41,6 +41,8 @@ const archiveOpen = openWhen('archive')
 
 const busy = ref(false)
 const editBusy = ref(false)
+// The inventory changed underneath (desktop Back, Alt+←): the sheet would act on the old one. A write in flight finishes first.
+useCloseOnSwitch(() => state.current, close, () => busy.value || editBusy.value)
 const choices = computed(() => (state.snapshot && item.value ? folderChoices(state.snapshot, item.value.folderId) : []))
 
 async function move(folderId: Id | null): Promise<void> {

@@ -58,6 +58,10 @@ const formKey = computed(() => {
 
 const formBusy = ref(false)
 const archiving = ref(false)
+const moving = ref(false)
+
+// The inventory changed underneath (desktop Back, Alt+←): the sheet would act on the old one. A write in flight finishes first.
+useCloseOnSwitch(() => state.current, close, () => formBusy.value || archiving.value || moving.value)
 
 async function archive(): Promise<void> {
   const target = folder.value
@@ -97,7 +101,7 @@ async function archive(): Promise<void> {
       @done="close"
     />
   </AppSheet>
-  <MoveFolderSheet v-if="folder && shown?.kind === 'move'" v-model:open="moveOpen" :folder-id="folder.id" />
+  <MoveFolderSheet v-if="folder && shown?.kind === 'move'" v-model:open="moveOpen" v-model:busy="moving" :folder-id="folder.id" />
   <ConfirmSheet
     v-model:open="archiveOpen"
     :title="$t('folderMenu.archiveTitle')"

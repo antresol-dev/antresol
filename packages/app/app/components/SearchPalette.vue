@@ -29,6 +29,13 @@ const desktop = useMediaQuery('(min-width: 1024px)')
 
 // The Android back gesture closes the palette without leaving the screen; the palette never touches the URL or history.
 useCloseWatcher(paletteOpen)
+// Results and actions are the current inventory's: another one coming in underneath (desktop Back) closes the palette.
+useCloseOnSwitch(
+  () => state.current,
+  () => {
+    paletteOpen.value = false
+  },
+)
 
 const contentId = useId()
 const listId = useId()

@@ -6,6 +6,7 @@ import type { QuickAddState } from '~/composables/useDialogs'
 // The quick add sheet for the whole app: the "+" button, the header button and the palette open it through useQuickAdd().
 const { t } = useI18n()
 const router = useRouter()
+const workspace = useWorkspace()
 const { state, close } = useQuickAdd()
 
 // What the form starts from: the values as they were when the sheet opened. They stay while it animates out, and a
@@ -13,6 +14,8 @@ const { state, close } = useQuickAdd()
 const shown = shallowRef<QuickAddState>({ name: '', folderId: null })
 const openings = ref(0)
 const busy = ref(false)
+// The inventory changed underneath (desktop Back, Alt+←): the item would go to the old one. A write in flight finishes first.
+useCloseOnSwitch(() => workspace.state.current, close, () => busy.value)
 watch(
   state,
   (s) => {

@@ -7,13 +7,14 @@ import { moveTargets } from '~/lib/views'
 
 const props = defineProps<{ folderId: Id }>()
 const open = defineModel<boolean>('open', { required: true })
+/** The move is being written; FolderDialogs keeps the sheet open meanwhile. */
+const busy = defineModel<boolean>('busy', { default: false })
 
 const { t } = useI18n()
 const workspace = useWorkspace()
 const { state } = workspace
 
 const targets = computed(() => (state.snapshot ? moveTargets(state.snapshot, props.folderId) : []))
-const busy = ref(false)
 const locked = computed(() => busy.value || !!state.readOnly)
 
 async function choose(parentId: Id | null, current: boolean): Promise<void> {

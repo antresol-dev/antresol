@@ -1,16 +1,24 @@
 import { openDeviceDb } from '~/lib/device-db'
 import { createNeonDriver } from '~/lib/sources'
 import { createWorkspace } from '~/lib/workspace'
+import type { WorkspaceDeps } from '~/lib/workspace-types'
 
 const STALE_AFTER_MS = 15 * 60_000
 /** A flapping connection fires `online` repeatedly; one reload per window is enough. */
 const ONLINE_DEBOUNCE_MS = 2_000
 
 export default defineNuxtPlugin(async () => {
+  const drivers: WorkspaceDeps['drivers'] = { neon: createNeonDriver() }
+  // No dev-pglite driver in production: a demo source saved on the device shows as unavailable (unsupported_source).
+  // A plain `if` on purpose: inside a spread expression `import.meta.dev` was left unreplaced in dev, so the demo
+  // driver never registered there. The dynamic import keeps PGlite out of the production bundle.
+  if (import.meta.dev) {
+    const { createDemoDriver } = await import('~/lib/dev/demo-source')
+    drivers['dev-pglite'] = createDemoDriver()
+  }
   const workspace = createWorkspace({
     db: await openDeviceDb(),
-    // No dev-pglite driver in production: a demo source saved on the device shows as unavailable (unsupported_source).
-    drivers: { neon: createNeonDriver(), ...(import.meta.dev ? { 'dev-pglite': (await import('~/lib/dev/demo-source')).createDemoDriver() } : {}) },
+    drivers,
     userAgent: navigator.userAgent,
   })
 

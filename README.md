@@ -1,13 +1,23 @@
 # GrayMatter
 
-GrayMatter is a collection of tools for personal use to help me dealing with everyday stuff.
-For now, it only contains a single tool -- Inventory project which was primarily created to organize electronic components.
+GrayMatter is a personal inventory app for small things, mostly electronic components. It runs in the browser, works offline once loaded, and installs on your phone like an app.
 
-## GrayMatter (revival)
+The idea: you are at the workbench or in a shop and wonder "do I have a TL072?". Open GrayMatter, type "TL072" into search, and see how many you have and which drawer they are in.
 
-The Nuxt app in `packages/app` on the `revival` branch is the new version. The Inventory section below describes the legacy app.
+Your data lives in your own free Neon (Postgres) project. There is no GrayMatter server and there are no accounts.
 
-## Photos with Uploadcare
+## Use it
+
+1. Open the app at the address of your GitHub Pages site (see "Deploy your own" below).
+2. Install it as an app. On Android Chrome: menu, then "Install app".
+3. Add a source. Create a free project at [Neon](https://neon.tech/), copy its connection string, and paste it into GrayMatter's settings. The connection string stays on your device.
+4. Optional: set up photos (see below).
+
+### Backups
+
+Open Settings, pick your source, and press "Export backup". It saves a JSON file. Neon's free plan keeps only about 6 hours of restore history, so export regularly. Importing a backup is not available yet.
+
+### Photos with Uploadcare (optional)
 
 Photos are stored in [Uploadcare](https://uploadcare.com/). Setup for each source:
 
@@ -20,17 +30,54 @@ Photos are stored in [Uploadcare](https://uploadcare.com/). Setup for each sourc
 
 The "Photo address" field is the CDN domain used to show photos. Projects created after September 2025 get a personal `*.ucarecd.net` domain, shown in the dashboard under Delivery; paste it there. Leave the field empty to use `ucarecdn.com`, which is right for projects created before September 2025.
 
-## Inventory
+## Develop
+
+Use pnpm. Plain npm fails in the repo root because `devEngines` pins Node.
+
+```sh
+pnpm install
+pnpm dev
+```
+
+- Demo data exists only in development. Run `pnpm dev` and open `/welcome`. Production builds have no demo.
+- Checks: `pnpm test`, `pnpm typecheck`, `pnpm lint`.
+- Some tests need a real Neon database. Put its connection string in `GM_NEON_TEST_URL` in `.env.local`. The database name must end in `_test`, so the tests never touch real data. Without the variable, those tests skip themselves.
+- To try the dev server on a phone over USB, run `adb reverse tcp:3000 tcp:3000` and open `http://localhost:3000` on the phone.
+
+## Deploy your own
+
+1. Fork the repository.
+2. In the fork, go to Settings, Pages, and set the source to "GitHub Actions".
+3. Push to `master`. The workflow in `.github/workflows/deploy.yml` runs the checks, builds the app with the right base path, and publishes it.
+
+## Privacy
+
+- There is no server and there are no accounts. The app talks straight to your Neon database (and to Uploadcare if you use photos).
+- The connection string is stored in IndexedDB on your device.
+- Production builds set a Content Security Policy as a meta tag. It allows only Neon, Uploadcare and the fonts the app needs.
+
+**Shared origin on GitHub Pages.** All Pages sites of one account share the origin `<user>.github.io`, and IndexedDB belongs to the origin. Any other Pages site on the same account could read your connection string. Before you enter real data, do one of these:
+
+- connect your own domain to Pages (a `CNAME` file, with free HTTPS), or
+- host somewhere that gives each project its own origin, for example Cloudflare Pages (`*.pages.dev`).
+
+If you change the origin later, the device data is lost: you add the source again. The data in Neon is not affected.
+
+## Legacy
+
+The old `api/` and `web/` apps (Fastify, PostgreSQL, Quasar) are kept in the repository for reference. They are not part of the new app. Their description follows.
+
+### Inventory
 
 I'm currently deeply involved in DIY synthesizers, including both analog and digital.
 When my carts from AliExpress began to be large and amount of distinct electronic components became so large I sometimes reordered the same thing multiple times, I started thinking about some organization of that stuff.
 Tried different options but the best one was Sortly as it is friendly for personal use and has a bunch of convenient features. Anyway, it is pricey, I quicly went over the limit of 100 distinct items.
 Thus, because I love reinventing the wheel, I started this project.
 
-### Screenshots:
+#### Screenshots
 <img src="https://github.com/hazer-hazer/graymatter/assets/29581311/bdeaca77-7b86-4717-b4d6-e5a40f75366c" width="500px">
 
-### Stack
+#### Stack
 
 Both front-end and back-end use Typescript, modern ESLint with stylistic
 
@@ -46,7 +93,7 @@ Both front-end and back-end use Typescript, modern ESLint with stylistic
 - PostgreSQL with Prisma.js
 - AJV with self-written JSON schema from TypeScript type definitions
 
-### Features
+#### Features
 
 - Any count of inventories can be created
 - File-system-like hierarchy of folders and items. Special "Trash folder" is a kind of archive of items. 
@@ -61,7 +108,7 @@ Both front-end and back-end use Typescript, modern ESLint with stylistic
   - Usages say what some amount of item is used for
   - Returns not just magically increases the amount of items but says that something used got back because of some reason
 
-### Planned
+#### Planned
 
 - Better search capabilities
 - API for Personal Assistants (e.g. Yandex Station)

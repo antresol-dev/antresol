@@ -20,9 +20,9 @@ const tbody = document.getElementById('results') as HTMLElement
 const actor: Actor = { device: `Spike · ${/Android/.test(navigator.userAgent) ? 'Android' : 'Desktop'}` }
 let results: StepResult[] = []
 
-// The connection string lives only in this page's memory; the dev server may prefill the test DB URL
-// when the page was opened with the token it prints (?k=…).
-fetch(`/__spike/prefill?k=${encodeURIComponent(new URLSearchParams(location.search).get('k') ?? '')}`)
+// The connection string lives only in this page's memory; the dev server prefills the test DB URL
+// for loopback clients only (this machine, or a phone over `adb reverse`).
+fetch('/__spike/prefill')
   .then((r) => (r.ok ? (r.json() as Promise<{ url: string | null }>) : null))
   .then((d) => {
     if (d?.url && !urlInput.value) {

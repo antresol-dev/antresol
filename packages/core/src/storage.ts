@@ -33,5 +33,7 @@ export interface InventoryStorage {
   loadInventory(id: Id): Promise<InventorySnapshot>
   /** Newest first (seq desc). */
   loadMovements(itemId: Id): Promise<Movement[]>
+  /** Every movement of the inventory, all items (archived included), newest last (seq asc). */
+  loadAllMovements(inventoryId: Id): Promise<Movement[]>
   apply(command: Command, actor: Actor): Promise<void>
 }

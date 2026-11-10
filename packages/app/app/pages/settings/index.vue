@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { defaultDeviceName } from '~/lib/device-name'
+import { downloadBackup } from '~/lib/backup'
 import { errorMessageKey } from '~/lib/errors'
 import type { SourceConfig } from '~/lib/types'
 
@@ -36,6 +37,20 @@ const sheetOpen = computed({
 // Neutral hover; the text keeps its colour.
 const sourceAction = 'h-11 rounded-field transition-colors duration-150 hover:bg-hover'
 
+const exporting = ref<string | null>(null)
+
+async function exportBackup(config: SourceConfig): Promise<void> {
+  if (exporting.value) return
+  exporting.value = config.id
+  try {
+    downloadBackup(await workspace.exportSource(config.id), new Date())
+  } catch (e) {
+    toast.error(t(errorMessageKey(e)))
+  } finally {
+    exporting.value = null
+  }
+}
+
 async function confirmRemove(): Promise<void> {
   const target = removing.value
   removing.value = null
@@ -66,10 +81,19 @@ async function confirmRemove(): Promise<void> {
               <Button v-if="s.config.kind === 'neon'" as-child variant="ghost" :class="[sourceAction, 'text-primary']">
                 <NuxtLink :to="`/settings/sources/${s.config.id}`">{{ $t('settings.sources.edit') }}</NuxtLink>
               </Button>
+              <Button
+                variant="ghost"
+                :class="[sourceAction, 'text-primary']"
+                :disabled="exporting !== null"
+                @click="exportBackup(s.config)"
+              >
+                {{ exporting === s.config.id ? $t('settings.sources.exporting') : $t('settings.sources.exportBackup') }}
+              </Button>
               <Button variant="ghost" :class="[sourceAction, 'text-destructive']" @click="removing = s.config">
                 {{ $t('settings.sources.remove') }}
               </Button>
             </div>
+            <p v-if="s.config.kind === 'neon'" class="text-sm text-subtle-foreground">{{ $t('settings.sources.exportHint') }}</p>
           </li>
         </ul>
         <p v-else class="text-subtle-foreground">{{ $t('settings.sources.empty') }}</p>

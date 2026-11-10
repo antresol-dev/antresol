@@ -1,4 +1,5 @@
 import type { Command, FileStore, Id, Inventory, InventorySnapshot, Movement } from '@graymatter/core'
+import type { BackupFile } from './backup'
 import type { DeviceDb } from './device-db'
 import type { FailureReason, SourceDriver } from './sources'
 import type { InventoryRef, SourceConfig, SourceKind } from './types'
@@ -71,6 +72,9 @@ export interface Workspace {
   applyTo(ref: InventoryRef, command: Command): Promise<void>
   /** Journal of an item of the current inventory, newest first. Rejects without a network call while the source is unreachable. */
   loadMovements(itemId: Id): Promise<Movement[]>
+  /** Read-only copy of every inventory of a connected source (archived included) with all movements. Rejects with
+   *  `unavailable` when the source is offline or failing; never returns a partial backup. */
+  exportSource(sourceId: string): Promise<BackupFile>
   /** Uploadcare for a Neon source with a public key, the device store for the demo source, otherwise null. */
   fileStoreFor(sourceId: string): FileStore | null
   /** Prepares, uploads and records each file in order (photo.add with newId, provider, fileId, url). Stops at the first failure

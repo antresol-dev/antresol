@@ -731,6 +731,52 @@ describe('workspace', () => {
     ])
   })
 
+  it('exports every inventory, archived included, with all movements, and nothing secret', async () => {
+    const h = setup()
+    const a = await h.seed(CS('one'), 'Active')
+    const b = await h.seed(CS('one'), 'Old')
+    await h.db.putSource({ ...config('s1', CS('one')), uploadcarePublicKey: 'pk_secret_key' })
+    const ws = h.workspace()
+    await ws.start()
+    const itemA = await itemWithStock(ws, a)
+    await ws.applyTo({ sourceId: 's1', inventoryId: b }, { type: 'archive', target: 'inventory', id: b, archiveId: newId() })
+    const backup = await ws.exportSource('s1')
+    expect(backup).toMatchObject({
+      format: 'graymatter-backup',
+      version: 1,
+      app: { schemaVersion: APP_SCHEMA_VERSION },
+      source: { name: 'Source s1', kind: 'neon' },
+    })
+    expect(backup.inventories.map((i) => i.snapshot.inventory.name).sort()).toEqual(['Active', 'Old'])
+    const archived = backup.inventories.find((i) => i.snapshot.inventory.id === b)!
+    expect(archived.snapshot.inventory.archivedAt).not.toBeNull()
+    const active = backup.inventories.find((i) => i.snapshot.inventory.id === a)!
+    expect(active.movements.map((m) => [m.itemId, m.kind, m.quantity])).toEqual([
+      [itemA, 'receipt', '37'],
+      [itemA, 'usage', '-5'],
+    ])
+    const text = JSON.stringify(backup)
+    for (const forbidden of ['connectionString', 'postgresql://', 'pw-one', 'uploadcarePublicKey', 'pk_secret_key']) {
+      expect(text).not.toContain(forbidden)
+    }
+  })
+
+  it('export fails with unavailable when the source is offline, and when a read fails midway', async () => {
+    const h = setup()
+    const id = await h.seed(CS('one'), 'Inv')
+    await h.db.putSource(config('s1', CS('one')))
+    const ws = h.workspace()
+    await ws.start()
+    await itemWithStock(ws, id)
+    await expect(ws.exportSource('nope')).rejects.toMatchObject({ code: 'not_found' })
+    h.flags.loadError = new StorageError('unavailable')
+    await expect(ws.exportSource('s1')).rejects.toMatchObject({ code: 'unavailable' })
+    h.flags.loadError = null
+    h.flags.offline = true
+    await ws.refresh()
+    await expect(ws.exportSource('s1')).rejects.toMatchObject({ code: 'unavailable' })
+  })
+
   it('32. the journal fails fast when the source is unreachable', async () => {
     const h = setup()
     const id = await h.seed(CS('one'), 'Inv')

@@ -13,7 +13,9 @@ import {
   type Movement,
 } from '@graymatter/core'
 import { createUploadcareStore } from '@graymatter/files-uploadcare'
+import { APP_SCHEMA_VERSION } from '@graymatter/storage-postgres'
 import { markRaw, reactive } from 'vue'
+import { buildBackup, type BackupFile } from './backup'
 import { createDeviceFileStore } from './device-files'
 import { prepareImage as defaultPrepareImage } from './images'
 import { defaultDeviceName } from './device-name'
@@ -589,6 +591,29 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     return guarded(cur.sourceId, conn, () => conn.storage.loadMovements(itemId))
   }
 
+  async function exportSource(sourceId: string): Promise<BackupFile> {
+    const entry = state.sources.find((s) => s.config.id === sourceId)
+    const conn = conns.get(sourceId)
+    if (!entry) throw new StorageError('not_found')
+    if (!conn || entry.status === 'unreachable' || entry.status === 'error' || entry.status === 'connecting') {
+      throw new StorageError('unavailable')
+    }
+    // Everything is read before anything is returned: a failure midway leaves no partial file.
+    return guarded(sourceId, conn, async () => {
+      const inventories = []
+      for (const { id } of await conn.storage.listInventories()) {
+        const snapshot = await conn.storage.loadInventory(id)
+        inventories.push({ snapshot, movements: await conn.storage.loadAllMovements(id) })
+      }
+      return buildBackup({
+        exportedAt: nowIso(),
+        app: { schemaVersion: APP_SCHEMA_VERSION },
+        source: { name: entry.config.name, kind: entry.config.kind },
+        inventories,
+      })
+    })
+  }
+
   /** Runs a storage call on `conn`: an `unavailable` failure marks the source, any failure is redacted with the
    *  connection string `conn` was opened with, even if the source was edited or removed since. */
   async function guarded<T>(sourceId: string, conn: SourceConnection, call: () => Promise<T>): Promise<T> {
@@ -628,6 +653,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     apply,
     applyTo,
     loadMovements,
+    exportSource,
     fileStoreFor,
     addPhotos,
     setVariantPhoto,

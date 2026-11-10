@@ -89,6 +89,16 @@ export async function loadMovements(exec: PgExecutor, itemId: Id): Promise<Movem
   return result.map(rows.toMovement)
 }
 
+/** Oldest first: one constant statement by `inventory_id` (the order names the column, not the `seq::text` alias). */
+export async function loadAllMovements(exec: PgExecutor, inventoryId: Id): Promise<Movement[]> {
+  const result = await exec.query(
+    sql`select id, seq::text as seq, item_id, variant_id, kind, quantity::text as quantity,
+               total_price::text as total_price, source_url, note, transfer_id, created_at, created_by
+        from movements m where inventory_id = ${inventoryId} order by m.seq asc`,
+  )
+  return result.map(rows.toMovement)
+}
+
 type R = Record<string, unknown>[]
 /** One row set per statement of loadInventory's readBatch, in order. */
 type SnapshotRows = [R, R, R, R, R, R, R, R, R, R, R]

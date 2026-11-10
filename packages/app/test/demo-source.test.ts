@@ -1,10 +1,12 @@
 import { createSearch } from '@graymatter/core'
+import type { Transaction } from '@electric-sql/pglite'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createDemoDriver, type DemoDriver } from '../app/lib/dev/demo-source'
 import type { SourceConfig } from '../app/lib/types'
 
-/** The next `failNext` PGlite databases fail to open. */
-const pglite = vi.hoisted(() => ({ failNext: 0 }))
+/** The next `failNext` PGlite databases fail to open; the transaction number `failTransactionAt` (1-based, counted
+ *  from `transactions = 0`) fails once. */
+const pglite = vi.hoisted(() => ({ failNext: 0, transactions: 0, failTransactionAt: 0 }))
 vi.mock('@electric-sql/pglite', async (importOriginal) => {
   const real = await importOriginal<typeof import('@electric-sql/pglite')>()
   class FlakyPGlite extends real.PGlite {
@@ -14,6 +16,12 @@ vi.mock('@electric-sql/pglite', async (importOriginal) => {
         throw new Error('could not open the database')
       }
       super(...args)
+    }
+
+    override async transaction<T>(callback: (tx: Transaction) => Promise<T>): Promise<T> {
+      pglite.transactions++
+      if (pglite.transactions === pglite.failTransactionAt) throw new Error('disk full')
+      return super.transaction(callback)
     }
   }
   return { ...real, PGlite: FlakyPGlite }
@@ -105,7 +113,7 @@ describe('demo source', () => {
     const driver = demo({ memory: true, extras: false })
     const conn = await driver.connect(cfg)
     await driver.close()
-    await expect(conn.storage.listInventories()).rejects.toThrow()
+    await expect(conn.storage.listInventories()).rejects.toThrow(/closed/i)
   })
 
   it('keeps the database open when an older connection is closed', async () => {
@@ -114,5 +122,25 @@ describe('demo source', () => {
     const second = await driver.connect(cfg)
     await first.close()
     expect((await second.storage.listInventories()).length).toBe(2)
+  })
+
+  it('seeds the whole demo on the next connect after a seeding failure', async () => {
+    pglite.transactions = 0
+    const probe = await demo({ memory: true, extras: false }).connect(cfg)
+    await probe.close()
+    const total = pglite.transactions
+    expect(total).toBeGreaterThanOrEqual(3)
+
+    const driver = demo({ memory: true, extras: false })
+    pglite.transactions = 0
+    pglite.failTransactionAt = total - 2
+    await expect(driver.connect(cfg)).rejects.toThrow('disk full')
+    pglite.failTransactionAt = 0
+    const conn = await driver.connect(cfg)
+    expect((await conn.storage.listInventories()).map((i) => i.name).sort()).toEqual(['Electronics', 'Workshop'])
+    const all = await conn.storage.listInventories()
+    const snap = await conn.storage.loadInventory(all.find((i) => i.name === 'Electronics')!.id)
+    expect(snap.items.map((i) => i.name)).toContain('TL072')
+    expect(snap.items).toHaveLength(4)
   })
 })

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { newId, type Inventory, type InventorySnapshot } from '@graymatter/core'
 import { openDeviceDb } from '../app/lib/device-db'
 import type { SourceConfig } from '../app/lib/types'
@@ -107,5 +107,21 @@ describe('device db without IndexedDB', () => {
     expect(await db.getListings()).toEqual({ m: [tools], n: [] })
     await db.deleteListing('m')
     expect(await db.getListings()).toEqual({ n: [] })
+  })
+})
+
+describe('device db when the probe write fails', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('falls back to memory', async () => {
+    vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(() => {
+      throw new DOMException('quota exceeded', 'QuotaExceededError')
+    })
+    const db = await openDeviceDb()
+    expect(db.persistent).toBe(false)
+    await db.putSource(source('m'))
+    expect((await db.getSources()).map((s) => s.id)).toEqual(['m'])
   })
 })

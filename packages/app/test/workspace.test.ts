@@ -53,6 +53,8 @@ function harness() {
     movementError: null as Error | null,
   }
 
+  const directConns: { close(): Promise<void> }[] = []
+
   const addDatabase = (connectionString: string): PGlite => {
     const pg = new PGlite()
     pgs.push(pg)
@@ -70,14 +72,16 @@ function harness() {
     return pg
   }
 
-  const authFailing: PgExecutor = (() => {
+  // Like a server that echoes the login it refused: the password must not survive into the state.
+  const authFailing = (connectionString: string): PgExecutor => {
+    const password = new URL(connectionString).password
     const fail = async (): Promise<never> => {
-      throw Object.assign(new Error('password authentication failed'), { code: '28P01' })
+      throw Object.assign(new Error(`password authentication failed (${password})`), { code: '28P01' })
     }
     return { query: fail, batch: fail, readBatch: fail, close: async () => {} }
-  })()
+  }
 
-  const inner = createNeonDriver((cs) => execs.get(cs) ?? authFailing)
+  const inner = createNeonDriver((cs) => execs.get(cs) ?? authFailing(cs))
   const driver: SourceDriver = {
     probe: inner.probe,
     async connect(cfg) {
@@ -151,10 +155,15 @@ function harness() {
       { type: 'inventory.create', id, name: inventoryName, description: null, currency: 'USD' },
       { device: 'seed' },
     )
+    await conn.close()
     return id
   }
 
-  const direct = async (connectionString: string) => (await inner.connect(config('direct', connectionString))).storage
+  const direct = async (connectionString: string) => {
+    const conn = await inner.connect(config('direct', connectionString))
+    directConns.push(conn)
+    return conn.storage
+  }
 
   const gate = (): { promise: Promise<void>; open: () => void } => {
     let open!: () => void
@@ -175,7 +184,7 @@ function harness() {
     return hold
   }
 
-  return { gate, holdDb, pgs, flags, db, workspace, seed, direct, addDatabase }
+  return { gate, holdDb, pgs, directConns, flags, db, workspace, seed, direct, addDatabase }
 }
 
 const folderCreate = (inventoryId: Id, name: string, id: Id = newId()): Command => ({
@@ -190,6 +199,7 @@ const folderCreate = (inventoryId: Id, name: string, id: Id = newId()): Command 
 let current: ReturnType<typeof harness>
 const setup = () => (current = harness())
 afterEach(async () => {
+  await Promise.all(current?.directConns.map((c) => c.close().catch(() => {})) ?? [])
   await Promise.all(current?.pgs.map((p) => p.close().catch(() => {})) ?? [])
 })
 
@@ -396,6 +406,7 @@ describe('workspace', () => {
     const ref = ws.state.current
     await expect(ws.updateSource('s1', { connectionString: CS('wrong') })).rejects.toBeInstanceOf(StorageError)
     expect(ws.state.sources[0]!.status).toBe('error')
+    expect(ws.state.sources[0]!.error).toContain('password authentication failed')
     expect(ws.state.sources[0]!.error).not.toContain('pw-wrong')
     expect(ws.state.readOnly).toBe('source_error')
     expect(ws.state.current).toEqual(ref)
@@ -627,6 +638,7 @@ describe('workspace', () => {
     const source = ws.state.sources[0]!
     expect(source.status).toBe('error')
     expect(source.reason).toBe('auth')
+    expect(source.error).toContain('password authentication failed')
     expect(source.error).not.toContain('pw-nope')
   })
 

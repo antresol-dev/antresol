@@ -151,7 +151,7 @@ describe('PgExecutor.batch', () => {
         sql`insert into gm_meta (key, value) values ('a', '1')`,
         sql`insert into gm_meta (key, value) values ('a', '2')`,
       ]),
-    ).rejects.toThrow()
+    ).rejects.toThrow(/duplicate key/)
     expect(await exec.query(sql`select 1 from gm_meta where key = 'a'`)).toEqual([])
   })
 })

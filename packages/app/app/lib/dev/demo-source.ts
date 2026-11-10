@@ -43,7 +43,15 @@ export function createDemoDriver(options: { memory?: boolean; extras?: boolean }
     const exec = await executorFor(config)
     const wasEmpty = (await inspectSchema(exec)).state === 'empty'
     const { storage, status } = await openPostgresStorage(exec)
-    if (wasEmpty) await seedDemo(storage, DEMO_ACTOR, { extras: options.extras ?? true })
+    if (wasEmpty) {
+      try {
+        await seedDemo(storage, DEMO_ACTOR, { extras: options.extras ?? true })
+      } catch (e) {
+        // A half-seeded database would never look empty again: wipe it so the next connect starts over.
+        await exec.batch([{ text: 'drop schema public cascade', params: [] }, { text: 'create schema public', params: [] }]).catch(() => {})
+        throw e
+      }
+    }
     return { storage, status, inspect: () => inspectSchema(exec), close: async () => {} }
   }
 

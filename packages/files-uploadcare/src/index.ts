@@ -5,6 +5,7 @@ export interface UploadcareOptions {
   /**
    * CDN base for the returned URL; the Upload API returns only the file UUID. Default 'https://ucarecdn.com', which is
    * right for projects created before 2025-09-04; newer projects are delivered from their own `<id>.ucarecd.net`.
+   * Must satisfy isUploadcareCdnBase, otherwise upload() rejects with 'no_store'.
    */
   cdnBase?: string
   fetch?: typeof fetch
@@ -22,19 +23,39 @@ function codeForStatus(status: number): FileErrorCode {
   return 'failed'
 }
 
-function isHttps(url: string): boolean {
+function parseHttps(url: string): URL | null {
   try {
-    return new URL(url).protocol === 'https:'
+    const u = new URL(url)
+    return u.protocol === 'https:' && !u.username && !u.password && !u.port ? u : null
   } catch {
-    return false
+    return null
   }
+}
+
+function isUploadcareHost(hostname: string): boolean {
+  if (hostname === 'ucarecdn.com') return true
+  return hostname.endsWith('.ucarecd.net') && hostname.length > '.ucarecd.net'.length
+}
+
+/** A photo URL (with a path) on an Uploadcare delivery host: `https://ucarecdn.com` or `https://<sub>.ucarecd.net`. */
+export function isUploadcareUrl(url: string): boolean {
+  const u = parseHttps(url)
+  return u !== null && isUploadcareHost(u.hostname)
+}
+
+/** The one rule for a CDN base: an Uploadcare delivery host over https, with no path, query or fragment
+ *  (trailing slashes are tolerated). Custom CNAME domains are not accepted: the app never displays their photos. */
+export function isUploadcareCdnBase(url: string): boolean {
+  if (/[?#]/.test(url)) return false
+  const u = parseHttps(url)
+  return u !== null && isUploadcareHost(u.hostname) && /^\/*$/.test(u.pathname)
 }
 
 export function createUploadcareStore(options: UploadcareOptions): FileStore {
   const publicKey = options.publicKey.trim()
   if (!publicKey) throw new FileError('no_store')
   const cdnBase = (options.cdnBase?.trim() || DEFAULT_CDN).replace(/\/+$/, '')
-  const cdnOk = isHttps(cdnBase)
+  const cdnOk = isUploadcareCdnBase(cdnBase)
   const timeoutMs = options.timeoutMs ?? 60_000
 
   return {

@@ -1,16 +1,9 @@
+import { isUploadcareUrl } from '@graymatter/files-uploadcare'
+
+export { isUploadcareUrl }
 export type PhotoSize = 'thumb' | 'card' | 'full'
 
 const SIDE: Record<PhotoSize, number> = { thumb: 160, card: 800, full: 2048 }
-
-export function isUploadcareUrl(url: string): boolean {
-  let u: URL
-  try {
-    u = new URL(url)
-  } catch {
-    return false
-  }
-  return u.protocol === 'https:' && (u.hostname === 'ucarecdn.com' || u.hostname.endsWith('.ucarecd.net'))
-}
 
 export function isDeviceUrl(url: string): boolean {
   return url.startsWith('device:')

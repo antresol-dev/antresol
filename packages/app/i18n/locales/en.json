@@ -255,7 +255,7 @@
     "uploadcareKeyHint": "Public key from your Uploadcare project. Turn signed uploads off; files are stored permanently.",
     "uploadcareKeyLink": "Open the Uploadcare dashboard",
     "uploadcareCdn": "Photo address",
-    "uploadcareCdnHint": "Copy it from your Uploadcare dashboard → Delivery. Leave empty to use ucarecdn.com, which is right for projects created before September 2025.",
+    "uploadcareCdnHint": "Must be the ….ucarecd.net address from your Uploadcare dashboard → Delivery, without a path. Leave empty to use ucarecdn.com, which is right for projects created before September 2025.",
     "optional": "Optional",
     "check": "Check",
     "checking": "Checking…",
@@ -265,7 +265,7 @@
       "not_postgres_url": "This isn’t a Postgres connection string. It should start with postgresql://",
       "missing_password": "The connection string has a missing password.",
       "missing_database": "The connection string has a missing database name.",
-      "cdn": "Use the full https:// address."
+      "cdn": "Use the https://….ucarecd.net address from Dashboard → Delivery (or https://ucarecdn.com). Custom domains are not supported."
     },
     "result": {
       "empty": "This source is empty. GrayMatter will set it up.",
@@ -422,7 +422,7 @@
       "no_store": "Photos aren’t set up for this source. Check the Uploadcare key and photo address in Settings.",
       "unsupported": "This photo can’t be opened — the format isn’t supported or the image is too large.",
       "too_large": "This photo is too large.",
-      "rejected": "The photo service rejected this photo. Check the Uploadcare key in the source settings.",
+      "rejected": "The photo service rejected this photo. Check the Uploadcare key, and that signed uploads are turned off.",
       "unavailable": "Can’t reach the photo service. Check your connection.",
       "failed": "The photo couldn’t be uploaded. Try again."
     },

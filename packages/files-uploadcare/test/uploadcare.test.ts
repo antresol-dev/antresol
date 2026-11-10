@@ -1,6 +1,6 @@
 import { FileError } from '@graymatter/core'
 import { describe, expect, it, vi } from 'vitest'
-import { createUploadcareStore } from '../src/index'
+import { createUploadcareStore, isUploadcareCdnBase, isUploadcareUrl } from '../src/index'
 
 const UUID = '17be4678-dab7-4bc7-8753-28914a22960a'
 const KEY = 'demo-public-key'
@@ -120,7 +120,16 @@ describe('createUploadcareStore', () => {
     expect(await codeOf(p)).toBe('failed')
   })
 
-  it.each(['abc123.ucarecd.net', 'http://abc123.ucarecd.net', 'not a url'])(
+  it.each([
+    'abc123.ucarecd.net',
+    'http://abc123.ucarecd.net',
+    'not a url',
+    'https://example.com',
+    'https://cdn.example.com/ucarecdn.com',
+    'https://ucarecdn.com.evil.com',
+    'https://app.uploadcare.com/projects/x/delivery',
+    'https://abc123.ucarecd.net/path',
+  ])(
     'rejects a bad cdnBase %j with no_store before fetching',
     async (cdnBase) => {
       const fetchMock = vi.fn(async () => json(200, { file: UUID }))
@@ -145,5 +154,35 @@ describe('createUploadcareStore', () => {
       init.signal!.aborted ? Promise.reject(new DOMException('aborted', 'AbortError')) : Promise.resolve(json(200, { file: UUID }))) as unknown as typeof fetch
     const store = createUploadcareStore({ publicKey: KEY, fetch: fetchAbort })
     expect(await codeOf(store.upload(blob(), 'a.jpg', ctl.signal))).toBe('failed')
+  })
+})
+
+describe('isUploadcareCdnBase', () => {
+  it.each([
+    'https://ucarecdn.com',
+    'https://ucarecdn.com/',
+    'https://abc123.ucarecd.net',
+    'https://abc123.ucarecd.net//',
+  ])('accepts %j', (u) => expect(isUploadcareCdnBase(u)).toBe(true))
+  it.each([
+    '',
+    'http://ucarecdn.com',
+    'https://ucarecd.net',
+    'https://evilucarecdn.com',
+    'https://ucarecdn.com.evil.com',
+    'https://ucarecdn.com/abc/',
+    'https://ucarecdn.com:8443',
+    'https://user@ucarecdn.com',
+    'https://ucarecdn.com?x=1',
+    'https://example.com',
+  ])('rejects %j', (u) => expect(isUploadcareCdnBase(u)).toBe(false))
+})
+
+describe('isUploadcareUrl', () => {
+  it('accepts photo urls on Uploadcare hosts only', () => {
+    expect(isUploadcareUrl(`https://ucarecdn.com/${UUID}/`)).toBe(true)
+    expect(isUploadcareUrl(`https://abc.ucarecd.net/${UUID}/`)).toBe(true)
+    expect(isUploadcareUrl(`http://ucarecdn.com/${UUID}/`)).toBe(false)
+    expect(isUploadcareUrl(`https://example.com/${UUID}/`)).toBe(false)
   })
 })

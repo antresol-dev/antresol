@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isUploadcareCdnBase } from '@graymatter/files-uploadcare'
 import { Eye, EyeOff } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,19 +28,14 @@ const saving = ref(false)
 const saveError = ref<string | null>(null)
 const checkError = ref<string | null>(null)
 
-/** Trimmed, without trailing slashes; null when empty. Anything but a full https:// address is not valid. */
+/** Trimmed, without trailing slashes; null when empty. Must be an Uploadcare delivery host (see isUploadcareCdnBase). */
 function cdnBase(): string | null {
   return uploadcareCdn.value.trim().replace(/\/+$/, '') || null
 }
 
 function cdnValid(): boolean {
   const v = cdnBase()
-  if (v === null) return true
-  try {
-    return new URL(v).protocol === 'https:'
-  } catch {
-    return false
-  }
+  return v === null || isUploadcareCdnBase(v)
 }
 
 const draft = (): Omit<SourceConfig, 'id' | 'createdAt'> => ({

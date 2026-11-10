@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { effectScope, nextTick, ref, type EffectScope, type Ref } from 'vue'
+import { effectScope, nextTick, reactive, ref, type EffectScope, type Ref } from 'vue'
 import { useCloseWatcher } from '../app/composables/useCloseWatcher'
+import { useListLayer } from '../app/composables/useListLayer'
 
 class FakeCloseWatcher {
   onclose: (() => void) | null = null
@@ -27,9 +28,18 @@ const live = (): FakeCloseWatcher[] => watchers.filter((w) => !w.destroyed && !w
 function layer(initial = false): { open: Ref<boolean>; scope: EffectScope } {
   const open = ref(initial)
   const scope = effectScope()
+  scopes.push(scope)
   scope.run(() => useCloseWatcher(open))
   return { open, scope }
 }
+/** Stopped after each test, also when it fails half way: the stack of layers is shared by the whole module. */
+const scopes: EffectScope[] = []
+
+/** Stands in for `window`: the composable listens for Esc on it (once, on first use). */
+const keys = new EventTarget()
+const pressEscape = (): void => void keys.dispatchEvent(Object.assign(new Event('keydown'), { key: 'Escape' }))
+/** The Esc flag lasts until the next task. */
+const nextTask = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
 
 let watchers: FakeCloseWatcher[]
 let scope: EffectScope
@@ -38,6 +48,7 @@ let open: Ref<boolean>
 beforeEach(() => {
   watchers = []
   vi.stubGlobal('CloseWatcher', FakeCloseWatcher)
+  vi.stubGlobal('window', keys)
   open = ref(false)
   scope = effectScope()
   scope.run(() => useCloseWatcher(open))
@@ -45,6 +56,7 @@ beforeEach(() => {
 
 afterEach(() => {
   scope.stop()
+  for (const s of scopes.splice(0)) s.stop()
   vi.unstubAllGlobals()
 })
 
@@ -233,6 +245,114 @@ describe('useCloseWatcher', () => {
       expect(bottom.open.value).toBe(false)
       expect(middle.open.value).toBe(true)
       for (const l of [bottom, middle, top, second]) l.scope.stop()
+    })
+  })
+
+  describe('with Esc', () => {
+    it('leaves the layer below open when Esc closed the top one (Reka) and then reaches the watcher', async () => {
+      const drawer = layer()
+      const menu = layer()
+      drawer.open.value = true
+      await nextTick()
+      menu.open.value = true
+      await nextTick()
+
+      // Esc: Reka closes the menu in its keydown listener, the stack arms the drawer in the microtask flush, and only
+      // then does Chrome send the close request, to the drawer's new watcher.
+      pressEscape()
+      menu.open.value = false
+      await nextTick()
+      const drawerWatcher = live()[0]!
+      const preventDefault = vi.fn()
+      drawerWatcher.oncancel!({ preventDefault })
+      expect(preventDefault).toHaveBeenCalled()
+      drawerWatcher.requestClose()
+      expect(drawer.open.value).toBe(true)
+      // The spent watcher is replaced: the drawer still listens.
+      expect(live()).toHaveLength(1)
+      expect(live()[0]).not.toBe(drawerWatcher)
+
+      // The back gesture afterwards closes it as before.
+      await nextTask()
+      const free = vi.fn()
+      live()[0]!.oncancel!({ preventDefault: free })
+      expect(free).not.toHaveBeenCalled()
+      live()[0]!.requestClose()
+      expect(drawer.open.value).toBe(false)
+      drawer.scope.stop()
+      menu.scope.stop()
+    })
+
+    it('ignores keys other than Esc', async () => {
+      const drawer = layer()
+      drawer.open.value = true
+      await nextTick()
+      keys.dispatchEvent(Object.assign(new Event('keydown'), { key: 'Enter' }))
+      live()[0]!.requestClose()
+      expect(drawer.open.value).toBe(false)
+      drawer.scope.stop()
+    })
+  })
+
+  describe('a Select or Combobox list (useListLayer)', () => {
+    /** A list's root: Reka writes `open` through v-model, the parent may pass `open` and hears update:open. */
+    function list(props: { open?: boolean; defaultOpen?: boolean } = {}) {
+      const p = reactive(props)
+      const emitted = vi.fn()
+      const s = effectScope()
+      scopes.push(s)
+      const state = s.run(() => useListLayer(p, emitted))!
+      return { props: p, open: state, emitted, scope: s }
+    }
+
+    it('takes the back gesture while open, and the sheet under it stays open', async () => {
+      const sheet = layer()
+      sheet.open.value = true
+      await nextTick()
+      const select = list()
+      expect(select.open.value).toBe(false)
+
+      select.open.value = true
+      await nextTick()
+      expect(select.emitted).toHaveBeenLastCalledWith(true)
+      expect(live()).toHaveLength(1)
+
+      live()[0]!.requestClose()
+      expect(select.open.value).toBe(false)
+      expect(sheet.open.value).toBe(true)
+      await nextTick()
+      // The parent hears the close; the sheet listens again and the next gesture closes it.
+      expect(select.emitted).toHaveBeenLastCalledWith(false)
+      expect(live()).toHaveLength(1)
+      live()[0]!.requestClose()
+      expect(sheet.open.value).toBe(false)
+      select.scope.stop()
+      sheet.scope.stop()
+    })
+
+    it('follows an open state the parent controls', async () => {
+      const combobox = list({ open: false })
+      combobox.props.open = true
+      await nextTick()
+      expect(combobox.open.value).toBe(true)
+      // The parent's own change isn't echoed back.
+      expect(combobox.emitted).not.toHaveBeenCalled()
+      expect(live()).toHaveLength(1)
+
+      live()[0]!.requestClose()
+      await nextTick()
+      expect(combobox.emitted).toHaveBeenLastCalledWith(false)
+      combobox.props.open = false
+      await nextTick()
+      expect(combobox.open.value).toBe(false)
+      expect(live()).toHaveLength(0)
+      combobox.scope.stop()
+    })
+
+    it('starts from defaultOpen', () => {
+      const select = list({ defaultOpen: true })
+      expect(select.open.value).toBe(true)
+      select.scope.stop()
     })
   })
 })

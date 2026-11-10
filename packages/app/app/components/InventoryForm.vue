@@ -87,7 +87,8 @@ async function submit(): Promise<void> {
       })
     }
     emit('done')
-    if (props.mode === 'create') await router.push('/')
+    // A new history entry for the new inventory's root, even when the root is already open (see InventorySwitcher.choose).
+    if (props.mode === 'create') await router.push({ path: '/', force: true })
   } catch (e) {
     errorKey.value = errorMessageKey(e)
   } finally {

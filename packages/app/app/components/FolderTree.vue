@@ -1,51 +1,73 @@
 <script setup lang="ts">
-import { folderTree, type TreeNode } from '~/lib/views'
+import { treeCurrent } from '~/lib/shell'
+import { loadTreeOpen, openPath, saveTreeOpen, toggleOpen, treeRows, type TreeOpen, type TreeRow } from '~/lib/tree-state'
+import { inventoryItemCount } from '~/lib/views'
+
+defineProps<{ variant: 'panel' | 'drawer' }>()
 
 const { state } = useWorkspace()
 const route = useRoute()
 
-const rootName = computed(() => state.snapshot?.inventory.name ?? '')
-const currentId = computed(() => (route.name === 'folder-id' ? String(route.params.id) : null))
+const snapshot = computed(() => state.snapshot)
+const inventoryId = computed(() => snapshot.value?.inventory.id ?? null)
+const current = computed(() =>
+  treeCurrent(snapshot.value, typeof route.name === 'string' ? route.name : null, route.params),
+)
 
-interface Row {
-  id: string
-  name: string
-  depth: number
-}
-const rows = computed<Row[]>(() => {
-  const out: Row[] = []
-  const walk = (nodes: TreeNode[], depth: number): void => {
-    for (const n of nodes) {
-      out.push({ id: n.id, name: n.name, depth })
-      walk(n.children, depth + 1)
+const open = shallowRef<TreeOpen>({})
+let loadedFor: string | null = null
+
+// Load the saved state when the inventory changes; on every move, open the path to the current row.
+watch(
+  [inventoryId, current],
+  ([id, cur]) => {
+    const s = snapshot.value
+    if (!s || id === null) {
+      loadedFor = null
+      open.value = {}
+      return
     }
-  }
-  if (state.snapshot) walk(folderTree(state.snapshot), 1)
-  return out
-})
+    if (id !== loadedFor) {
+      loadedFor = id
+      open.value = loadTreeOpen(id)
+    }
+    const next = openPath(s, open.value, cur === 'root' ? null : cur)
+    if (next !== open.value) {
+      open.value = next
+      saveTreeOpen(id, next)
+    }
+  },
+  { immediate: true },
+)
 
-const link = 'flex min-h-11 items-center rounded-field pr-3 text-sm font-semibold'
-const active = 'bg-accent-soft text-accent-soft-foreground'
+const rows = computed(() => (snapshot.value ? treeRows(snapshot.value, open.value, current.value) : []))
+const root = computed<TreeRow | null>(() =>
+  snapshot.value
+    ? {
+        id: snapshot.value.inventory.id,
+        name: snapshot.value.inventory.name,
+        itemCount: inventoryItemCount(snapshot.value),
+        hasChildren: false,
+        open: false,
+        current: current.value === 'root',
+        children: [],
+      }
+    : null,
+)
+
+function toggle(id: string): void {
+  const inventory = inventoryId.value
+  if (inventory === null) return
+  open.value = toggleOpen(open.value, id)
+  saveTreeOpen(inventory, open.value)
+}
 </script>
 
 <template>
-  <nav v-if="state.snapshot" :aria-label="$t('folder.tree')" class="grid grid-cols-1 gap-0.5 p-3">
-    <NuxtLink
-      to="/"
-      :class="[link, 'pl-3 font-bold', currentId === null && route.name === 'index' ? active : 'text-icon']"
-      :aria-current="currentId === null && route.name === 'index' ? 'page' : undefined"
-    >
-      <span class="truncate">{{ rootName }}</span>
-    </NuxtLink>
-    <NuxtLink
-      v-for="r in rows"
-      :key="r.id"
-      :to="`/folder/${r.id}`"
-      :class="[link, r.id === currentId ? active : 'text-icon']"
-      :style="{ paddingLeft: `${12 + r.depth * 16}px` }"
-      :aria-current="r.id === currentId ? 'page' : undefined"
-    >
-      <span class="truncate">{{ r.name }}</span>
-    </NuxtLink>
+  <nav v-if="root" :aria-label="$t('folder.tree')">
+    <ul class="flex flex-col gap-0.5">
+      <FolderTreeNode :row="root" :variant="variant" root />
+      <FolderTreeNode v-for="r in rows" :key="r.id" :row="r" :variant="variant" @toggle="toggle" />
+    </ul>
   </nav>
 </template>

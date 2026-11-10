@@ -22,6 +22,9 @@
   --icon: #3F3F46;
   --destructive: #DC2626;
   --warning: #B45309;
+  --hover: #F1F1F4;
+  --rail: #EFEFF2;
+  --tree-line: #DCDCE2;
 
   --card: var(--surface);
   --card-foreground: var(--foreground);
@@ -55,6 +58,9 @@
   --icon: #D4D4D8;
   --destructive: #F87171;
   --warning: #FBBF24;
+  --hover: #1F1F23;
+  --rail: #131316;
+  --tree-line: #2E2E33;
 }
 
 @theme inline {
@@ -76,6 +82,9 @@
   --color-icon: var(--icon);
   --color-destructive: var(--destructive);
   --color-warning: var(--warning);
+  --color-hover: var(--hover);
+  --color-rail: var(--rail);
+  --color-tree-line: var(--tree-line);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
@@ -93,6 +102,25 @@
   --radius-thumb: 12px;
   --radius-icon: 10px;
   --radius-fab: 18px;
+
+  /* Navigation drawer: slides in from the left (motion-safe only) while its backdrop fades. */
+  --animate-drawer-in: drawer-in 200ms ease-out;
+  --animate-drawer-out: drawer-out 200ms ease-in;
+  --animate-fade-in: fade-in 200ms ease-out;
+  --animate-fade-out: fade-out 200ms ease-in;
+
+  @keyframes drawer-in {
+    from { transform: translateX(-100%); }
+  }
+  @keyframes drawer-out {
+    to { transform: translateX(-100%); }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; }
+  }
+  @keyframes fade-out {
+    to { opacity: 0; }
+  }
 }
 
 @layer base {

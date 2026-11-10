@@ -1,9 +1,9 @@
 <script setup lang="ts">
-definePageMeta({ layout: 'inventory' })
+definePageMeta({ layout: 'default' })
 </script>
 
 <template>
-  <main class="grid min-w-0 grid-cols-1 gap-3.5">
+  <main class="min-w-0">
     <FolderScreen :folder-id="null" />
   </main>
 </template>

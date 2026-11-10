@@ -3,6 +3,8 @@ import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
 import { errorMessageKey } from '~/lib/errors'
 
+definePageMeta({ layout: 'bare' })
+
 const { t } = useI18n()
 const workspace = useWorkspace()
 const router = useRouter()

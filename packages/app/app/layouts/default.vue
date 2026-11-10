@@ -1,31 +1,27 @@
 <script setup lang="ts">
-import { Loader2, Settings } from '@lucide/vue'
+import { useMediaQuery } from '@vueuse/core'
+import { showsTree } from '~/lib/shell'
 
 const route = useRoute()
-const { state } = useWorkspace()
+// Below 1024 px one column and the page scrolls; from 1024 px three full-height columns, each scrolling on its own.
+const desktop = useMediaQuery('(min-width: 1024px)')
+const withTree = computed(() => showsTree(typeof route.name === 'string' ? route.name : null))
 </script>
 
 <template>
-  <div class="min-h-dvh bg-background text-foreground">
-    <header v-if="route.path !== '/welcome'" class="flex items-center justify-between gap-2 px-4 pt-2.5">
-      <NuxtLink to="/" class="flex min-h-11 items-center gap-2 text-base font-bold tracking-[-0.02em]">
-        <img src="/favicon.svg" alt="" class="size-6 rounded-icon" >
-        {{ $t('app.name') }}
-      </NuxtLink>
-      <div class="flex items-center gap-1">
-        <span v-if="state.saving" role="status" class="flex size-11 items-center justify-center text-subtle-foreground">
-          <Loader2 class="size-4 animate-spin" aria-hidden="true" />
-          <span class="sr-only">{{ $t('status.saving') }}</span>
-        </span>
-        <NuxtLink
-          to="/settings"
-          class="flex size-11 items-center justify-center rounded-field text-icon hover:bg-chip"
-          :aria-label="$t('nav.settings')"
-        >
-          <Settings class="size-5" aria-hidden="true" />
-        </NuxtLink>
-      </div>
-    </header>
-    <slot />
+  <div
+    :class="[
+      'min-h-dvh bg-background text-foreground lg:grid lg:h-dvh lg:overflow-hidden',
+      withTree ? 'lg:grid-cols-[212px_264px_minmax(0,1fr)]' : 'lg:grid-cols-[212px_minmax(0,1fr)]',
+    ]"
+  >
+    <div v-if="desktop" class="min-h-0 overflow-y-auto bg-rail">
+      <AppNav variant="rail" />
+    </div>
+    <TreePanel v-if="desktop && withTree" />
+    <div class="min-w-0 lg:min-h-0 lg:overflow-y-auto">
+      <slot />
+    </div>
+    <NavDrawer />
   </div>
 </template>

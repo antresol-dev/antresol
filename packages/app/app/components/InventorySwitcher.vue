@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { newId } from '@graymatter/core'
 import { createReusableTemplate, useMediaQuery } from '@vueuse/core'
-import { Archive, Check, ChevronDown, Pencil, Plus } from '@lucide/vue'
+import { Archive, Check, ChevronsUpDown, Pencil, Plus } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import {
   DropdownMenu,
@@ -21,12 +21,21 @@ const router = useRouter()
 
 const desktop = useMediaQuery('(min-width: 768px)')
 const [DefineContent, ReuseContent] = createReusableTemplate()
+const [DefineTrigger, ReuseTrigger] = createReusableTemplate()
 
 const menuOpen = ref(false)
 const dialog = ref<'create' | 'rename' | 'archive' | null>(null)
 const archiving = ref(false)
 
-const name = computed(() => state.snapshot?.inventory.name ?? '')
+const isCurrent = (e: InventoryEntry): boolean =>
+  e.ref.sourceId === state.current?.sourceId && e.ref.inventoryId === state.current?.inventoryId
+
+// The snapshot's name once it is the current inventory's; until then (first load, a switch) the listed name.
+const name = computed(() => {
+  const snapshot = state.snapshot
+  if (snapshot && snapshot.inventory.id === state.current?.inventoryId) return snapshot.inventory.name
+  return state.inventories.find(isCurrent)?.inventory.name ?? ''
+})
 const hasCurrent = computed(() => !!state.current && !!state.snapshot)
 const locked = computed(() => !!state.readOnly || archiving.value)
 
@@ -39,9 +48,6 @@ const groups = computed(() => {
   }
   return [...map].map(([label, entries]) => ({ label, entries }))
 })
-
-const isCurrent = (e: InventoryEntry): boolean =>
-  e.ref.sourceId === state.current?.sourceId && e.ref.inventoryId === state.current?.inventoryId
 
 const formOpen = computed({
   get: () => dialog.value === 'create' || dialog.value === 'rename',
@@ -56,11 +62,18 @@ const archiveOpen = computed({
   },
 })
 
-function choose(entry: InventoryEntry): void {
+async function choose(entry: InventoryEntry): Promise<void> {
   menuOpen.value = false
   if (isCurrent(entry)) return
-  void router.push('/')
-  workspace.selectInventory(entry.ref).catch((e: unknown) => toast.error(t(errorMessageKey(e))))
+  // selectInventory sets the current inventory before its first await, so the history entry pushed next is stamped
+  // with the new inventory. force: a new entry even when the root is already open, so Back returns to the old one.
+  const selecting = workspace.selectInventory(entry.ref)
+  void router.push({ path: '/', force: true })
+  try {
+    await selecting
+  } catch (e) {
+    toast.error(t(errorMessageKey(e)))
+  }
 }
 
 function openDialog(kind: 'create' | 'rename' | 'archive'): void {
@@ -87,6 +100,19 @@ const itemClass = 'flex min-h-11 w-full items-center gap-2 rounded-sm px-2 py-1.
 </script>
 
 <template>
+  <!-- Attributes on ReuseTrigger (the menu trigger's aria and handlers, @click) fall through to this button. -->
+  <DefineTrigger>
+    <button
+      type="button"
+      class="flex min-h-11 w-full min-w-0 items-center gap-2.5 rounded-field border border-border bg-surface px-2.5 py-2 text-left outline-none transition-colors duration-150 hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <span class="flex min-w-0 flex-1 flex-col">
+        <span class="text-[11px] font-semibold text-subtle-foreground">{{ $t('inventory.label') }}</span>
+        <span class="min-h-5 truncate text-sm font-bold">{{ name || (state.current ? '' : $t('inventory.none')) }}</span>
+      </span>
+      <ChevronsUpDown class="size-4 shrink-0 text-subtle-foreground" aria-hidden="true" />
+    </button>
+  </DefineTrigger>
   <DefineContent>
     <div class="grid gap-1">
       <template v-for="group in groups" :key="group.label">
@@ -148,24 +174,14 @@ const itemClass = 'flex min-h-11 w-full items-center gap-2 rounded-sm px-2 py-1.
 
   <DropdownMenu v-if="desktop" v-model:open="menuOpen">
     <DropdownMenuTrigger as-child>
-      <button type="button" class="flex min-h-11 min-w-0 items-center gap-1.5 p-0 text-2xl font-bold tracking-[-0.02em]">
-        <span class="truncate">{{ name || $t('app.name') }}</span>
-        <ChevronDown class="size-[18px] shrink-0 text-subtle-foreground" aria-hidden="true" />
-      </button>
+      <ReuseTrigger />
     </DropdownMenuTrigger>
     <DropdownMenuContent align="start" class="w-72 bg-surface p-1.5">
       <ReuseContent />
     </DropdownMenuContent>
   </DropdownMenu>
   <template v-else>
-    <button
-      type="button"
-      class="flex min-h-11 min-w-0 items-center gap-1.5 p-0 text-2xl font-bold tracking-[-0.02em]"
-      @click="menuOpen = true"
-    >
-      <span class="truncate">{{ name || $t('app.name') }}</span>
-      <ChevronDown class="size-[18px] shrink-0 text-subtle-foreground" aria-hidden="true" />
-    </button>
+    <ReuseTrigger @click="menuOpen = true" />
     <AppSheet v-model:open="menuOpen" :title="$t('inventory.switchTitle')">
       <ReuseContent />
     </AppSheet>

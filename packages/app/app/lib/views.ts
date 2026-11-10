@@ -207,7 +207,7 @@ export function folderView(s: InventorySnapshot, folderId: Id | null): FolderVie
 }
 
 /** ≤ max: unchanged; otherwise [first, 'ellipsis', ...last two]. */
-export function collapseCrumbs(crumbs: Crumb[], max = 4): (Crumb | 'ellipsis')[] {
+export function collapseCrumbs<T>(crumbs: T[], max = 4): (T | 'ellipsis')[] {
   if (crumbs.length <= max) return crumbs
   return [crumbs[0]!, 'ellipsis', ...crumbs.slice(-2)]
 }
@@ -250,14 +250,26 @@ export function searchRows(s: InventorySnapshot, hits: SearchHit[]): SearchRow[]
 export interface TreeNode {
   id: Id
   name: string
+  /** Active items anywhere in the subtree, the same number as in the folder list. */
+  itemCount: number
   children: TreeNode[]
 }
 
 export function folderTree(s: InventorySnapshot): TreeNode[] {
   const ix = indexOf(s)
   const build = (parentId: Id | null): TreeNode[] =>
-    (ix.childFolders.get(parentId) ?? []).map((f) => ({ id: f.id, name: f.name, children: build(f.id) }))
+    (ix.childFolders.get(parentId) ?? []).map((f) => ({
+      id: f.id,
+      name: f.name,
+      itemCount: ix.subtreeCounts.get(f.id) ?? 0,
+      children: build(f.id),
+    }))
   return build(null)
+}
+
+/** Active items in the whole inventory (not under an archived folder). */
+export function inventoryItemCount(s: InventorySnapshot): number {
+  return indexOf(s).subtreeCounts.get(null) ?? 0
 }
 
 export interface MoveTarget {

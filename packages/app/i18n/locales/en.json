@@ -1,9 +1,25 @@
 {
   "app": { "name": "GrayMatter" },
   "ui": { "close": "Close", "cancel": "Cancel", "back": "Back" },
-  "nav": { "settings": "Settings" },
+  "nav": {
+    "sections": "Sections",
+    "items": "Items",
+    "settings": "Settings",
+    "menu": "Menu",
+    "back": "Back",
+    "forward": "Forward"
+  },
+  "tree": { "expand": "Expand {name}", "collapse": "Collapse {name}" },
   "search": { "label": "Search", "placeholder": "Search: TL072, 10k, 0805…", "nothing": "Nothing found for “{q}”" },
-  "folder": { "path": "Path", "tree": "Folders", "ellipsis": "…", "items": "Items · {count}" },
+  "folder": {
+    "path": "Path",
+    "tree": "Folders",
+    "ellipsis": "…",
+    "items": "Items · {count}",
+    "summary": "{folders} · {items}",
+    "folderCount": "{count} folder | {count} folders",
+    "itemCount": "{count} item | {count} items"
+  },
   "item": { "outOfStock": "Out of stock", "variants": "{count} variant | {count} variants" },
   "empty": {
     "noInventories": "Create your first inventory",
@@ -97,6 +113,8 @@
     }
   },
   "inventory": {
+    "label": "Inventory",
+    "none": "No inventory",
     "switchTitle": "Inventories",
     "new": "New inventory",
     "create": "Create inventory",

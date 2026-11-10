@@ -45,6 +45,14 @@ const pairs: [string, string][] = [
   ['accent-soft-foreground', 'accent-soft'],
   // destructive menu item: text on its focused background
   ['destructive', 'background'],
+  // app shell: panel sections on the rail, the active one on surface; tree rows and their counts under the pointer
+  ['icon', 'rail'],
+  ['primary', 'surface'],
+  ['foreground', 'hover'],
+  ['icon', 'hover'],
+  ['subtle-foreground', 'hover'],
+  // screen header path on the page background
+  ['muted-foreground', 'background'],
 ]
 
 describe.each(Object.keys(themes))('%s theme contrast', (name) => {

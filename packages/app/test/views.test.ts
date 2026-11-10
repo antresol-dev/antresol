@@ -2,7 +2,16 @@ import { createSearch, itemStock, newId, type InventorySnapshot, type InventoryS
 import { beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import type { SourceConfig } from '../app/lib/types'
-import { collapseCrumbs, folderTree, folderView, indexStats, moveTargets, searchRows, type Crumb } from '../app/lib/views'
+import {
+  collapseCrumbs,
+  folderTree,
+  folderView,
+  indexStats,
+  inventoryItemCount,
+  moveTargets,
+  searchRows,
+  type Crumb,
+} from '../app/lib/views'
 
 const cfg: SourceConfig = {
   id: 'demo',
@@ -79,6 +88,11 @@ describe('collapseCrumbs', () => {
   it('keeps short paths', () => {
     expect(collapseCrumbs(crumbs.slice(0, 4))).toEqual(crumbs.slice(0, 4))
   })
+  it('works with any crumb type', () => {
+    expect(collapseCrumbs(['a', 'b', 'c', 'd', 'e'])).toEqual(['a', 'ellipsis', 'd', 'e'])
+    expect(collapseCrumbs(['a', 'b', 'c'], 2)).toEqual(['a', 'ellipsis', 'b', 'c'])
+    expect(collapseCrumbs(['a', 'b'])).toEqual(['a', 'b'])
+  })
 })
 
 describe('searchRows', () => {
@@ -96,6 +110,23 @@ describe('folderTree', () => {
     const tree = folderTree(snap)
     expect(names(tree)).toEqual(['ICs', 'Passive components', expect.stringContaining('Очень длинное')])
     expect(names(tree[0]!.children)).toEqual(['Op-amps'])
+  })
+
+  it('counts active items in each subtree, like the folder list', () => {
+    const tree = folderTree(snap)
+    expect(tree.map((n) => n.itemCount)).toEqual([3, 1, 0])
+    expect(tree[0]!.children.map((n) => n.itemCount)).toEqual([1])
+    expect(tree[1]!.children.map((n) => [n.name, n.itemCount])).toEqual([['Resistors', 1]])
+    expect(tree.map((n) => n.itemCount)).toEqual(folderView(snap, null)!.folders.map((f) => f.itemCount))
+  })
+})
+
+describe('inventoryItemCount', () => {
+  it('counts active items in the whole inventory', () => {
+    expect(inventoryItemCount(snap)).toBe(4)
+    const s = structuredClone(snap)
+    s.items.find((i) => i.name === 'TL072')!.archivedAt = '2026-11-10T00:00:00Z'
+    expect(inventoryItemCount(s)).toBe(3)
   })
 })
 

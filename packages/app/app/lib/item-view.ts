@@ -167,7 +167,11 @@ export function itemView(s: InventorySnapshot, itemId: Id): ItemView | null {
   const lines = ix.stockByItem.get(itemId) ?? []
   const lineOf = new Map(lines.map((l) => [l.variantId, l] as const))
   const photoOf = new Map<Id, Photo>()
-  for (const p of s.photos) if (p.itemId === itemId && p.variantId !== null) photoOf.set(p.variantId, p)
+  for (const p of s.photos) {
+    if (p.itemId !== itemId || p.variantId === null) continue
+    const known = photoOf.get(p.variantId)
+    if (!known || p.position < known.position) photoOf.set(p.variantId, p)
+  }
   const bucket = (variantId: Id | null, name: string | null, description: string | null, values: BucketRow['values']): BucketRow => {
     const line = lineOf.get(variantId)
     const sum = summarize(line ? [line] : [])

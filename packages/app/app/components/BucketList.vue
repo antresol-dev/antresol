@@ -102,7 +102,7 @@ watch(() => props.highlight, reveal)
           v-if="row.photo"
           :url="row.photo.url"
           size="thumb"
-          :alt="row.name ?? $t('item.noVariant')"
+          alt=""
           class="size-10 shrink-0 rounded-icon object-cover"
         />
         <span class="flex min-w-0 grow flex-col gap-0.5">

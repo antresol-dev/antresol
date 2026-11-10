@@ -250,7 +250,16 @@ const linkClass =
         :description="$t('photos.variantHint')"
         :locked="photoBusy"
       >
-        <p v-if="!hasStore" class="py-2 text-sm text-muted-foreground">{{ $t('photos.noStore') }}</p>
+        <div v-if="!hasStore" class="grid py-2">
+          <p class="text-sm text-muted-foreground">{{ $t('photos.noStore') }}</p>
+          <NuxtLink
+            v-if="state.current"
+            :to="`/settings/sources/${state.current.sourceId}`"
+            :class="linkClass"
+          >
+            {{ $t('photos.noStoreLink') }}
+          </NuxtLink>
+        </div>
         <PhotoPicker v-else class="py-3" :disabled="photoBusy || locked" @pick="pickVariantPhoto" />
       </AppSheet>
       <ConfirmSheet

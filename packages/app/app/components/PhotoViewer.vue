@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { errorMessageKey } from '~/lib/errors'
 import { SWIPE } from '~/lib/swipe'
 
-const props = defineProps<{ itemId: string; photos: Photo[] }>()
+const props = defineProps<{ itemId: string; photos: Photo[]; /** An upload is running: no cover or delete until it ends. */ locked?: boolean }>()
 const open = defineModel<boolean>('open', { required: true })
 const index = defineModel<number>('index', { required: true })
 
@@ -17,9 +17,9 @@ const { state } = workspace
 
 const busy = ref(false)
 const confirmOpen = ref(false)
-const locked = computed(() => !!state.readOnly || state.saving || busy.value)
+const locked = computed(() => !!state.readOnly || state.saving || busy.value || !!props.locked)
 
-useCloseWatcher(open, () => busy.value)
+useCloseWatcher(open, () => busy.value || state.saving)
 
 const photo = computed(() => props.photos[index.value] ?? null)
 const total = computed(() => props.photos.length)
@@ -38,7 +38,7 @@ function go(step: number): void {
   index.value = (index.value + step + total.value) % total.value
 }
 function onKey(event: KeyboardEvent): void {
-  if (confirmOpen.value) return
+  if (confirmOpen.value || event.altKey || event.metaKey) return
   if (event.key === 'ArrowLeft') go(-1)
   else if (event.key === 'ArrowRight') go(1)
   else return

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Image as ImageIcon } from '@lucide/vue'
 import { resolveDeviceUrl } from '~/lib/device-files'
-import { isDeviceUrl, photoUrl, type PhotoSize } from '~/lib/photo-url'
+import { displayablePhotoUrl, isDeviceUrl, type PhotoSize } from '~/lib/photo-url'
 
 const props = defineProps<{ url: string; size: PhotoSize; alt: string }>()
 
@@ -12,8 +12,15 @@ watch(
   () => [props.url, props.size] as const,
   ([url, size]) => {
     failed.value = false
+    const shown = displayablePhotoUrl(url, size)
+    if (shown === null) {
+      // Not Uploadcare and not on the device: never loaded.
+      src.value = null
+      failed.value = true
+      return
+    }
     if (!isDeviceUrl(url)) {
-      src.value = photoUrl(url, size)
+      src.value = shown
       return
     }
     src.value = null

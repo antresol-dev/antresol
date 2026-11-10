@@ -24,6 +24,15 @@ const skeletons = computed(() => {
   return p ? Array.from({ length: p.total - p.done }, (_, i) => p.done + i + 1) : []
 })
 
+function retry(files: File[]): void {
+  if (!canAdd.value) {
+    // Never fail silently: say why nothing happens (a write is running, or the source went read-only).
+    toast.error(t(readOnly.value ? 'errors.storage.read_only' : 'photos.busy'))
+    return
+  }
+  void upload(files)
+}
+
 async function upload(files: File[]): Promise<void> {
   if (files.length === 0 || !canAdd.value) return
   progress.value = { total: files.length, done: 0 }
@@ -36,7 +45,7 @@ async function upload(files: File[]): Promise<void> {
     // A photo the app can't use fails again however often it is tried: retry what comes after it.
     const hopeless = e instanceof FileError && (e.code === 'unsupported' || e.code === 'too_large')
     const rest = files.slice(done + (hopeless ? 1 : 0))
-    toast.error(t(errorMessageKey(e)), rest.length > 0 ? { action: { label: t('status.retry'), onClick: () => void upload(rest) } } : {})
+    toast.error(t(errorMessageKey(e)), rest.length > 0 ? { action: { label: t('status.retry'), onClick: () => retry(rest) } } : {})
   } finally {
     progress.value = null
   }
@@ -61,16 +70,26 @@ const isImage = (f: File): boolean => f.type.startsWith('image/')
 const dragging = ref(false)
 function onDrop(event: DragEvent): void {
   dragging.value = false
+  // Dropped while the gallery can't add: nothing happens (the browser still doesn't open the file).
   if (!canAdd.value) return
   void upload(Array.from(event.dataTransfer?.files ?? []).filter(isImage))
 }
 function onDragOver(event: DragEvent): void {
-  if (!canAdd.value || !event.dataTransfer?.types.includes('Files')) return
+  if (!event.dataTransfer?.types.includes('Files')) return
+  // Always claim a file drag, so the browser never navigates to the dropped file.
   event.preventDefault()
-  dragging.value = true
+  dragging.value = canAdd.value
+}
+function onDragLeave(event: DragEvent): void {
+  // Moving over a child fires dragleave on the section: only leaving it for outside counts.
+  const next = event.relatedTarget
+  if (next instanceof Node && (event.currentTarget as Node).contains(next)) return
+  dragging.value = false
 }
 function onPaste(event: ClipboardEvent): void {
   if (!canAdd.value || viewerOpen.value || addOpen.value) return
+  // Any other open sheet or dialog (variant photo, stock, rename…) owns the screen: paste goes nowhere.
+  if (document.querySelector('[role=dialog][data-state=open]')) return
   const target = event.target
   if (target instanceof HTMLElement && (target.isContentEditable || target.matches('input, textarea'))) return
   const files = Array.from(event.clipboardData?.files ?? []).filter(isImage)
@@ -91,15 +110,15 @@ const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thu
   <section
     v-if="photos.length > 0 || progress || !readOnly"
     :aria-label="$t('photos.viewer')"
-    :class="['grid max-w-md min-w-0 gap-0.5 rounded-card', dragging && 'ring-2 ring-ring']"
+    :class="['grid min-w-0 gap-0.5 rounded-card', dragging && 'ring-2 ring-ring']"
     @dragover="onDragOver"
-    @dragleave="dragging = false"
+    @dragleave="onDragLeave"
     @drop.prevent="onDrop"
   >
     <template v-if="cover">
       <button
         type="button"
-        class="aspect-[4/3] w-full overflow-hidden rounded-card bg-thumb outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        class="aspect-[4/3] max-h-96 w-full overflow-hidden rounded-card bg-thumb outline-none focus-visible:ring-2 focus-visible:ring-ring"
         :aria-label="alt(0)"
         @click="show(0)"
       >
@@ -132,7 +151,7 @@ const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thu
     <template v-else>
       <div
         v-if="progress"
-        :class="['aspect-[4/3] w-full rounded-card text-sm', pending]"
+        :class="['aspect-[4/3] max-h-96 w-full rounded-card text-sm', pending]"
         role="status"
         :aria-label="$t('photos.uploading', { n: progress.done + 1, total: progress.total })"
       >
@@ -140,7 +159,7 @@ const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thu
       </div>
       <div
         v-else
-        class="grid aspect-[4/3] w-full place-items-center gap-2 rounded-card border border-dashed border-border bg-surface p-4 text-center"
+        class="grid aspect-[4/3] max-h-96 w-full place-items-center gap-2 rounded-card border border-dashed border-border bg-surface p-4 text-center"
       >
         <p v-if="!hasStore" class="text-sm text-muted-foreground">{{ $t('photos.noStore') }}</p>
         <PhotoPicker v-else multiple :disabled="!canAdd" @pick="upload" />
@@ -164,6 +183,6 @@ const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thu
     <AppSheet v-model:open="addOpen" :title="$t('photos.addTitle')">
       <PhotoPicker multiple :disabled="!canAdd" class="py-2" @pick="pickedFromSheet" />
     </AppSheet>
-    <PhotoViewer v-model:open="viewerOpen" v-model:index="viewerIndex" :item-id="itemId" :photos="photos" />
+    <PhotoViewer v-model:open="viewerOpen" v-model:index="viewerIndex" :item-id="itemId" :photos="photos" :locked="progress !== null" />
   </section>
 </template>

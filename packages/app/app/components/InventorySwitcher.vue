@@ -27,6 +27,7 @@ const [DefineTrigger, ReuseTrigger] = createReusableTemplate()
 const menuOpen = ref(false)
 const dialog = ref<'create' | 'rename' | 'archive' | null>(null)
 const archiving = ref(false)
+const formBusy = ref(false)
 
 // The Android back gesture closes the dropdown; below 768 px the menu is an AppSheet, which watches by itself.
 const dropdownOpen = computed({
@@ -172,7 +173,7 @@ const itemClass = computed(() => [
           :is="desktop ? DropdownMenuItem : 'button'"
           :type="desktop ? undefined : 'button'"
           :disabled="locked"
-          :class="[itemClass, 'text-destructive focus:bg-background focus:text-destructive']"
+          :class="[itemClass, 'text-destructive focus:text-destructive']"
           @click="openDialog('archive')"
         >
           <Archive class="size-4 shrink-0" aria-hidden="true" />
@@ -200,8 +201,13 @@ const itemClass = computed(() => [
     </AppSheet>
   </template>
 
-  <AppSheet v-model:open="formOpen" :title="$t(dialog === 'rename' ? 'inventory.renameTitle' : 'inventory.new')">
-    <InventoryForm v-if="dialog === 'create' || dialog === 'rename'" :mode="dialog" @done="dialog = null" />
+  <AppSheet
+    v-model:open="formOpen"
+    :title="$t(dialog === 'rename' ? 'inventory.renameTitle' : 'inventory.new')"
+    :locked="formBusy"
+    initial-focus="#inventory-name"
+  >
+    <InventoryForm v-if="dialog === 'create' || dialog === 'rename'" v-model:busy="formBusy" :mode="dialog" @done="dialog = null" />
   </AppSheet>
   <ConfirmSheet
     v-model:open="archiveOpen"

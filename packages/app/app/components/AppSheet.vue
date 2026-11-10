@@ -8,11 +8,17 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 
-const props = defineProps<{ title: string; description?: string; initialFocus?: string }>()
+const props = defineProps<{
+  title: string
+  description?: string
+  initialFocus?: string
+  /** A write is running: Esc, a click outside and the back gesture leave the sheet open. */
+  locked?: boolean
+}>()
 const open = defineModel<boolean>('open', { required: true })
 
 // The Android back gesture closes the sheet instead of leaving the screen.
-useCloseWatcher(open)
+useCloseWatcher(open, () => !!props.locked)
 
 // Sheets open from header buttons, row menus, the tree and long presses, never from a DialogTrigger, so Reka has
 // nothing to return focus to and it would drop to <body>. Remember what had focus when the sheet opened (before the
@@ -43,6 +49,10 @@ function focusInitial(event: Event): void {
   target.focus()
 }
 
+function refuseWhileLocked(event: Event): void {
+  if (props.locked) event.preventDefault()
+}
+
 function returnFocus(event: Event): void {
   event.preventDefault()
   const sheet = event.target instanceof Node ? event.target : null
@@ -63,6 +73,9 @@ function returnFocus(event: Event): void {
     <DialogContent
       :show-close-button="false"
       class="max-h-[calc(100dvh-1rem)] overflow-y-auto top-auto bottom-0 left-0 max-w-full translate-x-0 translate-y-0 rounded-b-none rounded-t-card border-x-0 border-b-0 bg-surface p-4 pb-6 motion-safe:data-[state=open]:animate-sheet-in motion-safe:data-[state=closed]:animate-sheet-out motion-reduce:animate-none sm:max-w-full md:top-1/2 md:bottom-auto md:left-1/2 md:max-w-[480px] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-card md:border md:pb-4 md:motion-safe:data-[state=open]:animate-pop-in md:motion-safe:data-[state=closed]:animate-pop-out"
+      @escape-key-down="refuseWhileLocked"
+      @pointer-down-outside="refuseWhileLocked"
+      @interact-outside="refuseWhileLocked"
       @open-auto-focus="focusInitial"
       @close-auto-focus="returnFocus"
     >

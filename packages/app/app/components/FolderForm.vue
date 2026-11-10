@@ -14,7 +14,8 @@ const { state } = workspace
 const existing = props.mode === 'rename' ? props.folder : null
 const name = ref(existing?.name ?? '')
 const description = ref(existing?.description ?? '')
-const busy = ref(false)
+// The sheet around the form locks while this is set.
+const busy = defineModel<boolean>('busy', { default: false })
 const errorKey = ref<string | null>(null)
 
 const canSubmit = computed(
@@ -56,12 +57,11 @@ async function submit(): Promise<void> {
 <template>
   <form class="grid gap-3.5" novalidate @submit.prevent="submit">
     <div class="grid gap-1.5">
-      <Label for="folder-name">{{ $t('folderForm.name') }}</Label>
+      <Label for="folder-name">{{ $t('form.name') }}</Label>
       <Input
         id="folder-name"
         v-model="name"
         autocomplete="off"
-        autofocus
         :aria-invalid="errorKey ? true : undefined"
         aria-describedby="folder-form-error"
         class="h-11 rounded-field bg-surface"
@@ -69,8 +69,8 @@ async function submit(): Promise<void> {
     </div>
     <div class="grid gap-1.5">
       <Label for="folder-description">
-        {{ $t('folderForm.description') }}
-        <span class="font-normal text-subtle-foreground">· {{ $t('folderForm.optional') }}</span>
+        {{ $t('form.description') }}
+        <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
       </Label>
       <Input id="folder-description" v-model="description" autocomplete="off" class="h-11 rounded-field bg-surface" />
     </div>

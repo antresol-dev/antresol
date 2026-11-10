@@ -22,7 +22,8 @@ const amount = ref('')
 const price = ref('')
 const url = ref('')
 const picking = ref(false)
-const busy = ref(false)
+// The sheet around the form locks while this is set.
+const busy = defineModel<boolean>('busy', { default: false })
 const errorKey = ref<string | null>(null)
 
 const snapshot = computed(() => state.snapshot)
@@ -74,7 +75,7 @@ async function submit(): Promise<void> {
 <template>
   <form class="grid gap-3.5" novalidate @submit.prevent="submit">
     <div class="grid gap-1.5">
-      <Label for="quick-add-name">{{ $t('quickAdd.name') }}</Label>
+      <Label for="quick-add-name">{{ $t('form.name') }}</Label>
       <Input id="quick-add-name" v-model="name" autocomplete="off" class="h-11 rounded-field bg-surface" />
     </div>
 
@@ -96,7 +97,7 @@ async function submit(): Promise<void> {
     <div class="grid gap-1.5">
       <Label for="quick-add-amount">
         {{ $t('quickAdd.amount') }}
-        <span class="font-normal text-subtle-foreground">· {{ $t('quickAdd.optional') }}</span>
+        <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
       </Label>
       <AmountField id="quick-add-amount" v-model="amount" v-model:unit-key="unitKey" :units="units" />
     </div>
@@ -104,7 +105,7 @@ async function submit(): Promise<void> {
     <div class="grid gap-1.5">
       <Label for="quick-add-price">
         {{ $t('quickAdd.price') }}
-        <span class="font-normal text-subtle-foreground">· {{ $t('quickAdd.optional') }}</span>
+        <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
       </Label>
       <div class="relative">
         <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-semibold text-muted-foreground">
@@ -125,7 +126,7 @@ async function submit(): Promise<void> {
     <div class="grid gap-1.5">
       <Label for="quick-add-url">
         {{ $t('quickAdd.url') }}
-        <span class="font-normal text-subtle-foreground">· {{ $t('quickAdd.optional') }}</span>
+        <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
       </Label>
       <Input id="quick-add-url" v-model="url" type="url" autocomplete="off" class="h-11 rounded-field bg-surface" />
     </div>

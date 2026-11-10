@@ -19,7 +19,8 @@ const name = ref(props.item.name)
 const description = ref(props.item.description ?? '')
 const unitKey = ref(props.item.unitKey)
 const tagIds = ref<Id[]>([...props.item.tagIds])
-const busy = ref(false)
+// The sheet around the form locks while this is set.
+const busy = defineModel<boolean>('busy', { default: false })
 const errorKey = ref<string | null>(null)
 
 const snapshot = computed(() => state.snapshot)
@@ -68,13 +69,13 @@ async function submit(): Promise<void> {
 <template>
   <form class="grid gap-3.5" novalidate @submit.prevent="submit">
     <div class="grid gap-1.5">
-      <Label for="item-name">{{ $t('itemForm.name') }}</Label>
+      <Label for="item-name">{{ $t('form.name') }}</Label>
       <Input id="item-name" v-model="name" autocomplete="off" :aria-invalid="errorKey ? true : undefined" aria-describedby="item-form-error" class="h-11 rounded-field bg-surface" />
     </div>
     <div class="grid gap-1.5">
       <Label for="item-description">
-        {{ $t('itemForm.description') }}
-        <span class="font-normal text-subtle-foreground">· {{ $t('itemForm.optional') }}</span>
+        {{ $t('form.description') }}
+        <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
       </Label>
       <Textarea id="item-description" v-model="description" rows="3" class="min-h-20 rounded-field bg-surface" />
     </div>

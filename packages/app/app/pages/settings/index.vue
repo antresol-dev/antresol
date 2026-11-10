@@ -22,6 +22,9 @@ async function saveDeviceName(): Promise<void> {
   }
 }
 
+// The source type is shown only when it says something the name does not (a demo source is named "Demo").
+const kindLabel = (c: SourceConfig): string => t(`settings.sources.kind.${c.kind}`)
+
 const removing = ref<SourceConfig | null>(null)
 const sheetOpen = computed({
   get: () => removing.value !== null,
@@ -55,7 +58,7 @@ async function confirmRemove(): Promise<void> {
           <li v-for="s in state.sources" :key="s.config.id" class="grid gap-1 px-4 py-2.5">
             <div class="flex flex-wrap items-center gap-2">
               <span class="min-w-0 break-words font-semibold">{{ s.config.name }}</span>
-              <span class="text-sm text-subtle-foreground">{{ $t(`settings.sources.kind.${s.config.kind}`) }}</span>
+              <span v-if="kindLabel(s.config) !== s.config.name" class="text-sm text-subtle-foreground">{{ kindLabel(s.config) }}</span>
               <SourceStatusBadge :status="s.status" />
             </div>
             <p v-if="s.reason" class="break-words text-sm text-destructive">{{ $t(`errors.probe.${s.reason}`) }}</p>

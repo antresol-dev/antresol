@@ -57,7 +57,8 @@ const sourceId = ref(
 )
 const search = ref('')
 const comboOpen = ref(false)
-const busy = ref(false)
+// The sheet around the form locks while this is set.
+const busy = defineModel<boolean>('busy', { default: false })
 const errorKey = ref<string | null>(null)
 
 const options = computed(() => currencyOptions(search.value))
@@ -100,12 +101,11 @@ async function submit(): Promise<void> {
 <template>
   <form class="grid gap-3.5" novalidate @submit.prevent="submit">
     <div class="grid gap-1.5">
-      <Label for="inventory-name">{{ $t('inventoryForm.name') }}</Label>
+      <Label for="inventory-name">{{ $t('form.name') }}</Label>
       <Input
         id="inventory-name"
         v-model="name"
         autocomplete="off"
-        autofocus
         :aria-invalid="errorKey ? true : undefined"
         aria-describedby="inventory-form-error"
         class="h-11 rounded-field bg-surface"
@@ -159,8 +159,8 @@ async function submit(): Promise<void> {
 
     <div v-if="mode === 'rename'" class="grid gap-1.5">
       <Label for="inventory-description">
-        {{ $t('inventoryForm.description') }}
-        <span class="font-normal text-subtle-foreground">· {{ $t('inventoryForm.optional') }}</span>
+        {{ $t('form.description') }}
+        <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
       </Label>
       <Input id="inventory-description" v-model="description" autocomplete="off" class="h-11 rounded-field bg-surface" />
     </div>
@@ -169,7 +169,10 @@ async function submit(): Promise<void> {
       <template v-if="errorKey">{{ $t(errorKey) }}</template>
     </p>
 
-    <Button type="submit" class="h-11 rounded-field" :disabled="!canSubmit">
+    <Button v-if="mode === 'create' && !sources.length" as-child variant="outline" class="h-11 rounded-field bg-surface">
+      <NuxtLink to="/settings" @click="emit('done')">{{ $t('inventoryForm.connectSource') }}</NuxtLink>
+    </Button>
+    <Button v-else type="submit" class="h-11 rounded-field" :disabled="!canSubmit">
       {{ $t(busy ? 'status.saving' : mode === 'create' ? 'inventoryForm.create' : 'inventoryForm.save') }}
     </Button>
   </form>

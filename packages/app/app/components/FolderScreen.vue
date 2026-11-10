@@ -37,6 +37,7 @@ const crumbs = computed(() => {
 const current = computed(() => (view.value ? title.value : null))
 
 const creating = ref(false)
+const creatingBusy = ref(false)
 const noInventories = computed(
   () =>
     !snapshot.value &&
@@ -75,8 +76,8 @@ function retry(): void {
       <Button class="h-11 rounded-field" :disabled="!!state.readOnly" @click="creating = true">
         {{ $t('inventory.create') }}
       </Button>
-      <AppSheet v-model:open="creating" :title="$t('inventory.new')">
-        <InventoryForm v-if="creating" mode="create" @done="creating = false" />
+      <AppSheet v-model:open="creating" :title="$t('inventory.new')" :locked="creatingBusy" initial-focus="#inventory-name">
+        <InventoryForm v-if="creating" v-model:busy="creatingBusy" mode="create" @done="creating = false" />
       </AppSheet>
       <NuxtLink
         v-if="state.archivedInventories.length > 0"

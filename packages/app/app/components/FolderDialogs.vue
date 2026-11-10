@@ -56,6 +56,7 @@ const formKey = computed(() => {
   return d.kind === 'create' ? `create:${d.parentId ?? ''}` : `${d.kind}:${d.folderId}`
 })
 
+const formBusy = ref(false)
 const archiving = ref(false)
 
 async function archive(): Promise<void> {
@@ -80,10 +81,16 @@ async function archive(): Promise<void> {
 </script>
 
 <template>
-  <AppSheet v-model:open="formOpen" :title="$t(renaming ? 'folderMenu.renameTitle' : 'folderMenu.new')">
+  <AppSheet
+    v-model:open="formOpen"
+    :title="$t(renaming ? 'folderMenu.renameTitle' : 'folderMenu.new')"
+    :locked="formBusy"
+    initial-focus="#folder-name"
+  >
     <FolderForm
       v-if="shown?.kind === 'create' || (shown?.kind === 'rename' && folder)"
       :key="formKey"
+      v-model:busy="formBusy"
       :mode="renaming ? 'rename' : 'create'"
       :parent-id="parentId"
       :folder="folder"

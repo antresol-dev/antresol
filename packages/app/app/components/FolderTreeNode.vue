@@ -8,13 +8,17 @@ const props = defineProps<{
   variant: 'panel' | 'drawer'
   /** The inventory root: Boxes icon, links to `/`, never has a chevron or row actions. */
   root?: boolean
+  /** How many folders are above this row. Past MAX_INDENT levels the indent and the guide line stop growing. */
+  level?: number
 }>()
+const MAX_INDENT = 6
 const emit = defineEmits<{ toggle: [id: string] }>()
 
 const { t } = useI18n()
 const { state } = useWorkspace()
 const { open } = useFolderDialog()
 
+const indents = computed(() => (props.level ?? 0) < MAX_INDENT)
 const panel = computed(() => props.variant === 'panel')
 const to = computed(() => (props.root ? '/' : `/folder/${props.row.id}`))
 // Drawer rows are touch targets: 44 px tall with a 44 px chevron; the guide line runs under the parent's chevron.
@@ -119,13 +123,17 @@ const pressHandlers = computed(() =>
     </div>
     <ul
       v-if="row.open"
-      :class="['flex flex-col gap-0.5 border-l border-tree-line pl-1', panel ? 'ml-3' : 'ml-[21px]']"
+      :class="[
+        'flex flex-col gap-0.5',
+        indents ? ['border-l border-tree-line pl-1', panel ? 'ml-3' : 'ml-[21px]'] : '',
+      ]"
     >
       <FolderTreeNode
         v-for="child in row.children"
         :key="child.id"
         :row="child"
         :variant="variant"
+        :level="(level ?? 0) + 1"
         @toggle="emit('toggle', $event)"
       />
     </ul>

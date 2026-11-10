@@ -35,8 +35,8 @@ async function choose(parentId: Id | null, current: boolean): Promise<void> {
 </script>
 
 <template>
-  <AppSheet v-model:open="open" :title="$t('folderMenu.moveTitle')" :description="$t('folderMenu.moveHint')">
-    <ul class="grid max-h-[50dvh] grid-cols-1 gap-0.5 overflow-x-hidden overflow-y-auto">
+  <AppSheet v-model:open="open" :title="$t('folderMenu.moveTitle')" :description="$t('folderMenu.moveHint')" :locked="busy">
+    <ul class="grid max-h-[50dvh] grid-cols-1 gap-0.5 overflow-x-hidden overflow-y-auto p-1">
       <li v-for="target in targets" :key="target.id ?? 'root'" class="min-w-0">
         <button
           type="button"

@@ -1,4 +1,5 @@
 import {
+  DomainError,
   newId,
   normalizeCommand,
   StorageError,
@@ -122,6 +123,16 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   let queue: Promise<void> = Promise.resolve()
   let pendingWrites = 0
   let refreshing: Promise<void> | null = null
+  let refreshEpoch = 0
+  let refreshingEpoch = -1
+  let loadSeq = 0
+  /** Bumped whenever a source is added, edited or removed; stale connect outcomes are discarded. */
+  const generations = new Map<string, number>()
+  const generationOf = (id: string): number => generations.get(id) ?? 0
+  const bumpGeneration = (id: string): void => {
+    generations.set(id, generationOf(id) + 1)
+    refreshEpoch++
+  }
 
   const statusOf = (sourceId: string): SourceStatus | null =>
     state.sources.find((s) => s.config.id === sourceId)?.status ?? null
@@ -227,19 +238,40 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     const ref = state.current
     const conn = ref && conns.get(ref.sourceId)
     if (!ref || !conn) return
+    // Only the most recently started load may write state and cache.
+    const token = ++loadSeq
     let snapshot: InventorySnapshot
     try {
       snapshot = await conn.storage.loadInventory(ref.inventoryId)
     } catch (error) {
+      if (token !== loadSeq || !sameRef(state.current, ref)) return
+      if (error instanceof StorageError && error.code === 'not_found') {
+        await dropMissing(ref)
+        return
+      }
       markFailure(ref.sourceId, error)
       return
     }
-    if (!sameRef(state.current, ref)) return
+    if (token !== loadSeq || !sameRef(state.current, ref)) return
     const savedAt = nowIso()
     state.snapshot = snapshot
     state.snapshotOrigin = 'live'
     state.snapshotSavedAt = savedAt
     await db.putSnapshot(ref, { snapshot, savedAt })
+  }
+
+  /** The current inventory vanished from its (reachable) source: forget it and move to the first remaining one. */
+  async function dropMissing(ref: InventoryRef): Promise<void> {
+    await db.deleteSnapshot(ref)
+    listings.set(ref.sourceId, (listings.get(ref.sourceId) ?? []).filter((i) => i.id !== ref.inventoryId))
+    rebuildInventories()
+    const first = state.inventories[0]
+    if (first) {
+      await selectInventory(first.ref)
+    } else {
+      setCurrent(null)
+      await db.putSettings({ current: null })
+    }
   }
 
   const isConnected = (status: SourceStatus | null): boolean => status === 'ready' || status === 'read_only'
@@ -295,6 +327,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
 
   async function doRefresh(): Promise<void> {
     state.refreshing = true
+    const startGenerations = new Map(generations)
     try {
       const configs = await db.getSources()
       const previous = new Map(state.sources.map((s) => [s.config.id, s]))
@@ -306,21 +339,41 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
         error: previous.get(config.id)?.error ?? null,
       }))
       recompute()
-      const outcomes = await Promise.all(configs.map(async (config) => ({ config, outcome: await attempt(config) })))
-      for (const { config, outcome } of outcomes) await applyOutcome(config, outcome)
+      const outcomes = await Promise.all(
+        configs.map(async (config) => ({ config, generation: startGenerations.get(config.id) ?? 0, outcome: await attempt(config) })),
+      )
+      let complete = true
+      for (const { config, generation, outcome } of outcomes) {
+        if (generation !== generationOf(config.id)) {
+          // The source was edited or removed while connecting: this outcome is stale.
+          if (outcome.ok) await outcome.conn.close().catch(() => {})
+          complete = false
+          continue
+        }
+        if (!outcome.ok) complete = false
+        await applyOutcome(config, outcome)
+      }
       rebuildInventories()
       await resolveCurrent()
-      if (outcomes.every((o) => o.outcome.ok)) state.lastRefreshAt = nowIso()
+      if (complete) state.lastRefreshAt = nowIso()
     } finally {
       state.refreshing = false
     }
   }
 
   function refresh(): Promise<void> {
-    refreshing ??= doRefresh().finally(() => {
-      refreshing = null
+    // A run that started before the latest source change cannot satisfy this call.
+    if (refreshing && refreshingEpoch === refreshEpoch) return refreshing
+    const previous = refreshing
+    const run: Promise<void> = (async () => {
+      await previous?.catch(() => {})
+      await doRefresh()
+    })().finally(() => {
+      if (refreshing === run) refreshing = null
     })
-    return refreshing
+    refreshing = run
+    refreshingEpoch = refreshEpoch
+    return run
   }
 
   /** Runs `job` after all earlier writes; a failed job does not block later ones. */
@@ -338,20 +391,24 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     })
   }
 
-  function write(sourceId: string, command: Command, snapshot: InventorySnapshot | null): Promise<void> {
+  function write(
+    sourceId: string,
+    command: Command,
+    snapshotFor: (conn: SourceConnection) => Promise<InventorySnapshot | null>,
+  ): Promise<void> {
     return enqueue(async () => {
       const status = statusOf(sourceId)
       if (status === 'unreachable' || status === 'read_only' || status === 'error') throw new StorageError('read_only')
       const conn = conns.get(sourceId)
       if (!conn) throw new StorageError('unavailable')
       const normalized = normalizeCommand(command)
-      const invalid = validateCommand(normalized, snapshot)
+      const invalid = validateCommand(normalized, await snapshotFor(conn))
       if (invalid) throw invalid
       try {
         await conn.storage.apply(normalized, { device: state.deviceName })
       } catch (error) {
         if (error instanceof StorageError && error.code === 'unavailable') markFailure(sourceId, error)
-        throw error
+        throw redactError(error, sourceId)
       }
       if (isRelistCommand(command)) {
         await relist(sourceId)
@@ -365,7 +422,16 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   async function apply(command: Command): Promise<void> {
     const cur = state.current
     if (!cur) throw new StorageError('not_found')
-    await write(cur.sourceId, command, state.snapshot)
+    // Read when the job runs: earlier queued writes have reloaded the snapshot by then.
+    await write(cur.sourceId, command, async (conn) =>
+      sameRef(state.current, cur) ? state.snapshot : conn.storage.loadInventory(cur.inventoryId),
+    )
+  }
+
+  function redactError(error: unknown, sourceId: string): Error {
+    const cs = state.sources.find((s) => s.config.id === sourceId)?.config.connectionString ?? ''
+    if (error instanceof DomainError) return new DomainError(error.code, redactSecret(error.message, cs))
+    return sanitize(error, cs)
   }
 
   return {
@@ -384,7 +450,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     apply,
     async createInventory({ sourceId, name, currency }) {
       const id = newId()
-      await write(sourceId, { type: 'inventory.create', id, name, description: null, currency }, null)
+      await write(sourceId, { type: 'inventory.create', id, name, description: null, currency }, async () => null)
       const ref = { sourceId, inventoryId: id }
       await selectInventory(ref)
       return ref
@@ -394,6 +460,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       const outcome = await attempt(config)
       if (!outcome.ok) throw sanitize(outcome.error, config.connectionString)
       await db.putSource(config)
+      bumpGeneration(config.id)
       await applyOutcome(config, outcome)
       rebuildInventories()
       await resolveCurrent()
@@ -403,6 +470,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       const old = state.sources.find((s) => s.config.id === id)?.config
       if (!old) throw new StorageError('not_found')
       const config: SourceConfig = { ...old, ...patch }
+      bumpGeneration(id)
       await db.putSource(config)
       setSource(config, 'connecting', null)
       const outcome = await attempt(config)
@@ -412,6 +480,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       if (!outcome.ok) throw sanitize(outcome.error, config.connectionString)
     },
     async removeSource(id) {
+      bumpGeneration(id)
       await dropConnection(id)
       listings.delete(id)
       await db.deleteSource(id)

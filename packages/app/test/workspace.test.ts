@@ -1,7 +1,7 @@
 import { PGlite } from '@electric-sql/pglite'
 import { newId, StorageError, type Command, type Id } from '@graymatter/core'
 import { APP_SCHEMA_VERSION, createPgliteExecutor, type PgExecutor } from '@graymatter/storage-postgres'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryDeviceDb } from '../app/lib/device-db'
 import { defaultDeviceName } from '../app/lib/device-name'
 import { createNeonDriver, type SourceDriver } from '../app/lib/sources'
@@ -23,7 +23,18 @@ const config = (id: string, connectionString: string): SourceConfig => ({
 function harness() {
   const pgs: PGlite[] = []
   const execs = new Map<string, PgExecutor>()
-  const flags = { offline: false, listCalls: 0, clock: Date.parse('2026-11-10T10:00:00Z') }
+  const flags = {
+    offline: false,
+    listCalls: 0,
+    clock: Date.parse('2026-11-10T10:00:00Z'),
+    /** One-shot: the next connect waits for this promise. */
+    connectGate: null as Promise<void> | null,
+    /** One-shot: the next loadInventory reads its data, then waits for this promise. */
+    loadGate: null as Promise<void> | null,
+    loadBlocked: false,
+    missing: new Set<string>(),
+    applyError: null as Error | null,
+  }
 
   const addDatabase = (connectionString: string): PGlite => {
     const pg = new PGlite()
@@ -53,8 +64,26 @@ function harness() {
   const driver: SourceDriver = {
     probe: inner.probe,
     async connect(cfg) {
+      const gate = flags.connectGate
+      flags.connectGate = null
+      if (gate) await gate
       const conn = await inner.connect(cfg)
       const storage = Object.create(conn.storage) as typeof conn.storage
+      storage.loadInventory = async (id) => {
+        if (flags.missing.has(id)) throw new StorageError('not_found')
+        const result = await conn.storage.loadInventory(id)
+        const loadGate = flags.loadGate
+        if (loadGate) {
+          flags.loadGate = null
+          flags.loadBlocked = true
+          await loadGate
+        }
+        return result
+      }
+      storage.apply = async (command, actor) => {
+        if (flags.applyError) throw flags.applyError
+        return conn.storage.apply(command, actor)
+      }
       storage.listInventories = () => {
         flags.listCalls++
         return conn.storage.listInventories()
@@ -69,7 +98,7 @@ function harness() {
 
   /** Creates a database for the connection string with one inventory, directly through storage. */
   const seed = async (connectionString: string, inventoryName: string): Promise<Id> => {
-    addDatabase(connectionString)
+    if (!execs.has(connectionString)) addDatabase(connectionString)
     const conn = await inner.connect(config('seed', connectionString))
     const id = newId()
     await conn.storage.apply(
@@ -81,7 +110,12 @@ function harness() {
 
   const direct = async (connectionString: string) => (await inner.connect(config('direct', connectionString))).storage
 
-  return { pgs, flags, db, workspace, seed, direct, addDatabase }
+  const gate = (): { promise: Promise<void>; open: () => void } => {
+    let open!: () => void
+    return { promise: new Promise<void>((r) => (open = r)), open }
+  }
+
+  return { gate, pgs, flags, db, workspace, seed, direct, addDatabase }
 }
 
 const folderCreate = (inventoryId: Id, name: string, id: Id = newId()): Command => ({
@@ -314,5 +348,99 @@ describe('workspace', () => {
     h.flags.clock += 120_000
     await ws.refreshIfStale(60_000)
     expect(h.flags.listCalls).toBeGreaterThan(calls)
+  })
+
+  it('15. removing a source during a refresh does not resurrect it or its cache', async () => {
+    const h = setup()
+    const id = await h.seed(CS('one'), 'Inv')
+    await h.db.putSource(config('s1', CS('one')))
+    const ws = h.workspace()
+    await ws.start()
+    const gate = h.gate()
+    h.flags.connectGate = gate.promise
+    const refresh = ws.refresh()
+    await vi.waitFor(() => expect(h.flags.connectGate).toBeNull())
+    await ws.removeSource('s1')
+    gate.open()
+    await refresh
+    expect(ws.state.sources).toEqual([])
+    expect(ws.state.inventories).toEqual([])
+    expect(ws.state.current).toBeNull()
+    expect(await h.db.getSnapshot({ sourceId: 's1', inventoryId: id })).toBeNull()
+  })
+
+  it('16. editing a source during a refresh keeps the new config and status', async () => {
+    const h = setup()
+    await h.seed(CS('one'), 'Inv')
+    await h.db.putSource(config('s1', CS('one')))
+    const ws = h.workspace()
+    await ws.start()
+    const gate = h.gate()
+    h.flags.connectGate = gate.promise
+    const refresh = ws.refresh()
+    await vi.waitFor(() => expect(h.flags.connectGate).toBeNull())
+    await ws.updateSource('s1', { name: 'Renamed' })
+    gate.open()
+    await refresh
+    expect(ws.state.sources[0]!.config.name).toBe('Renamed')
+    expect(ws.state.sources[0]!.status).toBe('ready')
+    expect(ws.state.inventories[0]!.sourceName).toBe('Renamed')
+  })
+
+  it('17. a slow refresh load does not replace a newer post-write snapshot', async () => {
+    const h = setup()
+    const id = await h.seed(CS('one'), 'Inv')
+    await h.db.putSource(config('s1', CS('one')))
+    const ws = h.workspace()
+    await ws.start()
+    const gate = h.gate()
+    h.flags.loadGate = gate.promise
+    const refresh = ws.refresh()
+    await vi.waitFor(() => expect(h.flags.loadBlocked).toBe(true))
+    await ws.apply(folderCreate(id, 'Fresh'))
+    gate.open()
+    await refresh
+    expect(ws.state.snapshot?.folders.map((f) => f.name)).toEqual(['Fresh'])
+    expect((await h.db.getSnapshot(ws.state.current!))!.snapshot.folders).toHaveLength(1)
+  })
+
+  it('18. queued writes validate against the snapshot as of when they run', async () => {
+    const h = setup()
+    const id = await h.seed(CS('one'), 'Inv')
+    await h.db.putSource(config('s1', CS('one')))
+    const ws = h.workspace()
+    await ws.start()
+    const parent = newId()
+    const first = ws.apply(folderCreate(id, 'Parent', parent))
+    const second = ws.apply({ ...folderCreate(id, 'Child'), parentId: parent } as Command)
+    await Promise.all([first, second])
+    expect(ws.state.snapshot?.folders).toHaveLength(2)
+  })
+
+  it('19. a current inventory deleted elsewhere falls back without breaking the source', async () => {
+    const h = setup()
+    const a = await h.seed(CS('one'), 'A-inv')
+    const b = await h.seed(CS('one'), 'B-inv')
+    await h.db.putSource(config('s1', CS('one')))
+    const ws = h.workspace()
+    await ws.start()
+    const old = ws.state.current!
+    expect(old.inventoryId).toBe(a)
+    h.flags.missing.add(a)
+    await ws.refresh()
+    expect(ws.state.current).toEqual({ sourceId: 's1', inventoryId: b })
+    expect(ws.state.sources[0]!.status).toBe('ready')
+    expect(ws.state.readOnly).toBeNull()
+    expect(await h.db.getSnapshot(old)).toBeNull()
+  })
+
+  it('20. storage errors from apply are redacted', async () => {
+    const h = setup()
+    const id = await h.seed(CS('one'), 'Inv')
+    await h.db.putSource(config('s1', CS('one')))
+    const ws = h.workspace()
+    await ws.start()
+    h.flags.applyError = new StorageError('failed', 'boom pw-one')
+    await expect(ws.apply(folderCreate(id, 'X'))).rejects.toMatchObject({ code: 'failed', message: 'boom ***' })
   })
 })

@@ -32,4 +32,12 @@ describe('demo source', () => {
     expect(res).toEqual({ ok: true, inspection: { state: 'empty' } })
   })
 
+
+  it('keeps the database open when an older connection is closed', async () => {
+    const driver = createDemoDriver({ memory: true })
+    const first = await driver.connect(cfg)
+    const second = await driver.connect(cfg)
+    await first.close()
+    expect((await second.storage.listInventories()).length).toBe(2)
+  })
 })

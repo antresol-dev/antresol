@@ -7,45 +7,31 @@ const DEMO_ACTOR: Actor = { device: 'Demo' }
 
 /** Dev only: PGlite in the browser (idb://graymatter-dev-<sourceId>) or in memory when memory=true; seeds demo data on an empty database. */
 export function createDemoDriver(options: { memory?: boolean } = {}): SourceDriver {
-  // One in-memory database per source id, so probe and connect see the same data.
-  const memoryDbs = new Map<string, Promise<PgExecutor>>()
-  const open = async (config: SourceConfig): Promise<PgExecutor> => {
-    // Imported lazily so production bundles never include PGlite.
-    const { PGlite } = await import('@electric-sql/pglite')
-    const db = options.memory ? new PGlite() : new PGlite(`idb://graymatter-dev-${config.id}`)
-    return createPgliteExecutor(db)
-  }
-  const memoryExecutor = (config: SourceConfig): Promise<PgExecutor> => {
-    let pending = memoryDbs.get(config.id)
+  // One database per source id for the lifetime of the page, shared by probe and every connection:
+  // closing a connection must not close the database a newer connection uses.
+  const dbs = new Map<string, Promise<PgExecutor>>()
+  const executorFor = (config: SourceConfig): Promise<PgExecutor> => {
+    let pending = dbs.get(config.id)
     if (!pending) {
-      pending = open(config)
-      memoryDbs.set(config.id, pending)
+      // Imported lazily so production bundles never include PGlite.
+      pending = import('@electric-sql/pglite').then(({ PGlite }) => {
+        const db = options.memory ? new PGlite() : new PGlite(`idb://graymatter-dev-${config.id}`)
+        const exec = createPgliteExecutor(db)
+        return { ...exec, close: async () => {} }
+      })
+      dbs.set(config.id, pending)
     }
     return pending
   }
-  const executorFor = (config: SourceConfig): Promise<PgExecutor> =>
-    options.memory ? memoryExecutor(config) : open(config)
 
   return {
-    probe: (config) =>
-      probeWithExecutor(async () => {
-        const exec = await executorFor(config)
-        // In memory mode the database must survive the probe.
-        return options.memory ? { ...exec, close: async () => {} } : exec
-      }, config),
+    probe: (config) => probeWithExecutor(() => executorFor(config), config),
     async connect(config) {
       const exec = await executorFor(config)
       const wasEmpty = (await inspectSchema(exec)).state === 'empty'
       const { storage, status } = await openPostgresStorage(exec)
       if (wasEmpty) await seedDemo(storage, DEMO_ACTOR)
-      return {
-        storage,
-        status,
-        close: async () => {
-          memoryDbs.delete(config.id)
-          await exec.close()
-        },
-      }
+      return { storage, status, close: async () => {} }
     },
   }
 }

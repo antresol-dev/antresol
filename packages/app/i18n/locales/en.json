@@ -225,7 +225,7 @@
     "uploadcareKey": "Uploadcare public key",
     "uploadcareKeyHint": "Needed later to add photos",
     "uploadcareCdn": "Photo address",
-    "uploadcareCdnHint": "Copy it from your Uploadcare project's delivery settings. Leave empty if your project was created before September 2025.",
+    "uploadcareCdnHint": "Copy it from your Uploadcare dashboard → Delivery. Leave empty to use ucarecdn.com, which is right for projects created before September 2025.",
     "optional": "Optional",
     "check": "Check",
     "checking": "Checking…",
@@ -234,7 +234,8 @@
       "empty": "Enter the connection string.",
       "not_postgres_url": "This isn’t a Postgres connection string. It should start with postgresql://",
       "missing_password": "The connection string has a missing password.",
-      "missing_database": "The connection string has a missing database name."
+      "missing_database": "The connection string has a missing database name.",
+      "cdn": "Use the full https:// address."
     },
     "result": {
       "empty": "This source is empty. GrayMatter will set it up.",

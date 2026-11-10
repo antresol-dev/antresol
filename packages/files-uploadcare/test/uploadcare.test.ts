@@ -119,4 +119,31 @@ describe('createUploadcareStore', () => {
     ctl.abort()
     expect(await codeOf(p)).toBe('failed')
   })
+
+  it.each(['abc123.ucarecd.net', 'http://abc123.ucarecd.net', 'not a url'])(
+    'rejects a bad cdnBase %j with no_store before fetching',
+    async (cdnBase) => {
+      const fetchMock = vi.fn(async () => json(200, { file: UUID }))
+      const store = createUploadcareStore({ publicKey: KEY, cdnBase, fetch: fetchMock as unknown as typeof fetch })
+      expect(await codeOf(store.upload(blob(), 'a.jpg'))).toBe('no_store')
+      expect(fetchMock).not.toHaveBeenCalled()
+    },
+  )
+
+  it('maps a non-JSON 200 body to failed', async () => {
+    const store = createUploadcareStore({
+      publicKey: KEY,
+      fetch: (async () => new Response('<html>', { status: 200 })) as typeof fetch,
+    })
+    expect(await codeOf(store.upload(blob(), 'a.jpg'))).toBe('failed')
+  })
+
+  it('maps an already aborted caller signal to failed', async () => {
+    const ctl = new AbortController()
+    ctl.abort()
+    const fetchAbort = ((_u: string, init: RequestInit) =>
+      init.signal!.aborted ? Promise.reject(new DOMException('aborted', 'AbortError')) : Promise.resolve(json(200, { file: UUID }))) as unknown as typeof fetch
+    const store = createUploadcareStore({ publicKey: KEY, fetch: fetchAbort })
+    expect(await codeOf(store.upload(blob(), 'a.jpg', ctl.signal))).toBe('failed')
+  })
 })

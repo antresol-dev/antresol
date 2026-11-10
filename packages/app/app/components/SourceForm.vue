@@ -18,6 +18,7 @@ const name = ref(props.source?.name ?? t('sourceForm.defaultName'))
 const connectionString = ref(props.source?.connectionString ?? '')
 const uploadcareKey = ref(props.source?.uploadcarePublicKey ?? '')
 const uploadcareCdn = ref(props.source?.uploadcareCdnBase ?? '')
+const cdnProblem = ref(false)
 const reveal = ref(false)
 const problem = ref<ReturnType<typeof checkConnectionString>>(null)
 const probe = ref<SourceProbe | null>(null)
@@ -26,12 +27,31 @@ const saving = ref(false)
 const saveError = ref<string | null>(null)
 const checkError = ref<string | null>(null)
 
+/** Trimmed, without trailing slashes; null when empty. Anything but a full https:// address is not valid. */
+function cdnBase(): string | null {
+  return uploadcareCdn.value.trim().replace(/\/+$/, '') || null
+}
+
+function cdnValid(): boolean {
+  const v = cdnBase()
+  if (v === null) return true
+  try {
+    return new URL(v).protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 const draft = (): Omit<SourceConfig, 'id' | 'createdAt'> => ({
   kind: 'neon',
   name: name.value.trim() || t('sourceForm.defaultName'),
   connectionString: connectionString.value.trim(),
   uploadcarePublicKey: uploadcareKey.value.trim() || null,
-  uploadcareCdnBase: uploadcareCdn.value.trim() || null,
+  uploadcareCdnBase: cdnBase(),
+})
+
+watch(uploadcareCdn, () => {
+  cdnProblem.value = false
 })
 
 watch(connectionString, () => {
@@ -42,6 +62,8 @@ watch(connectionString, () => {
 })
 
 async function check(): Promise<void> {
+  cdnProblem.value = !cdnValid()
+  if (cdnProblem.value) return
   problem.value = checkConnectionString(connectionString.value)
   probe.value = null
   checkError.value = null
@@ -66,6 +88,8 @@ const saveKey = computed(() =>
 )
 
 async function save(): Promise<void> {
+  cdnProblem.value = !cdnValid()
+  if (cdnProblem.value) return
   saving.value = true
   saveError.value = null
   try {
@@ -142,9 +166,14 @@ async function save(): Promise<void> {
         autocapitalize="off"
         spellcheck="false"
         placeholder="https://abc123.ucarecd.net"
+        :aria-invalid="cdnProblem ? true : undefined"
+        aria-describedby="source-cdn-problem"
         class="h-11 rounded-field bg-surface"
       />
       <p class="text-sm text-subtle-foreground">{{ $t('sourceForm.uploadcareCdnHint') }}</p>
+      <p id="source-cdn-problem" role="alert" class="text-sm text-destructive">
+        <template v-if="cdnProblem">{{ $t('sourceForm.problem.cdn') }}</template>
+      </p>
     </div>
 
     <Button type="submit" variant="outline" class="h-11 rounded-field bg-surface" :disabled="checking || saving">

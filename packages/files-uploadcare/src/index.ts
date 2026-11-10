@@ -22,15 +22,26 @@ function codeForStatus(status: number): FileErrorCode {
   return 'failed'
 }
 
+function isHttps(url: string): boolean {
+  try {
+    return new URL(url).protocol === 'https:'
+  } catch {
+    return false
+  }
+}
+
 export function createUploadcareStore(options: UploadcareOptions): FileStore {
   const publicKey = options.publicKey.trim()
   if (!publicKey) throw new FileError('no_store')
   const cdnBase = (options.cdnBase?.trim() || DEFAULT_CDN).replace(/\/+$/, '')
+  const cdnOk = isHttps(cdnBase)
   const timeoutMs = options.timeoutMs ?? 60_000
 
   return {
     provider: 'uploadcare',
     async upload(file: Blob, name: string, signal?: AbortSignal): Promise<StoredFile> {
+      // A bad base would be baked into every stored photo URL: refuse before anything is sent.
+      if (!cdnOk) throw new FileError('no_store', 'invalid CDN base')
       const doFetch = options.fetch ?? fetch
       const form = new FormData()
       form.append('UPLOADCARE_PUB_KEY', publicKey)

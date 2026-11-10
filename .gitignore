@@ -9,3 +9,4 @@ coverage/
 !.env.example
 .neon
 spikes/*/results.jsonl
+packages/app/dist

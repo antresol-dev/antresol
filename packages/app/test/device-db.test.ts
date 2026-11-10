@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { newId, type InventorySnapshot } from '@graymatter/core'
+import { newId, type Inventory, type InventorySnapshot } from '@graymatter/core'
 import { openDeviceDb } from '../app/lib/device-db'
 import type { SourceConfig } from '../app/lib/types'
 
@@ -10,6 +10,18 @@ const source = (id: string): SourceConfig => ({
   connectionString: 'postgresql://u:p@h/db',
   uploadcarePublicKey: null,
   createdAt: '2026-11-10T00:00:00Z',
+})
+const inventory = (name: string): Inventory => ({
+  id: newId(),
+  name,
+  description: null,
+  currency: 'USD',
+  createdAt: '2026-11-10T00:00:00Z',
+  updatedAt: '2026-11-10T00:00:00Z',
+  createdBy: 'test',
+  updatedBy: 'test',
+  archivedAt: null,
+  archiveId: null,
 })
 const snap = (): { snapshot: InventorySnapshot; savedAt: string } => ({
   snapshot: { inventory: { id: newId() } } as unknown as InventorySnapshot,
@@ -44,6 +56,23 @@ describe('device db (IndexedDB)', () => {
     expect(await db.getSnapshot({ sourceId: b, inventoryId: inv })).toBeNull()
   })
 
+  it('stores, replaces and deletes inventory listings per source', async () => {
+    const db = await openDeviceDb()
+    const a = newId()
+    const b = newId()
+    const tools = inventory('Tools')
+    await db.putListing(a, [inventory('Old')])
+    await db.putListing(a, [tools])
+    await db.putListing(b, [])
+    const stored = await db.getListings()
+    expect(stored[a]).toEqual([tools])
+    expect(stored[b]).toEqual([])
+    await db.deleteListing(a)
+    const after = await db.getListings()
+    expect(Object.hasOwn(after, a)).toBe(false)
+    expect(after[b]).toEqual([])
+  })
+
   it('putSettings merges into existing settings', async () => {
     const db = await openDeviceDb()
     const current = { sourceId: 's', inventoryId: 'i' }
@@ -71,5 +100,12 @@ describe('device db without IndexedDB', () => {
     await db.putSnapshot({ sourceId: 'm', inventoryId: 'i' }, snap())
     await db.deleteSource('m')
     expect(await db.getSnapshot({ sourceId: 'm', inventoryId: 'i' })).toBeNull()
+    expect(await db.getListings()).toEqual({})
+    const tools = inventory('Tools')
+    await db.putListing('m', [tools])
+    await db.putListing('n', [])
+    expect(await db.getListings()).toEqual({ m: [tools], n: [] })
+    await db.deleteListing('m')
+    expect(await db.getListings()).toEqual({ n: [] })
   })
 })

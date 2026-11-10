@@ -1,4 +1,4 @@
-import type { InventorySnapshot } from '@graymatter/core'
+import type { Inventory, InventorySnapshot } from '@graymatter/core'
 import { createStore, del, get, keys, set, update, type UseStore } from 'idb-keyval'
 import type { InventoryRef, SourceConfig } from './types'
 
@@ -24,10 +24,16 @@ export interface DeviceDb {
   getSnapshot(ref: InventoryRef): Promise<CachedSnapshot | null>
   putSnapshot(ref: InventoryRef, value: CachedSnapshot): Promise<void>
   deleteSnapshot(ref: InventoryRef): Promise<void>
+  /** A source's last known inventories, active and archived; replaces the stored list. */
+  putListing(sourceId: string, inventories: Inventory[]): Promise<void>
+  /** Stored lists by source id. */
+  getListings(): Promise<Record<string, Inventory[]>>
+  deleteListing(sourceId: string): Promise<void>
 }
 
 const SOURCES = 'sources'
 const SETTINGS = 'settings'
+const LISTINGS = 'listings'
 const snapshotKey = (ref: InventoryRef): string => `snapshot:${ref.sourceId}:${ref.inventoryId}`
 const snapshotPrefix = (sourceId: string): string => `snapshot:${sourceId}:`
 const defaultSettings = (): DeviceSettings => ({ deviceName: null, current: null })
@@ -76,6 +82,17 @@ function buildDeviceDb(kv: Kv, persistent: boolean): DeviceDb {
     },
     async deleteSnapshot(ref) {
       await kv.del(snapshotKey(ref))
+    },
+    async putListing(sourceId, inventories) {
+      await kv.update<Record<string, Inventory[]>>(LISTINGS, (all) => ({ ...all, [sourceId]: inventories }))
+    },
+    async getListings() {
+      return (await kv.get<Record<string, Inventory[]>>(LISTINGS)) ?? {}
+    },
+    async deleteListing(sourceId) {
+      await kv.update<Record<string, Inventory[]>>(LISTINGS, (all) =>
+        Object.fromEntries(Object.entries(all ?? {}).filter(([id]) => id !== sourceId)),
+      )
     },
   }
 }

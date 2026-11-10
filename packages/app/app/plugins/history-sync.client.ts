@@ -1,3 +1,4 @@
+import type { RouteLocationNormalized } from 'vue-router'
 import { toast } from 'vue-sonner'
 import { errorMessageKey } from '~/lib/errors'
 import { entryInventory, entrySync, INVENTORY_KEY } from '~/lib/history-nav'
@@ -19,9 +20,12 @@ const plain = (ref: InventoryRef): { sourceId: string; inventoryId: string } => 
  */
 export default defineNuxtPlugin((nuxtApp) => {
   const router = useRouter()
+  // The error's own text is never shown or logged: it may hold a connection string.
+  const report = (e: unknown): void => {
+    toast.error(nuxtApp.$i18n.t(errorMessageKey(e)))
+  }
 
-  router.afterEach(async (to, _from, failure) => {
-    if (failure) return
+  async function sync(to: RouteLocationNormalized): Promise<void> {
     // This plugin runs before the workspace plugin (alphabetical order); read it lazily.
     await nuxtApp.$workspaceReady
     // A newer navigation landed meanwhile: its own afterEach handles its entry.
@@ -40,12 +44,18 @@ export default defineNuxtPlugin((nuxtApp) => {
     if (action.kind === 'stamp' && current) {
       window.history.replaceState({ ...window.history.state, [INVENTORY_KEY]: plain(current) }, '')
     } else if (action.kind === 'switch') {
-      workspace.selectInventory(action.ref).catch((e: unknown) => toast.error(nuxtApp.$i18n.t(errorMessageKey(e))))
+      workspace.selectInventory(action.ref).catch(report)
     } else if (action.kind === 'root') {
       // Restamp the entry while replacing it, or the stale stamp would send this same entry to the root again.
       await router.replace(
         current ? { path: '/', force: true, state: { [INVENTORY_KEY]: plain(current) } } : '/',
       )
     }
+  }
+
+  router.afterEach(async (to, _from, failure) => {
+    if (failure) return
+    // A rejected workspace start or replace must not become an unhandled rejection.
+    await sync(to).catch(report)
   })
 })

@@ -385,3 +385,29 @@ describe('attributeWrites', () => {
     expect(attributeWrites(s, item.id, attr, { variants: { [item.v['rb']!]: '' } })).toHaveLength(1)
   })
 })
+
+describe('itemView photos', () => {
+  const addPhoto = (itemId: string, variantId: string | null, name: string): Promise<void> =>
+    run({ type: 'photo.add', id: newId(), itemId, variantId, provider: 'uploadcare', fileId: name, url: `https://ucarecdn.com/${name}/` })
+
+  it('lists the item photos by position, without the variants photos', async () => {
+    const it1 = await newItem({ variants: ['A', 'B'] })
+    await addPhoto(it1.id, null, 'first')
+    await addPhoto(it1.id, it1.v['A']!, 'varA')
+    await addPhoto(it1.id, null, 'second')
+    let view = itemView(s, it1.id)!
+    expect(view.photos.map((p) => p.fileId)).toEqual(['first', 'second'])
+    await run({ type: 'photo.reorder', itemId: it1.id, orderedIds: [view.photos[1]!.id, view.photos[0]!.id] })
+    view = itemView(s, it1.id)!
+    expect(view.photos.map((p) => p.fileId)).toEqual(['second', 'first'])
+  })
+
+  it('gives the variant row its photo, and null when it has none', async () => {
+    const it1 = await newItem({ variants: ['A', 'B'] })
+    await addPhoto(it1.id, it1.v['A']!, 'varA')
+    const view = itemView(s, it1.id)!
+    expect(view.buckets.find((b) => b.variantId === it1.v['A'])!.photo?.fileId).toBe('varA')
+    expect(view.buckets.find((b) => b.variantId === it1.v['B'])!.photo).toBeNull()
+    expect(view.photos).toEqual([])
+  })
+})

@@ -10,6 +10,8 @@ const props = defineProps<{
   crumbs?: { name: string; to: string }[]
   /** The screen's own place at the end of the path; shown from 1024 px only. */
   current?: string | null
+  /** A long title wraps (item names) instead of ending in an ellipsis (folder names). */
+  wrapTitle?: boolean
 }>()
 defineSlots<{
   /** compact = below 1024 px: icon-only buttons in the top bar. */
@@ -61,7 +63,7 @@ const crumbLink =
         </div>
         <div class="flex min-w-0 items-end justify-between gap-3">
           <div class="min-w-0 flex-1">
-            <h1 class="truncate text-2xl font-bold tracking-[-0.02em]">{{ title }}</h1>
+            <h1 :class="['text-2xl font-bold tracking-[-0.02em]', wrapTitle ? 'wrap-anywhere' : 'truncate']">{{ title }}</h1>
             <p v-if="subtitle" class="mt-0.5 truncate text-[13px] font-semibold text-muted-foreground">{{ subtitle }}</p>
           </div>
           <div v-if="$slots.actions" class="flex shrink-0 items-center gap-1.5">
@@ -98,7 +100,7 @@ const crumbLink =
             </NuxtLink>
           </template>
         </nav>
-        <h1 class="truncate text-2xl font-bold tracking-[-0.02em]">{{ title }}</h1>
+        <h1 :class="['text-2xl font-bold tracking-[-0.02em]', wrapTitle ? 'wrap-anywhere' : 'truncate']">{{ title }}</h1>
       </template>
 
       <AppStatus />

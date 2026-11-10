@@ -40,11 +40,40 @@
     "folderCount": "{count} folder | {count} folders",
     "itemCount": "{count} item | {count} items"
   },
-  "item": { "outOfStock": "Out of stock", "variants": "{count} variant | {count} variants" },
+  "item": {
+    "outOfStock": "Out of stock",
+    "variants": "{count} variant | {count} variants",
+    "tags": "Tags",
+    "stock": "Stock",
+    "avgPrice": "avg {price} / {unit}",
+    "lastPrice": "last {price} / {unit}",
+    "variantsTitle": "Variants",
+    "noVariant": "No variant",
+    "attributes": "Attributes",
+    "differsByVariant": "Differs by variant",
+    "noValue": "—"
+  },
+  "journal": {
+    "title": "History",
+    "loading": "Loading history",
+    "needsConnection": "History needs a connection to the source",
+    "empty": "No movements yet",
+    "kind": {
+      "receipt": "Received",
+      "usage": "Used",
+      "return": "Returned",
+      "adjustment": "Adjusted",
+      "transfer": "Moved"
+    },
+    "moved": "Moved from {from} to {to}",
+    "whereBought": "Where bought",
+    "newTab": "(opens in a new tab)"
+  },
   "empty": {
     "noInventories": "Create your first inventory",
     "folder": "This folder is empty",
     "folderGone": "This folder was archived or deleted",
+    "itemGone": "This item is no longer here",
     "offlineNoCopy": "Can’t reach your source and there is no saved copy on this device yet.",
     "sourceFailed": "Can’t open {source}: {reason}",
     "backTo": "Back to {name}"

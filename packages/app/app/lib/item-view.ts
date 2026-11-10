@@ -1,0 +1,233 @@
+import {
+  addQ,
+  BUILTIN_UNITS,
+  cmpQ,
+  formatAmountParts,
+  negQ,
+  resolveUnit,
+  unitPrice,
+  type Folder,
+  type Id,
+  type InventorySnapshot,
+  type Item,
+  type Movement,
+  type MovementKind,
+  type Quantity,
+  type StockLine,
+  type UnitDef,
+} from '@graymatter/core'
+import { byName, pathOf, snapshotIndex, type Crumb } from './views'
+
+export interface BucketRow {
+  variantId: Id | null
+  /** null for the stock kept without a variant. */
+  name: string | null
+  description: string | null
+  quantity: Quantity
+  number: string
+  unit: string
+  outOfStock: boolean
+  avgUnitPrice: number | null
+  lastUnitPrice: number | null
+  /** Per-variant attribute values (only attributes marked per-variant), by attribute name. */
+  values: { attributeId: Id; name: string; value: string | null }[]
+}
+export interface AttributeRow {
+  attributeId: Id
+  name: string
+  kind: 'text' | 'enum'
+  options: string[]
+  value: string | null
+  /** The item's value is empty and the item has active variants: values live on the variants. */
+  perVariant: boolean
+}
+export interface ItemView {
+  item: Item
+  crumbs: Crumb[]
+  unit: UnitDef
+  currency: string
+  tags: { id: Id; name: string }[]
+  total: { quantity: Quantity; number: string; unit: string; outOfStock: boolean; avgUnitPrice: number | null; lastUnitPrice: number | null }
+  /** The no-variant bucket first when shown, then active variants by position. */
+  buckets: BucketRow[]
+  hasVariants: boolean
+  attributes: AttributeRow[]
+}
+
+interface Summary {
+  quantity: Quantity
+  avgUnitPrice: number | null
+  lastUnitPrice: number | null
+}
+
+/** The sums of core's itemStock (and, for one line, bucketStock) over the given stock lines. */
+function summarize(lines: StockLine[]): Summary {
+  let quantity: Quantity = '0'
+  let pricedQuantity: Quantity = '0'
+  let pricedTotal = 0
+  let last: StockLine['lastPriced'] = null
+  for (const l of lines) {
+    quantity = addQ(quantity, l.quantity)
+    pricedQuantity = addQ(pricedQuantity, l.pricedQuantity)
+    pricedTotal += l.pricedTotal
+    if (l.lastPriced && (!last || l.lastPriced.at > last.at)) last = l.lastPriced
+  }
+  return {
+    quantity,
+    avgUnitPrice: cmpQ(pricedQuantity, '0') > 0 ? unitPrice(pricedTotal, pricedQuantity) : null,
+    lastUnitPrice: last ? unitPrice(last.totalPrice, last.quantity) : null,
+  }
+}
+
+const unitOf = (s: InventorySnapshot, item: Item | undefined): UnitDef =>
+  (item && resolveUnit(item.unitKey, s.units)) ?? BUILTIN_UNITS.pcs
+
+/** An empty or blank value counts as no value. */
+const valueOf = (v: string | null): string | null => (v === null || v.trim() === '' ? null : v)
+
+/** null when the item is missing, archived, or its folder chain is archived or missing. */
+export function itemView(s: InventorySnapshot, itemId: Id): ItemView | null {
+  const ix = snapshotIndex(s)
+  const item = ix.items.get(itemId)
+  if (!item || item.archivedAt !== null) return null
+  let path: Folder[] = []
+  if (item.folderId !== null) {
+    path = pathOf(ix, item.folderId)
+    if (path.length === 0) return null
+  }
+  const unit = unitOf(s, item)
+
+  const variants = s.variants
+    .filter((v) => v.itemId === itemId && v.archivedAt === null)
+    .sort((a, b) => a.position - b.position || byName(a, b))
+  const hasVariants = variants.length > 0
+
+  const definitions = new Map(s.attributes.map((a) => [a.id, a] as const))
+  const attributes: AttributeRow[] = s.itemAttributes
+    .filter((a) => a.itemId === itemId)
+    .flatMap((a) => {
+      const def = definitions.get(a.attributeId)
+      if (!def) return []
+      const value = valueOf(a.value)
+      return [{ attributeId: def.id, name: def.name, kind: def.kind, options: def.options, value, perVariant: value === null && hasVariants }]
+    })
+    .sort(byName)
+  const perVariant = attributes.filter((a) => a.perVariant)
+
+  const valueKey = (variantId: Id, attributeId: Id): string => `${variantId}\u0000${attributeId}`
+  const variantValues = new Map<string, string | null>()
+  if (perVariant.length > 0) {
+    const ids = new Set(variants.map((v) => v.id))
+    for (const v of s.variantAttributeValues) if (ids.has(v.variantId)) variantValues.set(valueKey(v.variantId, v.attributeId), valueOf(v.value))
+  }
+
+  const lines = ix.stockByItem.get(itemId) ?? []
+  const lineOf = new Map(lines.map((l) => [l.variantId, l] as const))
+  const bucket = (variantId: Id | null, name: string | null, description: string | null, values: BucketRow['values']): BucketRow => {
+    const line = lineOf.get(variantId)
+    const sum = summarize(line ? [line] : [])
+    return {
+      variantId,
+      name,
+      description,
+      quantity: sum.quantity,
+      ...formatAmountParts(sum.quantity, unit),
+      outOfStock: cmpQ(sum.quantity, '0') <= 0,
+      avgUnitPrice: sum.avgUnitPrice,
+      lastUnitPrice: sum.lastUnitPrice,
+      values,
+    }
+  }
+  const buckets: BucketRow[] = []
+  if (!hasVariants || cmpQ(lineOf.get(null)?.quantity ?? '0', '0') !== 0) buckets.push(bucket(null, null, null, []))
+  for (const v of variants) {
+    const values = perVariant.map((a) => ({
+      attributeId: a.attributeId,
+      name: a.name,
+      value: variantValues.get(valueKey(v.id, a.attributeId)) ?? null,
+    }))
+    buckets.push(bucket(v.id, v.name, v.description, values))
+  }
+
+  // Same rule as core's itemStock: every bucket except archived variants.
+  const total = summarize(lines.filter((l) => l.variantId === null || !ix.variants.get(l.variantId)?.archived))
+
+  const tagsById = new Map(s.tags.map((t) => [t.id, t] as const))
+  const tags = item.tagIds
+    .flatMap((id) => {
+      const tag = tagsById.get(id)
+      return tag ? [{ id: tag.id, name: tag.name }] : []
+    })
+    .sort(byName)
+
+  return {
+    item,
+    crumbs: path.map((f) => ({ id: f.id, name: f.name })),
+    unit,
+    currency: s.inventory.currency,
+    tags,
+    total: {
+      quantity: total.quantity,
+      ...formatAmountParts(total.quantity, unit),
+      outOfStock: cmpQ(total.quantity, '0') <= 0,
+      avgUnitPrice: total.avgUnitPrice,
+      lastUnitPrice: total.lastUnitPrice,
+    },
+    buckets,
+    hasVariants,
+    attributes,
+  }
+}
+
+export interface JournalRow {
+  /** Movement id; for a transfer, its transferId. */
+  id: Id
+  kind: MovementKind
+  at: string
+  by: string
+  /** '+37', '−5' (U+2212); transfers show the moved amount without a sign. */
+  number: string
+  unit: string
+  /** Variant name; null = no variant. Unused for transfers. */
+  variantName: string | null
+  transfer: { from: string | null; to: string | null } | null
+  totalPrice: number | null
+  sourceUrl: string | null
+  note: string | null
+}
+
+const MINUS = '−'
+
+/** `movements` newest first (as loadMovements returns them); the two halves of a transfer become one row. */
+export function journalRows(s: InventorySnapshot, itemId: Id, movements: Movement[]): JournalRow[] {
+  const ix = snapshotIndex(s)
+  const unit = unitOf(s, ix.items.get(itemId))
+  // Archived variants keep their names in the index, so old movements still name them.
+  const nameOf = (variantId: Id | null): string | null => (variantId === null ? null : (ix.variants.get(variantId)?.name ?? null))
+
+  const rows: JournalRow[] = []
+  const transfers = new Map<Id, NonNullable<JournalRow['transfer']>>()
+  for (const m of movements) {
+    const sign = cmpQ(m.quantity, '0')
+    const parts = formatAmountParts(sign < 0 ? negQ(m.quantity) : m.quantity, unit)
+    const base = { at: m.createdAt, by: m.createdBy, unit: parts.unit, totalPrice: m.totalPrice, sourceUrl: m.sourceUrl, note: m.note }
+
+    if (m.kind === 'transfer' && m.transferId !== null) {
+      // The outgoing half is negative; the first half met (the newest) places the row.
+      const side = sign < 0 ? 'from' : 'to'
+      const known = transfers.get(m.transferId)
+      if (known) {
+        known[side] = nameOf(m.variantId)
+        continue
+      }
+      const transfer = { from: null, to: null, [side]: nameOf(m.variantId) }
+      transfers.set(m.transferId, transfer)
+      rows.push({ ...base, id: m.transferId, kind: 'transfer', number: parts.number, variantName: null, transfer })
+      continue
+    }
+
+    const prefix = parts.number === '0' ? '' : sign > 0 ? '+' : sign < 0 ? MINUS : ''
+    rows.push({ ...base, id: m.id, kind: m.kind, number: `${prefix}${parts.number}`, variantName: nameOf(m.variantId), transfer: null })
+  }
+  return rows
+}

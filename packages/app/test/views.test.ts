@@ -1,4 +1,14 @@
-import { createSearch, itemStock, newId, type InventorySnapshot, type InventoryStorage, type Photo } from '@graymatter/core'
+import {
+  createSearch,
+  formatAmountParts,
+  isOutOfStock,
+  itemStock,
+  newId,
+  resolveUnit,
+  type InventorySnapshot,
+  type InventoryStorage,
+  type Photo,
+} from '@graymatter/core'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import type { SourceConfig } from '../app/lib/types'
@@ -156,13 +166,32 @@ describe('index and edge cases', () => {
     expect(indexStats.builds).toBe(before + 2)
   })
 
-  it('agrees with core itemStock for every item', () => {
-    for (const f of [null, ...snap.folders.map((x) => x.id)]) {
-      for (const row of folderView(snap, f)?.items ?? []) {
-        const q = itemStock(snap, row.id).quantity
-        expect(row.outOfStock).toBe(Number(q) <= 0)
+  it('agrees with core itemStock for every item, with stock in an archived variant', async () => {
+    // Its own source: the shared one has ICs archived by an earlier test.
+    const own = (await createDemoDriver({ memory: true, extras: false }).connect({ ...cfg, id: 'agree' })).storage
+    const inv = (await own.listInventories()).find((i) => i.name === 'Electronics')!.id
+    let s = await own.loadInventory(inv)
+    const resistor = s.items.find((i) => i.name === 'Резистор 0,25 Вт')!.id
+    const v100k = s.variants.find((v) => v.itemId === resistor && v.name === '100k')!.id
+    await own.apply(
+      { type: 'stock.receive', movementId: newId(), itemId: resistor, variantId: v100k, quantity: '7', totalPrice: null, sourceUrl: null, note: null },
+      { device: 'Test' },
+    )
+    await own.apply({ type: 'archive', target: 'variant', id: v100k, archiveId: newId() }, { device: 'Test' })
+    s = await own.loadInventory(inv)
+
+    const seen: string[] = []
+    for (const f of [null, ...s.folders.map((x) => x.id)]) {
+      for (const row of folderView(s, f)?.items ?? []) {
+        const stock = itemStock(s, row.id)
+        const unit = resolveUnit(s.items.find((i) => i.id === row.id)!.unitKey, s.units)!
+        expect([row.number, row.unit]).toEqual(Object.values(formatAmountParts(stock.quantity, unit)))
+        expect(row.outOfStock).toBe(isOutOfStock(stock))
+        seen.push(`${row.name} ${row.number}`)
       }
     }
+    expect(seen).toContain('Резистор 0,25 Вт 100')
+    expect(seen).toHaveLength(4)
   })
 
   it('uses the lowest-position item photo and ignores variant photos', () => {

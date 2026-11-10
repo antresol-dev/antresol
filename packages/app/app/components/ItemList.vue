@@ -22,13 +22,16 @@ const rows = computed(() =>
 <template>
   <section class="grid gap-2">
     <h2 class="px-1 text-[13px] font-semibold text-subtle-foreground">{{ $t('folder.items', { count: items.length }) }}</h2>
-    <ul class="rounded-card border border-border bg-surface py-1">
+    <ul class="overflow-hidden rounded-card border border-border bg-surface py-1">
       <li
         v-for="item in rows"
         :key="item.id"
         class="relative not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-[68px] not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
       >
-        <div class="flex h-[62px] items-center gap-3 px-3.5">
+        <NuxtLink
+          :to="`/item/${item.id}`"
+          class="flex h-[62px] items-center gap-3 px-3.5 outline-none transition-colors duration-150 hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        >
           <span class="flex size-[42px] shrink-0 items-center justify-center overflow-hidden rounded-thumb bg-thumb text-thumb-foreground">
             <img v-if="item.coverUrl" :src="item.coverUrl" alt="" loading="lazy" class="size-full object-cover" >
             <Cpu v-else class="size-5" stroke-width="1.75" aria-hidden="true" />
@@ -44,7 +47,7 @@ const rows = computed(() =>
             {{ item.number }}
             <span class="text-xs font-semibold text-muted-foreground">{{ item.unit }}</span>
           </span>
-        </div>
+        </NuxtLink>
       </li>
     </ul>
   </section>

@@ -41,11 +41,12 @@ export interface FolderView {
   items: ItemRow[]
 }
 
-const byName = (a: { name: string }, b: { name: string }): number =>
+/** @internal Name order used by every list: case-insensitive, numbers in numeric order. */
+export const byName = (a: { name: string }, b: { name: string }): number =>
   a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
 
-/** Lookups built once per snapshot object (snapshots are replaced whole, never mutated). */
-interface Index {
+/** @internal Lookups built once per snapshot object (snapshots are replaced whole, never mutated); shared by views.ts and item-view.ts. */
+export interface Index {
   items: Map<Id, Item>
   folders: Map<Id, Folder>
   /** Active folders and items by parent, sorted by name. */
@@ -126,7 +127,8 @@ function buildIndex(s: InventorySnapshot): Index {
   return { items, folders, childFolders, folderItems, subtreeCounts, stockByItem, buckets, variants, activeVariantCount, covers, paths: new Map() }
 }
 
-function indexOf(s: InventorySnapshot): Index {
+/** @internal The index of a snapshot, built on first use. */
+export function snapshotIndex(s: InventorySnapshot): Index {
   let ix = indexes.get(s)
   if (!ix) {
     ix = buildIndex(s)
@@ -135,8 +137,8 @@ function indexOf(s: InventorySnapshot): Index {
   return ix
 }
 
-/** Root-to-folder chain of active folders; empty if the folder is missing, archived or under an archived ancestor. */
-function pathOf(ix: Index, folderId: Id): Folder[] {
+/** @internal Root-to-folder chain of active folders; empty if the folder is missing, archived or under an archived ancestor. */
+export function pathOf(ix: Index, folderId: Id): Folder[] {
   const cached = ix.paths.get(folderId)
   if (cached) return cached
   const path: Folder[] = []
@@ -188,7 +190,7 @@ function itemRow(s: InventorySnapshot, ix: Index, item: Item): ItemRow {
 
 /** null when the folder is missing, archived, or under an archived ancestor. Root: folder null, crumbs []. */
 export function folderView(s: InventorySnapshot, folderId: Id | null): FolderView | null {
-  const ix = indexOf(s)
+  const ix = snapshotIndex(s)
   let path: Folder[] = []
   if (folderId !== null) {
     path = pathOf(ix, folderId)
@@ -224,7 +226,7 @@ export interface SearchRow {
 }
 
 export function searchRows(s: InventorySnapshot, hits: SearchHit[]): SearchRow[] {
-  const ix = indexOf(s)
+  const ix = snapshotIndex(s)
   const rows: SearchRow[] = []
   for (const hit of hits) {
     const item = ix.items.get(hit.itemId)
@@ -256,7 +258,7 @@ export interface TreeNode {
 }
 
 export function folderTree(s: InventorySnapshot): TreeNode[] {
-  const ix = indexOf(s)
+  const ix = snapshotIndex(s)
   const build = (parentId: Id | null): TreeNode[] =>
     (ix.childFolders.get(parentId) ?? []).map((f) => ({
       id: f.id,
@@ -269,7 +271,7 @@ export function folderTree(s: InventorySnapshot): TreeNode[] {
 
 /** Active items in the whole inventory (not under an archived folder). */
 export function inventoryItemCount(s: InventorySnapshot): number {
-  return indexOf(s).subtreeCounts.get(null) ?? 0
+  return snapshotIndex(s).subtreeCounts.get(null) ?? 0
 }
 
 export interface MoveTarget {
@@ -283,7 +285,7 @@ export interface MoveTarget {
 
 /** Root first, then active folders depth-first by name; excludes the folder itself and its subtree. */
 export function moveTargets(s: InventorySnapshot, folderId: Id): MoveTarget[] {
-  const ix = indexOf(s)
+  const ix = snapshotIndex(s)
   const parentId = ix.folders.get(folderId)?.parentId ?? null
   const out: MoveTarget[] = [{ id: null, name: s.inventory.name, depth: 0, current: parentId === null }]
   const walk = (pid: Id | null, depth: number): void => {

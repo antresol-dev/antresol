@@ -11,15 +11,15 @@ export function formatMoney(minor: number, currency: string): string {
   return currencyFormat(currency).format(minor / 10 ** digitsOf(currency))
 }
 
-/** A price per unit, fractional minor units allowed: from one major unit up the currency's decimals, below it 3 significant digits. */
+/** A price per unit, fractional minor units allowed: from one major unit up the currency's decimals; below it up to
+ *  3 significant digits, but never fewer decimals than the currency has ($0.0622, $0.50, not $0.5). */
 export function formatUnitPrice(minorPerUnit: number, currency: string): string {
-  const major = minorPerUnit / 10 ** digitsOf(currency)
+  const digits = digitsOf(currency)
+  const major = minorPerUnit / 10 ** digits
   if (Math.abs(major) >= 1) return currencyFormat(currency).format(major)
-  return currencyFormat(currency, {
-    maximumSignificantDigits: 3,
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 20,
-  }).format(major)
+  const parts = currencyFormat(currency, { maximumSignificantDigits: 3 }).formatToParts(major)
+  const decimals = parts.find((p) => p.type === 'fraction')?.value.length ?? 0
+  return decimals >= digits ? parts.map((p) => p.value).join('') : currencyFormat(currency).format(major)
 }
 
 export function formatDate(iso: string): string {

@@ -5,8 +5,10 @@ import {
   StorageError,
   validateCommand,
   type Command,
+  type Id,
   type Inventory,
   type InventorySnapshot,
+  type Movement,
 } from '@graymatter/core'
 import { markRaw, reactive } from 'vue'
 import type { DeviceDb } from './device-db'
@@ -37,6 +39,8 @@ export interface WorkspaceState {
   sources: SourceState[]
   /** Active only, sorted by name (localeCompare, numeric, base). */
   inventories: InventoryEntry[]
+  /** Archived inventories of all sources, sorted like `inventories`. */
+  archivedInventories: InventoryEntry[]
   current: InventoryRef | null
   /** Replaced whole, never mutated; stored with markRaw so views read plain data. */
   snapshot: InventorySnapshot | null
@@ -70,6 +74,10 @@ export interface Workspace {
   selectInventory(ref: InventoryRef): Promise<void>
   /** Throws DomainError | StorageError; calls run one after another in call order. */
   apply(command: Command): Promise<void>
+  /** Like apply, but for any inventory of a connected source; validated against that inventory's snapshot. */
+  applyTo(ref: InventoryRef, command: Command): Promise<void>
+  /** Journal of an item of the current inventory, newest first. Rejects without a network call while the source is unreachable. */
+  loadMovements(itemId: Id): Promise<Movement[]>
   createInventory(input: { sourceId: string; name: string; currency: string }): Promise<InventoryRef>
   addSource(input: Omit<SourceConfig, 'id' | 'createdAt'>): Promise<SourceConfig>
   updateSource(
@@ -96,7 +104,9 @@ function sanitize(error: unknown, connectionString: string): StorageError {
 }
 
 function isRelistCommand(c: Command): boolean {
-  return c.type.startsWith('inventory.') || c.type === 'restore' || (c.type === 'archive' && c.target === 'inventory')
+  return c.type.startsWith('inventory.') || c.type === 'restore' ||
+    (c.type === 'archive' && c.target === 'inventory') ||
+    (c.type === 'deletePermanently' && c.target === 'inventory')
 }
 
 export function createWorkspace(deps: WorkspaceDeps): Workspace {
@@ -110,6 +120,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     deviceName: defaultDeviceName(deps.userAgent),
     sources: [],
     inventories: [],
+    archivedInventories: [],
     current: null,
     snapshot: null,
     snapshotOrigin: null,
@@ -121,7 +132,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   })
 
   const conns = new Map<string, SourceConnection>()
-  /** Last known active inventories per source; kept while the source is unreachable. */
+  /** Last known inventories (active and archived) per source; kept while the source is unreachable. */
   const listings = new Map<string, Inventory[]>()
   let queue: Promise<void> = Promise.resolve()
   let pendingWrites = 0
@@ -170,18 +181,19 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   }
 
   function rebuildInventories(): void {
-    const entries: InventoryEntry[] = []
+    const active: InventoryEntry[] = []
+    const archived: InventoryEntry[] = []
     for (const { config } of state.sources) {
       for (const inventory of listings.get(config.id) ?? []) {
-        entries.push({ ref: { sourceId: config.id, inventoryId: inventory.id }, inventory, sourceName: config.name })
+        const entry = { ref: { sourceId: config.id, inventoryId: inventory.id }, inventory, sourceName: config.name }
+        ;(inventory.archivedAt === null ? active : archived).push(entry)
       }
     }
-    entries.sort(
-      (a, b) =>
-        a.inventory.name.localeCompare(b.inventory.name, undefined, { numeric: true, sensitivity: 'base' }) ||
-        (a.inventory.id < b.inventory.id ? -1 : a.inventory.id > b.inventory.id ? 1 : 0),
-    )
-    state.inventories = entries
+    const byName = (a: InventoryEntry, b: InventoryEntry): number =>
+      a.inventory.name.localeCompare(b.inventory.name, undefined, { numeric: true, sensitivity: 'base' }) ||
+      (a.inventory.id < b.inventory.id ? -1 : a.inventory.id > b.inventory.id ? 1 : 0)
+    state.inventories = active.sort(byName)
+    state.archivedInventories = archived.sort(byName)
   }
 
   async function dropConnection(sourceId: string): Promise<void> {
@@ -196,8 +208,8 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     let conn: SourceConnection | undefined
     try {
       conn = await driver.connect(config)
-      const all = await conn.storage.listInventories()
-      return { ok: true, conn, inventories: all.filter((i) => i.archivedAt === null) }
+      const inventories = await conn.storage.listInventories()
+      return { ok: true, conn, inventories }
     } catch (error) {
       await conn?.close().catch(() => {})
       return { ok: false, error }
@@ -238,8 +250,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     const conn = conns.get(sourceId)
     if (!conn) return
     try {
-      const all = await conn.storage.listInventories()
-      listings.set(sourceId, all.filter((i) => i.archivedAt === null))
+      listings.set(sourceId, await conn.storage.listInventories())
       rebuildInventories()
     } catch (error) {
       markFailure(sourceId, error)
@@ -431,19 +442,37 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       if (isRelistCommand(command)) {
         await relist(sourceId)
         await resolveCurrent()
+        if (command.type === 'deletePermanently') await db.deleteSnapshot({ sourceId, inventoryId: command.id })
       } else if (state.current?.sourceId === sourceId) {
         await loadCurrent()
       }
     })
   }
 
+  async function applyTo(ref: InventoryRef, command: Command): Promise<void> {
+    // Read when the job runs: earlier queued writes have reloaded the snapshot by then.
+    await write(ref.sourceId, command, async (conn) =>
+      sameRef(state.current, ref) ? state.snapshot : conn.storage.loadInventory(ref.inventoryId),
+    )
+  }
+
   async function apply(command: Command): Promise<void> {
     const cur = state.current
     if (!cur) throw new StorageError('not_found')
-    // Read when the job runs: earlier queued writes have reloaded the snapshot by then.
-    await write(cur.sourceId, command, async (conn) =>
-      sameRef(state.current, cur) ? state.snapshot : conn.storage.loadInventory(cur.inventoryId),
-    )
+    await applyTo({ sourceId: cur.sourceId, inventoryId: cur.inventoryId }, command)
+  }
+
+  async function loadMovements(itemId: Id): Promise<Movement[]> {
+    const cur = state.current
+    const status = cur ? statusOf(cur.sourceId) : null
+    const conn = cur && conns.get(cur.sourceId)
+    if (!cur || !conn || status === 'unreachable' || status === 'error') throw new StorageError('unavailable')
+    try {
+      return await conn.storage.loadMovements(itemId)
+    } catch (error) {
+      if (error instanceof StorageError && error.code === 'unavailable') markFailure(cur.sourceId, error)
+      throw redactError(error, cur.sourceId)
+    }
   }
 
   function redactError(error: unknown, sourceId: string): Error {
@@ -467,6 +496,8 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     },
     selectInventory,
     apply,
+    applyTo,
+    loadMovements,
     async createInventory({ sourceId, name, currency }) {
       const id = newId()
       await write(sourceId, { type: 'inventory.create', id, name, description: null, currency }, async () => null)

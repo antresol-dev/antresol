@@ -38,6 +38,8 @@ function harness() {
     applyCalls: 0,
     /** loadInventory fails with this after listInventories succeeded. */
     loadError: null as Error | null,
+    movementCalls: 0,
+    movementError: null as Error | null,
   }
 
   const addDatabase = (connectionString: string): PGlite => {
@@ -89,6 +91,11 @@ function harness() {
         flags.applyCalls++
         if (flags.applyError) throw flags.applyError
         return conn.storage.apply(command, actor)
+      }
+      storage.loadMovements = async (itemId) => {
+        flags.movementCalls++
+        if (flags.movementError) throw flags.movementError
+        return conn.storage.loadMovements(itemId)
       }
       storage.listInventories = () => {
         flags.listCalls++
@@ -567,5 +574,110 @@ describe('workspace', () => {
     h.flags.offline = false
     await ws.refresh()
     expect(ws.state.sources[0]!.reason).toBeNull()
+  })
+
+  /** Two inventories A and B in one source; B is archived. */
+  const archivedSetup = async () => {
+    const h = setup()
+    const a = await h.seed(CS('one'), 'A')
+    const b = await h.seed(CS('one'), 'B')
+    await h.db.putSource(config('s1', CS('one')))
+    const ws = h.workspace()
+    await ws.start()
+    const refA = { sourceId: 's1', inventoryId: a }
+    expect(ws.state.current).toEqual(refA)
+    await ws.applyTo({ sourceId: 's1', inventoryId: b }, { type: 'archive', target: 'inventory', id: b, archiveId: newId() })
+    return { h, ws, a, b, refA }
+  }
+
+  it('27. keeps archived inventories in their own list', async () => {
+    const { ws } = await archivedSetup()
+    expect(ws.state.inventories.map((e) => e.inventory.name)).toEqual(['A'])
+    expect(ws.state.archivedInventories.map((e) => [e.inventory.name, e.sourceName])).toEqual([['B', 'Source s1']])
+  })
+
+  it('28. restores an archived inventory while another one is current', async () => {
+    const { ws, refA } = await archivedSetup()
+    const b = ws.state.archivedInventories[0]!
+    await ws.applyTo(b.ref, { type: 'restore', archiveId: b.inventory.archiveId! })
+    expect(ws.state.inventories.map((e) => e.inventory.name)).toEqual(['A', 'B'])
+    expect(ws.state.archivedInventories).toEqual([])
+    expect(ws.state.current).toEqual(refA)
+  })
+
+  it('29. permanently deletes an archived inventory and its cached copy', async () => {
+    const { h, ws } = await archivedSetup()
+    const b = ws.state.archivedInventories[0]!
+    await h.db.putSnapshot(b.ref, { snapshot: (await (await h.direct(CS('one'))).loadInventory(b.inventory.id)), savedAt: 'x' })
+    expect(await h.db.getSnapshot(b.ref)).not.toBeNull()
+    await ws.applyTo(b.ref, { type: 'deletePermanently', target: 'inventory', id: b.inventory.id })
+    expect(ws.state.archivedInventories).toEqual([])
+    expect(await h.db.getSnapshot(b.ref)).toBeNull()
+  })
+
+  it('30. applyTo validates against the target inventory', async () => {
+    const { ws } = await archivedSetup()
+    const b = ws.state.archivedInventories[0]!
+    await expect(ws.applyTo(b.ref, { type: 'restore', archiveId: newId() })).rejects.toMatchObject({ code: 'not_found' })
+  })
+
+  const itemWithStock = async (ws: ReturnType<ReturnType<typeof harness>['workspace']>, inventoryId: Id): Promise<Id> => {
+    const itemId = newId()
+    await ws.apply({
+      type: 'item.create',
+      id: itemId,
+      inventoryId,
+      folderId: null,
+      name: 'Bolt',
+      description: null,
+      unitKey: 'pcs',
+      tagIds: [],
+      initialReceipt: null,
+    })
+    await ws.apply({ type: 'stock.receive', movementId: newId(), itemId, variantId: null, quantity: '37', totalPrice: null, sourceUrl: null, note: null })
+    await ws.apply({ type: 'stock.use', movementId: newId(), itemId, variantId: null, quantity: '5', note: null })
+    return itemId
+  }
+
+  it('31. loads the journal of the current inventory newest first', async () => {
+    const h = setup()
+    const id = await h.seed(CS('one'), 'Inv')
+    await h.db.putSource(config('s1', CS('one')))
+    const ws = h.workspace()
+    await ws.start()
+    const itemId = await itemWithStock(ws, id)
+    expect((await ws.loadMovements(itemId)).map((m) => [m.kind, m.quantity])).toEqual([
+      ['usage', '-5'],
+      ['receipt', '37'],
+    ])
+  })
+
+  it('32. the journal fails fast when the source is unreachable', async () => {
+    const h = setup()
+    const id = await h.seed(CS('one'), 'Inv')
+    await h.db.putSource(config('s1', CS('one')))
+    const ws = h.workspace()
+    await ws.start()
+    const itemId = await itemWithStock(ws, id)
+    h.flags.offline = true
+    await ws.refresh()
+    expect(ws.state.sources[0]!.status).toBe('unreachable')
+    h.flags.movementCalls = 0
+    await expect(ws.loadMovements(itemId)).rejects.toMatchObject({ code: 'unavailable' })
+    expect(h.flags.movementCalls).toBe(0)
+  })
+
+  it('33. a failing journal read is redacted and marks the source unreachable', async () => {
+    const h = setup()
+    const id = await h.seed(CS('one'), 'Inv')
+    await h.db.putSource(config('s1', CS('one')))
+    const ws = h.workspace()
+    await ws.start()
+    const itemId = await itemWithStock(ws, id)
+    h.flags.movementError = new StorageError('failed', 'boom pw-one')
+    await expect(ws.loadMovements(itemId)).rejects.toMatchObject({ code: 'failed', message: 'boom ***' })
+    h.flags.movementError = new StorageError('unavailable')
+    await expect(ws.loadMovements(itemId)).rejects.toMatchObject({ code: 'unavailable' })
+    expect(ws.state.sources[0]!.status).toBe('unreachable')
   })
 })

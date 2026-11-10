@@ -62,7 +62,7 @@ const entryJobs = computed<Job[]>(() => {
     ]
     return {
       row: {
-        key: `entry:${e.archiveId}`,
+        key: `${e.target}:${e.id}`,
         kind: e.target,
         name,
         sub: sub.filter((x): x is string => !!x).join(' · '),
@@ -122,11 +122,11 @@ async function remove(): Promise<void> {
   <main class="min-w-0">
     <ScreenHeader :title="$t('archive.title')" />
     <ScreenBody>
-      <section v-if="inventoryJobs.length > 0" class="grid gap-2">
+      <section v-if="inventoryJobs.length > 0" class="grid min-w-0 grid-cols-1 gap-2">
         <h2 class="px-1 text-[13px] font-semibold text-subtle-foreground">{{ $t('archive.inventories') }}</h2>
         <ArchiveList :rows="rowsOf(inventoryJobs)" @restore="restore" @remove="ask" />
       </section>
-      <section v-if="snapshot && entryJobs.length > 0" class="grid gap-2">
+      <section v-if="snapshot && entryJobs.length > 0" class="grid min-w-0 grid-cols-1 gap-2">
         <h2 class="px-1 text-[13px] font-semibold text-subtle-foreground wrap-anywhere">{{ snapshot.inventory.name }}</h2>
         <ArchiveList :rows="rowsOf(entryJobs)" @restore="restore" @remove="ask" />
       </section>

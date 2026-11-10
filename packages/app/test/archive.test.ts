@@ -80,4 +80,41 @@ describe('archiveEntries', () => {
     await run({ type: 'restore', archiveId: b })
     expect(archiveEntries(snap).map((e) => e.name)).toEqual(['TL072'])
   })
+
+  it('keeps a separately archived item as its own entry after the folder is restored', async () => {
+    const a = await archive('item', itemId('TL072'))
+    await tick()
+    const b = await archive('folder', folderId('ICs'))
+    void a
+    await run({ type: 'restore', archiveId: b })
+    expect(archiveEntries(snap).map((e) => [e.target, e.name, e.path])).toEqual([['item', 'TL072', 'ICs / Op-amps']])
+  })
+
+  it('splits a folder archive into separate, distinctly keyed entries when an item is restored', async () => {
+    const a = await archive('item', itemId('TL072'))
+    await tick()
+    const b = await archive('folder', folderId('ICs'))
+    await run({ type: 'restore', archiveId: a })
+    const entries = archiveEntries(snap)
+    expect(entries.map((e) => [e.target, e.name, e.archiveId, e.itemCount, e.folderCount]).sort()).toEqual(
+      [['item', 'LM13700', b, 0, 0], ['item', 'NE555', b, 0, 0]].sort(),
+    )
+    expect(new Set(entries.map((e) => `${e.target}:${e.id}`)).size).toBe(2)
+    expect(snap.folders.find((f) => f.name === 'ICs')!.archivedAt).toBeNull()
+  })
+
+  it('counts a folder subtree, not other records with the same archiveId elsewhere', async () => {
+    const b = await archive('folder', folderId('ICs'))
+    expect(archiveEntries(snap).map((e) => [e.name, e.folderCount, e.itemCount])).toEqual([['ICs', 1, 3]])
+    await run({ type: 'restore', archiveId: b })
+    expect(archiveEntries(snap)).toEqual([])
+  })
+
+  it('drops an item entry when its archived folder is deleted for good', async () => {
+    await archive('item', itemId('TL072'))
+    await tick()
+    await archive('folder', folderId('ICs'))
+    await run({ type: 'deletePermanently', target: 'folder', id: folderId('ICs') })
+    expect(archiveEntries(snap)).toEqual([])
+  })
 })

@@ -33,11 +33,17 @@ export function archiveEntries(s: InventorySnapshot): ArchiveEntry[] {
     return names.join(' / ')
   }
 
-  const foldersBy = new Map<Id, number>()
-  const itemsBy = new Map<Id, number>()
-  const bump = (m: Map<Id, number>, k: Id): void => void m.set(k, (m.get(k) ?? 0) + 1)
-  for (const f of s.folders) if (f.archiveId !== null) bump(foldersBy, f.archiveId)
-  for (const i of s.items) if (i.archiveId !== null) bump(itemsBy, i.archiveId)
+  const childrenOf = new Map<Id, Id[]>()
+  for (const f of s.folders) if (f.parentId !== null) childrenOf.set(f.parentId, [...(childrenOf.get(f.parentId) ?? []), f.id])
+  /** Folders and items inside a folder's own subtree that were archived by the same operation. */
+  const countsIn = (root: Id, archiveId: Id): { folders: number; items: number } => {
+    const inside = new Set<Id>([root])
+    for (const cur of inside) for (const c of childrenOf.get(cur) ?? []) inside.add(c)
+    return {
+      folders: s.folders.filter((f) => f.id !== root && inside.has(f.id) && f.archiveId === archiveId).length,
+      items: s.items.filter((i) => i.folderId !== null && inside.has(i.folderId) && i.archiveId === archiveId).length,
+    }
+  }
 
   const entries: ArchiveEntry[] = []
   for (const f of s.folders) {
@@ -52,8 +58,8 @@ export function archiveEntries(s: InventorySnapshot): ArchiveEntry[] {
       itemName: null,
       path: pathOf(f.parentId),
       archivedAt: f.archivedAt,
-      folderCount: (foldersBy.get(f.archiveId) ?? 1) - 1,
-      itemCount: itemsBy.get(f.archiveId) ?? 0,
+      folderCount: countsIn(f.id, f.archiveId).folders,
+      itemCount: countsIn(f.id, f.archiveId).items,
     })
   }
   for (const i of s.items) {

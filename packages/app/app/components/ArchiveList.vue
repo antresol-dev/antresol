@@ -28,7 +28,14 @@ const icons: Record<ArchiveRow['kind'], Component> = { folder: Folder, item: Pac
       class="relative not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-[58px] not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
     >
       <div class="flex min-h-[62px] items-center gap-3 px-3.5 py-1.5">
-        <span class="flex size-8 shrink-0 items-center justify-center rounded-icon bg-accent-soft text-accent-soft-foreground">
+        <span
+          :class="[
+            'flex shrink-0 items-center justify-center',
+            row.kind === 'folder'
+              ? 'size-8 rounded-icon bg-accent-soft text-accent-soft-foreground'
+              : 'size-8 rounded-thumb bg-thumb text-thumb-foreground',
+          ]"
+        >
           <component :is="icons[row.kind]" class="size-[17px]" aria-hidden="true" />
         </span>
         <span class="flex min-w-0 grow flex-col gap-0.5">

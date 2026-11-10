@@ -2,7 +2,7 @@
 import type { Id } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
 import { errorMessageKey } from '~/lib/errors'
-import type { ItemView } from '~/lib/item-view'
+import { attributeWrites, type ItemView } from '~/lib/item-view'
 
 // The per-variant attribute values of one variant.
 const props = defineProps<{ view: ItemView; variantId: Id | null }>()
@@ -14,7 +14,6 @@ const { state } = workspace
 // What the sheet shows while it animates out.
 const shown = shallowRef<{ id: Id; name: string; attributes: { id: Id; name: string; kind: 'text' | 'enum'; options: string[] }[] } | null>(null)
 const values = ref<Record<string, string>>({})
-const initial = ref<Record<string, string>>({})
 const saving = ref(false)
 const errorKey = ref<string | null>(null)
 
@@ -30,8 +29,7 @@ watch(
     }
     const found: Record<string, string> = {}
     for (const v of bucket?.values ?? []) found[v.attributeId] = v.value ?? ''
-    values.value = { ...found }
-    initial.value = found
+    values.value = found
     saving.value = false
     errorKey.value = null
   },
@@ -51,10 +49,12 @@ async function save(): Promise<void> {
   saving.value = true
   errorKey.value = null
   try {
+    const snapshot = state.snapshot
+    if (!snapshot) return
     for (const a of current.attributes) {
-      const next = (values.value[a.id] ?? '').trim()
-      if (next === (initial.value[a.id] ?? '').trim()) continue
-      await workspace.apply({ type: 'variant.setAttribute', variantId: current.id, attributeId: a.id, value: next === '' ? null : next })
+      // Only this variant's value is edited; the item's own value is already empty for a per-variant attribute.
+      const writes = attributeWrites(snapshot, props.view.item.id, a.id, { variants: { [current.id]: values.value[a.id] ?? '' } })
+      for (const command of writes) if (command.type === 'variant.setAttribute') await workspace.apply(command)
     }
     emit('close')
   } catch (e) {

@@ -1,7 +1,7 @@
-import { itemStock, newId, type Command, type InventorySnapshot, type InventoryStorage, type Movement } from '@graymatter/core'
+import { createSearch, itemStock, newId, type Command, type InventorySnapshot, type InventoryStorage, type Movement } from '@graymatter/core'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
-import { attributeChoices, itemView, journalRows, looseTransferOffer } from '../app/lib/item-view'
+import { attributeChoices, attributeWrites, itemView, journalRows, looseTransferOffer } from '../app/lib/item-view'
 import type { SourceConfig } from '../app/lib/types'
 
 const cfg: SourceConfig = {
@@ -334,5 +334,50 @@ describe('attributeChoices', () => {
     expect(attributeChoices(s, item.id).some((a) => a.id === ids.size)).toBe(false)
     // Another item still sees it.
     expect(attributeChoices(s, ne555).some((a) => a.id === ids.size)).toBe(true)
+  })
+})
+
+describe('attributeWrites', () => {
+  const setup = async () => {
+    const item = await newItem({ variants: ['ra', 'rb', 'rc'] })
+    const attr = newId()
+    await run({ type: 'attribute.create', id: attr, inventoryId, name: 'Resistance', kind: 'text', options: [] })
+    await run({ type: 'item.setAttribute', itemId: item.id, attributeId: attr, value: null })
+    await run({ type: 'variant.setAttribute', variantId: item.v['ra']!, attributeId: attr, value: '1 kΩ' })
+    await run({ type: 'variant.setAttribute', variantId: item.v['rb']!, attributeId: attr, value: '10 kΩ' })
+    return { item, attr }
+  }
+
+  it('per variant: empties the item value and writes only the changed variants, blank as null', async () => {
+    const { item, attr } = await setup()
+    const writes = attributeWrites(s, item.id, attr, {
+      variants: { [item.v['ra']!]: '1 kΩ', [item.v['rb']!]: '', [item.v['rc']!]: ' 100 kΩ ' },
+    })
+    expect(writes).toEqual([
+      { type: 'item.setAttribute', itemId: item.id, attributeId: attr, value: null },
+      { type: 'variant.setAttribute', variantId: item.v['rb'], attributeId: attr, value: null },
+      { type: 'variant.setAttribute', variantId: item.v['rc'], attributeId: attr, value: '100 kΩ' },
+    ])
+  })
+
+  it('shared: sets the item value, then clears every variant that has a value', async () => {
+    const { item, attr } = await setup()
+    expect(attributeWrites(s, item.id, attr, { shared: ' 5 kΩ ' })).toEqual([
+      { type: 'item.setAttribute', itemId: item.id, attributeId: attr, value: '5 kΩ' },
+      { type: 'variant.setAttribute', variantId: item.v['ra'], attributeId: attr, value: null },
+      { type: 'variant.setAttribute', variantId: item.v['rb'], attributeId: attr, value: null },
+    ])
+    expect(attributeWrites(s, item.id, attr, { shared: '  ' })[0]).toMatchObject({ value: null })
+  })
+
+  it('after switching to a shared value search no longer finds the old variant values', async () => {
+    const { item, attr } = await setup()
+    const found = () => createSearch(s).search('10 kΩ').filter((h) => h.itemId === item.id && h.variantId !== null).map((h) => h.variantId)
+    expect(found()).toContain(item.v['rb'])
+    for (const c of attributeWrites(s, item.id, attr, { shared: '5 kΩ' })) await run(c)
+    expect(found()).toEqual([])
+    expect(createSearch(s).search('5 kΩ').some((h) => h.itemId === item.id)).toBe(true)
+    // Switching back starts from empty values.
+    expect(attributeWrites(s, item.id, attr, { variants: { [item.v['rb']!]: '' } })).toHaveLength(1)
   })
 })

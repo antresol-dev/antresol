@@ -7,6 +7,7 @@ import {
   resolveUnit,
   unitPrice,
   type Attribute,
+  type Command,
   type Folder,
   type Id,
   type InventorySnapshot,
@@ -90,6 +91,36 @@ const valueOf = (v: string | null): string | null => (v === null || v.trim() ===
 export function attributeChoices(s: InventorySnapshot, itemId: Id): Attribute[] {
   const attached = new Set(s.itemAttributes.filter((a) => a.itemId === itemId).map((a) => a.attributeId))
   return s.attributes.filter((a) => !attached.has(a.id)).sort(byName)
+}
+
+/** What to store for an attribute of an item: one value for the item, or one value per variant (a variant left out keeps its value). */
+export type AttributeInput = { shared: string } | { variants: Record<Id, string> }
+
+/**
+ * The commands that store the input, in order. Per variant: the item's own value is emptied, then only the variants whose
+ * value changed are written. Shared: the item's value is set, then every active variant that still has a value of its own
+ * is cleared (search indexes them even while the item's value hides them). Blank text counts as no value.
+ */
+export function attributeWrites(s: InventorySnapshot, itemId: Id, attributeId: Id, input: AttributeInput): Command[] {
+  const variants = s.variants.filter((v) => v.itemId === itemId && v.archivedAt === null)
+  const current = (variantId: Id): string | null =>
+    valueOf(s.variantAttributeValues.find((x) => x.variantId === variantId && x.attributeId === attributeId)?.value ?? null)
+  const set = (variantId: Id, value: string | null): Command => ({ type: 'variant.setAttribute', variantId, attributeId, value })
+  if ('shared' in input) {
+    const value = input.shared.trim() === '' ? null : input.shared.trim()
+    return [
+      { type: 'item.setAttribute', itemId, attributeId, value },
+      ...variants.filter((v) => current(v.id) !== null).map((v) => set(v.id, null)),
+    ]
+  }
+  const writes: Command[] = [{ type: 'item.setAttribute', itemId, attributeId, value: null }]
+  for (const v of variants) {
+    const text = input.variants[v.id]
+    if (text === undefined) continue
+    const next = text.trim() === '' ? null : text.trim()
+    if (next !== current(v.id)) writes.push(set(v.id, next))
+  }
+  return writes
 }
 
 /** null when the item is missing, archived, or its folder chain is archived or missing. */

@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import { errorMessageKey } from '~/lib/errors'
-import { attributeChoices, type ItemView } from '~/lib/item-view'
+import { attributeChoices, attributeWrites, type ItemView } from '~/lib/item-view'
 
 // Gives an item an attribute (picking one or making a new one) or edits its value: one value for the item, or one per variant.
 const props = defineProps<{ view: ItemView; open: boolean; attributeId: Id | null }>()
@@ -30,7 +30,6 @@ const choice = ref('')
 const shared = ref('')
 const perVariant = ref(false)
 const values = ref<Record<string, string>>({})
-const initial = ref<Record<string, string>>({})
 const formBusy = ref(false)
 const saving = ref(false)
 const errorKey = ref<string | null>(null)
@@ -55,8 +54,7 @@ function loadVariantValues(): void {
   for (const v of variants.value) {
     found[v.id] = snapshot?.variantAttributeValues.find((x) => x.variantId === v.id && x.attributeId === choice.value)?.value ?? ''
   }
-  values.value = { ...found }
-  initial.value = found
+  values.value = found
 }
 watch(
   () => props.open,
@@ -86,18 +84,10 @@ async function save(): Promise<void> {
   saving.value = true
   errorKey.value = null
   try {
-    const itemId = props.view.item.id
-    if (perVariant.value && hasVariants.value) {
-      await workspace.apply({ type: 'item.setAttribute', itemId, attributeId: a.id, value: null })
-      for (const v of variants.value) {
-        const next = (values.value[v.id] ?? '').trim()
-        if (next === (initial.value[v.id] ?? '').trim()) continue
-        await workspace.apply({ type: 'variant.setAttribute', variantId: v.id, attributeId: a.id, value: next === '' ? null : next })
-      }
-    } else {
-      const next = shared.value.trim()
-      await workspace.apply({ type: 'item.setAttribute', itemId, attributeId: a.id, value: next === '' ? null : next })
-    }
+    const snapshot = state.snapshot
+    if (!snapshot) return
+    const input = perVariant.value && hasVariants.value ? { variants: values.value } : { shared: shared.value }
+    for (const command of attributeWrites(snapshot, props.view.item.id, a.id, input)) await workspace.apply(command)
     emit('close')
   } catch (e) {
     errorKey.value = errorMessageKey(e)

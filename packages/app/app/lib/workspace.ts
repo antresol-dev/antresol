@@ -300,7 +300,8 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
 
   async function selectInventory(ref: InventoryRef): Promise<void> {
     setCurrent(ref)
-    await db.putSettings({ current: ref })
+    // A plain copy: refs taken from reactive state are proxies, which IndexedDB cannot clone.
+    await db.putSettings({ current: { sourceId: ref.sourceId, inventoryId: ref.inventoryId } })
     const cached = await db.getSnapshot(ref)
     if (!sameRef(state.current, ref)) return
     state.snapshot = cached?.snapshot ?? null

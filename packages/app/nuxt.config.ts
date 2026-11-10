@@ -1,8 +1,26 @@
+import { createHash } from 'node:crypto'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
+import { cspFor } from './app/lib/csp'
 
 const baseURL = process.env.NUXT_APP_BASE_URL ?? '/'
+
+/**
+ * Adds the CSP <meta> to a generated page, allowing exactly the executable inline scripts it contains (color-mode's
+ * theme-flash script, Nuxt's bootstrap). The hashes are computed from the final HTML, so they cannot go stale.
+ * `<script type="application/json">` blocks are data, not executed, and need none.
+ */
+function withCsp(html: string): string {
+  const hashes = new Set<string>()
+  for (const m of html.matchAll(/<script(\s[^>]*)?>([\s\S]*?)<\/script>/g)) {
+    const attrs = m[1] ?? ''
+    if (/\ssrc=/.test(attrs) || /\stype="application\/json"/.test(attrs)) continue
+    hashes.add(`'sha256-${createHash('sha256').update(m[2] ?? '').digest('base64')}'`)
+  }
+  const meta = `<meta http-equiv="Content-Security-Policy" content="${cspFor([...hashes])}">`
+  return html.replace(/<head(\s[^>]*)?>/, (head) => `${head}${meta}`)
+}
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-11-10',
@@ -16,6 +34,10 @@ export default defineNuxtConfig({
   },
   nitro: {
     hooks: {
+      // Production only: nitro prerenders on generate, never under `nuxt dev` (which needs eval and a websocket for HMR).
+      'prerender:generate': (route: { fileName?: string; contents?: string }) => {
+        if (route.fileName?.endsWith('.html') && typeof route.contents === 'string') route.contents = withCsp(route.contents)
+      },
       // GitHub Pages must not run Jekyll over the output (it drops _nuxt/). 404.html (the SPA fallback for deep links)
       // is written by Nuxt itself from index.html on generate.
       compiled: (nitro: { options: { output: { publicDir: string } } }) => {

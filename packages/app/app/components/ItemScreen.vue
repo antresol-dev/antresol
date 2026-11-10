@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { Button } from '@/components/ui/button'
+import { toast } from 'vue-sonner'
+import type { StockTarget } from '~/components/StockSheet.vue'
+import { errorMessageKey } from '~/lib/errors'
 import { itemView } from '~/lib/item-view'
+import { quickStep, type StockMode } from '~/lib/stock-forms'
 
 const props = defineProps<{ itemId: string; variantId: string | null }>()
 
@@ -40,6 +44,19 @@ function retry(): void {
   void workspace.refresh().catch(() => {})
 }
 
+// Stock movements: "−" and "+" write at once, the other actions open the sheet.
+const stockTarget = ref<StockTarget | null>(null)
+const openStock = (mode: StockMode, variantId: string | null): void => {
+  stockTarget.value = { mode, variantId }
+}
+async function step(kind: 'plus' | 'minus', variantId: string | null): Promise<void> {
+  try {
+    await workspace.apply(quickStep(kind, { itemId: props.itemId, variantId }))
+  } catch (e) {
+    toast.error(t(errorMessageKey(e)))
+  }
+}
+
 const highlight = computed(() => (view.value?.hasVariants ? props.variantId : null))
 const linkClass =
   'min-h-11 content-center rounded-md text-sm font-semibold text-primary underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring'
@@ -53,6 +70,7 @@ const linkClass =
   </ScreenHeader>
   <ScreenBody>
     <template v-if="view && snapshot">
+      <StockSheet :view="view" :target="stockTarget" @close="stockTarget = null" />
       <div v-if="view.item.description || view.tags.length > 0" class="grid min-w-0 gap-2.5">
         <p v-if="view.item.description" class="text-[15px] whitespace-pre-line text-muted-foreground wrap-anywhere">
           {{ view.item.description }}
@@ -67,8 +85,15 @@ const linkClass =
           </li>
         </ul>
       </div>
-      <StockCard :total="view.total" :unit-symbol="view.unit.symbol" :currency="view.currency" />
-      <BucketList v-if="view.hasVariants" :buckets="view.buckets" :highlight="highlight" />
+      <StockCard
+        :total="view.total"
+        :unit-symbol="view.unit.symbol"
+        :currency="view.currency"
+        :controls="!view.hasVariants"
+        @step="(kind) => step(kind, null)"
+        @open="(mode) => openStock(mode, null)"
+      />
+      <BucketList v-if="view.hasVariants" :buckets="view.buckets" :highlight="highlight" @step="step" @open="openStock" />
       <ItemAttributes v-if="view.attributes.length > 0" :attributes="view.attributes" />
       <JournalList :item-id="itemId" />
     </template>

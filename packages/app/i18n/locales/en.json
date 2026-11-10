@@ -81,6 +81,31 @@
     "whereBought": "Where bought",
     "newTab": "(opens in a new tab)"
   },
+  "stockForm": {
+    "title": { "receive": "Receive", "use": "Use", "set": "Set quantity", "transfer": "Move stock" },
+    "submit": { "receive": "Receive", "use": "Use", "set": "Set quantity", "transfer": "Move" },
+    "amount": "Amount",
+    "actual": "Actual quantity",
+    "moveTo": "Move to",
+    "price": "Price for the batch",
+    "url": "Where bought",
+    "note": "Note",
+    "optional": "Optional",
+    "invalidAmount": "Enter a valid amount, like 10 or 50 cm.",
+    "invalidPrice": "Enter a valid price.",
+    "sameBucket": "Choose a different place to move it to."
+  },
+  "stockActions": {
+    "useOne": "Use one",
+    "addOne": "Add one",
+    "useOneOf": "Use one of {name}",
+    "addOneOf": "Add one of {name}",
+    "receive": "Receive",
+    "use": "Use",
+    "setQuantity": "Set quantity",
+    "moveTo": "Move to…",
+    "moreFor": "More stock actions"
+  },
   "empty": {
     "noInventories": "Create your first inventory",
     "folder": "This folder is empty",

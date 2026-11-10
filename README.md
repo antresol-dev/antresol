@@ -15,7 +15,7 @@ Your data lives in your own free Neon (Postgres) project. There is no GrayMatter
 
 ### Backups
 
-Open Settings, pick your source, and press "Export backup". It saves a JSON file. Neon's free plan keeps only about 6 hours of restore history, so export regularly. Importing a backup is not available yet.
+Open Settings, pick your source, and press "Export backup". It saves a JSON file. Neon's free plan keeps only about 6 hours of restore history, so export regularly. Photos are kept as links (URLs) only, not as files, so the backup does not contain the pictures themselves. Importing a backup is not available yet.
 
 ### Photos with Uploadcare (optional)
 
@@ -25,10 +25,11 @@ Photos are stored in [Uploadcare](https://uploadcare.com/). Setup for each sourc
 2. Copy the project's public key.
 3. Turn signed uploads off in the project. The app has no secret key, so it cannot sign uploads.
 4. Paste the key into the "Uploadcare public key" field of the source in GrayMatter's settings.
-5. Mind the free plan limits: 1,000 operations per month (each upload is one operation, and so is each first request for an image size), 1 GB of storage and 5 GB of traffic per month. When a limit is exceeded, photos stop loading until next month. The inventory keeps working. Pricing: <https://uploadcare.com/pricing/>.
-6. The app never deletes files. To remove a photo from Uploadcare, delete it in the dashboard.
+5. Fill the "Photo address" field. Projects created after September 2025 must paste their personal `*.ucarecd.net` address, shown in the dashboard under Delivery (for example `https://abc123.ucarecd.net`, without a path). Leave it empty to use `ucarecdn.com`, which is right only for projects created before September 2025.
+6. Mind the free plan limits: 1,000 operations per month (each upload is one operation, and so is each first request for an image size), 1 GB of storage and 5 GB of traffic per month. When a limit is exceeded, photos stop loading until next month. The inventory keeps working. Pricing: <https://uploadcare.com/pricing/>.
+7. The app never deletes files. To remove a photo from Uploadcare, delete it in the dashboard.
 
-The "Photo address" field is the CDN domain used to show photos. Projects created after September 2025 get a personal `*.ucarecd.net` domain, shown in the dashboard under Delivery; paste it there. Leave the field empty to use `ucarecdn.com`, which is right for projects created before September 2025.
+Custom CNAME CDN domains are not supported: only `ucarecdn.com` and `*.ucarecd.net` addresses are accepted, and photos on any other domain would not display.
 
 ## Develop
 
@@ -59,7 +60,7 @@ pnpm dev
 
 **Shared origin on GitHub Pages.** All Pages sites of one account share the origin `<user>.github.io`, and IndexedDB belongs to the origin. Any other Pages site on the same account could read your connection string. Before you enter real data, do one of these:
 
-- connect your own domain to Pages (a `CNAME` file, with free HTTPS), or
+- connect your own domain to Pages (set it in Settings, Pages, Custom domain; with Actions-based deploys a `CNAME` file is ignored; free HTTPS), or
 - host somewhere that gives each project its own origin, for example Cloudflare Pages (`*.pages.dev`).
 
 If you change the origin later, the device data is lost: you add the source again. The data in Neon is not affected.

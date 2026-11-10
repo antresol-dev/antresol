@@ -36,8 +36,14 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm lint
 
+      - id: pages
+        uses: actions/configure-pages@v5
+
+      # base_path is empty on a custom domain or a <user>.github.io repository, and "/graymatter" otherwise.
       - name: Build
-        run: NUXT_APP_BASE_URL=/${{ github.event.repository.name }}/ pnpm --filter @graymatter/app generate
+        env:
+          BASE_PATH: ${{ steps.pages.outputs.base_path }}
+        run: NUXT_APP_BASE_URL="${BASE_PATH%/}/" pnpm --filter @graymatter/app generate
 
       - uses: actions/upload-pages-artifact@v3
         with:

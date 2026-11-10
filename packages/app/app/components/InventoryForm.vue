@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { currencyOptions } from '~/lib/currencies'
-import { changedFields } from '~/lib/changed-fields'
+import { captureBaseline, changedFields } from '~/lib/changed-fields'
 import { errorMessageKey } from '~/lib/errors'
 
 const props = defineProps<{ mode: 'create' | 'rename' }>()
@@ -65,9 +65,10 @@ const errorKey = ref<string | null>(null)
 const options = computed(() => currencyOptions(search.value))
 const selected = computed(() => CURRENCIES[currency.value])
 // Rename sends only what differs from the inventory as it was opened: a stale form must not revert another device's edit.
+const baseline = captureBaseline({ name: existing?.name ?? '', description: existing?.description ?? null })
 const changes = computed(() =>
   changedFields(
-    { name: existing?.name ?? '', description: existing?.description ?? null },
+    baseline,
     { name: name.value.trim(), description: description.value.trim() || null },
   ),
 )

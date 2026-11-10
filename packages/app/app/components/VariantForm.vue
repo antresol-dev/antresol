@@ -3,7 +3,7 @@ import type { Variant } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { changedFields } from '~/lib/changed-fields'
+import { captureBaseline, changedFields } from '~/lib/changed-fields'
 import { errorMessageKey } from '~/lib/errors'
 
 const props = defineProps<{ variant: Variant }>()
@@ -18,9 +18,10 @@ const description = ref(props.variant.description ?? '')
 const busy = defineModel<boolean>('busy', { default: false })
 const errorKey = ref<string | null>(null)
 // Only what differs from the variant as it was opened is sent: a stale form must not revert another device's edit.
+const baseline = captureBaseline({ name: props.variant.name, description: props.variant.description })
 const changes = computed(() =>
   changedFields(
-    { name: props.variant.name, description: props.variant.description },
+    baseline,
     { name: name.value.trim(), description: description.value.trim() || null },
   ),
 )

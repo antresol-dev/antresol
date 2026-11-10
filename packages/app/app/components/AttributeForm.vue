@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Textarea } from '@/components/ui/textarea'
+import { captureBaseline, changedFields } from '~/lib/changed-fields'
 import { errorMessageKey } from '~/lib/errors'
 import { parseNameList } from '~/lib/lists'
 
@@ -22,7 +23,13 @@ const options = ref(props.attribute?.options.join('\n') ?? '')
 // The sheet around the form locks while this is set.
 const busy = defineModel<boolean>('busy', { default: false })
 const errorKey = ref<string | null>(null)
-const canSubmit = computed(() => !busy.value && !state.readOnly && !!state.snapshot)
+// Editing sends only what differs from the attribute as it was opened: a stale form must not revert another device's
+// edit. Options are compared as the text typed, because their order is meaningful.
+const baseline = captureBaseline({ name: props.attribute?.name ?? '', options: props.attribute?.options.join('\n') ?? '' })
+const changes = computed(() => changedFields(baseline, { name: name.value.trim(), options: options.value.trim() }))
+const canSubmit = computed(
+  () => !busy.value && !state.readOnly && !!state.snapshot && (!props.attribute || Object.keys(changes.value).length > 0),
+)
 
 async function submit(): Promise<void> {
   const snapshot = state.snapshot
@@ -39,8 +46,8 @@ async function submit(): Promise<void> {
       await workspace.apply({
         type: 'attribute.update',
         id: props.attribute.id,
-        name: name.value.trim(),
-        ...(kind.value === 'enum' ? { options: list } : {}),
+        ...(changes.value.name !== undefined ? { name: changes.value.name } : {}),
+        ...(kind.value === 'enum' && changes.value.options !== undefined ? { options: list } : {}),
       })
       emit('done', props.attribute.id)
     } else {

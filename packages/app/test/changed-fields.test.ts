@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { changedFields } from '../app/lib/changed-fields'
+import { captureBaseline, changedFields } from '../app/lib/changed-fields'
 
 describe('changedFields', () => {
   it('returns only the changed fields', () => {
@@ -27,5 +27,18 @@ describe('changedFields', () => {
 
   it('compares other values strictly', () => {
     expect(changedFields({ unitKey: 'pcs' }, { unitKey: 'kg' })).toEqual({ unitKey: 'kg' })
+  })
+})
+
+describe('captureBaseline', () => {
+  it('does not move when the source it was taken from changes later', () => {
+    // A form opened on "Red"; a refresh swaps in the other device's rename while the input still says "Red".
+    const live = { name: 'Red', description: null as string | null, tagIds: ['a'] }
+    const baseline = captureBaseline(live)
+    live.name = 'Crimson'
+    live.tagIds.push('b')
+    const typed = { name: 'Red', description: null, tagIds: ['a'] }
+    expect(changedFields(baseline, typed)).toEqual({})
+    expect(changedFields(live, typed)).toEqual({ name: 'Red', tagIds: ['a'] })
   })
 })

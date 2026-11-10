@@ -55,24 +55,34 @@ describe('replaying a command with client ids is a no-op', () => {
     expect((await storage.loadInventory(inv)).items[0]!.tagIds).toEqual([])
   })
 
-  it('stock.receive, stock.transfer and stock.set', async () => {
+  it('stock.receive, use, return, transfer and set', async () => {
     const { storage, inv } = await setup()
     const item = await plainItem(storage, inv)
     const v = newId()
     await storage.apply({ type: 'variant.createMany', itemId: item, variants: [{ id: v, name: 'v' }] }, TEST_ACTOR)
-    const receive = (movementId: string, quantity: string): Command => ({
-      type: 'stock.receive', movementId, itemId: item, variantId: null, quantity: q(quantity), totalPrice: null, sourceUrl: null, note: null,
+    const qty = async (variantId: string | null) => (await storage.loadInventory(inv)).stock.find((l) => l.variantId === variantId)?.quantity
+    const receive = (quantity: string): Command => ({
+      type: 'stock.receive', movementId: newId(), itemId: item, variantId: null, quantity: q(quantity), totalPrice: null, sourceUrl: null, note: null,
     })
-    await twice(storage, receive(newId(), '10'))
-    expect(await storage.loadMovements(item)).toHaveLength(1)
+    await twice(storage, receive('10'))
+    expect(await qty(null)).toBe('10')
+    await twice(storage, { type: 'stock.use', movementId: newId(), itemId: item, variantId: null, quantity: q('3'), note: null })
+    expect(await qty(null)).toBe('7')
+    await twice(storage, { type: 'stock.return', movementId: newId(), itemId: item, variantId: null, quantity: q('1'), note: null })
+    expect(await qty(null)).toBe('8')
+    expect(await storage.loadMovements(item)).toHaveLength(3)
     await twice(storage, {
       type: 'stock.transfer', transferId: newId(), outMovementId: newId(), inMovementId: newId(), itemId: item, fromVariantId: null, toVariantId: v, quantity: q('4'),
     })
-    expect(await storage.loadMovements(item)).toHaveLength(3)
+    expect(await storage.loadMovements(item)).toHaveLength(5)
+    expect(await qty(null)).toBe('4')
+    expect(await qty(v)).toBe('4')
     const set: Command = { type: 'stock.set', movementId: newId(), itemId: item, variantId: null, target: q('1'), note: null }
     await storage.apply(set, TEST_ACTOR)
-    await storage.apply(receive(newId(), '5'), TEST_ACTOR)
+    expect(await qty(null)).toBe('1')
+    await storage.apply(receive('5'), TEST_ACTOR)
     await storage.apply(set, TEST_ACTOR) // same id, but the delta is different now: still must not insert or throw
+    expect(await qty(null)).toBe('6')
     expect((await storage.loadMovements(item)).filter((m) => m.kind === 'adjustment')).toHaveLength(1)
   })
 

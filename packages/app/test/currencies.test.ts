@@ -14,7 +14,11 @@ describe('currencyOptions', () => {
   it('ranks exact code, then code prefix, then name substring', () => {
     const codes = currencyOptions('us').map((c) => c.code)
     const prefixEnd = codes.findIndex((c) => !c.startsWith('US'))
+    expect(prefixEnd).toBeGreaterThan(0)
     expect(codes.slice(0, prefixEnd).every((c) => c.startsWith('US'))).toBe(true)
+    const rest = currencyOptions('us').slice(prefixEnd)
+    expect(rest.some((c) => c.code.startsWith('US'))).toBe(false)
+    expect(rest.every((c) => c.name.toLowerCase().includes('us'))).toBe(true)
     expect(currencyOptions('usd')[0]?.code).toBe('USD')
   })
 

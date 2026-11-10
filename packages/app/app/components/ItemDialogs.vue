@@ -40,6 +40,7 @@ const moveOpen = openWhen('move')
 const archiveOpen = openWhen('archive')
 
 const busy = ref(false)
+const editBusy = ref(false)
 const choices = computed(() => (state.snapshot && item.value ? folderChoices(state.snapshot, item.value.folderId) : []))
 
 async function move(folderId: Id | null): Promise<void> {
@@ -77,10 +78,10 @@ async function archive(): Promise<void> {
 </script>
 
 <template>
-  <AppSheet v-model:open="editOpen" :title="$t('itemMenu.editTitle')">
-    <ItemForm v-if="item && shown?.kind === 'edit'" :key="item.id" :item="item" @done="close" />
+  <AppSheet v-model:open="editOpen" :title="$t('itemMenu.editTitle')" :locked="editBusy || busy" initial-focus="#item-name">
+    <ItemForm v-if="item && shown?.kind === 'edit'" :key="item.id" v-model:busy="editBusy" :item="item" @done="close" />
   </AppSheet>
-  <AppSheet v-model:open="moveOpen" :title="$t('itemMenu.moveTitle')" :description="$t('itemMenu.moveHint')">
+  <AppSheet v-model:open="moveOpen" :title="$t('itemMenu.moveTitle')" :description="$t('itemMenu.moveHint')" :locked="busy">
     <FolderPickerList v-if="item" :choices="choices" disable-current :aria-label="$t('itemMenu.moveTitle')" @select="move" />
   </AppSheet>
   <ConfirmSheet

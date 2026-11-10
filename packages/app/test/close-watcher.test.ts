@@ -4,6 +4,7 @@ import { useCloseWatcher } from '../app/composables/useCloseWatcher'
 
 class FakeCloseWatcher {
   onclose: (() => void) | null = null
+  oncancel: ((event: { preventDefault(): void }) => void) | null = null
   destroyed = false
   /** The browser fired close: the watcher is spent, as after a real back gesture. */
   spent = false
@@ -63,6 +64,33 @@ describe('useCloseWatcher', () => {
     open.value = true
     await nextTick()
     expect(watchers).toHaveLength(2)
+  })
+
+  it('does not close while locked, and watches again once the gesture has been refused', async () => {
+    const locked = ref(true)
+    const own = ref(false)
+    const s = effectScope()
+    s.run(() => useCloseWatcher(own, () => locked.value))
+    own.value = true
+    await nextTick()
+
+    // Where the browser allows cancelling, the close is cancelled.
+    const preventDefault = vi.fn()
+    live()[0]!.oncancel!({ preventDefault })
+    expect(preventDefault).toHaveBeenCalled()
+
+    // Where it does not, the layer stays open and a fresh watcher replaces the spent one.
+    live()[0]!.requestClose()
+    expect(own.value).toBe(true)
+    expect(live()).toHaveLength(1)
+
+    locked.value = false
+    const free = vi.fn()
+    live()[0]!.oncancel!({ preventDefault: free })
+    expect(free).not.toHaveBeenCalled()
+    live()[0]!.requestClose()
+    expect(own.value).toBe(false)
+    s.stop()
   })
 
   it('destroys the watcher when closed from the UI and on scope dispose', async () => {

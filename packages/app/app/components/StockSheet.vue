@@ -107,6 +107,7 @@ async function submit(): Promise<void> {
     :title="$t(`stockForm.title.${mode}`)"
     :description="source?.name ?? undefined"
     initial-focus="#stock-amount"
+    :locked="busy"
   >
     <form :key="openings" class="mt-3.5 grid gap-3.5" novalidate @submit.prevent="submit">
       <div class="grid gap-1.5">
@@ -136,7 +137,7 @@ async function submit(): Promise<void> {
         <div class="grid gap-1.5">
           <Label for="stock-price">
             {{ $t('stockForm.price') }}
-            <span class="font-normal text-subtle-foreground">· {{ $t('stockForm.optional') }}</span>
+            <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
           </Label>
           <div class="relative">
             <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-semibold text-muted-foreground">
@@ -148,7 +149,7 @@ async function submit(): Promise<void> {
         <div class="grid gap-1.5">
           <Label for="stock-url">
             {{ $t('stockForm.url') }}
-            <span class="font-normal text-subtle-foreground">· {{ $t('stockForm.optional') }}</span>
+            <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
           </Label>
           <Input id="stock-url" v-model="url" type="url" autocomplete="off" class="h-11 rounded-field bg-surface" />
         </div>
@@ -157,7 +158,7 @@ async function submit(): Promise<void> {
       <div v-if="mode !== 'transfer'" class="grid gap-1.5">
         <Label for="stock-note">
           {{ $t('stockForm.note') }}
-          <span class="font-normal text-subtle-foreground">· {{ $t('stockForm.optional') }}</span>
+          <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
         </Label>
         <Input id="stock-note" v-model="note" autocomplete="off" class="h-11 rounded-field bg-surface" />
       </div>

@@ -81,6 +81,7 @@
     "whereBought": "Where bought",
     "newTab": "(opens in a new tab)"
   },
+  "form": { "name": "Name", "description": "Description", "optional": "Optional" },
   "stockForm": {
     "title": { "receive": "Receive", "use": "Use", "set": "Set quantity", "transfer": "Move stock" },
     "submit": { "receive": "Receive", "use": "Use", "set": "Set quantity", "transfer": "Move" },
@@ -90,7 +91,6 @@
     "price": "Price for the batch",
     "url": "Where bought",
     "note": "Note",
-    "optional": "Optional",
     "invalidAmount": "Enter a valid amount, like 10 or 50 cm.",
     "invalidPrice": "Enter a valid price.",
     "sameBucket": "Choose a different place to move it to."
@@ -132,6 +132,8 @@
     "folder": "This folder is empty",
     "folderGone": "This folder was archived or deleted",
     "itemGone": "This item is no longer here",
+    "sourceGone": "This source is no longer on this device",
+    "backToSettings": "Back to settings",
     "offlineNoCopy": "Can’t reach your source and there is no saved copy on this device yet.",
     "sourceFailed": "Can’t open {source}: {reason}",
     "backTo": "Back to {name}"
@@ -233,13 +235,11 @@
     "archiveConfirm": "Archive “{name}”? It disappears from the list. You can restore it from the Archive."
   },
   "inventoryForm": {
-    "name": "Name",
     "currency": "Currency",
     "currencySearch": "Search currency",
     "currencyNone": "No matching currency",
     "source": "Source",
-    "description": "Description",
-    "optional": "Optional",
+    "connectSource": "Connect a source first",
     "create": "Create",
     "save": "Save"
   },
@@ -254,11 +254,8 @@
     "archiveConfirm": "“{name}” moves to the archive with its variants and history. You can restore it from the archive."
   },
   "itemForm": {
-    "name": "Name",
-    "description": "Description",
     "unit": "Unit",
     "tags": "Tags",
-    "optional": "Optional",
     "filterTags": "Find or add a tag",
     "createTag": "Create tag “{name}”",
     "noTags": "No tags yet",
@@ -279,14 +276,12 @@
   },
   "quickAdd": {
     "title": "Add item",
-    "name": "Name",
     "folder": "Folder",
     "amount": "Amount",
     "unit": "Unit",
     "price": "Price for the batch",
     "priceHint": "Total for the whole batch",
     "url": "Where bought",
-    "optional": "Optional",
     "add": "Add",
     "added": "Added “{name}”",
     "open": "Open",
@@ -295,7 +290,7 @@
     "needsAmount": "Enter the amount to add a price or a link.",
     "chooseFolder": "Choose a folder"
   },
-  "folderForm": { "name": "Name", "description": "Description", "optional": "Optional", "create": "Create", "save": "Save" },
+  "folderForm": { "create": "Create", "save": "Save" },
   "errors": {
     "unknown": "Something went wrong. Try again.",
     "domain": {

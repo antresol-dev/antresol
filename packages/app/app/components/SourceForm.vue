@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { Eye, EyeOff } from '@lucide/vue'
-import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -24,6 +23,7 @@ const probe = ref<SourceProbe | null>(null)
 const checking = ref(false)
 const saving = ref(false)
 const saveError = ref<string | null>(null)
+const checkError = ref<string | null>(null)
 
 const draft = (): Omit<SourceConfig, 'id' | 'createdAt'> => ({
   kind: 'neon',
@@ -36,15 +36,19 @@ watch(connectionString, () => {
   probe.value = null
   problem.value = null
   saveError.value = null
+  checkError.value = null
 })
 
 async function check(): Promise<void> {
   problem.value = checkConnectionString(connectionString.value)
   probe.value = null
+  checkError.value = null
   if (problem.value) return
   checking.value = true
   try {
     probe.value = await driver.probe({ ...draft(), id: props.source?.id ?? '', createdAt: '' })
+  } catch (e) {
+    checkError.value = errorMessageKey(e)
   } finally {
     checking.value = false
   }
@@ -68,7 +72,6 @@ async function save(): Promise<void> {
     await router.push('/')
   } catch (e) {
     saveError.value = errorMessageKey(e)
-    toast.error(t(saveError.value))
   } finally {
     saving.value = false
   }
@@ -128,9 +131,14 @@ async function save(): Promise<void> {
       {{ $t(checking ? 'sourceForm.checking' : 'sourceForm.check') }}
     </Button>
 
-    <div v-if="resultKey" role="status" class="grid gap-1 text-sm" :class="probe?.ok && inspection !== 'foreign' ? '' : 'text-destructive'">
+    <div v-if="resultKey && probe?.ok && inspection !== 'foreign'" role="status" class="grid gap-1 text-sm">
       <p>{{ $t(resultKey) }}</p>
     </div>
+    <!-- A database that is not GrayMatter's, or a failed check, is a problem: announced at once. -->
+    <div v-else-if="resultKey" role="alert" class="grid gap-1 text-sm text-destructive">
+      <p>{{ $t(resultKey) }}</p>
+    </div>
+    <p v-if="checkError" role="alert" class="text-sm text-destructive">{{ $t(checkError) }}</p>
 
     <p v-if="saveError" role="alert" class="text-sm text-destructive">{{ $t(saveError) }}</p>
 

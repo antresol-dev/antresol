@@ -13,7 +13,7 @@ const open = defineModel<boolean>('open', { required: true })
 </script>
 
 <template>
-  <AppSheet v-model:open="open" :title="title" :description="description">
+  <AppSheet v-model:open="open" :title="title" :description="description" :locked="busy">
     <template #footer>
       <Button
         type="button"

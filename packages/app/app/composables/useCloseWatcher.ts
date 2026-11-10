@@ -3,12 +3,14 @@ import { onScopeDispose, watch, type Ref } from 'vue'
 /** The part of the CloseWatcher API (Chrome 126+) used here; TypeScript's DOM types don't have it yet. */
 interface CloseWatcherLike {
   onclose: ((event: Event) => void) | null
+  oncancel: ((event: Event) => void) | null
   destroy(): void
 }
 type CloseWatcherConstructor = new () => CloseWatcherLike
 
 interface Layer {
   open: Ref<boolean>
+  locked: () => boolean
   watcher: CloseWatcherLike | null
 }
 
@@ -21,10 +23,19 @@ function arm(layer: Layer): void {
   const Ctor = (globalThis as { CloseWatcher?: CloseWatcherConstructor }).CloseWatcher
   if (layer.watcher || typeof Ctor !== 'function') return
   const w = new Ctor()
+  // A locked layer refuses the gesture where the browser lets a close be cancelled (it does with user activation)...
+  w.oncancel = (event) => {
+    if (layer.locked()) event.preventDefault()
+  }
   w.onclose = () => {
     // The browser has already spent this watcher; the layer below is armed once this one has closed.
     if (layer.watcher !== w) return
     layer.watcher = null
+    // ...and where it does not, the spent watcher is replaced and the layer stays open.
+    if (layer.locked()) {
+      arm(layer)
+      return
+    }
     layer.open.value = false
   }
   layer.watcher = w
@@ -55,9 +66,10 @@ function remove(layer: Layer): void {
 }
 
 /** While `open` is true, the Android back gesture and Esc set it to false through window.CloseWatcher where the browser has it.
- *  Only the topmost open layer listens, so one gesture closes one layer. No history entries. Without CloseWatcher it does nothing. */
-export function useCloseWatcher(open: Ref<boolean>): void {
-  const layer: Layer = { open, watcher: null }
+ *  Only the topmost open layer listens, so one gesture closes one layer. No history entries. Without CloseWatcher it does nothing.
+ *  While `locked()` is true (a write is running) the gesture does not close the layer. */
+export function useCloseWatcher(open: Ref<boolean>, locked: () => boolean = () => false): void {
+  const layer: Layer = { open, locked, watcher: null }
   watch(open, (isOpen) => (isOpen ? push(layer) : remove(layer)), { immediate: true })
   onScopeDispose(() => remove(layer))
 }

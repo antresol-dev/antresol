@@ -12,6 +12,7 @@ const { state, close } = useQuickAdd()
 // counter gives every opening a fresh form.
 const shown = shallowRef<QuickAddState>({ name: '', folderId: null })
 const openings = ref(0)
+const busy = ref(false)
 watch(
   state,
   (s) => {
@@ -38,7 +39,7 @@ function added({ id, name }: { id: Id; name: string }): void {
 </script>
 
 <template>
-  <AppSheet v-model:open="open" :title="$t('quickAdd.title')" initial-focus="#quick-add-name">
-    <QuickAddForm :key="openings" :name="shown.name" :folder-id="shown.folderId" @done="added" />
+  <AppSheet v-model:open="open" :title="$t('quickAdd.title')" initial-focus="#quick-add-name" :locked="busy">
+    <QuickAddForm :key="openings" v-model:busy="busy" :name="shown.name" :folder-id="shown.folderId" @done="added" />
   </AppSheet>
 </template>

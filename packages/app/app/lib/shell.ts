@@ -1,5 +1,7 @@
 import type { Id, InventorySnapshot } from '@graymatter/core'
+import type { InventoryRef } from './types'
 import { pathOf, snapshotIndex } from './views'
+import type { InventoryEntry } from './workspace'
 
 export type Section = 'items' | 'archive' | 'dictionaries' | 'settings'
 
@@ -71,4 +73,20 @@ export function showsInside(
   const current = treeCurrent(s, routeName, params)
   if (!s || current === null || current === 'root') return false
   return pathOf(snapshotIndex(s), current).some((f) => f.id === folderId)
+}
+
+/** The current inventory's name for the switcher, the palette and the bottom search bar: the snapshot's once it is the
+ *  current inventory's (also before the list of inventories arrives), until then (a switch) the listed one; '' without one. */
+export function currentInventoryName(state: {
+  snapshot: InventorySnapshot | null
+  current: InventoryRef | null
+  inventories: readonly InventoryEntry[]
+}): string {
+  const current = state.current
+  if (!current) return ''
+  if (state.snapshot && state.snapshot.inventory.id === current.inventoryId) return state.snapshot.inventory.name
+  const entry = state.inventories.find(
+    (e) => e.ref.sourceId === current.sourceId && e.ref.inventoryId === current.inventoryId,
+  )
+  return entry?.inventory.name ?? ''
 }

@@ -1,7 +1,15 @@
 import { newId, type InventorySnapshot } from '@graymatter/core'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
-import { inventoryScoped, NAV_SECTIONS, sectionOf, showsInside, showsTree, treeCurrent } from '../app/lib/shell'
+import {
+  currentInventoryName,
+  inventoryScoped,
+  NAV_SECTIONS,
+  sectionOf,
+  showsInside,
+  showsTree,
+  treeCurrent,
+} from '../app/lib/shell'
 import type { SourceConfig } from '../app/lib/types'
 
 const cfg: SourceConfig = {
@@ -78,5 +86,21 @@ describe('shell', () => {
     expect(showsInside(snap, 'archive', {}, ics)).toBe(false)
     expect(showsInside(null, 'folder-id', { id: ics }, ics)).toBe(false)
     expect(showsInside(snap, 'folder-id', { id: newId() }, ics)).toBe(false)
+  })
+
+  it('names the current inventory', () => {
+    const electronics = { sourceId: 'demo', inventoryId: snap.inventory.id }
+    const workshop = { sourceId: 'demo', inventoryId: newId() }
+    const listed = [
+      { ref: electronics, inventory: { ...snap.inventory, name: 'Electronics (listed)' }, sourceName: 'Demo' },
+      { ref: workshop, inventory: { ...snap.inventory, id: workshop.inventoryId, name: 'Workshop' }, sourceName: 'Demo' },
+    ]
+    // The snapshot's name once it is the current inventory's, also before the list arrives.
+    expect(currentInventoryName({ snapshot: snap, current: electronics, inventories: listed })).toBe('Electronics')
+    expect(currentInventoryName({ snapshot: snap, current: electronics, inventories: [] })).toBe('Electronics')
+    // Switching: the snapshot is still the old inventory's.
+    expect(currentInventoryName({ snapshot: snap, current: workshop, inventories: listed })).toBe('Workshop')
+    expect(currentInventoryName({ snapshot: null, current: workshop, inventories: [] })).toBe('')
+    expect(currentInventoryName({ snapshot: snap, current: null, inventories: listed })).toBe('')
   })
 })

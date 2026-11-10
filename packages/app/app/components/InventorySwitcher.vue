@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { errorMessageKey } from '~/lib/errors'
+import { currentInventoryName } from '~/lib/shell'
 import type { InventoryEntry } from '~/lib/workspace'
 
 const { t } = useI18n()
@@ -39,12 +40,7 @@ useCloseWatcher(dropdownOpen)
 const isCurrent = (e: InventoryEntry): boolean =>
   e.ref.sourceId === state.current?.sourceId && e.ref.inventoryId === state.current?.inventoryId
 
-// The snapshot's name once it is the current inventory's; until then (first load, a switch) the listed name.
-const name = computed(() => {
-  const snapshot = state.snapshot
-  if (snapshot && snapshot.inventory.id === state.current?.inventoryId) return snapshot.inventory.name
-  return state.inventories.find(isCurrent)?.inventory.name ?? ''
-})
+const name = computed(() => currentInventoryName(state))
 const hasCurrent = computed(() => !!state.current && !!state.snapshot)
 const locked = computed(() => !!state.readOnly || archiving.value)
 

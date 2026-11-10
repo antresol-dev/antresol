@@ -69,6 +69,14 @@ describe('stock journal', () => {
     expect((await storage.loadMovements(item))[0]).toMatchObject({ kind: 'adjustment', quantity: '5', variantId: v2 })
   })
 
+  it('lists movements newest first by number, not as text, past seq 9', async () => {
+    const { storage, item } = await setup()
+    for (let i = 1; i <= 11; i++) await storage.apply(receive(item, String(i), null), TEST_ACTOR)
+    const m = await storage.loadMovements(item)
+    expect(m.map((x) => x.quantity)).toEqual(['11', '10', '9', '8', '7', '6', '5', '4', '3', '2', '1'])
+    expect(m.every((x, i) => i === 0 || x.seq < m[i - 1]!.seq)).toBe(true)
+  })
+
   it('stock.set to the current quantity adds no movement', async () => {
     const { storage, item } = await setup()
     await storage.apply(receive(item, '10', null), TEST_ACTOR)

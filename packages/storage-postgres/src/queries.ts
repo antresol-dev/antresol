@@ -79,11 +79,12 @@ export async function loadInventory(exec: PgExecutor, id: Id): Promise<Inventory
   }
 }
 
+/** Newest first. The order names the table column: a bare `seq` would sort by the `seq::text` output alias. */
 export async function loadMovements(exec: PgExecutor, itemId: Id): Promise<Movement[]> {
   const result = await exec.query(
     sql`select id, seq::text as seq, item_id, variant_id, kind, quantity::text as quantity,
                total_price::text as total_price, source_url, note, transfer_id, created_at, created_by
-        from movements where item_id = ${itemId} order by seq desc`,
+        from movements m where item_id = ${itemId} order by m.seq desc`,
   )
   return result.map(rows.toMovement)
 }

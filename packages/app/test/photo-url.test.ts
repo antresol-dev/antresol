@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isDeviceUrl, isUploadcareUrl, photoUrl } from '../app/lib/photo-url'
+import { displayablePhotoUrl, isDeviceUrl, isUploadcareUrl, photoUrl } from '../app/lib/photo-url'
 
 describe('photoUrl', () => {
   it('builds Uploadcare transformations per size', () => {
@@ -12,6 +12,16 @@ describe('photoUrl', () => {
   it('leaves device and foreign urls unchanged', () => {
     expect(photoUrl('device:x', 'thumb')).toBe('device:x')
     expect(photoUrl('https://example.com/a.jpg', 'thumb')).toBe('https://example.com/a.jpg')
+  })
+})
+
+describe('displayablePhotoUrl', () => {
+  it('allows Uploadcare and device urls only', () => {
+    expect(displayablePhotoUrl('https://ucarecdn.com/abc/', 'card')).toContain('/-/preview/800x800/')
+    expect(displayablePhotoUrl('device:x', 'thumb')).toBe('device:x')
+    expect(displayablePhotoUrl('https://example.com/a.gif', 'thumb')).toBeNull()
+    expect(displayablePhotoUrl('data:image/gif;base64,AAAA', 'thumb')).toBeNull()
+    expect(displayablePhotoUrl('http://ucarecdn.com/abc/', 'thumb')).toBeNull()
   })
 })
 

@@ -109,6 +109,38 @@ async function archiveVariant(): Promise<void> {
   }
 }
 
+// Variant photo: one per variant, uploaded and swapped in by setVariantPhoto.
+const photoId = ref<Id | null>(null)
+const photoBusy = ref(false)
+const photoVariant = shallowRef<{ id: Id; name: string } | null>(null)
+const hasStore = computed(() => !!state.current && workspace.fileStoreFor(state.current.sourceId) !== null)
+const photoOpen = computed({
+  get: () => photoId.value !== null,
+  set: (open: boolean) => {
+    if (!open && !photoBusy.value) photoId.value = null
+  },
+})
+function askPhoto(id: Id): void {
+  const v = variantOf(id)
+  if (!v) return
+  photoVariant.value = { id, name: v.name }
+  photoId.value = id
+}
+async function pickVariantPhoto(files: File[]): Promise<void> {
+  const id = photoId.value
+  const file = files[0]
+  if (!id || !file || photoBusy.value) return
+  photoBusy.value = true
+  try {
+    await workspace.setVariantPhoto(props.itemId, id, file)
+    photoId.value = null
+  } catch (e) {
+    toast.error(t(errorMessageKey(e)))
+  } finally {
+    photoBusy.value = false
+  }
+}
+
 // Attributes: add one or edit its value in a sheet, remove after a confirmation (the variants' values go too); a
 // variant's own values in another sheet.
 const attributeOpen = ref(false)
@@ -162,6 +194,7 @@ const linkClass =
   <ScreenBody>
     <template v-if="view && snapshot">
       <StockSheet :view="view" :target="stockTarget" @close="stockTarget = null" />
+      <ItemGallery :item-id="itemId" :photos="view.photos" />
       <div v-if="view.item.description || view.tags.length > 0" class="grid min-w-0 gap-2.5">
         <p v-if="view.item.description" class="text-[15px] whitespace-pre-line text-muted-foreground wrap-anywhere">
           {{ view.item.description }}
@@ -192,6 +225,7 @@ const linkClass =
         @open="openStock"
         @rename="(id) => (renameId = id)"
         @attributes="(id) => (valuesId = id)"
+        @photo="askPhoto"
         @archive="askArchive"
       />
       <Button variant="outline" class="h-11 justify-self-start rounded-field bg-surface px-4 font-bold" :disabled="locked" @click="addOpen = true">
@@ -209,6 +243,24 @@ const linkClass =
       />
       <AppSheet v-model:open="renameOpen" :title="$t('variantMenu.renameTitle')" :locked="renameBusy" initial-focus="#variant-name">
         <VariantForm v-if="renaming" :key="renaming.id" v-model:busy="renameBusy" :variant="renaming" @done="renameId = null" />
+      </AppSheet>
+      <AppSheet
+        v-model:open="photoOpen"
+        :title="$t('photos.variantTitle', { name: photoVariant?.name ?? '' })"
+        :description="$t('photos.variantHint')"
+        :locked="photoBusy"
+      >
+        <div v-if="!hasStore" class="grid py-2">
+          <p class="text-sm text-muted-foreground">{{ $t('photos.noStore') }}</p>
+          <NuxtLink
+            v-if="state.current"
+            :to="`/settings/sources/${state.current.sourceId}`"
+            :class="linkClass"
+          >
+            {{ $t('photos.noStoreLink') }}
+          </NuxtLink>
+        </div>
+        <PhotoPicker v-else class="py-3" :disabled="photoBusy || locked" @pick="pickVariantPhoto" />
       </AppSheet>
       <ConfirmSheet
         v-model:open="archiveOpen"

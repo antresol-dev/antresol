@@ -13,6 +13,7 @@ import {
   type InventorySnapshot,
   type Item,
   type Movement,
+  type Photo,
   type MovementKind,
   type Quantity,
   type StockLine,
@@ -31,6 +32,8 @@ export interface BucketRow {
   outOfStock: boolean
   avgUnitPrice: number | null
   lastUnitPrice: number | null
+  /** The variant's photo (one at most); null for the no-variant bucket. */
+  photo: Photo | null
   /** Per-variant attribute values (only attributes marked per-variant), by attribute name. */
   values: { attributeId: Id; name: string; value: string | null }[]
 }
@@ -54,6 +57,8 @@ export interface ItemView {
   buckets: BucketRow[]
   hasVariants: boolean
   attributes: AttributeRow[]
+  /** The item's own photos (variantId null) by position; the first is the cover. */
+  photos: Photo[]
 }
 
 interface Summary {
@@ -161,6 +166,12 @@ export function itemView(s: InventorySnapshot, itemId: Id): ItemView | null {
 
   const lines = ix.stockByItem.get(itemId) ?? []
   const lineOf = new Map(lines.map((l) => [l.variantId, l] as const))
+  const photoOf = new Map<Id, Photo>()
+  for (const p of s.photos) {
+    if (p.itemId !== itemId || p.variantId === null) continue
+    const known = photoOf.get(p.variantId)
+    if (!known || p.position < known.position) photoOf.set(p.variantId, p)
+  }
   const bucket = (variantId: Id | null, name: string | null, description: string | null, values: BucketRow['values']): BucketRow => {
     const line = lineOf.get(variantId)
     const sum = summarize(line ? [line] : [])
@@ -173,6 +184,7 @@ export function itemView(s: InventorySnapshot, itemId: Id): ItemView | null {
       outOfStock: cmpQ(sum.quantity, '0') <= 0,
       avgUnitPrice: sum.avgUnitPrice,
       lastUnitPrice: sum.lastUnitPrice,
+      photo: variantId === null ? null : (photoOf.get(variantId) ?? null),
       values,
     }
   }
@@ -214,6 +226,7 @@ export function itemView(s: InventorySnapshot, itemId: Id): ItemView | null {
     buckets,
     hasVariants,
     attributes,
+    photos: s.photos.filter((p) => p.itemId === itemId && p.variantId === null).sort((a, b) => a.position - b.position),
   }
 }
 

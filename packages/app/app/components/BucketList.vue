@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useMediaQuery } from '@vueuse/core'
 import type { Component } from 'vue'
-import { Archive, ArrowRightLeft, Download, Minus, Pencil, PencilLine, Plus, SlidersHorizontal, Upload } from '@lucide/vue'
+import { Archive, ArrowRightLeft, Camera, Download, Minus, Pencil, PencilLine, Plus, SlidersHorizontal, Upload } from '@lucide/vue'
 import type { Id } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -19,6 +19,7 @@ const emit = defineEmits<{
   open: [mode: StockMode, variantId: Id | null]
   rename: [variantId: Id]
   attributes: [variantId: Id]
+  photo: [variantId: Id]
   archive: [variantId: Id]
 }>()
 
@@ -26,7 +27,7 @@ const { t } = useI18n()
 const { state } = useWorkspace()
 const locked = computed(() => !!state.readOnly || state.saving)
 
-type MenuKey = StockMode | 'rename' | 'archive' | 'attributes'
+type MenuKey = StockMode | 'rename' | 'archive' | 'attributes' | 'photo'
 
 function actionsOf(row: BucketRow): { key: MenuKey; label: string; icon: Component; destructive?: boolean; disabled: boolean }[] {
   const all: { key: MenuKey; label: string; icon: Component; destructive?: boolean }[] = [
@@ -38,6 +39,7 @@ function actionsOf(row: BucketRow): { key: MenuKey; label: string; icon: Compone
     ...(row.variantId !== null
       ? [
           ...(row.values.length > 0 ? [{ key: 'attributes' as const, label: t('variantMenu.attributes'), icon: SlidersHorizontal }] : []),
+          { key: 'photo' as const, label: t('variantMenu.photo'), icon: Camera },
           { key: 'rename' as const, label: t('variantMenu.rename'), icon: Pencil },
           { key: 'archive' as const, label: t('variantMenu.archive'), icon: Archive, destructive: true },
         ]
@@ -51,6 +53,8 @@ function choose(key: string, row: BucketRow): void {
     if (row.variantId !== null) emit('rename', row.variantId)
   } else if (key === 'attributes') {
     if (row.variantId !== null) emit('attributes', row.variantId)
+  } else if (key === 'photo') {
+    if (row.variantId !== null) emit('photo', row.variantId)
   } else if (key === 'archive') {
     if (row.variantId !== null) emit('archive', row.variantId)
   } else emit('open', key as StockMode, row.variantId)
@@ -94,6 +98,13 @@ watch(() => props.highlight, reveal)
           row.variantId !== null && row.variantId === highlight && 'bg-accent-soft',
         ]"
       >
+        <PhotoImg
+          v-if="row.photo"
+          :url="row.photo.url"
+          size="thumb"
+          alt=""
+          class="size-10 shrink-0 rounded-icon object-cover"
+        />
         <span class="flex min-w-0 grow flex-col gap-0.5">
           <span class="truncate text-[15px] font-bold" :class="row.outOfStock && 'text-dimmed-foreground'">
             {{ row.name ?? $t('item.noVariant') }}

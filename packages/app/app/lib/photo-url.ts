@@ -16,6 +16,13 @@ export function isDeviceUrl(url: string): boolean {
   return url.startsWith('device:')
 }
 
+/** What may be put in an <img>: Uploadcare urls (transformed), and device: urls unchanged (resolved by the caller).
+ *  Any other url in the data is never loaded (it would be a tracking pixel); null then. */
+export function displayablePhotoUrl(url: string, size: PhotoSize): string | null {
+  if (isDeviceUrl(url)) return url
+  return isUploadcareUrl(url) ? photoUrl(url, size) : null
+}
+
 /** Uploadcare: preview transformation appended to the base (which ends with '/'); other URLs unchanged. */
 export function photoUrl(url: string, size: PhotoSize): string {
   if (!isUploadcareUrl(url)) return url

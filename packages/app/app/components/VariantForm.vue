@@ -1,0 +1,67 @@
+<script setup lang="ts">
+import type { Variant } from '@graymatter/core'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { errorMessageKey } from '~/lib/errors'
+
+const props = defineProps<{ variant: Variant }>()
+const emit = defineEmits<{ done: [] }>()
+
+const workspace = useWorkspace()
+const { state } = workspace
+
+const name = ref(props.variant.name)
+const description = ref(props.variant.description ?? '')
+const busy = ref(false)
+const errorKey = ref<string | null>(null)
+const canSubmit = computed(() => !busy.value && !state.readOnly)
+
+async function submit(): Promise<void> {
+  if (!canSubmit.value) return
+  busy.value = true
+  errorKey.value = null
+  try {
+    await workspace.apply({
+      type: 'variant.update',
+      id: props.variant.id,
+      name: name.value.trim(),
+      description: description.value.trim() || null,
+    })
+    emit('done')
+  } catch (e) {
+    errorKey.value = errorMessageKey(e)
+  } finally {
+    busy.value = false
+  }
+}
+</script>
+
+<template>
+  <form class="mt-3.5 grid gap-3.5" novalidate @submit.prevent="submit">
+    <div class="grid gap-1.5">
+      <Label for="variant-name">{{ $t('variantForm.name') }}</Label>
+      <Input
+        id="variant-name"
+        v-model="name"
+        autocomplete="off"
+        :aria-invalid="errorKey ? true : undefined"
+        aria-describedby="variant-form-error"
+        class="h-11 rounded-field bg-surface"
+      />
+    </div>
+    <div class="grid gap-1.5">
+      <Label for="variant-description">
+        {{ $t('variantForm.description') }}
+        <span class="font-normal text-subtle-foreground">· {{ $t('variantForm.optional') }}</span>
+      </Label>
+      <Input id="variant-description" v-model="description" autocomplete="off" class="h-11 rounded-field bg-surface" />
+    </div>
+    <p id="variant-form-error" role="alert" class="text-sm text-destructive">
+      <template v-if="errorKey">{{ $t(errorKey) }}</template>
+    </p>
+    <Button type="submit" class="h-11 rounded-field" :disabled="!canSubmit">
+      {{ $t(busy ? 'status.saving' : 'variantForm.save') }}
+    </Button>
+  </form>
+</template>

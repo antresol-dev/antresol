@@ -95,6 +95,27 @@
     "invalidPrice": "Enter a valid price.",
     "sameBucket": "Choose a different place to move it to."
   },
+  "variantsForm": {
+    "open": "Add variants",
+    "title": "Add variants",
+    "names": "Variants",
+    "hint": "One per line or separated by commas: 1k, 10k, 100k",
+    "add": "Add"
+  },
+  "variantForm": { "name": "Name", "description": "Description", "optional": "Optional", "save": "Save" },
+  "variantMenu": {
+    "rename": "Rename",
+    "archive": "Archive variant",
+    "renameTitle": "Rename variant",
+    "archiveTitle": "Archive variant?",
+    "archiveConfirm": "Variant “{name}” moves to the archive with its stock and history."
+  },
+  "looseTransfer": {
+    "title": "Move {number} {unit} without a variant into a variant?",
+    "choose": "Move to",
+    "move": "Move",
+    "keep": "Keep without variant"
+  },
   "stockActions": {
     "useOne": "Use one",
     "addOne": "Add one",

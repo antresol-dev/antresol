@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useMediaQuery } from '@vueuse/core'
 import type { Component } from 'vue'
-import { ArrowRightLeft, Download, Minus, PencilLine, Plus, Upload } from '@lucide/vue'
+import { Archive, ArrowRightLeft, Download, Minus, Pencil, PencilLine, Plus, Upload } from '@lucide/vue'
 import type { Id } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -14,20 +14,42 @@ const props = defineProps<{
   highlight: string | null
 }>()
 
-const emit = defineEmits<{ step: [step: 'plus' | 'minus', variantId: Id | null]; open: [mode: StockMode, variantId: Id | null] }>()
+const emit = defineEmits<{
+  step: [step: 'plus' | 'minus', variantId: Id | null]
+  open: [mode: StockMode, variantId: Id | null]
+  rename: [variantId: Id]
+  archive: [variantId: Id]
+}>()
 
 const { t } = useI18n()
 const { state } = useWorkspace()
 const locked = computed(() => !!state.readOnly || state.saving)
 
-function actionsOf(row: BucketRow): { key: StockMode; label: string; icon: Component; disabled: boolean }[] {
-  const all = [
-    { key: 'receive' as const, label: t('stockActions.receive'), icon: Download },
-    { key: 'use' as const, label: t('stockActions.use'), icon: Upload },
-    { key: 'set' as const, label: t('stockActions.setQuantity'), icon: PencilLine },
+type MenuKey = StockMode | 'rename' | 'archive'
+
+function actionsOf(row: BucketRow): { key: MenuKey; label: string; icon: Component; destructive?: boolean; disabled: boolean }[] {
+  const all: { key: MenuKey; label: string; icon: Component; destructive?: boolean }[] = [
+    { key: 'receive', label: t('stockActions.receive'), icon: Download },
+    { key: 'use', label: t('stockActions.use'), icon: Upload },
+    { key: 'set', label: t('stockActions.setQuantity'), icon: PencilLine },
     ...(props.buckets.length > 1 ? [{ key: 'transfer' as const, label: t('stockActions.moveTo'), icon: ArrowRightLeft }] : []),
+    // The stock kept without a variant is not a variant: nothing to rename or archive.
+    ...(row.variantId !== null
+      ? [
+          { key: 'rename' as const, label: t('variantMenu.rename'), icon: Pencil },
+          { key: 'archive' as const, label: t('variantMenu.archive'), icon: Archive, destructive: true },
+        ]
+      : []),
   ]
   return all.map((a) => ({ ...a, disabled: locked.value || (a.key === 'use' && row.outOfStock) }))
+}
+
+function choose(key: string, row: BucketRow): void {
+  if (key === 'rename') {
+    if (row.variantId !== null) emit('rename', row.variantId)
+  } else if (key === 'archive') {
+    if (row.variantId !== null) emit('archive', row.variantId)
+  } else emit('open', key as StockMode, row.variantId)
 }
 const stepButton = 'size-11 shrink-0 rounded-field'
 
@@ -113,7 +135,7 @@ watch(() => props.highlight, reveal)
             class="size-11"
             :label="row.name ?? $t('item.noVariant')"
             :actions="actionsOf(row)"
-            @select="(key) => emit('open', key as StockMode, row.variantId)"
+            @select="(key) => choose(key, row)"
           />
         </span>
       </li>

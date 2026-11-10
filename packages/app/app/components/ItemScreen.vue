@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import { newId, type Id } from '@graymatter/core'
+import { Plus } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { toast } from 'vue-sonner'
 import type { StockTarget } from '~/components/StockSheet.vue'
+import type { LooseOffer, VariantsAdded } from '~/components/VariantsForm.vue'
 import { errorMessageKey } from '~/lib/errors'
 import { itemView } from '~/lib/item-view'
 import { quickStep, type StockMode } from '~/lib/stock-forms'
@@ -57,6 +60,53 @@ async function step(kind: 'plus' | 'minus', variantId: string | null): Promise<v
   }
 }
 
+// Variants: add in bulk (and offer the loose stock to the first of them), rename, archive.
+const locked = computed(() => !!state.readOnly || state.saving)
+const addOpen = ref(false)
+const looseOffer = ref<{ offer: LooseOffer; variants: { id: Id; name: string }[] } | null>(null)
+function added(a: VariantsAdded): void {
+  addOpen.value = false
+  if (a.offer) looseOffer.value = { offer: a.offer, variants: a.created }
+}
+const renameId = ref<Id | null>(null)
+const archiveId = ref<Id | null>(null)
+// The variant the open sheet is about, kept while the sheet animates out.
+const sheetVariant = shallowRef<{ id: Id; name: string } | null>(null)
+const variantOf = (id: Id) => snapshot.value?.variants.find((v) => v.id === id) ?? null
+const renaming = computed(() => (renameId.value ? variantOf(renameId.value) : null))
+const renameOpen = computed({
+  get: () => renaming.value !== null,
+  set: (open: boolean) => {
+    if (!open) renameId.value = null
+  },
+})
+const archiveOpen = computed({
+  get: () => archiveId.value !== null,
+  set: (open: boolean) => {
+    if (!open) archiveId.value = null
+  },
+})
+const archiveBusy = ref(false)
+function askArchive(id: Id): void {
+  const v = variantOf(id)
+  if (!v) return
+  sheetVariant.value = { id, name: v.name }
+  archiveId.value = id
+}
+async function archiveVariant(): Promise<void> {
+  const id = archiveId.value
+  if (!id || archiveBusy.value) return
+  archiveBusy.value = true
+  try {
+    await workspace.apply({ type: 'archive', target: 'variant', id, archiveId: newId() })
+    archiveId.value = null
+  } catch (e) {
+    toast.error(t(errorMessageKey(e)))
+  } finally {
+    archiveBusy.value = false
+  }
+}
+
 const highlight = computed(() => (view.value?.hasVariants ? props.variantId : null))
 const linkClass =
   'min-h-11 content-center rounded-md text-sm font-semibold text-primary underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring'
@@ -93,7 +143,40 @@ const linkClass =
         @step="(kind) => step(kind, null)"
         @open="(mode) => openStock(mode, null)"
       />
-      <BucketList v-if="view.hasVariants" :buckets="view.buckets" :highlight="highlight" @step="step" @open="openStock" />
+      <BucketList
+        v-if="view.hasVariants"
+        :buckets="view.buckets"
+        :highlight="highlight"
+        @step="step"
+        @open="openStock"
+        @rename="(id) => (renameId = id)"
+        @archive="askArchive"
+      />
+      <Button variant="outline" class="h-11 justify-self-start rounded-field bg-surface px-4 font-bold" :disabled="locked" @click="addOpen = true">
+        <Plus class="size-5" aria-hidden="true" />
+        {{ $t('variantsForm.open') }}
+      </Button>
+      <AppSheet v-model:open="addOpen" :title="$t('variantsForm.title')" initial-focus="#variants-names">
+        <VariantsForm v-if="addOpen" :item-id="itemId" @done="added" />
+      </AppSheet>
+      <LooseTransferSheet
+        :item-id="itemId"
+        :offer="looseOffer?.offer ?? null"
+        :variants="looseOffer?.variants ?? []"
+        @close="looseOffer = null"
+      />
+      <AppSheet v-model:open="renameOpen" :title="$t('variantMenu.renameTitle')" initial-focus="#variant-name">
+        <VariantForm v-if="renaming" :key="renaming.id" :variant="renaming" @done="renameId = null" />
+      </AppSheet>
+      <ConfirmSheet
+        v-model:open="archiveOpen"
+        :title="$t('variantMenu.archiveTitle')"
+        :description="$t('variantMenu.archiveConfirm', { name: sheetVariant?.name ?? '' })"
+        :confirm-label="$t(archiveBusy ? 'status.saving' : 'variantMenu.archive')"
+        :busy="archiveBusy"
+        destructive
+        @confirm="archiveVariant"
+      />
       <ItemAttributes v-if="view.attributes.length > 0" :attributes="view.attributes" />
       <JournalList :item-id="itemId" />
     </template>

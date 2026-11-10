@@ -179,6 +179,16 @@ export function itemView(s: InventorySnapshot, itemId: Id): ItemView | null {
   }
 }
 
+/** Stock without a variant to offer moving into a first variant: only when the item has no active variants and that stock is > 0. */
+export function looseTransferOffer(s: InventorySnapshot, itemId: Id): { quantity: Quantity; number: string; unit: string } | null {
+  const item = s.items.find((i) => i.id === itemId)
+  if (!item) return null
+  if (s.variants.some((v) => v.itemId === itemId && v.archivedAt === null)) return null
+  const line = snapshotIndex(s).stockByItem.get(itemId)?.find((l) => l.variantId === null)
+  if (!line || cmpQ(line.quantity, '0') <= 0) return null
+  return { quantity: line.quantity, ...formatAmountParts(line.quantity, unitOf(s, item)) }
+}
+
 export interface JournalRow {
   /** Movement id; for a transfer, its transferId. */
   id: Id

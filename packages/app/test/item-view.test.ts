@@ -1,7 +1,7 @@
 import { itemStock, newId, type Command, type InventorySnapshot, type InventoryStorage, type Movement } from '@graymatter/core'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
-import { itemView, journalRows } from '../app/lib/item-view'
+import { itemView, journalRows, looseTransferOffer } from '../app/lib/item-view'
 import type { SourceConfig } from '../app/lib/types'
 
 const cfg: SourceConfig = {
@@ -299,5 +299,23 @@ describe('journalRows', () => {
     await run({ type: 'stock.set', movementId: newId(), itemId: item.id, variantId: null, target: '35', note: null })
     const rows = journalRows(s, item.id, await storage.loadMovements(item.id))
     expect(rows.map((r) => [r.kind, r.number])).toEqual([['adjustment', '−5'], ['adjustment', '+3'], ['receipt', '+37']])
+  })
+})
+
+describe('looseTransferOffer', () => {
+  it('offers nothing for an item with variants', () => {
+    expect(looseTransferOffer(s, resistor)).toBeNull()
+  })
+  it('offers nothing when there is no stock without a variant', () => {
+    expect(looseTransferOffer(s, ne555)).toBeNull()
+  })
+  it('offers the stock of an item without variants', () => {
+    expect(looseTransferOffer(s, tl072)).toEqual({ quantity: '37', number: '37', unit: 'pcs' })
+  })
+  it('offers the loose stock again once the last active variant is archived', async () => {
+    const item = await newItem({ variants: ['a'], receipt: '5' })
+    expect(looseTransferOffer(s, item.id)).toBeNull()
+    await archive('variant', item.v.a!)
+    expect(looseTransferOffer(s, item.id)).toEqual({ quantity: '5', number: '5', unit: 'pcs' })
   })
 })

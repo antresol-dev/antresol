@@ -22,7 +22,11 @@ interface Job {
   confirm: string
 }
 
-const snapshot = computed(() => state.snapshot)
+/** The current inventory's snapshot only: never another inventory's paired with the current ref. */
+const snapshot = computed(() => {
+  const s = state.snapshot
+  return s && s.inventory.id === state.current?.inventoryId ? s : null
+})
 const manySources = computed(() => state.sources.length > 1)
 const sourceReady = (sourceId: string): boolean => state.sources.find((s) => s.config.id === sourceId)?.status === 'ready'
 

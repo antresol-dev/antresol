@@ -1,6 +1,22 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import type { SourceConfig } from '../app/lib/types'
+
+/** The next `failNext` PGlite databases fail to open. */
+const pglite = vi.hoisted(() => ({ failNext: 0 }))
+vi.mock('@electric-sql/pglite', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@electric-sql/pglite')>()
+  class FlakyPGlite extends real.PGlite {
+    constructor(...args: ConstructorParameters<typeof real.PGlite>) {
+      if (pglite.failNext > 0) {
+        pglite.failNext--
+        throw new Error('could not open the database')
+      }
+      super(...args)
+    }
+  }
+  return { ...real, PGlite: FlakyPGlite }
+})
 
 const cfg: SourceConfig = {
   id: 'demo',
@@ -41,6 +57,21 @@ describe('demo source', () => {
     expect(res).toEqual({ ok: true, inspection: { state: 'empty' } })
   })
 
+
+  it('does not keep a failed PGlite open: the next connect tries again', async () => {
+    const driver = createDemoDriver({ memory: true, extras: false })
+    pglite.failNext = 1
+    await expect(driver.connect(cfg)).rejects.toThrow('could not open the database')
+    const conn = await driver.connect(cfg)
+    expect((await conn.storage.listInventories()).map((i) => i.name).sort()).toEqual(['Electronics', 'Workshop'])
+  })
+
+  it('seeds once when two connects run at the same time', async () => {
+    const driver = createDemoDriver({ memory: true, extras: false })
+    const [first, second] = await Promise.all([driver.connect(cfg), driver.connect(cfg)])
+    expect((await first.storage.listInventories()).map((i) => i.name).sort()).toEqual(['Electronics', 'Workshop'])
+    expect((await second.storage.listInventories()).map((i) => i.name).sort()).toEqual(['Electronics', 'Workshop'])
+  })
 
   it('keeps the database open when an older connection is closed', async () => {
     const driver = createDemoDriver({ memory: true, extras: false })

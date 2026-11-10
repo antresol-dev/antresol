@@ -1,6 +1,6 @@
 import { newId, type Actor, type Command, type InventoryStorage } from '@graymatter/core'
 import { createPgliteExecutor, inspectSchema, openPostgresStorage, type PgExecutor } from '@graymatter/storage-postgres'
-import { probeWithExecutor, type SourceDriver } from '../sources'
+import { probeWithExecutor, type SourceConnection, type SourceDriver } from '../sources'
 import type { SourceConfig } from '../types'
 
 const DEMO_ACTOR: Actor = { device: 'Demo' }
@@ -15,24 +15,45 @@ export function createDemoDriver(options: { memory?: boolean; extras?: boolean }
     let pending = dbs.get(config.id)
     if (!pending) {
       // Imported lazily so production bundles never include PGlite.
-      pending = import('@electric-sql/pglite').then(({ PGlite }) => {
+      const opening = import('@electric-sql/pglite').then(async ({ PGlite }) => {
         const db = options.memory ? new PGlite() : new PGlite(`idb://graymatter-dev-${config.id}`)
+        await db.waitReady
         const exec = createPgliteExecutor(db)
         return { ...exec, close: async () => {} }
       })
-      dbs.set(config.id, pending)
+      // A failed open is not kept: the next connect or probe tries again.
+      opening.catch(() => {
+        if (dbs.get(config.id) === opening) dbs.delete(config.id)
+      })
+      dbs.set(config.id, opening)
+      pending = opening
     }
     return pending
   }
 
+  async function open(config: SourceConfig): Promise<SourceConnection> {
+    const exec = await executorFor(config)
+    const wasEmpty = (await inspectSchema(exec)).state === 'empty'
+    const { storage, status } = await openPostgresStorage(exec)
+    if (wasEmpty) await seedDemo(storage, DEMO_ACTOR, { extras: options.extras ?? true })
+    return { storage, status, inspect: () => inspectSchema(exec), close: async () => {} }
+  }
+
+  // Connects of one source run one after another: two at once would both find the database empty,
+  // then both migrate and seed it.
+  const connects = new Map<string, Promise<unknown>>()
+
   return {
     probe: (config) => probeWithExecutor(() => executorFor(config), config),
-    async connect(config) {
-      const exec = await executorFor(config)
-      const wasEmpty = (await inspectSchema(exec)).state === 'empty'
-      const { storage, status } = await openPostgresStorage(exec)
-      if (wasEmpty) await seedDemo(storage, DEMO_ACTOR, { extras: options.extras ?? true })
-      return { storage, status, close: async () => {} }
+    connect(config) {
+      const previous = connects.get(config.id) ?? Promise.resolve()
+      const run = previous.catch(() => {}).then(() => open(config))
+      connects.set(config.id, run)
+      const forget = (): void => {
+        if (connects.get(config.id) === run) connects.delete(config.id)
+      }
+      run.then(forget, forget)
+      return run
     },
   }
 }

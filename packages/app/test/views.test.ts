@@ -1,8 +1,8 @@
-import { createSearch, newId, type InventorySnapshot, type InventoryStorage } from '@graymatter/core'
+import { createSearch, itemStock, newId, type InventorySnapshot, type InventoryStorage, type Photo } from '@graymatter/core'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import type { SourceConfig } from '../app/lib/types'
-import { collapseCrumbs, folderTree, folderView, searchRows, type Crumb } from '../app/lib/views'
+import { collapseCrumbs, folderTree, folderView, indexStats, searchRows, type Crumb } from '../app/lib/views'
 
 const cfg: SourceConfig = {
   id: 'demo',
@@ -96,5 +96,77 @@ describe('folderTree', () => {
     const tree = folderTree(snap)
     expect(names(tree)).toEqual(['ICs', 'Passive components', expect.stringContaining('Очень длинное')])
     expect(names(tree[0]!.children)).toEqual(['Op-amps'])
+  })
+})
+
+describe('index and edge cases', () => {
+  const photo = (itemId: string, variantId: string | null, position: number, url: string): Photo => ({
+    id: newId(),
+    itemId,
+    variantId,
+    provider: 'test',
+    fileId: url,
+    url,
+    position,
+    createdAt: '2026-11-10T00:00:00Z',
+    createdBy: 'Test',
+  })
+  const clone = (): InventorySnapshot => structuredClone(snap)
+
+  it('builds the index once per snapshot object', () => {
+    const s = clone()
+    const before = indexStats.builds
+    folderView(s, null)
+    folderView(s, idOf(s, 'ICs'))
+    searchRows(s, createSearch(s).search('tl072'))
+    folderTree(s)
+    expect(indexStats.builds).toBe(before + 1)
+    folderView(clone(), null)
+    expect(indexStats.builds).toBe(before + 2)
+  })
+
+  it('agrees with core itemStock for every item', () => {
+    for (const f of [null, ...snap.folders.map((x) => x.id)]) {
+      for (const row of folderView(snap, f)?.items ?? []) {
+        const q = itemStock(snap, row.id).quantity
+        expect(row.outOfStock).toBe(Number(q) <= 0)
+      }
+    }
+  })
+
+  it('uses the lowest-position item photo and ignores variant photos', () => {
+    const s = clone()
+    const item = s.items.find((i) => i.name === 'Резистор 0,25 Вт')!
+    const variant = s.variants.find((v) => v.itemId === item.id)!
+    s.photos = [
+      photo(item.id, variant.id, 0, 'variant.jpg'),
+      photo(item.id, null, 2, 'second.jpg'),
+      photo(item.id, null, 1, 'first.jpg'),
+    ]
+    expect(folderView(s, idOf(s, 'Resistors'))!.items[0]!.coverUrl).toBe('first.jpg')
+    const onlyVariant = clone()
+    onlyVariant.photos = [photo(item.id, variant.id, 0, 'variant.jpg')]
+    expect(folderView(onlyVariant, idOf(onlyVariant, 'Resistors'))!.items[0]!.coverUrl).toBeNull()
+  })
+
+  it('falls back to pcs for an unknown unit', () => {
+    const s = clone()
+    s.items.find((i) => i.name === 'TL072')!.unitKey = 'custom:gone'
+    const row = folderView(s, idOf(s, 'Op-amps'))!.items[0]!
+    expect(row.unit).toBe('pcs')
+    expect(row.number).toBe('37')
+  })
+
+  it('uses item stock for an item-level hit and an empty path for a root item', () => {
+    const s = clone()
+    const resistor = s.items.find((i) => i.name === 'Резистор 0,25 Вт')!
+    const [row] = searchRows(s, [{ itemId: resistor.id, variantId: null }])
+    expect(row!.variantName).toBeNull()
+    expect(row!.number).toBe('100')
+    expect(row!.path).toBe('Passive components / Resistors')
+    const tl = s.items.find((i) => i.name === 'TL072')!
+    tl.folderId = null
+    const [root] = searchRows(s, [{ itemId: tl.id, variantId: null }])
+    expect(root!.path).toBe('')
   })
 })

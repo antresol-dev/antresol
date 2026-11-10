@@ -2,6 +2,7 @@ import { PGlite } from '@electric-sql/pglite'
 import { newId, StorageError, type Command, type Id } from '@graymatter/core'
 import { APP_SCHEMA_VERSION, createPgliteExecutor, type PgExecutor } from '@graymatter/storage-postgres'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { isReactive } from 'vue'
 import { createMemoryDeviceDb } from '../app/lib/device-db'
 import { defaultDeviceName } from '../app/lib/device-name'
 import { createNeonDriver, type SourceDriver } from '../app/lib/sources'
@@ -244,6 +245,31 @@ describe('workspace', () => {
     const after = (await h.db.getSnapshot(ref))!
     expect(after.savedAt).not.toBe(before)
     expect(after.snapshot.folders).toHaveLength(1)
+  })
+
+  it('8a. keeps the snapshot non-reactive after cache start, refresh, apply and select', async () => {
+    const h = setup()
+    const aId = await h.seed(CS('one'), 'A-inv')
+    const bId = await h.seed(CS('two'), 'B-inv')
+    await h.db.putSource(config('s1', CS('one')))
+    await h.db.putSource(config('s2', CS('two')))
+    await h.workspace().start()
+
+    const ws = h.workspace()
+    await ws.startFromCache()
+    expect(ws.state.snapshotOrigin).toBe('cache')
+    expect(isReactive(ws.state.snapshot)).toBe(false)
+    await ws.refresh()
+    expect(ws.state.snapshotOrigin).toBe('live')
+    expect(isReactive(ws.state.snapshot)).toBe(false)
+    await ws.apply(folderCreate(ws.state.snapshot!.inventory.id, 'Shelf'))
+    expect(ws.state.snapshot?.folders).toHaveLength(1)
+    expect(isReactive(ws.state.snapshot)).toBe(false)
+    const other = ws.state.inventories.find((e) => e.inventory.id !== ws.state.current!.inventoryId)!
+    await ws.selectInventory(other.ref)
+    expect([aId, bId]).toContain(ws.state.snapshot!.inventory.id)
+    expect(ws.state.snapshot!.inventory.id).toBe(other.inventory.id)
+    expect(isReactive(ws.state.snapshot)).toBe(false)
   })
 
   it('8. serializes concurrent writes', async () => {

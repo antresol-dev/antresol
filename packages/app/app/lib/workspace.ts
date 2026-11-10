@@ -8,7 +8,7 @@ import {
   type Inventory,
   type InventorySnapshot,
 } from '@graymatter/core'
-import { reactive } from 'vue'
+import { markRaw, reactive } from 'vue'
 import type { DeviceDb } from './device-db'
 import { defaultDeviceName } from './device-name'
 import { redactSecret, type SourceConnection, type SourceDriver } from './sources'
@@ -36,6 +36,7 @@ export interface WorkspaceState {
   /** Active only, sorted by name (localeCompare, numeric, base). */
   inventories: InventoryEntry[]
   current: InventoryRef | null
+  /** Replaced whole, never mutated; stored with markRaw so views read plain data. */
   snapshot: InventorySnapshot | null
   snapshotOrigin: 'cache' | 'live' | null
   /** ISO time the shown data was loaded from the source. */
@@ -254,7 +255,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     }
     if (token !== loadSeq || !sameRef(state.current, ref)) return
     const savedAt = nowIso()
-    state.snapshot = snapshot
+    state.snapshot = markRaw(snapshot)
     state.snapshotOrigin = 'live'
     state.snapshotSavedAt = savedAt
     await db.putSnapshot(ref, { snapshot, savedAt })
@@ -304,7 +305,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     await db.putSettings({ current: { sourceId: ref.sourceId, inventoryId: ref.inventoryId } })
     const cached = await db.getSnapshot(ref)
     if (!sameRef(state.current, ref)) return
-    state.snapshot = cached?.snapshot ?? null
+    state.snapshot = cached ? markRaw(cached.snapshot) : null
     state.snapshotOrigin = cached ? 'cache' : null
     state.snapshotSavedAt = cached?.savedAt ?? null
     if (isConnected(statusOf(ref.sourceId))) await loadCurrent()
@@ -319,7 +320,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     recompute()
     const cached = settings.current ? await db.getSnapshot(settings.current) : null
     if (cached && sameRef(state.current, settings.current)) {
-      state.snapshot = cached.snapshot
+      state.snapshot = markRaw(cached.snapshot)
       state.snapshotOrigin = 'cache'
       state.snapshotSavedAt = cached.savedAt
     }

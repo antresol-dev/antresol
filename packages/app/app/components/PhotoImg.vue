@@ -37,7 +37,13 @@ watch(
 
 <template>
   <img v-if="src && !failed" :src="src" :alt="alt" loading="lazy" decoding="async" draggable="false" @error="failed = true" >
-  <div v-else class="grid place-items-center bg-thumb text-thumb-foreground" role="img" :aria-label="failed ? $t('photos.unavailable') : alt">
+  <div
+    v-else
+    class="grid place-items-center bg-thumb text-thumb-foreground"
+    :role="alt === '' ? undefined : 'img'"
+    :aria-hidden="alt === '' ? 'true' : undefined"
+    :aria-label="alt === '' ? undefined : failed ? $t('photos.unavailable') : alt"
+  >
     <ImageIcon class="size-1/3 max-h-8 min-h-4" aria-hidden="true" />
   </div>
 </template>

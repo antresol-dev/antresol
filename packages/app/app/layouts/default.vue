@@ -2,7 +2,7 @@
 import { until, useEventListener, useMediaQuery } from '@vueuse/core'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { NAV_DRAWER_ID } from '~/composables/useShell'
-import { launchAction, showsTree } from '~/lib/shell'
+import { launchAction, launchReady, showsTree } from '~/lib/shell'
 import { swipeAction } from '~/lib/swipe'
 
 const route = useRoute()
@@ -20,10 +20,11 @@ const router = useRouter()
 const launch = launchAction(route.query)
 if (launch) {
   void router.replace({ query: { ...route.query, action: undefined } })
-  // A one-shot wait for an inventory (never on the welcome page with no sources: it gives up after 10 s), dropped if the
+  // A one-shot wait for an inventory whose source has finished connecting, so offline it already knows it is read-only
+  // (never on the welcome page with no sources: it gives up after 10 s), dropped if the
   // user navigates first.
   const startPath = route.path
-  void until(() => state.current).toBeTruthy({ timeout: 10_000, throwOnTimeout: false }).then(() => {
+  void until(() => launchReady(state)).toBeTruthy({ timeout: 10_000, throwOnTimeout: false }).then(() => {
     if (!state.current || route.path !== startPath) return
     // A read-only inventory can't take new items; the quieter fallback is the search palette.
     if (launch === 'add' && !state.readOnly) quickAdd.open()

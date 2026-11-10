@@ -151,10 +151,10 @@ async function submit(): Promise<void> {
     </div>
 
     <div v-if="canPhoto" class="grid gap-1.5">
-      <Label>
+      <p class="text-sm font-medium leading-none">
         {{ $t('quickAdd.photo') }}
         <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
-      </Label>
+      </p>
       <div v-if="preview" class="flex items-center gap-3">
         <img :src="preview" alt="" class="size-[42px] shrink-0 rounded-thumb object-cover" >
         <span class="min-w-0 flex-1 truncate text-sm text-muted-foreground">{{ photo?.name }}</span>

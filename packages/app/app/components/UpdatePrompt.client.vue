@@ -9,7 +9,7 @@ let timer: ReturnType<typeof setInterval> | undefined
 // Never reloads by itself: a new version waits behind the toast, so nothing typed is lost.
 const { needRefresh, offlineReady, updateServiceWorker } = useRegisterSW({
   onRegisteredSW(_url, registration) {
-    if (registration) timer = setInterval(() => void registration.update(), HOUR)
+    if (registration) timer = setInterval(() => void registration.update().catch(() => {}), HOUR)
   },
 })
 

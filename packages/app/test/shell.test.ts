@@ -5,6 +5,7 @@ import {
   currentInventoryName,
   inventoryScoped,
   launchAction,
+  launchReady,
   themeColorMeta,
   NAV_SECTIONS,
   sectionOf,
@@ -131,6 +132,17 @@ describe('launchAction', () => {
     expect(launchAction({ action: 'nope' })).toBeNull()
     expect(launchAction({ action: ['add', 'search'] })).toBeNull()
     expect(launchAction({ action: null })).toBeNull()
+  })
+})
+
+describe('launchReady', () => {
+  const src = (status: string) => [{ config: { id: 's1' }, status }]
+  const cur = { sourceId: 's1', inventoryId: 'i1' }
+  it('waits for a current inventory whose source has left connecting', () => {
+    expect(launchReady({ current: null, sources: src('ready') })).toBe(false)
+    expect(launchReady({ current: cur, sources: src('connecting') })).toBe(false)
+    expect(launchReady({ current: cur, sources: src('ready') })).toBe(true)
+    expect(launchReady({ current: cur, sources: src('unreachable') })).toBe(true)
   })
 })
 

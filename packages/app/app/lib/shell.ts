@@ -111,6 +111,15 @@ export function launchAction(query: Record<string, unknown>): 'add' | 'search' |
   return action === 'add' || action === 'search' ? action : null
 }
 
+/** True once a launch shortcut may decide what to open: there is a current inventory and its source has stopped
+ *  `connecting` (so an offline start already knows the inventory is read-only). */
+export function launchReady(state: { current: InventoryRef | null; sources: { config: { id: string }; status: string }[] }): boolean {
+  const cur = state.current
+  if (!cur) return false
+  const status = state.sources.find((s) => s.config.id === cur.sourceId)?.status
+  return status !== 'connecting'
+}
+
 const THEME_COLOR = { light: '#F7F7F8', dark: '#0E0E10' } as const // the --background tokens
 
 /** `theme-color` metas: both media-scoped ones while the preference is "system"; otherwise one for the chosen theme. */

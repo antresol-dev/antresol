@@ -8,6 +8,7 @@ import { errorMessageKey } from '~/lib/errors'
 const props = defineProps<{ itemId: string; photos: Photo[] }>()
 
 const { t } = useI18n()
+const router = useRouter()
 const workspace = useWorkspace()
 const { state } = workspace
 
@@ -45,7 +46,17 @@ async function upload(files: File[]): Promise<void> {
     // A photo the app can't use fails again however often it is tried: retry what comes after it.
     const hopeless = e instanceof FileError && (e.code === 'unsupported' || e.code === 'too_large')
     const rest = files.slice(done + (hopeless ? 1 : 0))
-    toast.error(t(errorMessageKey(e)), rest.length > 0 ? { action: { label: t('status.retry'), onClick: () => retry(rest) } } : {})
+    // A refused photo or a missing store is fixed in this source's settings, not by retrying.
+    const needsSettings = e instanceof FileError && (e.code === 'rejected' || e.code === 'no_store')
+    const settingsTo = sourceId.value ? `/settings/sources/${sourceId.value}` : '/settings'
+    toast.error(
+      t(errorMessageKey(e)),
+      needsSettings
+        ? { action: { label: t('nav.settings'), onClick: () => void router.push(settingsTo) } }
+        : rest.length > 0
+          ? { action: { label: t('status.retry'), onClick: () => retry(rest) } }
+          : {},
+    )
   } finally {
     progress.value = null
   }

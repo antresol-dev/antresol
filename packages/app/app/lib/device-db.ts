@@ -10,6 +10,8 @@ export interface DeviceSettings {
 export interface CachedSnapshot {
   snapshot: InventorySnapshot
   savedAt: string
+  /** Source revision the snapshot is known to be at least as new as; absent or null when unknown. */
+  rev?: string | null
 }
 
 export interface DeviceDb {

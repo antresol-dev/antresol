@@ -4,6 +4,9 @@ import type { PgExecutor } from './executor'
 import { inspectSchema } from './inspect'
 import { ensureSchema } from './migrator'
 import * as queries from './queries'
+import { sql } from './sql'
+
+const bumpRev = sql`update gm_meta set value = (value::bigint + 1)::text where key = 'rev'`
 
 /** Lets StorageError through; wraps anything else as StorageError('failed') keeping the cause. */
 async function wrapFailure<T>(run: () => Promise<T>): Promise<T> {
@@ -34,7 +37,9 @@ export async function openPostgresStorage(
     async apply(command, actor) {
       if (readOnly) throw new StorageError('read_only')
       // Idempotent: canonicalizes quantities etc. even if the caller skipped normalization.
-      await wrapFailure(() => exec.batch(toStatements(normalizeCommand(command), actor)))
+      // The rev bump is the batch's last statement: atomic with the write, one Neon HTTP transaction. Replaying a
+      // command whose inserts are `on conflict do nothing` still bumps: a needless reload elsewhere, never a missed one.
+      await wrapFailure(() => exec.batch([...toStatements(normalizeCommand(command), actor), bumpRev]))
     },
   }
   return { storage, status }

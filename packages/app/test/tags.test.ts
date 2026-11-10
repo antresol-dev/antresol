@@ -22,7 +22,7 @@ afterAll(() => driver.close())
 beforeAll(async () => {
   const conn = await driver.connect(cfg)
   const storage: InventoryStorage = conn.storage
-  const inventoryId = (await storage.listInventories()).find((i) => i.name === 'Electronics')!.id
+  const inventoryId = (await storage.listInventories()).inventories.find((i) => i.name === 'Electronics')!.id
   for (const name of ['Audio', 'Lab', 'Zeta', 'Alpha']) {
     const command: Command = { type: 'tag.create', id: newId(), inventoryId, name }
     await storage.apply(command, { device: 'Test' })

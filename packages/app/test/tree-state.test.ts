@@ -27,7 +27,7 @@ afterAll(() => driver.close())
 
 beforeAll(async () => {
   storage = (await driver.connect(cfg)).storage
-  inventoryId = (await storage.listInventories()).find((i) => i.name === 'Electronics')!.id
+  inventoryId = (await storage.listInventories()).inventories.find((i) => i.name === 'Electronics')!.id
   snap = await storage.loadInventory(inventoryId)
   const idOf = (name: string): string => snap.folders.find((f) => f.name === name)!.id
   ics = idOf('ICs')

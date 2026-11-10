@@ -34,7 +34,7 @@ afterAll(() => driver.close())
 
 beforeAll(async () => {
   const { storage } = await driver.connect(cfg)
-  const inventoryId = (await storage.listInventories()).find((i) => i.name === 'Electronics')!.id
+  const inventoryId = (await storage.listInventories()).inventories.find((i) => i.name === 'Electronics')!.id
   snap = await storage.loadInventory(inventoryId)
   opamps = snap.folders.find((f) => f.name === 'Op-amps')!.id
   ics = snap.folders.find((f) => f.name === 'ICs')!.id

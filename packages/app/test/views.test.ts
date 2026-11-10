@@ -47,7 +47,7 @@ afterAll(() => driver.close())
 beforeAll(async () => {
   const conn = await driver.connect(cfg)
   storage = conn.storage
-  inventoryId = (await storage.listInventories()).find((i) => i.name === 'Electronics')!.id
+  inventoryId = (await storage.listInventories()).inventories.find((i) => i.name === 'Electronics')!.id
   snap = await storage.loadInventory(inventoryId)
 })
 
@@ -174,7 +174,7 @@ describe('index and edge cases', () => {
   it('agrees with core itemStock for every item, with stock in an archived variant', async () => {
     // Its own source: the shared one has ICs archived by an earlier test.
     const own = (await driver.connect({ ...cfg, id: 'agree' })).storage
-    const inv = (await own.listInventories()).find((i) => i.name === 'Electronics')!.id
+    const inv = (await own.listInventories()).inventories.find((i) => i.name === 'Electronics')!.id
     let s = await own.loadInventory(inv)
     const resistor = s.items.find((i) => i.name === 'Резистор 0,25 Вт')!.id
     const v100k = s.variants.find((v) => v.itemId === resistor && v.name === '100k')!.id

@@ -6,12 +6,17 @@ import { sql } from './sql'
 const AUDIT = 'created_at, updated_at, created_by, updated_by'
 const ARCHIVE = 'archived_at, archive_id'
 
-export async function listInventories(exec: PgExecutor): Promise<Inventory[]> {
-  const result = await exec.query(
+/** The inventories and the revision counter, read in one snapshot transaction (so `rev` matches the list). */
+export async function listInventories(exec: PgExecutor): Promise<{ inventories: Inventory[]; rev: string }> {
+  const [list, rev] = await exec.readBatch([
     sql`select id, name, description, currency::text as currency, ${raw(`${AUDIT}, ${ARCHIVE}`)}
         from inventories order by name, id`,
-  )
-  return result.map(rows.toInventory)
+    sql`select value from gm_meta where key = 'rev'`,
+  ])
+  return {
+    inventories: (list as Record<string, unknown>[]).map(rows.toInventory),
+    rev: String((rev?.[0] as { value?: unknown } | undefined)?.value ?? '0'),
+  }
 }
 
 /** Fixed number of queries (one per kind of data), in one read-only snapshot transaction; archived records included. */

@@ -14,9 +14,9 @@ describe('read errors', () => {
     let broken = false
     const wrapped = {
       ...exec,
-      query: (s: Parameters<typeof exec.query>[0]) => {
+      readBatch: (s: Parameters<typeof exec.readBatch>[0]) => {
         if (broken) throw new Error('boom')
-        return exec.query(s)
+        return exec.readBatch(s)
       },
     } as typeof exec
     const { storage } = await openPostgresStorage(wrapped)

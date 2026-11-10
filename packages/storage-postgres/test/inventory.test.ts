@@ -10,7 +10,7 @@ describe('inventories', () => {
     const storage = await makeStorage()
     const id = newId()
     await storage.apply({ type: 'inventory.create', id, name: 'Workshop', description: 'Tools', currency: 'USD' }, TEST_ACTOR)
-    const [inv] = await storage.listInventories()
+    const [inv] = (await storage.listInventories()).inventories
     expect(inv).toMatchObject({
       id,
       name: 'Workshop',
@@ -29,7 +29,7 @@ describe('inventories', () => {
     const id = newId()
     await storage.apply({ type: 'inventory.create', id, name: 'A', description: 'd', currency: 'USD' }, TEST_ACTOR)
     await storage.apply({ type: 'inventory.update', id, description: null }, { device: 'Other' })
-    const [inv] = await storage.listInventories()
+    const [inv] = (await storage.listInventories()).inventories
     expect(inv).toMatchObject({ name: 'A', description: null, updatedBy: 'Other', createdBy: 'Test · Vitest' })
   })
 
@@ -38,7 +38,7 @@ describe('inventories', () => {
     for (const name of ['B', 'A']) {
       await storage.apply({ type: 'inventory.create', id: newId(), name, description: null, currency: 'EUR' }, TEST_ACTOR)
     }
-    expect((await storage.listInventories()).map((i) => i.name)).toEqual(['A', 'B'])
+    expect((await storage.listInventories()).inventories.map((i) => i.name)).toEqual(['A', 'B'])
   })
 
   it('loads an empty snapshot', async () => {
@@ -65,7 +65,7 @@ describe('inventories', () => {
       .catch((e: unknown) => e)
     expect(err).toBeInstanceOf(StorageError)
     expect((err as StorageError).code).toBe('read_only')
-    expect(await storage.listInventories()).toEqual([])
+    expect((await storage.listInventories()).inventories).toEqual([])
   })
 
   it('wraps driver errors in StorageError(failed) with cause', async () => {
@@ -76,5 +76,21 @@ describe('inventories', () => {
     expect(err).toBeInstanceOf(StorageError)
     expect((err as StorageError).code).toBe('failed')
     expect((err as StorageError).cause).toBeDefined()
+  })
+})
+
+describe('revision counter', () => {
+  it('starts at 0, grows by one per apply and is not touched by reads', async () => {
+    const storage = await makeStorage()
+    expect((await storage.listInventories()).rev).toBe('0')
+    const id = newId()
+    await storage.apply({ type: 'inventory.create', id, name: 'A', description: null, currency: 'USD' }, TEST_ACTOR)
+    expect((await storage.listInventories()).rev).toBe('1')
+    await storage.apply({ type: 'inventory.update', id, name: 'B' }, TEST_ACTOR)
+    expect((await storage.listInventories()).rev).toBe('2')
+    await storage.loadInventory(id)
+    await storage.loadAllMovements(id)
+    await storage.listInventories()
+    expect((await storage.listInventories()).rev).toBe('2')
   })
 })

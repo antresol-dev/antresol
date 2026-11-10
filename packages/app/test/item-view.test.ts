@@ -30,7 +30,7 @@ afterAll(() => driver.close())
 
 beforeAll(async () => {
   storage = (await driver.connect(cfg)).storage
-  inventoryId = (await storage.listInventories()).find((i) => i.name === 'Electronics')!.id
+  inventoryId = (await storage.listInventories()).inventories.find((i) => i.name === 'Electronics')!.id
   s = await storage.loadInventory(inventoryId)
   tl072 = demoItem('TL072')
   ne555 = demoItem('NE555')

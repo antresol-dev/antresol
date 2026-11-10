@@ -108,7 +108,7 @@ describe('replaying a command with client ids is a no-op', () => {
   it('inventory, folder, tag, attribute and unit creates', async () => {
     const { storage, inv } = await setup()
     await twice(storage, { type: 'inventory.create', id: newId(), name: 'B', description: null, currency: 'USD' })
-    expect(await storage.listInventories()).toHaveLength(2)
+    expect((await storage.listInventories()).inventories).toHaveLength(2)
     await twice(storage, { type: 'folder.create', id: newId(), inventoryId: inv, parentId: null, name: 'F', description: null })
     await twice(storage, { type: 'tag.create', id: newId(), inventoryId: inv, name: 'again' })
     await twice(storage, { type: 'attribute.create', id: newId(), inventoryId: inv, name: 'Color', kind: 'text', options: [] })

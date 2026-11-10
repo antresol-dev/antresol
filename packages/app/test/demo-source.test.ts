@@ -50,7 +50,7 @@ afterEach(async () => {
 describe('demo source', () => {
   it('seeds two inventories with stock', async () => {
     const conn = await demo({ memory: true, extras: false }).connect(cfg)
-    const invs = await conn.storage.listInventories()
+    const invs = (await conn.storage.listInventories()).inventories
     expect(invs.map((i) => i.name).sort()).toEqual(['Electronics', 'Workshop'])
     const snap = await conn.storage.loadInventory(invs.find((i) => i.name === 'Electronics')!.id)
     const qty = (name: string) => {
@@ -65,7 +65,7 @@ describe('demo source', () => {
 
   it('seeds an archive with extras', async () => {
     const conn = await demo({ memory: true }).connect(cfg)
-    const all = await conn.storage.listInventories()
+    const all = (await conn.storage.listInventories()).inventories
     const snap = await conn.storage.loadInventory(all.find((i) => i.name === 'Electronics')!.id)
     expect(snap.folders.find((f) => f.name === 'Old projects')!.archivedAt).not.toBeNull()
     expect(snap.items.find((i) => i.name === 'CD4017')!.archivedAt).not.toBeNull()
@@ -74,7 +74,7 @@ describe('demo source', () => {
 
   it('seeds tags and attributes with extras, found by search', async () => {
     const conn = await demo({ memory: true }).connect(cfg)
-    const all = await conn.storage.listInventories()
+    const all = (await conn.storage.listInventories()).inventories
     const snap = await conn.storage.loadInventory(all.find((i) => i.name === 'Electronics')!.id)
     expect(snap.tags.map((x) => x.name).sort()).toEqual(['audio', 'smd'])
     expect(snap.attributes.map((a) => [a.name, a.kind, a.options])).toEqual(
@@ -99,14 +99,14 @@ describe('demo source', () => {
     pglite.failNext = 1
     await expect(driver.connect(cfg)).rejects.toThrow('could not open the database')
     const conn = await driver.connect(cfg)
-    expect((await conn.storage.listInventories()).map((i) => i.name).sort()).toEqual(['Electronics', 'Workshop'])
+    expect((await conn.storage.listInventories()).inventories.map((i) => i.name).sort()).toEqual(['Electronics', 'Workshop'])
   })
 
   it('seeds once when two connects run at the same time', async () => {
     const driver = demo({ memory: true, extras: false })
     const [first, second] = await Promise.all([driver.connect(cfg), driver.connect(cfg)])
-    expect((await first.storage.listInventories()).map((i) => i.name).sort()).toEqual(['Electronics', 'Workshop'])
-    expect((await second.storage.listInventories()).map((i) => i.name).sort()).toEqual(['Electronics', 'Workshop'])
+    expect((await first.storage.listInventories()).inventories.map((i) => i.name).sort()).toEqual(['Electronics', 'Workshop'])
+    expect((await second.storage.listInventories()).inventories.map((i) => i.name).sort()).toEqual(['Electronics', 'Workshop'])
   })
 
   it('closes its databases on close()', async () => {
@@ -121,7 +121,7 @@ describe('demo source', () => {
     const first = await driver.connect(cfg)
     const second = await driver.connect(cfg)
     await first.close()
-    expect((await second.storage.listInventories()).length).toBe(2)
+    expect((await second.storage.listInventories()).inventories.length).toBe(2)
   })
 
   it('seeds the whole demo on the next connect after a seeding failure', async () => {
@@ -137,8 +137,8 @@ describe('demo source', () => {
     await expect(driver.connect(cfg)).rejects.toThrow('disk full')
     pglite.failTransactionAt = 0
     const conn = await driver.connect(cfg)
-    expect((await conn.storage.listInventories()).map((i) => i.name).sort()).toEqual(['Electronics', 'Workshop'])
-    const all = await conn.storage.listInventories()
+    expect((await conn.storage.listInventories()).inventories.map((i) => i.name).sort()).toEqual(['Electronics', 'Workshop'])
+    const all = (await conn.storage.listInventories()).inventories
     const snap = await conn.storage.loadInventory(all.find((i) => i.name === 'Electronics')!.id)
     expect(snap.items.map((i) => i.name)).toContain('TL072')
     expect(snap.items).toHaveLength(4)

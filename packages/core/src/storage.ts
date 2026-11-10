@@ -29,7 +29,9 @@ export class StorageError extends Error {
 
 export interface InventoryStorage {
   readonly readOnly: boolean
-  listInventories(): Promise<Inventory[]>
+  /** `rev`: the source's revision counter, read in the same snapshot as the list. It grows with every `apply`, so an
+   *  unchanged `rev` means nothing in the source changed. Opaque: compare for equality only. */
+  listInventories(): Promise<{ inventories: Inventory[]; rev: string }>
   loadInventory(id: Id): Promise<InventorySnapshot>
   /** Newest first (seq desc). */
   loadMovements(itemId: Id): Promise<Movement[]>

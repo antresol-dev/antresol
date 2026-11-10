@@ -28,6 +28,7 @@ function harness() {
   const flags = {
     offline: false,
     listCalls: 0,
+    loadCalls: 0,
     connectCalls: 0,
     closeCalls: 0,
     /** One-shot: the next listInventories fails with this. */
@@ -92,6 +93,7 @@ function harness() {
       const conn = await inner.connect(cfg)
       const storage = Object.create(conn.storage) as typeof conn.storage
       storage.loadInventory = async (id) => {
+        flags.loadCalls++
         if (flags.loadError) throw flags.loadError
         if (flags.loadErrorFor?.id === id) throw flags.loadErrorFor.error
         if (flags.missing.has(id)) throw new StorageError('not_found')
@@ -165,6 +167,12 @@ function harness() {
     return conn.storage
   }
 
+  /** Another device changes the source (the command touches no row, but every apply bumps the revision), so the next
+   *  refresh sees a new revision and reloads the snapshot. */
+  const bumpRev = async (connectionString: string): Promise<void> => {
+    await (await direct(connectionString)).apply({ type: 'inventory.update', id: newId(), name: 'x' }, { device: 'other' })
+  }
+
   const gate = (): { promise: Promise<void>; open: () => void } => {
     let open!: () => void
     return { promise: new Promise<void>((r) => (open = r)), open }
@@ -184,7 +192,7 @@ function harness() {
     return hold
   }
 
-  return { gate, holdDb, pgs, directConns, flags, db, workspace, seed, direct, addDatabase }
+  return { gate, holdDb, bumpRev, pgs, directConns, flags, db, workspace, seed, direct, addDatabase }
 }
 
 const folderCreate = (inventoryId: Id, name: string, id: Id = newId()): Command => ({
@@ -511,6 +519,7 @@ describe('workspace', () => {
     await ws.start()
     const gate = h.gate()
     h.flags.loadGate = gate.promise
+    await h.bumpRev(CS('one'))
     const refresh = ws.refresh()
     await vi.waitFor(() => expect(h.flags.loadBlocked).toBe(true))
     await ws.apply(folderCreate(id, 'Fresh'))
@@ -543,6 +552,7 @@ describe('workspace', () => {
     const old = ws.state.current!
     expect(old.inventoryId).toBe(a)
     h.flags.missing.add(a)
+    await h.bumpRev(CS('one'))
     await ws.refresh()
     expect(ws.state.current).toEqual({ sourceId: 's1', inventoryId: b })
     expect(ws.state.sources[0]!.status).toBe('ready')
@@ -1084,6 +1094,7 @@ describe('workspace', () => {
       const { h, ws, refs } = await started('A', 'B', 'C')
       const [a, b, c] = refs as [InventoryRef, InventoryRef, InventoryRef]
       h.flags.missing.add(a.inventoryId)
+      await h.bumpRev(CS('one'))
       const deleting = h.holdDb('deleteSnapshot')
       const refresh = ws.refresh()
       // A is gone from the source; its cached copy is being deleted.
@@ -1132,6 +1143,7 @@ describe('workspace', () => {
       const { h, ws, refs } = await started('Inv')
       const gate = h.gate()
       h.flags.loadGate = gate.promise
+      await h.bumpRev(CS('one'))
       const refresh = ws.refresh()
       await vi.waitFor(() => expect(h.flags.loadBlocked).toBe(true))
       // The load finishes right after the removal deleted the cached copies, before current is cleared.
@@ -1366,5 +1378,86 @@ describe('workspace photos', () => {
     expect(ws.fileStoreFor('n1')).toBeNull()
     expect(ws.fileStoreFor('n2')).not.toBeNull()
     expect(ws.fileStoreFor('missing')).toBeNull()
+  })
+
+  describe('revision counter', () => {
+    const start = async (h: ReturnType<typeof harness>) => {
+      const id = await h.seed(CS('one'), 'Inv')
+      await h.db.putSource(config('s1', CS('one')))
+      const ws = h.workspace()
+      await ws.start()
+      return { id, ws }
+    }
+
+    it('refresh with an unchanged rev does not load the inventory again', async () => {
+      const h = setup()
+      const { ws } = await start(h)
+      const loads = h.flags.loadCalls
+      await ws.refresh()
+      expect(h.flags.loadCalls).toBe(loads)
+      expect(ws.state.snapshotOrigin).toBe('live')
+      expect(ws.state.snapshot).not.toBeNull()
+    })
+
+    it('refresh with a changed rev loads again', async () => {
+      const h = setup()
+      const { id, ws } = await start(h)
+      const loads = h.flags.loadCalls
+      await (await h.direct(CS('one'))).apply(folderCreate(id, 'By another device'), { device: 'other' })
+      await ws.refresh()
+      expect(h.flags.loadCalls).toBe(loads + 1)
+      expect(ws.state.snapshot?.folders.map((f) => f.name)).toEqual(['By another device'])
+    })
+
+    it('a fresh start with a cached copy at the current rev skips the load and goes live', async () => {
+      const h = setup()
+      await start(h)
+      const loads = h.flags.loadCalls
+      const again = h.workspace()
+      await again.startFromCache()
+      expect(again.state.snapshotOrigin).toBe('cache')
+      await again.refresh()
+      expect(h.flags.loadCalls).toBe(loads)
+      expect(again.state.snapshotOrigin).toBe('live')
+    })
+
+    it('a cached copy at an older rev is reloaded', async () => {
+      const h = setup()
+      const { id } = await start(h)
+      await (await h.direct(CS('one'))).apply(folderCreate(id, 'Later'), { device: 'other' })
+      const again = h.workspace()
+      await again.startFromCache()
+      await again.refresh()
+      expect(again.state.snapshot?.folders.map((f) => f.name)).toEqual(['Later'])
+    })
+
+    it('an own write reloads, and a later change by another device is not skipped', async () => {
+      const h = setup()
+      const { id, ws } = await start(h)
+      await ws.apply(folderCreate(id, 'Mine'))
+      expect(ws.state.snapshot?.folders.map((f) => f.name)).toEqual(['Mine'])
+      await ws.refresh()
+      expect(ws.state.snapshot?.folders.map((f) => f.name)).toEqual(['Mine'])
+      await (await h.direct(CS('one'))).apply(folderCreate(id, 'Theirs'), { device: 'other' })
+      await ws.refresh()
+      expect(ws.state.snapshot?.folders.map((f) => f.name).sort()).toEqual(['Mine', 'Theirs'])
+    })
+
+    it('a change landing between the listing and the load is picked up by the next refresh', async () => {
+      const h = setup()
+      const { id, ws } = await start(h)
+      const other = await h.direct(CS('one'))
+      await other.apply(folderCreate(id, 'First'), { device: 'other' })
+      const gate = h.gate()
+      h.flags.loadGate = gate.promise
+      const refreshing = ws.refresh()
+      // The load has read its data (it waits after reading); a write lands after the listing was taken.
+      while (!h.flags.loadBlocked) await new Promise((r) => setTimeout(r, 1))
+      await other.apply(folderCreate(id, 'Second'), { device: 'other' })
+      gate.open()
+      await refreshing
+      await ws.refresh()
+      expect(ws.state.snapshot?.folders.map((f) => f.name).sort()).toEqual(['First', 'Second'])
+    })
   })
 })

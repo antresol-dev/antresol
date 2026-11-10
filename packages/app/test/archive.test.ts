@@ -26,9 +26,9 @@ afterAll(() => driver.close())
 
 // Every test archives and restores: each gets a fresh copy of the demo data, a new inventory in the same database.
 beforeEach(async () => {
-  const before = new Set((await storage.listInventories()).map((i) => i.id))
+  const before = new Set((await storage.listInventories()).inventories.map((i) => i.id))
   await seedDemo(storage, { device: 'Test' }, { extras: false })
-  inventoryId = (await storage.listInventories()).find((i) => i.name === 'Electronics' && !before.has(i.id))!.id
+  inventoryId = (await storage.listInventories()).inventories.find((i) => i.name === 'Electronics' && !before.has(i.id))!.id
   snap = await storage.loadInventory(inventoryId)
 })
 

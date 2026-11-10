@@ -50,7 +50,7 @@ afterAll(() => driver.close())
 beforeAll(async () => {
   const conn = await driver.connect(cfg)
   storage = conn.storage
-  inventories = (await storage.listInventories()).map((inventory) => ({
+  inventories = (await storage.listInventories()).inventories.map((inventory) => ({
     ref: { sourceId: cfg.id, inventoryId: inventory.id },
     inventory,
     sourceName: cfg.name,

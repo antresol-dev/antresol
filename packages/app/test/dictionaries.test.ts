@@ -33,7 +33,7 @@ afterAll(() => driver.close())
 beforeAll(async () => {
   const conn = await driver.connect(cfg)
   storage = conn.storage
-  inventoryId = (await storage.listInventories()).find((i) => i.name === 'Electronics')!.id
+  inventoryId = (await storage.listInventories()).inventories.find((i) => i.name === 'Electronics')!.id
   // Custom units created in reverse name order: the view sorts them.
   await run({ type: 'unit.create', id: reelId, inventoryId, name: 'Reel', symbol: 'reel', prefixPowers: [3] })
   await run({ type: 'unit.create', id: boxId, inventoryId, name: 'Box', symbol: 'box', prefixPowers: [] })

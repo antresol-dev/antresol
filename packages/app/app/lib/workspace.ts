@@ -38,7 +38,7 @@ export const FAILED_RETRY_MS = 5 * 60_000
 
 type Outcome =
   /** `fresh`: opened by this attempt rather than the source's open connection. */
-  | { ok: true; conn: SourceConnection; inventories: Inventory[]; fresh: boolean }
+  | { ok: true; conn: SourceConnection; inventories: Inventory[]; rev: string; fresh: boolean }
   | { ok: false; error: unknown }
 
 const sameRef = (a: InventoryRef | null, b: InventoryRef | null): boolean =>
@@ -100,6 +100,10 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   const connectionStringOf = (conn: SourceConnection): string => openedWith.get(conn) ?? ''
   /** Last known inventories (active and archived) per source; also kept on the device and while the source is unreachable. */
   const listings = new Map<string, Inventory[]>()
+  /** Revision of each source as last read by listInventories (see loadCurrent for how it is used). */
+  const sourceRevs = new Map<string, string>()
+  /** The revision the shown `state.snapshot` is known to be at least as new as; null when unknown. */
+  let shownRev: string | null = null
   let queue: Promise<void> = Promise.resolve()
   let pendingWrites = 0
   let refreshing: Promise<void> | null = null
@@ -116,6 +120,9 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   const bumpGeneration = (id: string): void => {
     generations.set(id, generationOf(id) + 1)
     refreshEpoch++
+    // The source may now be another database: revisions read from, or cached under, the old one prove nothing.
+    sourceRevs.delete(id)
+    if (state.current?.sourceId === id) shownRev = null
   }
 
   const statusOf = (sourceId: string): SourceStatus | null =>
@@ -146,6 +153,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       state.snapshot = null
       state.snapshotOrigin = null
       state.snapshotSavedAt = null
+      shownRev = null
     }
     state.current = ref
     recompute()
@@ -170,6 +178,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   async function dropConnection(sourceId: string): Promise<void> {
     const old = conns.get(sourceId)
     conns.delete(sourceId)
+    sourceRevs.delete(sourceId)
     await old?.close().catch(() => {})
   }
 
@@ -186,8 +195,8 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     try {
       conn = await driver.connect(config)
       openedWith.set(conn, config.connectionString)
-      const inventories = await conn.storage.listInventories()
-      return { ok: true, conn, inventories, fresh: true }
+      const { inventories, rev } = await conn.storage.listInventories()
+      return { ok: true, conn, inventories, rev, fresh: true }
     } catch (error) {
       await conn?.close().catch(() => {})
       return { ok: false, error }
@@ -200,9 +209,9 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     const open = conns.get(config.id)
     if (open && connectionStringOf(open) === config.connectionString) {
       try {
-        const [inspection, inventories] = await Promise.all([open.inspect(), open.storage.listInventories()])
+        const [inspection, listing] = await Promise.all([open.inspect(), open.storage.listInventories()])
         const opened = open.status.state === 'newer' ? 'newer' : 'current'
-        if (inspection.state === opened) return { ok: true, conn: open, inventories, fresh: false }
+        if (inspection.state === opened) return { ok: true, conn: open, ...listing, fresh: false }
       } catch {
         // Opened again below.
       }
@@ -227,6 +236,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     if (outcome.ok) {
       const old = conns.get(config.id)
       conns.set(config.id, outcome.conn)
+      sourceRevs.set(config.id, outcome.rev)
       setSource(config, outcome.conn.status.state === 'newer' ? 'read_only' : 'ready', null, null)
       const saving = storeListing(config.id, outcome.inventories)
       if (old && old !== outcome.conn) await old.close().catch(() => {})
@@ -251,23 +261,45 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     if (!conn) return
     const generation = generationOf(sourceId)
     let inventories: Inventory[]
+    let rev: string
     try {
-      inventories = await conn.storage.listInventories()
+      ;({ inventories, rev } = await conn.storage.listInventories())
     } catch (error) {
       if (generationOf(sourceId) === generation) markFailure(sourceId, error, connectionStringOf(conn))
       return
     }
     // Edited or removed meanwhile: the list is no longer this connection's to set.
     if (generationOf(sourceId) !== generation) return
+    sourceRevs.set(sourceId, rev)
     const saving = storeListing(sourceId, inventories)
     rebuildInventories()
     await saving
   }
 
-  async function loadCurrent(): Promise<void> {
+  /**
+   * Loads the current inventory's snapshot and shows and caches it.
+   *
+   * `skipIfUnchanged`: do nothing but mark the shown copy live when it is already at the source's revision. Only the
+   * refresh paths ask for this; a load after our own write never does (it must reload).
+   *
+   * Ordering argument: the revision stored with a snapshot is `sourceRevs`, captured BEFORE `loadInventory` starts. That
+   * value was read by a `listInventories` that completed earlier (or is absent after our own write: stored as null,
+   * which never matches, so the next refresh reloads once). Each write bumps the revision in the same transaction as its
+   * data, so a snapshot read after revision R was read contains every write up to R. If another device writes between
+   * the listing and the load, the snapshot is newer than its stored revision: the next refresh sees a different
+   * revision and reloads once more (a needless reload, never a missed one). Storing a revision read AFTER the load would
+   * be wrong: a write in between would be recorded as seen and skipped for good.
+   */
+  async function loadCurrent(skipIfUnchanged = false): Promise<void> {
     const ref = state.current
     const conn = ref && conns.get(ref.sourceId)
     if (!ref || !conn) return
+    const rev = sourceRevs.get(ref.sourceId) ?? null
+    if (skipIfUnchanged && rev !== null && shownRev === rev && state.snapshot?.inventory.id === ref.inventoryId) {
+      state.snapshotOrigin = 'live'
+      state.snapshotSavedAt = nowIso()
+      return
+    }
     const token = ++loadSeq
     const generation = generationOf(ref.sourceId)
     // Another inventory selected, or the source edited or removed meanwhile: the result is nobody's.
@@ -292,7 +324,8 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     state.snapshot = markRaw(snapshot)
     state.snapshotOrigin = 'live'
     state.snapshotSavedAt = savedAt
-    await db.putSnapshot(ref, { snapshot, savedAt })
+    shownRev = rev
+    await db.putSnapshot(ref, { snapshot, savedAt, rev })
   }
 
   /** The current inventory vanished from its (reachable) source: forget it and move to the first remaining one. */
@@ -325,7 +358,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       // A source that did not answer keeps its inventory and cached copy.
       if (status !== null && !isConnected(status)) return
       if (state.inventories.some((e) => sameRef(e.ref, cur))) {
-        await loadCurrent()
+        await loadCurrent(true)
         return
       }
       await db.deleteSnapshot(cur)
@@ -350,8 +383,9 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       state.snapshot = cached ? markRaw(cached.snapshot) : null
       state.snapshotOrigin = cached ? 'cache' : null
       state.snapshotSavedAt = cached?.savedAt ?? null
+      shownRev = cached?.rev ?? null
     }
-    if (isConnected(statusOf(ref.sourceId))) await loadCurrent()
+    if (isConnected(statusOf(ref.sourceId))) await loadCurrent(true)
   }
 
   async function startFromCache(): Promise<void> {
@@ -372,6 +406,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       state.snapshot = markRaw(cached.snapshot)
       state.snapshotOrigin = 'cache'
       state.snapshotSavedAt = cached.savedAt
+      shownRev = cached.rev ?? null
     }
     state.started = true
   }
@@ -467,6 +502,8 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       const invalid = validateCommand(normalized, snapshot)
       if (invalid) throw invalid
       await guarded(sourceId, conn, () => conn.storage.apply(normalized, { device: state.deviceName }))
+      // The source moved on: the revision known for it is stale, and the reloads below must not be skipped on it.
+      sourceRevs.delete(sourceId)
       if (isRelistCommand(command)) {
         await relist(sourceId)
         await resolveCurrent()
@@ -601,7 +638,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     // Everything is read before anything is returned: a failure midway leaves no partial file.
     return guarded(sourceId, conn, async () => {
       const inventories = []
-      for (const { id } of await conn.storage.listInventories()) {
+      for (const { id } of (await conn.storage.listInventories()).inventories) {
         const snapshot = await conn.storage.loadInventory(id)
         inventories.push({ snapshot, movements: await conn.storage.loadAllMovements(id) })
       }

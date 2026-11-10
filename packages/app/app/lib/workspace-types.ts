@@ -1,4 +1,4 @@
-import type { Command, Id, Inventory, InventorySnapshot, Movement } from '@graymatter/core'
+import type { Command, FileStore, Id, Inventory, InventorySnapshot, Movement } from '@graymatter/core'
 import type { DeviceDb } from './device-db'
 import type { FailureReason, SourceDriver } from './sources'
 import type { InventoryRef, SourceConfig, SourceKind } from './types'
@@ -46,6 +46,10 @@ export interface WorkspaceDeps {
   drivers: Partial<Record<SourceKind, SourceDriver>>
   userAgent: string
   now?: () => Date
+  /** Shrinks a photo before upload; defaults to the canvas-based prepareImage. */
+  prepareImage?: (f: File) => Promise<Blob>
+  /** The photo store of a source; defaults to Uploadcare (Neon with a key) or the device store (demo). */
+  fileStores?: (config: SourceConfig) => FileStore | null
 }
 
 export interface Workspace {
@@ -67,6 +71,16 @@ export interface Workspace {
   applyTo(ref: InventoryRef, command: Command): Promise<void>
   /** Journal of an item of the current inventory, newest first. Rejects without a network call while the source is unreachable. */
   loadMovements(itemId: Id): Promise<Movement[]>
+  /** Uploadcare for a Neon source with a public key, the device store for the demo source, otherwise null. */
+  fileStoreFor(sourceId: string): FileStore | null
+  /** Prepares, uploads and records each file in order (photo.add with newId, provider, fileId, url). Stops at the first failure
+   *  and rejects with it; photos already added stay. onProgress(doneCount) after each file. */
+  addPhotos(itemId: Id, files: File[], onProgress?: (done: number) => void): Promise<void>
+  /** One photo per variant: removes the old one first. */
+  setVariantPhoto(itemId: Id, variantId: Id, file: File): Promise<void>
+  removePhoto(photoId: Id): Promise<void>
+  /** photo.reorder with the chosen photo first. */
+  makeCover(itemId: Id, photoId: Id): Promise<void>
   createInventory(input: { sourceId: string; name: string; currency: string }): Promise<InventoryRef>
   addSource(input: Omit<SourceConfig, 'id' | 'createdAt'>): Promise<SourceConfig>
   /** Of overlapping calls for one source the last one called wins; an earlier one, or one whose source was removed

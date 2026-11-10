@@ -1,10 +1,11 @@
 import { PGlite } from '@electric-sql/pglite'
-import { newId, StorageError, type Command, type Id } from '@graymatter/core'
+import { FileError, newId, StorageError, type Command, type FileStore, type Id } from '@graymatter/core'
 import { APP_SCHEMA_VERSION, createPgliteExecutor, type PgExecutor } from '@graymatter/storage-postgres'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { isReactive } from 'vue'
 import { createMemoryDeviceDb, type DeviceDb } from '../app/lib/device-db'
 import { defaultDeviceName } from '../app/lib/device-name'
+import { createDemoDriver } from '../app/lib/dev/demo-source'
 import { createNeonDriver, type SourceDriver } from '../app/lib/sources'
 import type { InventoryRef, SourceConfig } from '../app/lib/types'
 import { createWorkspace, FAILED_RETRY_MS } from '../app/lib/workspace'
@@ -1077,5 +1078,155 @@ describe('workspace', () => {
       expect(ws.state.snapshot).toBeNull()
       expect(ws.state.current).toBeNull()
     })
+  })
+})
+
+describe('workspace photos', () => {
+  const demoConfig: SourceConfig = {
+    id: 'demo',
+    kind: 'dev-pglite',
+    name: 'Demo',
+    connectionString: '',
+    uploadcarePublicKey: null,
+    createdAt: '2026-11-10T00:00:00Z',
+  }
+  // A fresh in-memory demo database per test.
+  const drivers: ReturnType<typeof createDemoDriver>[] = []
+  const freshDriver = (): ReturnType<typeof createDemoDriver> => {
+    const d = createDemoDriver({ memory: true, extras: false })
+    drivers.push(d)
+    return d
+  }
+  afterEach(async () => {
+    await Promise.all(drivers.splice(0).map((d) => d.close()))
+  })
+
+  const file = (name: string): File => new File([name], `${name}.jpg`, { type: 'image/jpeg' })
+
+  async function photoHarness() {
+    const db = createMemoryDeviceDb()
+    await db.putSource(demoConfig)
+    const uploads: string[] = []
+    const prepared: string[] = []
+    const control = { failOn: null as number | null, count: 0 }
+    const store: FileStore = {
+      provider: 'fake',
+      async upload(_blob, name) {
+        control.count++
+        uploads.push(name)
+        if (control.failOn === control.count) throw new FileError('unavailable')
+        return { provider: 'fake', fileId: `f-${control.count}`, url: `https://cdn.test/${control.count}` }
+      },
+    }
+    const ws = createWorkspace({
+      db,
+      drivers: { 'dev-pglite': freshDriver() },
+      userAgent: UA,
+      prepareImage: async (f) => {
+        prepared.push(f.name)
+        return f
+      },
+      fileStores: () => store,
+    })
+    await ws.start()
+    const snap = ws.state.snapshot!
+    const item = snap.items.find((i) => i.name === 'TL072')!
+    return { db, ws, uploads, prepared, control, item }
+  }
+
+  const photosOf = (ws: ReturnType<typeof createWorkspace>, itemId: Id) =>
+    ws.state.snapshot!.photos.filter((p) => p.itemId === itemId).sort((a, b) => a.position - b.position)
+
+  it('adds two files in order and reports progress', async () => {
+    const { ws, item, prepared } = await photoHarness()
+    const progress: number[] = []
+    await ws.addPhotos(item.id, [file('a'), file('b')], (n) => progress.push(n))
+    expect(progress).toEqual([1, 2])
+    expect(prepared).toEqual(['a.jpg', 'b.jpg'])
+    const photos = photosOf(ws, item.id)
+    expect(photos.map((p) => p.fileId)).toEqual(['f-1', 'f-2'])
+    expect(photos.map((p) => p.provider)).toEqual(['fake', 'fake'])
+    expect(photos.map((p) => p.position)).toEqual([0, 1])
+  })
+
+  it('stops at the first failed upload and keeps earlier photos', async () => {
+    const { ws, item, control } = await photoHarness()
+    control.failOn = 2
+    await expect(ws.addPhotos(item.id, [file('a'), file('b'), file('c')])).rejects.toMatchObject({
+      name: 'FileError',
+      code: 'unavailable',
+    })
+    expect(photosOf(ws, item.id)).toHaveLength(1)
+    expect(control.count).toBe(2)
+    expect(ws.state.sources[0]!.status).toBe('ready')
+  })
+
+  it('uploads nothing while read-only', async () => {
+    const { ws, item, uploads, prepared } = await photoHarness()
+    ws.state.sources[0]!.status = 'read_only'
+    ws.state.readOnly = 'source_error'
+    await expect(ws.addPhotos(item.id, [file('a')])).rejects.toMatchObject({ code: 'read_only' })
+    expect(uploads).toEqual([])
+    expect(prepared).toEqual([])
+  })
+
+  it('refuses without a store before uploading', async () => {
+    const db = createMemoryDeviceDb()
+    await db.putSource(demoConfig)
+    const ws = createWorkspace({ db, drivers: { 'dev-pglite': freshDriver() }, userAgent: UA, fileStores: () => null })
+    await ws.start()
+    const item = ws.state.snapshot!.items[0]!
+    await expect(ws.addPhotos(item.id, [file('a')])).rejects.toMatchObject({ name: 'FileError', code: 'no_store' })
+  })
+
+  it('refuses without a current snapshot', async () => {
+    const db = createMemoryDeviceDb()
+    const ws = createWorkspace({ db, drivers: {}, userAgent: UA })
+    await ws.start()
+    await expect(ws.addPhotos(newId(), [file('a')])).rejects.toMatchObject({ code: 'not_found' })
+  })
+
+  it('setVariantPhoto removes the old photo, then adds the new one', async () => {
+    const { ws, uploads } = await photoHarness()
+    const snap = ws.state.snapshot!
+    const variant = snap.variants.find((v) => v.name === '10k')!
+    await ws.setVariantPhoto(variant.itemId, variant.id, file('one'))
+    const first = ws.state.snapshot!.photos.find((p) => p.variantId === variant.id)!
+    await ws.setVariantPhoto(variant.itemId, variant.id, file('two'))
+    const now = ws.state.snapshot!.photos.filter((p) => p.variantId === variant.id)
+    expect(now).toHaveLength(1)
+    expect(now[0]!.id).not.toBe(first.id)
+    expect(now[0]!.fileId).toBe('f-2')
+    expect(uploads).toEqual(['one.jpg', 'two.jpg'])
+  })
+
+  it('removePhoto removes one photo', async () => {
+    const { ws, item } = await photoHarness()
+    await ws.addPhotos(item.id, [file('a'), file('b')])
+    const [a, b] = photosOf(ws, item.id)
+    await ws.removePhoto(a!.id)
+    expect(photosOf(ws, item.id).map((p) => p.id)).toEqual([b!.id])
+  })
+
+  it('makeCover puts the chosen photo first', async () => {
+    const { ws, item } = await photoHarness()
+    await ws.addPhotos(item.id, [file('a'), file('b'), file('c')])
+    const [a, b, c] = photosOf(ws, item.id)
+    await ws.makeCover(item.id, c!.id)
+    expect(photosOf(ws, item.id).map((p) => p.id)).toEqual([c!.id, a!.id, b!.id])
+    expect(b).toBeDefined()
+  })
+
+  it('fileStoreFor: demo is the device store, Neon without a key is null', async () => {
+    const db = createMemoryDeviceDb()
+    await db.putSource(demoConfig)
+    await db.putSource(config('n1', CS('x')))
+    await db.putSource({ ...config('n2', CS('y')), uploadcarePublicKey: 'pub' })
+    const ws = createWorkspace({ db, drivers: { 'dev-pglite': freshDriver() }, userAgent: UA })
+    await ws.startFromCache()
+    expect(ws.fileStoreFor('demo')?.provider).toBe('device')
+    expect(ws.fileStoreFor('n1')).toBeNull()
+    expect(ws.fileStoreFor('n2')).not.toBeNull()
+    expect(ws.fileStoreFor('missing')).toBeNull()
   })
 })

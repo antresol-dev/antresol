@@ -1,16 +1,21 @@
 import {
   DomainError,
+  FileError,
   newId,
   normalizeCommand,
   StorageError,
   validateCommand,
   type Command,
+  type FileStore,
   type Id,
   type Inventory,
   type InventorySnapshot,
   type Movement,
 } from '@graymatter/core'
+import { createUploadcareStore } from '@graymatter/files-uploadcare'
 import { markRaw, reactive } from 'vue'
+import { createDeviceFileStore } from './device-files'
+import { prepareImage as defaultPrepareImage } from './images'
 import { defaultDeviceName } from './device-name'
 import { classifyFailure, redactSecret, type FailureReason, type SourceConnection } from './sources'
 import type { InventoryRef, SourceConfig } from './types'
@@ -49,6 +54,16 @@ function isRelistCommand(c: Command): boolean {
   return c.type.startsWith('inventory.') || c.type === 'restore' ||
     (c.type === 'archive' && c.target === 'inventory') ||
     (c.type === 'deletePermanently' && c.target === 'inventory')
+}
+
+/** Demo source: the device store. Neon with a public key: Uploadcare. Anything else: none. */
+export function defaultFileStore(config: SourceConfig): FileStore | null {
+  if (config.kind === 'dev-pglite') return createDeviceFileStore()
+  const key = config.uploadcarePublicKey?.trim()
+  if (config.kind === 'neon' && key) {
+    return createUploadcareStore({ publicKey: key, cdnBase: config.uploadcareCdnBase ?? undefined })
+  }
+  return null
 }
 
 export function createWorkspace(deps: WorkspaceDeps): Workspace {
@@ -475,6 +490,66 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     await applyTo({ sourceId: cur.sourceId, inventoryId: cur.inventoryId }, command)
   }
 
+  const prepare = deps.prepareImage ?? defaultPrepareImage
+  const stores = new Map<string, { key: string; store: FileStore | null }>()
+
+  function fileStoreFor(sourceId: string): FileStore | null {
+    const config = state.sources.find((s) => s.config.id === sourceId)?.config
+    if (!config) return null
+    if (deps.fileStores) return deps.fileStores(config)
+    const key = `${config.kind}|${config.uploadcarePublicKey ?? ''}|${config.uploadcareCdnBase ?? ''}`
+    const known = stores.get(sourceId)
+    if (known?.key === key) return known.store
+    const store = defaultFileStore(config)
+    stores.set(sourceId, { key, store })
+    return store
+  }
+
+  /** Checks that must pass before anything is uploaded. */
+  function photoTarget(): { cur: InventoryRef; store: FileStore } {
+    if (state.readOnly) throw new StorageError('read_only')
+    const cur = state.current
+    if (!cur || !state.snapshot) throw new StorageError('not_found')
+    const store = fileStoreFor(cur.sourceId)
+    if (!store) throw new FileError('no_store')
+    return { cur, store }
+  }
+
+  /** Upload errors are FileErrors and never touch the source's status. */
+  async function uploadOne(store: FileStore, file: File): Promise<{ provider: string; fileId: string; url: string }> {
+    const blob = await prepare(file)
+    return store.upload(blob, file.name)
+  }
+
+  async function addPhotos(itemId: Id, files: File[], onProgress?: (done: number) => void): Promise<void> {
+    const { store } = photoTarget()
+    let done = 0
+    for (const file of files) {
+      const stored = await uploadOne(store, file)
+      await apply({ type: 'photo.add', id: newId(), itemId, variantId: null, ...stored })
+      onProgress?.(++done)
+    }
+  }
+
+  async function setVariantPhoto(itemId: Id, variantId: Id, file: File): Promise<void> {
+    const { store } = photoTarget()
+    // Upload first: a failed upload leaves the old photo in place.
+    const stored = await uploadOne(store, file)
+    const old = state.snapshot?.photos.find((p) => p.variantId === variantId)
+    if (old) await apply({ type: 'photo.remove', id: old.id })
+    await apply({ type: 'photo.add', id: newId(), itemId, variantId, ...stored })
+  }
+
+  async function removePhoto(photoId: Id): Promise<void> {
+    await apply({ type: 'photo.remove', id: photoId })
+  }
+
+  async function makeCover(itemId: Id, photoId: Id): Promise<void> {
+    const own = (state.snapshot?.photos ?? []).filter((p) => p.itemId === itemId).sort((a, b) => a.position - b.position)
+    const orderedIds = [photoId, ...own.map((p) => p.id).filter((id) => id !== photoId)]
+    await apply({ type: 'photo.reorder', itemId, orderedIds })
+  }
+
   async function loadMovements(itemId: Id): Promise<Movement[]> {
     const cur = state.current
     const status = cur ? statusOf(cur.sourceId) : null
@@ -522,6 +597,11 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     apply,
     applyTo,
     loadMovements,
+    fileStoreFor,
+    addPhotos,
+    setVariantPhoto,
+    removePhoto,
+    makeCover,
     async createInventory({ sourceId, name, currency }) {
       const id = newId()
       await write(sourceId, { type: 'inventory.create', id, name, description: null, currency }, async () => null)

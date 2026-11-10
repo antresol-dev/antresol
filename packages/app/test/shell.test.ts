@@ -39,7 +39,7 @@ beforeAll(async () => {
 
 describe('shell', () => {
   it('lists the sections of the app panel', () => {
-    expect(NAV_SECTIONS.map((s) => s.key)).toEqual(['items', 'archive'])
+    expect(NAV_SECTIONS.map((s) => s.key)).toEqual(['items', 'dictionaries', 'archive'])
   })
 
   it('maps routes to sections', () => {

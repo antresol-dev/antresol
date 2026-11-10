@@ -70,11 +70,6 @@ export default defineNuxtConfig({
     baseURL,
     head: {
       title: 'GrayMatter',
-      // Browser chrome follows the system theme; a manual choice is added by app.vue. Same values as --background.
-      meta: [
-        { name: 'theme-color', content: '#F7F7F8', media: '(prefers-color-scheme: light)' },
-        { name: 'theme-color', content: '#0E0E10', media: '(prefers-color-scheme: dark)' },
-      ],
       // resizes-content: on Android the keyboard shrinks the layout viewport, so bottom sheets sit above it
       // instead of behind it (Chrome's default, resizes-visual, keeps fixed elements under the keyboard).
       viewport: 'width=device-width, initial-scale=1, interactive-widget=resizes-content',

@@ -1,15 +1,14 @@
 <script setup lang="ts">
 import { Toaster } from '@/components/ui/sonner'
+import { themeColorMeta } from '~/lib/shell'
 
-// A manual theme choice overrides the system one for the browser chrome: a meta without `media`, listed first, wins.
-// On "system" it is absent and the two media metas from nuxt.config apply.
+// Browser chrome colour: both media-scoped tags on "system", a single plain tag once a theme is picked.
 const colorMode = useColorMode()
-useHead({
-  meta: computed(() =>
-    colorMode.preference === 'system'
-      ? []
-      : [{ name: 'theme-color', content: colorMode.value === 'dark' ? '#0E0E10' : '#F7F7F8', tagPriority: 'critical' as const }],
-  ),
+useHead({ meta: computed(() => themeColorMeta(colorMode.preference, colorMode.value)) })
+// <NuxtPwaAssets> adds its own plain theme-color (the manifest's, always light), which would win over ours for the dark
+// theme. Ours are the ones with a key.
+injectHead()?.hooks?.hook('tags:resolve', (ctx) => {
+  ctx.tags = ctx.tags.filter((t) => !(t.tag === 'meta' && t.props.name === 'theme-color' && !t.key))
 })
 </script>
 

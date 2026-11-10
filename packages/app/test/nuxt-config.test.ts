@@ -25,10 +25,4 @@ describe('nuxt config', () => {
   it('loads Manrope 800 (font-extrabold)', () => {
     expect(config.fonts?.families?.[0]).toMatchObject({ name: 'Manrope', weights: [400, 500, 600, 700, 800] })
   })
-
-  it('declares light and dark theme-color metas matching the background tokens', () => {
-    const meta = config.app?.head?.meta ?? []
-    expect(meta).toContainEqual({ name: 'theme-color', content: '#F7F7F8', media: '(prefers-color-scheme: light)' })
-    expect(meta).toContainEqual({ name: 'theme-color', content: '#0E0E10', media: '(prefers-color-scheme: dark)' })
-  })
 })

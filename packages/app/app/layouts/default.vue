@@ -20,10 +20,14 @@ const router = useRouter()
 const launch = launchAction(route.query)
 if (launch) {
   void router.replace({ query: { ...route.query, action: undefined } })
-  // A one-shot wait: resolves as soon as an inventory is current.
-  void until(() => state.current).toBeTruthy().then(() => {
-    if (launch === 'search') paletteOpen.value = true
-    else if (!state.readOnly) quickAdd.open()
+  // A one-shot wait for an inventory (never on the welcome page with no sources: it gives up after 10 s), dropped if the
+  // user navigates first.
+  const startPath = route.path
+  void until(() => state.current).toBeTruthy({ timeout: 10_000, throwOnTimeout: false }).then(() => {
+    if (!state.current || route.path !== startPath) return
+    // A read-only inventory can't take new items; the quieter fallback is the search palette.
+    if (launch === 'add' && !state.readOnly) quickAdd.open()
+    else paletteOpen.value = true
   })
 }
 // Tooltips on icon buttons wait a moment, so moving across the header doesn't flash them.

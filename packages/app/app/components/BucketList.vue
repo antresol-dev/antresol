@@ -1,12 +1,35 @@
 <script setup lang="ts">
 import { useMediaQuery } from '@vueuse/core'
+import type { Component } from 'vue'
+import { ArrowRightLeft, Download, Minus, PencilLine, Plus, Upload } from '@lucide/vue'
+import type { Id } from '@graymatter/core'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { BucketRow } from '~/lib/item-view'
+import type { StockMode } from '~/lib/stock-forms'
 
 const props = defineProps<{
   buckets: BucketRow[]
   /** Variant to mark and scroll to (from ?variant=). */
   highlight: string | null
 }>()
+
+const emit = defineEmits<{ step: [step: 'plus' | 'minus', variantId: Id | null]; open: [mode: StockMode, variantId: Id | null] }>()
+
+const { t } = useI18n()
+const { state } = useWorkspace()
+const locked = computed(() => !!state.readOnly || state.saving)
+
+function actionsOf(row: BucketRow): { key: StockMode; label: string; icon: Component; disabled: boolean }[] {
+  const all = [
+    { key: 'receive' as const, label: t('stockActions.receive'), icon: Download },
+    { key: 'use' as const, label: t('stockActions.use'), icon: Upload },
+    { key: 'set' as const, label: t('stockActions.setQuantity'), icon: PencilLine },
+    ...(props.buckets.length > 1 ? [{ key: 'transfer' as const, label: t('stockActions.moveTo'), icon: ArrowRightLeft }] : []),
+  ]
+  return all.map((a) => ({ ...a, disabled: locked.value || (a.key === 'use' && row.outOfStock) }))
+}
+const stepButton = 'size-11 shrink-0 rounded-field'
 
 const rows = computed(() =>
   props.buckets.map((b) => ({
@@ -54,6 +77,44 @@ watch(() => props.highlight, reveal)
         <span class="shrink-0 text-base font-bold tabular-nums" :class="row.outOfStock && 'text-muted-foreground'">
           {{ row.number }}
           <span class="text-xs font-semibold text-muted-foreground">{{ row.unit }}</span>
+        </span>
+        <span class="flex shrink-0 items-center">
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <Button
+                variant="ghost"
+                size="icon"
+                :class="stepButton"
+                :aria-label="$t('stockActions.useOneOf', { name: row.name ?? $t('item.noVariant') })"
+                :disabled="locked || row.outOfStock"
+                @click="emit('step', 'minus', row.variantId)"
+              >
+                <Minus class="size-5" aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{{ $t('stockActions.useOne') }}</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger as-child>
+              <Button
+                variant="ghost"
+                size="icon"
+                :class="stepButton"
+                :aria-label="$t('stockActions.addOneOf', { name: row.name ?? $t('item.noVariant') })"
+                :disabled="locked"
+                @click="emit('step', 'plus', row.variantId)"
+              >
+                <Plus class="size-5" aria-hidden="true" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{{ $t('stockActions.addOne') }}</TooltipContent>
+          </Tooltip>
+          <RowMenu
+            class="size-11"
+            :label="row.name ?? $t('item.noVariant')"
+            :actions="actionsOf(row)"
+            @select="(key) => emit('open', key as StockMode, row.variantId)"
+          />
         </span>
       </li>
     </ul>

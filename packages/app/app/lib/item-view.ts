@@ -192,8 +192,23 @@ export interface JournalRow {
   variantName: string | null
   transfer: { from: string | null; to: string | null } | null
   totalPrice: number | null
+  /** As stored; show it as text only. */
   sourceUrl: string | null
+  /** `sourceUrl` as a link target, only when it parses as an http(s) URL; null otherwise (never link it). */
+  sourceHref: string | null
   note: string | null
+}
+
+/** Core refuses other schemes on write, but a source can be written by other clients: check again before linking. */
+function httpHref(url: string | null): string | null {
+  if (url === null) return null
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return null
+  }
+  return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.href : null
 }
 
 const MINUS = '−'
@@ -210,7 +225,15 @@ export function journalRows(s: InventorySnapshot, itemId: Id, movements: Movemen
   for (const m of movements) {
     const sign = cmpQ(m.quantity, '0')
     const parts = formatAmountParts(sign < 0 ? negQ(m.quantity) : m.quantity, unit)
-    const base = { at: m.createdAt, by: m.createdBy, unit: parts.unit, totalPrice: m.totalPrice, sourceUrl: m.sourceUrl, note: m.note }
+    const base = {
+      at: m.createdAt,
+      by: m.createdBy,
+      unit: parts.unit,
+      totalPrice: m.totalPrice,
+      sourceUrl: m.sourceUrl,
+      sourceHref: httpHref(m.sourceUrl),
+      note: m.note,
+    }
 
     if (m.kind === 'transfer' && m.transferId !== null) {
       // The outgoing half is negative; the first half met (the newest) places the row.

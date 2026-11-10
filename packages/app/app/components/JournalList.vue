@@ -89,7 +89,9 @@ function partsOf(row: JournalRow): Part[] {
   const parts: Part[] = []
   if (row.variantName) parts.push({ kind: 'text', text: row.variantName })
   if (row.totalPrice !== null && currency.value) parts.push({ kind: 'text', text: formatMoney(row.totalPrice, currency.value) })
-  if (row.sourceUrl) parts.push({ kind: 'link', href: row.sourceUrl })
+  // Only a checked http(s) address becomes a link; anything else stays plain text.
+  if (row.sourceHref) parts.push({ kind: 'link', href: row.sourceHref })
+  else if (row.sourceUrl) parts.push({ kind: 'text', text: row.sourceUrl })
   if (row.note) parts.push({ kind: 'text', text: row.note })
   return parts
 }

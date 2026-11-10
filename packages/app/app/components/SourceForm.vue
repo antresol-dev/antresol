@@ -150,7 +150,15 @@ async function save(): Promise<void> {
         <span class="font-normal text-subtle-foreground">· {{ $t('sourceForm.optional') }}</span>
       </Label>
       <Input id="source-key" v-model="uploadcareKey" autocomplete="off" class="h-11 rounded-field bg-surface" />
-      <p class="text-sm text-subtle-foreground">{{ $t('sourceForm.uploadcareKeyHint') }}</p>
+      <p class="text-sm text-subtle-foreground">
+        {{ $t('sourceForm.uploadcareKeyHint') }}
+        <a
+          href="https://app.uploadcare.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="underline underline-offset-2"
+        >{{ $t('sourceForm.uploadcareKeyLink') }}</a>
+      </p>
     </div>
 
     <div class="grid gap-1.5">

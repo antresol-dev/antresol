@@ -3,6 +3,23 @@
 GrayMatter is a collection of tools for personal use to help me dealing with everyday stuff.
 For now, it only contains a single tool -- Inventory project which was primarily created to organize electronic components.
 
+## GrayMatter (revival)
+
+The Nuxt app in `packages/app` on the `revival` branch is the new version. The Inventory section below describes the legacy app.
+
+## Photos with Uploadcare
+
+Photos are stored in [Uploadcare](https://uploadcare.com/). Setup for each source:
+
+1. Create a project in the [Uploadcare dashboard](https://app.uploadcare.com/).
+2. Copy the project's public key.
+3. Turn signed uploads off in the project. The app has no secret key, so it cannot sign uploads.
+4. Paste the key into the "Uploadcare public key" field of the source in GrayMatter's settings.
+5. Mind the free plan limits: 1,000 operations per month (each upload is one operation, and so is each first request for an image size), 1 GB of storage and 5 GB of traffic per month. When a limit is exceeded, photos stop loading until next month. The inventory keeps working. Pricing: <https://uploadcare.com/pricing/>.
+6. The app never deletes files. To remove a photo from Uploadcare, delete it in the dashboard.
+
+The "Photo address" field is the CDN domain used to show photos. Projects created after September 2025 get a personal `*.ucarecd.net` domain, shown in the dashboard under Delivery; paste it there. Leave the field empty to use `ucarecdn.com`, which is right for projects created before September 2025.
+
 ## Inventory
 
 I'm currently deeply involved in DIY synthesizers, including both analog and digital.

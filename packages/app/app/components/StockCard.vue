@@ -45,7 +45,7 @@ const prices = computed(() => {
       <span v-if="total.outOfStock" class="ml-1.5 text-sm font-semibold text-muted-foreground">{{ $t('item.outOfStock') }}</span>
     </p>
     <p v-if="prices" class="text-[13px] text-muted-foreground tabular-nums">{{ prices }}</p>
-    <div v-if="controls" class="mt-1 flex items-center gap-2">
+    <div v-if="controls" class="mt-1 flex flex-wrap items-center gap-2">
       <Tooltip>
         <TooltipTrigger as-child>
           <Button
@@ -76,10 +76,10 @@ const prices = computed(() => {
         </TooltipTrigger>
         <TooltipContent>{{ $t('stockActions.addOne') }}</TooltipContent>
       </Tooltip>
-      <Button variant="outline" class="h-11 rounded-field bg-surface px-4 font-bold" :disabled="locked" @click="emit('open', 'receive')">
+      <Button variant="outline" class="h-11 min-w-20 flex-1 rounded-field bg-surface px-3 font-bold" :disabled="locked" @click="emit('open', 'receive')">
         {{ $t('stockActions.receive') }}
       </Button>
-      <Button variant="outline" class="h-11 rounded-field bg-surface px-4 font-bold" :disabled="locked" @click="emit('open', 'use')">
+      <Button variant="outline" class="h-11 min-w-20 flex-1 rounded-field bg-surface px-3 font-bold" :disabled="locked" @click="emit('open', 'use')">
         {{ $t('stockActions.use') }}
       </Button>
       <RowMenu

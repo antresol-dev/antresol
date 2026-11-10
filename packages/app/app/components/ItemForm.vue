@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { unitChoices } from '~/lib/amounts'
+import { captureBaseline, changedFields } from '~/lib/changed-fields'
 import { errorMessageKey } from '~/lib/errors'
 
 // Reads the item's values once: the dialog gives every item its own form (key).
@@ -26,7 +27,20 @@ const errorKey = ref<string | null>(null)
 const snapshot = computed(() => state.snapshot)
 const units = computed(() => (snapshot.value ? unitChoices(snapshot.value) : []))
 const locked = computed(() => busy.value || !!state.readOnly)
-const canSubmit = computed(() => !locked.value && !!snapshot.value)
+// Only what differs from the item as it was opened is sent: a stale form must not revert another device's edit.
+const baseline = captureBaseline({
+  name: props.item.name,
+  description: props.item.description,
+  unitKey: props.item.unitKey,
+  tagIds: props.item.tagIds,
+})
+const changes = computed(() =>
+  changedFields(
+    baseline,
+    { name: name.value.trim(), description: description.value.trim() || null, unitKey: unitKey.value, tagIds: tagIds.value },
+  ),
+)
+const canSubmit = computed(() => !locked.value && !!snapshot.value && Object.keys(changes.value).length > 0)
 
 async function createTag(tagName: string): Promise<void> {
   const s = snapshot.value
@@ -52,10 +66,7 @@ async function submit(): Promise<void> {
     await workspace.apply({
       type: 'item.update',
       id: props.item.id,
-      name: name.value.trim(),
-      description: description.value.trim() || null,
-      unitKey: unitKey.value,
-      tagIds: tagIds.value,
+      ...changes.value,
     })
     emit('done')
   } catch (e) {

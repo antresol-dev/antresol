@@ -3,6 +3,7 @@ import { newId, type Folder, type Id } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { captureBaseline, changedFields } from '~/lib/changed-fields'
 import { errorMessageKey } from '~/lib/errors'
 
 const props = defineProps<{ mode: 'create' | 'rename'; parentId: Id | null; folder: Folder | null }>()
@@ -18,8 +19,20 @@ const description = ref(existing?.description ?? '')
 const busy = defineModel<boolean>('busy', { default: false })
 const errorKey = ref<string | null>(null)
 
+// Rename sends only what differs from the folder as it was opened: a stale form must not revert another device's edit.
+const baseline = captureBaseline({ name: existing?.name ?? '', description: existing?.description ?? null })
+const changes = computed(() =>
+  changedFields(
+    baseline,
+    { name: name.value.trim(), description: description.value.trim() || null },
+  ),
+)
 const canSubmit = computed(
-  () => !busy.value && !state.readOnly && !!state.snapshot && (props.mode === 'create' || !!existing),
+  () =>
+    !busy.value &&
+    !state.readOnly &&
+    !!state.snapshot &&
+    (props.mode === 'create' || (!!existing && Object.keys(changes.value).length > 0)),
 )
 
 async function submit(): Promise<void> {
@@ -41,8 +54,7 @@ async function submit(): Promise<void> {
       await workspace.apply({
         type: 'folder.update',
         id: existing.id,
-        name: name.value.trim(),
-        description: description.value.trim() || null,
+        ...changes.value,
       })
     }
     emit('done')

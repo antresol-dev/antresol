@@ -3,6 +3,7 @@ import type { Variant } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { captureBaseline, changedFields } from '~/lib/changed-fields'
 import { errorMessageKey } from '~/lib/errors'
 
 const props = defineProps<{ variant: Variant }>()
@@ -16,7 +17,15 @@ const description = ref(props.variant.description ?? '')
 // The sheet around the form locks while this is set.
 const busy = defineModel<boolean>('busy', { default: false })
 const errorKey = ref<string | null>(null)
-const canSubmit = computed(() => !busy.value && !state.readOnly)
+// Only what differs from the variant as it was opened is sent: a stale form must not revert another device's edit.
+const baseline = captureBaseline({ name: props.variant.name, description: props.variant.description })
+const changes = computed(() =>
+  changedFields(
+    baseline,
+    { name: name.value.trim(), description: description.value.trim() || null },
+  ),
+)
+const canSubmit = computed(() => !busy.value && !state.readOnly && Object.keys(changes.value).length > 0)
 
 async function submit(): Promise<void> {
   if (!canSubmit.value) return
@@ -26,8 +35,7 @@ async function submit(): Promise<void> {
     await workspace.apply({
       type: 'variant.update',
       id: props.variant.id,
-      name: name.value.trim(),
-      description: description.value.trim() || null,
+      ...changes.value,
     })
     emit('done')
   } catch (e) {

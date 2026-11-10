@@ -8,7 +8,8 @@ export function inventoryStatements(c: InventoryCommand, actor: Actor): Statemen
     case 'inventory.create':
       return [
         sql`insert into inventories (id, name, description, currency, created_by, updated_by)
-            values (${c.id}, ${c.name}, ${c.description}, ${c.currency}, ${actor.device}, ${actor.device})`,
+            values (${c.id}, ${c.name}, ${c.description}, ${c.currency}, ${actor.device}, ${actor.device})
+            on conflict (id) do nothing`,
       ]
     case 'inventory.update':
       return [

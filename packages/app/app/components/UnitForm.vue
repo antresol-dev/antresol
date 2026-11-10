@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { captureBaseline, changedFields } from '~/lib/changed-fields'
 import { errorMessageKey } from '~/lib/errors'
 
 // Creates a custom unit or edits one: name, symbol and the SI prefixes quantities may show with.
@@ -25,7 +26,22 @@ const powers = ref<number[]>([...(props.unit?.prefixPowers ?? [])])
 // The sheet around the form locks while this is set.
 const busy = defineModel<boolean>('busy', { default: false })
 const errorKey = ref<string | null>(null)
-const canSubmit = computed(() => !busy.value && !state.readOnly && !!state.snapshot)
+// Editing sends only what differs from the unit as it was opened: a stale form must not revert another device's edit.
+const baseline = captureBaseline({
+  name: props.unit?.name ?? '',
+  symbol: props.unit?.symbol ?? '',
+  prefixPowers: props.unit?.prefixPowers ?? [],
+})
+const changes = computed(() =>
+  changedFields(baseline, {
+    name: name.value.trim(),
+    symbol: symbol.value.trim(),
+    prefixPowers: [...powers.value].sort((a, b) => a - b),
+  }),
+)
+const canSubmit = computed(
+  () => !busy.value && !state.readOnly && !!state.snapshot && (!props.unit || Object.keys(changes.value).length > 0),
+)
 
 function toggle(power: number, on: boolean): void {
   powers.value = on ? [...powers.value, power] : powers.value.filter((p) => p !== power)
@@ -42,9 +58,7 @@ async function submit(): Promise<void> {
       await workspace.apply({
         type: 'unit.update',
         id: props.unit.id,
-        name: name.value.trim(),
-        symbol: symbol.value.trim(),
-        prefixPowers,
+        ...changes.value,
       })
     } else {
       await workspace.apply({

@@ -8,7 +8,8 @@ export function folderStatements(c: FolderCommand, actor: Actor): Statement[] {
     case 'folder.create':
       return [
         sql`insert into folders (id, inventory_id, parent_id, name, description, created_by, updated_by)
-            values (${c.id}, ${c.inventoryId}, ${c.parentId}, ${c.name}, ${c.description}, ${actor.device}, ${actor.device})`,
+            values (${c.id}, ${c.inventoryId}, ${c.parentId}, ${c.name}, ${c.description}, ${actor.device}, ${actor.device})
+            on conflict (id) do nothing`,
       ]
     case 'folder.update':
       return [

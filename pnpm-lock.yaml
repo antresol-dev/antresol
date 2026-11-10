@@ -46,6 +46,18 @@ importers:
         specifier: ^0.45.4
         version: 0.45.4(@electric-sql/pglite@0.5.15)(@neondatabase/serverless@1.2.0)
 
+  spikes/neon-browser:
+    dependencies:
+      '@graymatter/core':
+        specifier: workspace:*
+        version: link:../../packages/core
+      '@graymatter/storage-postgres':
+        specifier: workspace:*
+        version: link:../../packages/storage-postgres
+      '@neondatabase/serverless':
+        specifier: ^1.2.0
+        version: 1.2.0
+
 packages:
 
   '@drizzle-team/brocli@0.10.2':

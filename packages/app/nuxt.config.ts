@@ -43,5 +43,12 @@ export default defineNuxtConfig({
     },
     devOptions: { enabled: false },
   },
-  app: { head: { title: 'GrayMatter' } },
+  app: {
+    head: {
+      title: 'GrayMatter',
+      // resizes-content: on Android the keyboard shrinks the layout viewport, so bottom sheets sit above it
+      // instead of behind it (Chrome's default, resizes-visual, keeps fixed elements under the keyboard).
+      viewport: 'width=device-width, initial-scale=1, interactive-widget=resizes-content',
+    },
+  },
 })

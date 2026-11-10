@@ -99,7 +99,7 @@ describe('palette', () => {
   })
 
   it('builds the groups: items, folders, actions, the empty ones dropped', () => {
-    const label = (a: PaletteAction): string => (a.kind === 'newFolder' ? `New folder in ${a.parentName}` : a.kind)
+    const label = (a: PaletteAction): string => (a.kind === 'newFolder' ? `New folder in ${a.parentName}` : a.kind === 'addItem' ? `Add item “${a.name}”` : a.kind)
     const ctx: PaletteContext = {
       query: 'ne',
       folder: { id: null, name: 'Electronics' },
@@ -119,6 +119,7 @@ describe('palette', () => {
     })
     expect(folders!.rows).toMatchObject([{ kind: 'folder', hit: { name: 'Passive components', path: '' } }])
     expect(actions!.rows).toEqual([
+      { kind: 'action', key: 'action:add-item', action: { kind: 'addItem', name: 'ne' }, label: 'Add item “ne”' },
       {
         kind: 'action',
         key: 'action:new-folder',
@@ -140,7 +141,11 @@ describe('palette', () => {
     })
     expect(paletteResults(snap, createSearch(snap), { ...ctx, query: '' }, label).map((g) => g.key)).toEqual(['actions'])
     expect(paletteResults(null, null, { ...ctx, query: 'ne' }, label).map((g) => g.key)).toEqual(['actions'])
-    expect(paletteResults(snap, createSearch(snap), { ...ctx, query: 'zzzz' }, label)).toEqual([])
+    // Nothing found: only the offer to add it, and nothing at all when writing is off.
+    const none = paletteResults(snap, createSearch(snap), { ...ctx, query: 'zzzz' }, label)
+    expect(none.map((g) => g.key)).toEqual(['actions'])
+    expect(none[0]!.rows.map((r) => r.key)).toEqual(['action:add-item'])
+    expect(paletteResults(snap, createSearch(snap), { ...ctx, query: 'zzzz', canWrite: false }, label)).toEqual([])
   })
 
   it('turns the groups bottom-up for the phone and steps the selection on screen', () => {
@@ -198,7 +203,13 @@ describe('palette', () => {
 
   it('offers actions for the query', () => {
     const label = (a: PaletteAction): string =>
-      a.kind === 'newFolder' ? `New folder in ${a.parentName}` : a.kind === 'switchInventory' ? `Switch to ${a.name}` : a.section
+      a.kind === 'newFolder'
+        ? `New folder in ${a.parentName}`
+        : a.kind === 'switchInventory'
+          ? `Switch to ${a.name}`
+          : a.kind === 'addItem'
+            ? `Add item “${a.name}”`
+            : a.section
     const ctx: PaletteContext = {
       query: '',
       folder: { id: ics, name: 'ICs' },
@@ -213,9 +224,13 @@ describe('palette', () => {
       { kind: 'go', section: 'archive' },
       { kind: 'go', section: 'settings' },
     ])
-    expect(paletteActions({ ...ctx, query: 'work' }, label)).toEqual([{ kind: 'switchInventory', ref: workshop, name: 'Workshop' }])
-    expect(paletteActions({ ...ctx, query: 'NEW-folder' }, label).map((a) => a.kind)).toEqual(['newFolder'])
-    expect(paletteActions({ ...ctx, query: 'zzz' }, label)).toEqual([])
+    expect(paletteActions({ ...ctx, query: 'work' }, label)).toEqual([
+      { kind: 'addItem', name: 'work' },
+      { kind: 'switchInventory', ref: workshop, name: 'Workshop' },
+    ])
+    expect(paletteActions({ ...ctx, query: 'NEW-folder' }, label).map((a) => a.kind)).toEqual(['addItem', 'newFolder'])
+    expect(paletteActions({ ...ctx, query: 'zzz' }, label)).toEqual([{ kind: 'addItem', name: 'zzz' }])
+    expect(paletteActions({ ...ctx, query: 'zzz', canWrite: false }, label)).toEqual([])
     expect(paletteActions({ ...ctx, canWrite: false }, label).map((a) => a.kind)).not.toContain('newFolder')
     expect(paletteActions({ ...ctx, folder: null }, label).map((a) => a.kind)).not.toContain('newFolder')
     // At the root the new folder goes to the inventory root.
@@ -228,5 +243,22 @@ describe('palette', () => {
     expect(
       paletteActions({ ...ctx, current: null, folder: null }, label).filter((a) => a.kind === 'switchInventory'),
     ).toHaveLength(2)
+  })
+
+  it('offers to add an item first, only for a query and when writing is allowed', () => {
+    const label = (a: PaletteAction): string =>
+      a.kind === 'addItem' ? `Add item “${a.name}”` : a.kind === 'newFolder' ? `New folder in ${a.parentName}` : a.kind === 'go' ? a.section : 'x'
+    const ctx: PaletteContext = {
+      query: 'tl074',
+      folder: { id: ics, name: 'ICs' },
+      inventories,
+      current: electronics,
+      sections: ['archive'],
+      canWrite: true,
+    }
+    expect(paletteActions(ctx, label)[0]).toEqual({ kind: 'addItem', name: 'tl074' })
+    expect(paletteActions({ ...ctx, query: '' }, label).map((a) => a.kind)).not.toContain('addItem')
+    expect(paletteActions({ ...ctx, query: '  ' }, label).map((a) => a.kind)).not.toContain('addItem')
+    expect(paletteActions({ ...ctx, canWrite: false }, label).map((a) => a.kind)).not.toContain('addItem')
   })
 })

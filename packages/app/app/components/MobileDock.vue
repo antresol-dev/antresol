@@ -1,13 +1,17 @@
 <script setup lang="ts">
-import { Search } from '@lucide/vue'
+import { Plus, Search } from '@lucide/vue'
 import { currentInventoryName, sectionOf } from '~/lib/shell'
 
 const { state } = useWorkspace()
 const { paletteOpen } = useShell()
 const route = useRoute()
+const quickAdd = useQuickAdd()
 
-// Below 1024 px, on every section of the app once an inventory is chosen. Task 7 adds "+" on its right.
-const shown = computed(() => !!state.current && sectionOf(typeof route.name === 'string' ? route.name : null) !== null)
+// Below 1024 px, on every section of the app once an inventory is chosen. "+" (quick add) joins it on the folder and
+// item screens when the inventory can be written to.
+const section = computed(() => sectionOf(typeof route.name === 'string' ? route.name : null))
+const shown = computed(() => !!state.current && section.value !== null)
+const canAdd = computed(() => section.value === 'items' && !state.readOnly)
 const name = computed(() => currentInventoryName(state))
 </script>
 
@@ -27,6 +31,15 @@ const name = computed(() => currentInventoryName(state))
       >
         <Search class="size-[18px] shrink-0" aria-hidden="true" />
         <span class="truncate">{{ $t('search.field', { name }) }}</span>
+      </button>
+      <button
+        v-if="canAdd"
+        type="button"
+        :aria-label="$t('quickAdd.title')"
+        class="pointer-events-auto grid size-[52px] shrink-0 place-items-center rounded-fab bg-primary text-primary-foreground shadow-md outline-none transition-colors duration-150 hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        @click="quickAdd.open()"
+      >
+        <Plus class="size-6" aria-hidden="true" />
       </button>
     </div>
   </div>

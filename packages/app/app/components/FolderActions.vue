@@ -1,17 +1,18 @@
 <script setup lang="ts">
 import type { Id } from '@graymatter/core'
-import { Archive, FolderInput, FolderPlus, Pencil } from '@lucide/vue'
+import { Archive, FolderInput, FolderPlus, Pencil, Plus } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 // Folder actions in the screen header (shell design 6.3), neutral like every action:
-// - from 1024 px: "New folder" with its label, then Rename, Move and Archive as 36 px outline icon buttons;
+// - from 1024 px: the primary "Add item", "New folder" with its label, Rename, Move and Archive as 36 px outline icon buttons;
 // - below 1024 px (compact): the same four as 44 px transparent icon buttons in the top bar.
-// At the inventory root there is only "New folder": the inventory's own actions live in the switcher.
+// At the inventory root there are only "Add item" and "New folder": the inventory's own actions live in the switcher.
 const props = defineProps<{ folderId: Id | null; compact: boolean }>()
 
 const { state } = useWorkspace()
 const { open } = useFolderDialog()
+const quickAdd = useQuickAdd()
 
 const locked = computed(() => !!state.readOnly || state.saving)
 
@@ -51,6 +52,10 @@ const iconButton = 'size-9 rounded-thumb text-icon'
   </template>
 
   <template v-else>
+    <Button class="h-9 gap-[7px] rounded-thumb px-3.5 font-bold" :disabled="locked" @click="quickAdd.open()">
+      <Plus aria-hidden="true" />
+      {{ $t('quickAdd.title') }}
+    </Button>
     <Button variant="outline" class="h-9 gap-[7px] rounded-thumb px-3.5 font-bold" :disabled="locked" @click="newFolder">
       <FolderPlus aria-hidden="true" />
       {{ $t('folderMenu.new') }}

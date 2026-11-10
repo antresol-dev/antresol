@@ -14,6 +14,7 @@ import { createDemoDriver } from '../app/lib/dev/demo-source'
 import type { SourceConfig } from '../app/lib/types'
 import {
   collapseCrumbs,
+  folderChoices,
   folderTree,
   folderView,
   indexStats,
@@ -253,5 +254,25 @@ describe('moveTargets', () => {
   it('does not offer the moved folder\'s descendants', () => {
     const t = moveTargets(snap, idOf(snap, 'Passive components'))
     expect(names(t)).not.toContain('Resistors')
+  })
+})
+
+describe('folderChoices', () => {
+  it('lists the root and every active folder depth-first, marking the selected one', () => {
+    const opamps = idOf(snap, 'Op-amps')
+    const c = folderChoices(snap, opamps)
+    expect(c.map((t) => [t.name, t.depth, t.current]).slice(0, 4)).toEqual([
+      [snap.inventory.name, 0, false],
+      ['ICs', 1, false],
+      ['Op-amps', 2, true],
+      ['Passive components', 1, false],
+    ])
+    expect(c[0]!.id).toBeNull()
+    expect(c).toHaveLength(snap.folders.filter((f) => f.archivedAt === null).length + 1)
+  })
+
+  it('marks the root when nothing is selected', () => {
+    const c = folderChoices(snap, null)
+    expect(c.filter((t) => t.current).map((t) => t.id)).toEqual([null])
   })
 })

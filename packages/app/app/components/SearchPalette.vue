@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { createSearch } from '@graymatter/core'
 import { useMediaQuery } from '@vueuse/core'
-import { Archive, ArrowLeftRight, Cpu, Folder, FolderPlus, Search, SlidersHorizontal, Tags, X } from '@lucide/vue'
+import { Archive, ArrowLeftRight, Cpu, Folder, FolderPlus, Plus, Search, SlidersHorizontal, Tags, X } from '@lucide/vue'
 import { DialogContent, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui'
 import type { Component } from 'vue'
 import { toast } from 'vue-sonner'
@@ -23,6 +23,7 @@ const workspace = useWorkspace()
 const { state } = workspace
 const { paletteOpen } = useShell()
 const folderDialog = useFolderDialog()
+const quickAdd = useQuickAdd()
 // From 1024 px a window near the top; below, the whole screen with the field at the bottom, above the keyboard.
 const desktop = useMediaQuery('(min-width: 1024px)')
 
@@ -51,12 +52,19 @@ const screenFolder = computed(() => {
 })
 
 function labelOf(a: PaletteAction): string {
+  if (a.kind === 'addItem') return t('search.addItem', { name: a.name })
   if (a.kind === 'newFolder') return t('folderMenu.newIn', { name: a.parentName })
   if (a.kind === 'switchInventory') return t('search.switchTo', { name: a.name })
   return t(`nav.${a.section}`)
 }
 const actionIcon = (a: PaletteAction): Component =>
-  a.kind === 'go' ? SECTION_ICONS[a.section] : a.kind === 'newFolder' ? FolderPlus : ArrowLeftRight
+  a.kind === 'go'
+    ? SECTION_ICONS[a.section]
+    : a.kind === 'addItem'
+      ? Plus
+      : a.kind === 'newFolder'
+        ? FolderPlus
+        : ArrowLeftRight
 const groupLabels = computed(() => ({
   items: t('search.group.items'),
   folders: t('search.group.folders'),
@@ -171,7 +179,9 @@ async function run(row: PaletteRow): Promise<void> {
 }
 
 async function act(action: PaletteAction): Promise<void> {
-  if (action.kind === 'newFolder') {
+  if (action.kind === 'addItem') {
+    quickAdd.open({ name: action.name })
+  } else if (action.kind === 'newFolder') {
     folderDialog.open({ kind: 'create', parentId: action.parentId })
   } else if (action.kind === 'go') {
     void router.push(NAV_SECTIONS.find((s) => s.key === action.section)?.to ?? '/settings')

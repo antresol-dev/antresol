@@ -298,3 +298,17 @@ export function moveTargets(s: InventorySnapshot, folderId: Id): MoveTarget[] {
   walk(null, 1)
   return out
 }
+
+/** Root first (id null, inventory name), then every active folder depth-first by name; `current` marks `selected`. */
+export function folderChoices(s: InventorySnapshot, selected: Id | null): MoveTarget[] {
+  const ix = snapshotIndex(s)
+  const out: MoveTarget[] = [{ id: null, name: s.inventory.name, depth: 0, current: selected === null }]
+  const walk = (pid: Id | null, depth: number): void => {
+    for (const f of ix.childFolders.get(pid) ?? []) {
+      out.push({ id: f.id, name: f.name, depth, current: f.id === selected })
+      walk(f.id, depth + 1)
+    }
+  }
+  walk(null, 1)
+  return out
+}

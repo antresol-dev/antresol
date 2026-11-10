@@ -38,6 +38,7 @@
     "nothing": "Nothing found for “{q}”",
     "group": { "items": "Items", "folders": "Folders", "actions": "Actions" },
     "switchTo": "Switch to {name}",
+    "addItem": "Add item “{name}”",
     "key": { "move": "↑↓", "open": "↵", "close": "esc" },
     "hint": { "move": "move", "open": "open", "close": "close" },
     "shortcut": { "mac": "⌘K", "other": "Ctrl K" }
@@ -208,6 +209,24 @@
     "archive": "Archive",
     "archiveTitle": "Archive folder",
     "archiveConfirm": "Archive “{name}” and everything in it? You can restore it from the Archive."
+  },
+  "quickAdd": {
+    "title": "Add item",
+    "name": "Name",
+    "folder": "Folder",
+    "amount": "Amount",
+    "unit": "Unit",
+    "price": "Price for the batch",
+    "priceHint": "Total for the whole batch",
+    "url": "Where bought",
+    "optional": "Optional",
+    "add": "Add",
+    "added": "Added “{name}”",
+    "open": "Open",
+    "invalidAmount": "Enter a valid amount, like 10 or 50 cm.",
+    "invalidPrice": "Enter a valid price.",
+    "needsAmount": "Enter the amount to add a price or a link.",
+    "chooseFolder": "Choose a folder"
   },
   "folderForm": { "name": "Name", "description": "Description", "optional": "Optional", "create": "Create", "save": "Save" },
   "errors": {

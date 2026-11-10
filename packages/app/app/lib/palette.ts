@@ -85,6 +85,7 @@ export function matchFolders(s: InventorySnapshot, query: string, limit = 5): Fo
 }
 
 export type PaletteAction =
+  | { kind: 'addItem'; name: string }
   | { kind: 'newFolder'; parentId: Id | null; parentName: string }
   | { kind: 'switchInventory'; ref: InventoryRef; name: string }
   | { kind: 'go'; section: 'archive' | 'dictionaries' | 'settings' }
@@ -102,17 +103,20 @@ export interface PaletteContext {
 const sameRef = (a: InventoryRef, b: InventoryRef | null): boolean =>
   !!b && a.sourceId === b.sourceId && a.inventoryId === b.inventoryId
 
-/** In this order: newFolder (with a folder and canWrite), switchInventory for each other inventory, go for each section.
+/** In this order: addItem (a non-empty query and canWrite), newFolder (with a folder and canWrite), switchInventory for each other inventory, go for each section.
  *  With a non-empty query only actions whose label (from `labelOf`) contains it compactly. */
 export function paletteActions(ctx: PaletteContext, labelOf: (a: PaletteAction) => string): PaletteAction[] {
   const actions: PaletteAction[] = []
+  const typed = ctx.query.trim()
+  if (typed !== '' && ctx.canWrite) actions.push({ kind: 'addItem', name: typed })
   if (ctx.folder && ctx.canWrite) actions.push({ kind: 'newFolder', parentId: ctx.folder.id, parentName: ctx.folder.name })
   for (const e of ctx.inventories) {
     if (!sameRef(e.ref, ctx.current)) actions.push({ kind: 'switchInventory', ref: e.ref, name: e.inventory.name })
   }
   for (const section of ctx.sections) actions.push({ kind: 'go', section })
   const q = compactText(ctx.query)
-  return q === '' ? actions : actions.filter((a) => compactText(labelOf(a)).includes(q))
+  // Adding is always offered: the query is its name, whatever its label says.
+  return q === '' ? actions : actions.filter((a) => a.kind === 'addItem' || compactText(labelOf(a)).includes(q))
 }
 
 export type PaletteRow =
@@ -127,7 +131,9 @@ export interface PaletteGroup {
 const ITEM_LIMIT = 20
 
 const actionKey = (a: PaletteAction): string =>
-  a.kind === 'newFolder'
+  a.kind === 'addItem'
+    ? 'action:add-item'
+    : a.kind === 'newFolder'
     ? 'action:new-folder'
     : a.kind === 'switchInventory'
       ? `action:switch:${a.ref.sourceId}:${a.ref.inventoryId}`

@@ -94,6 +94,7 @@ useEventListener(
       <MobileDock />
       <NavDrawer />
       <FolderDialogs />
+      <QuickAddSheet />
       <SearchPalette />
     </div>
   </TooltipProvider>

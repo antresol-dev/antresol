@@ -1,0 +1,27 @@
+<script setup lang="ts">
+import type { Id } from '@graymatter/core'
+import { Check } from '@lucide/vue'
+import type { MoveTarget } from '~/lib/views'
+
+// The folders of the inventory as an indented list inside a form: root first, the chosen one marked.
+defineProps<{ choices: MoveTarget[] }>()
+const emit = defineEmits<{ select: [id: Id | null] }>()
+</script>
+
+<template>
+  <ul class="grid max-h-[40dvh] grid-cols-1 gap-0.5 overflow-x-hidden overflow-y-auto rounded-field border border-border bg-background p-1">
+    <li v-for="choice in choices" :key="choice.id ?? 'root'" class="min-w-0">
+      <button
+        type="button"
+        :aria-current="choice.current ? 'true' : undefined"
+        class="flex min-h-11 w-full items-center gap-2 rounded-sm py-1.5 pr-2 text-left text-sm outline-none transition-colors duration-150 hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring"
+        :class="choice.current ? 'bg-accent-soft font-semibold text-accent-soft-foreground' : ''"
+        :style="{ paddingLeft: `${8 + Math.min(choice.depth * 16, 64)}px` }"
+        @click="emit('select', choice.id)"
+      >
+        <span class="min-w-0 flex-1 truncate">{{ choice.name }}</span>
+        <Check v-if="choice.current" class="size-4 shrink-0" aria-hidden="true" />
+      </button>
+    </li>
+  </ul>
+</template>

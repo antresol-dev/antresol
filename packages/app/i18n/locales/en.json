@@ -1,4 +1,118 @@
 {
   "app": { "name": "GrayMatter" },
-  "ui": { "close": "Close" }
+  "ui": { "close": "Close", "cancel": "Cancel", "back": "Back" },
+  "nav": { "settings": "Settings" },
+  "status": {
+    "saving": "Saving…",
+    "offline": "Offline. Showing the copy from {time}. Changes are off.",
+    "schemaNewer": "Updated by a newer GrayMatter. Update the app to make changes.",
+    "sourceError": "Can’t open {source}: {reason}",
+    "fix": "Fix",
+    "notPersistent": "This browser won’t keep your sources after it closes.",
+    "updating": "Updating…"
+  },
+  "welcome": {
+    "title": "Your inventory, wherever it lives",
+    "body": "Your data stays in a source you own, and this app only reads and writes it.",
+    "addSource": "Add a source",
+    "useDemo": "Use demo data"
+  },
+  "settings": {
+    "title": "Settings",
+    "sources": {
+      "title": "Sources",
+      "add": "Add source",
+      "empty": "No sources yet.",
+      "edit": "Edit",
+      "remove": "Remove",
+      "removeTitle": "Remove source",
+      "removeConfirm": "Remove “{name}” from this device? Data in the source is not deleted.",
+      "kind": { "neon": "Neon", "dev-pglite": "Demo" },
+      "status": {
+        "connecting": "Connecting",
+        "ready": "Ready",
+        "read_only": "Read-only",
+        "unreachable": "Offline",
+        "error": "Error"
+      }
+    },
+    "device": {
+      "title": "This device",
+      "name": "Device name",
+      "hint": "Shown as the author of changes"
+    },
+    "appearance": {
+      "title": "Appearance",
+      "system": "System",
+      "light": "Light",
+      "dark": "Dark"
+    }
+  },
+  "sourceForm": {
+    "newTitle": "Add source",
+    "editTitle": "Edit source",
+    "name": "Name",
+    "defaultName": "Neon",
+    "connectionString": "Connection string",
+    "connectionStringHint": "Paste it from the Neon console: Connect → connection string",
+    "show": "Show connection string",
+    "hide": "Hide connection string",
+    "uploadcareKey": "Uploadcare public key",
+    "uploadcareKeyHint": "Needed later to add photos",
+    "optional": "Optional",
+    "check": "Check",
+    "checking": "Checking…",
+    "saving": "Saving…",
+    "problem": {
+      "empty": "Enter the connection string.",
+      "not_postgres_url": "This isn’t a Postgres connection string. It should start with postgresql://",
+      "missing_password": "The connection string has a missing password.",
+      "missing_database": "The connection string has a missing database name."
+    },
+    "result": {
+      "empty": "Empty database. GrayMatter will set it up.",
+      "older": "An older GrayMatter source. It will be upgraded.",
+      "current": "Ready to use.",
+      "newer": "This source was updated by a newer GrayMatter",
+      "foreign": "This database already has other tables. Use an empty Neon database for GrayMatter."
+    },
+    "save": {
+      "empty": "Set up and save",
+      "older": "Upgrade and save",
+      "current": "Save",
+      "newer": "Save (read-only)"
+    }
+  },
+  "errors": {
+    "unknown": "Something went wrong. Try again.",
+    "domain": {
+      "name_required": "Enter a name.",
+      "name_too_long": "That name is too long.",
+      "duplicate_name": "That name is already used here.",
+      "invalid_currency": "Choose a valid currency.",
+      "invalid_quantity": "Enter a valid quantity.",
+      "invalid_price": "Enter a valid price.",
+      "invalid_url": "Enter a valid link.",
+      "invalid_option": "Choose one of the available options.",
+      "insufficient_stock": "There isn’t enough in stock.",
+      "folder_cycle": "A folder can’t be moved into itself.",
+      "not_found": "That item no longer exists.",
+      "archived": "That item is archived.",
+      "not_archived": "That item isn’t archived.",
+      "unit_in_use": "That unit is still in use."
+    },
+    "storage": {
+      "read_only": "This source is read-only right now.",
+      "unavailable": "Can’t reach the source. Check your connection.",
+      "not_found": "That item no longer exists.",
+      "incompatible": "This database isn’t a GrayMatter source.",
+      "failed": "The source reported an error. Try again."
+    },
+    "probe": {
+      "unreachable": "Can’t reach the source. Check your connection.",
+      "auth": "The source rejected the login. Check the connection string.",
+      "no_database": "That database doesn’t exist. Check the connection string.",
+      "failed": "Couldn’t check the source. Try again."
+    }
+  }
 }

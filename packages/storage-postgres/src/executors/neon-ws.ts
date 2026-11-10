@@ -33,6 +33,30 @@ export function createNeonWsExecutor(connectionString: string): PgExecutor {
         client.release()
       }
     },
+    async readBatch(statements) {
+      let client
+      try {
+        client = await pool.connect()
+      } catch (e) {
+        throw unavailable(e)
+      }
+      try {
+        await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY')
+        const out: Record<string, unknown>[][] = []
+        for (const s of statements) out.push((await client.query(s.text, s.params)).rows)
+        await client.query('COMMIT')
+        return out
+      } catch (e) {
+        try {
+          await client.query('ROLLBACK')
+        } catch {
+          // keep the original error
+        }
+        throw e
+      } finally {
+        client.release()
+      }
+    },
     async close() {
       await pool.end()
     },

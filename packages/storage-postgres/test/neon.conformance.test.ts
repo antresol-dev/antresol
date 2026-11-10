@@ -1,6 +1,7 @@
 import { newId, type Quantity } from '@graymatter/core'
+import { neonConfig } from '@neondatabase/serverless'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { assertTestDatabase, createNeonHttpExecutor, createNeonWsExecutor, type PgExecutor } from '../src'
+import { assertTestDatabase, createNeonHttpExecutor, createNeonWsExecutor, inspectSchema, type PgExecutor } from '../src'
 import { openPostgresStorage } from '../src/storage'
 import { TEST_ACTOR } from './helpers'
 
@@ -66,6 +67,25 @@ describe.skipIf(!url)('Neon conformance', () => {
         )
         const { stock } = await storage.loadInventory(inv)
         expect(stock.find((l) => l.variantId === null)!.quantity).toBe('37')
+        expect((await inspectSchema(exec)).state).toBe('current')
+      })
+
+      it.skipIf(name !== 'http')('loads an inventory snapshot in one fetch', async () => {
+        const { storage } = await openPostgresStorage(exec)
+        const inv = newId()
+        await storage.apply({ type: 'inventory.create', id: inv, name: `snap-${name}`, description: null, currency: 'USD' }, TEST_ACTOR)
+        const previous = neonConfig.fetchFunction
+        let calls = 0
+        neonConfig.fetchFunction = (...args: Parameters<typeof fetch>) => {
+          calls++
+          return fetch(...args)
+        }
+        try {
+          await storage.loadInventory(inv)
+        } finally {
+          neonConfig.fetchFunction = previous
+        }
+        expect(calls).toBe(1)
       })
     })
   }

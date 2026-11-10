@@ -13,6 +13,14 @@ export function createPgliteExecutor(db: PGlite): PgExecutor {
         for (const s of statements) await tx.query(s.text, s.params)
       })
     },
+    async readBatch(statements) {
+      return db.transaction(async (tx) => {
+        await tx.query('set transaction isolation level repeatable read, read only')
+        const out: Record<string, unknown>[][] = []
+        for (const s of statements) out.push((await tx.query<Record<string, unknown>>(s.text, s.params)).rows)
+        return out
+      })
+    },
     async close() {
       await db.close()
     },

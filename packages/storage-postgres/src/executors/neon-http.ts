@@ -20,6 +20,17 @@ export function createNeonHttpExecutor(connectionString: string): PgExecutor {
         throw isFetchFailure(e) ? unavailable(e) : e
       }
     },
+    async readBatch(statements) {
+      if (statements.length === 0) return []
+      try {
+        return (await sql.transaction(
+          statements.map((s) => sql.query(s.text, s.params)),
+          { isolationLevel: 'RepeatableRead', readOnly: true },
+        )) as Record<string, unknown>[][]
+      } catch (e) {
+        throw isFetchFailure(e) ? unavailable(e) : e
+      }
+    },
     async close() {},
   }
 }

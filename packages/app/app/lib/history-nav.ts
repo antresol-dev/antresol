@@ -27,10 +27,17 @@ const sameRef = (a: InventoryRef, b: InventoryRef): boolean =>
  *  - not stamped yet → stamp it with the current inventory (nothing to stamp without one);
  *  - stamped with the current inventory → nothing;
  *  - stamped with another inventory that is still active (in `known`) → switch to it;
- *  - stamped with an inventory that is gone → open the current inventory's root. */
-export function entrySync(entry: InventoryRef | null, current: InventoryRef | null, known: InventoryRef[]): EntrySync {
+ *  - stamped with an inventory that is gone → open the current inventory's root.
+ *  Switching and the root apply only where the screen shows an inventory (`scoped`); on other screens, such as
+ *  Settings, an entry is only stamped. */
+export function entrySync(
+  entry: InventoryRef | null,
+  current: InventoryRef | null,
+  known: InventoryRef[],
+  scoped: boolean,
+): EntrySync {
   if (!entry) return current ? { kind: 'stamp' } : { kind: 'none' }
-  if (current && sameRef(entry, current)) return { kind: 'none' }
+  if (!scoped || (current && sameRef(entry, current))) return { kind: 'none' }
   const target = known.find((k) => sameRef(k, entry))
   if (target) return { kind: 'switch', ref: { sourceId: target.sourceId, inventoryId: target.inventoryId } }
   return { kind: 'root' }

@@ -1,6 +1,7 @@
 import { toast } from 'vue-sonner'
 import { errorMessageKey } from '~/lib/errors'
 import { entryInventory, entrySync, INVENTORY_KEY } from '~/lib/history-nav'
+import { inventoryScoped } from '~/lib/shell'
 import type { InventoryRef } from '~/lib/types'
 
 /** A plain copy: history.state is structured-cloned, and refs from reactive state are proxies.
@@ -12,8 +13,9 @@ const plain = (ref: InventoryRef): { sourceId: string; inventoryId: string } => 
 
 /**
  * Screen URLs carry no inventory, so every history entry is stamped with the inventory it was opened in.
- * Back or forward onto an entry of another inventory switches to it first; an entry of an inventory that is gone opens
- * the current inventory's root. Vue Router keeps foreign keys of history.state when it rewrites an entry.
+ * Back or forward onto an inventory screen's entry of another inventory switches to it first; an entry of an inventory
+ * that is gone opens the current inventory's root. Entries of other screens (Settings) are only stamped.
+ * Vue Router keeps foreign keys of history.state when it rewrites an entry.
  */
 export default defineNuxtPlugin((nuxtApp) => {
   const router = useRouter()
@@ -32,6 +34,7 @@ export default defineNuxtPlugin((nuxtApp) => {
       entryInventory(window.history.state),
       current,
       state.inventories.map((e) => e.ref),
+      inventoryScoped(typeof to.name === 'string' ? to.name : null),
     )
 
     if (action.kind === 'stamp' && current) {

@@ -1,7 +1,7 @@
 import { newId, type InventorySnapshot } from '@graymatter/core'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
-import { NAV_SECTIONS, sectionOf, showsTree, treeCurrent } from '../app/lib/shell'
+import { inventoryScoped, NAV_SECTIONS, sectionOf, showsTree, treeCurrent } from '../app/lib/shell'
 import type { SourceConfig } from '../app/lib/types'
 
 const cfg: SourceConfig = {
@@ -37,6 +37,13 @@ describe('shell', () => {
     expect([sectionOf('welcome'), sectionOf(null), sectionOf(undefined)]).toEqual([null, null, null])
     expect(['index', 'item-id', 'archive', 'settings'].map(showsTree)).toEqual([true, true, false, false])
     expect([showsTree('folder-id'), showsTree('welcome'), showsTree(null)]).toEqual([true, false, false])
+  })
+
+  it('tells inventory screens from the rest', () => {
+    expect(['index', 'folder-id', 'item-id', 'archive', 'dictionaries'].map(inventoryScoped)).toEqual([true, true, true, true, true])
+    expect(['settings', 'settings-sources-id', 'settings-sources-new', 'welcome'].map(inventoryScoped))
+      .toEqual([false, false, false, false])
+    expect([inventoryScoped(null), inventoryScoped(undefined)]).toEqual([false, false])
   })
 
   it('finds the current tree row', () => {

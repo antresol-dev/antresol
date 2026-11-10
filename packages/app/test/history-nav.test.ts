@@ -27,18 +27,27 @@ describe('history-nav', () => {
     expect(entryInventory(null)).toBeNull()
   })
 
-  it('decides what to do after landing on an entry', () => {
-    expect(entrySync(null, A, [A, B])).toEqual({ kind: 'stamp' })
-    expect(entrySync(A, A, [A, B])).toEqual({ kind: 'none' })
-    expect(entrySync(B, A, [A, B])).toEqual({ kind: 'switch', ref: B })
-    expect(entrySync(C, A, [A, B])).toEqual({ kind: 'root' })
-    expect(entrySync(B, null, [B])).toEqual({ kind: 'switch', ref: B })
+  it('decides what to do after landing on an entry of an inventory screen', () => {
+    expect(entrySync(null, A, [A, B], true)).toEqual({ kind: 'stamp' })
+    expect(entrySync(A, A, [A, B], true)).toEqual({ kind: 'none' })
+    expect(entrySync(B, A, [A, B], true)).toEqual({ kind: 'switch', ref: B })
+    expect(entrySync(C, A, [A, B], true)).toEqual({ kind: 'root' })
+    expect(entrySync(B, null, [B], true)).toEqual({ kind: 'switch', ref: B })
   })
 
   it('compares inventories by value and leaves an entry alone without a current inventory', () => {
-    expect(entrySync({ ...A }, { ...A }, [])).toEqual({ kind: 'none' })
-    expect(entrySync({ ...B }, A, [{ ...B }])).toEqual({ kind: 'switch', ref: B })
-    expect(entrySync({ sourceId: 't', inventoryId: 'a' }, A, [A])).toEqual({ kind: 'root' })
-    expect(entrySync(null, null, [])).toEqual({ kind: 'none' })
+    expect(entrySync({ ...A }, { ...A }, [], true)).toEqual({ kind: 'none' })
+    expect(entrySync({ ...B }, A, [{ ...B }], true)).toEqual({ kind: 'switch', ref: B })
+    expect(entrySync({ sourceId: 't', inventoryId: 'a' }, A, [A], true)).toEqual({ kind: 'root' })
+    expect(entrySync(null, null, [], true)).toEqual({ kind: 'none' })
+  })
+
+  it('only stamps entries of screens outside an inventory, never switches or replaces them', () => {
+    expect(entrySync(C, B, [B], false)).toEqual({ kind: 'none' })
+    expect(entrySync(null, A, [A, B], false)).toEqual({ kind: 'stamp' })
+    expect(entrySync(B, A, [A, B], false)).toEqual({ kind: 'none' })
+    expect(entrySync(A, A, [A, B], false)).toEqual({ kind: 'none' })
+    expect(entrySync(A, null, [], false)).toEqual({ kind: 'none' })
+    expect(entrySync(null, null, [], false)).toEqual({ kind: 'none' })
   })
 })

@@ -22,6 +22,13 @@ export function sectionOf(routeName: string | null | undefined): Section | null 
   return SECTION_BY_ROUTE[routeName]!
 }
 
+/** Screens that show the current inventory: items, archive, dictionaries. Back and forward onto one of their history
+ *  entries switch to the inventory the entry was opened in; other screens (Settings) are not tied to an inventory. */
+export function inventoryScoped(routeName: string | null | undefined): boolean {
+  const section = sectionOf(routeName)
+  return section !== null && section !== 'settings'
+}
+
 /** The tree panel shows in the items section only. */
 export function showsTree(routeName: string | null | undefined): boolean {
   return sectionOf(routeName) === 'items'

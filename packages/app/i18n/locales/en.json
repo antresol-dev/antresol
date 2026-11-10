@@ -2,6 +2,15 @@
   "app": { "name": "GrayMatter" },
   "ui": { "close": "Close", "cancel": "Cancel", "back": "Back" },
   "nav": { "settings": "Settings" },
+  "search": { "label": "Search", "placeholder": "Search: TL072, 10k, 0805…", "nothing": "Nothing found for “{q}”" },
+  "folder": { "path": "Path", "tree": "Folders", "ellipsis": "…", "items": "Items · {count}" },
+  "item": { "outOfStock": "Out of stock", "variants": "{count} variant | {count} variants" },
+  "empty": {
+    "noInventories": "Create your first inventory",
+    "folder": "This folder is empty",
+    "folderGone": "This folder was archived or deleted",
+    "backTo": "Back to {name}"
+  },
   "status": {
     "saving": "Saving…",
     "offline": "Offline. Showing the copy from {time}. Changes are off.",

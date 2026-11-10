@@ -50,7 +50,7 @@ export function resolveUnit(key: string, custom: CustomUnit[]): UnitDef | undefi
 
 const abs = (n: bigint) => (n < 0n ? -n : n)
 
-export function formatAmount(q: Quantity, unit: UnitDef): string {
+export function formatAmountParts(q: Quantity, unit: UnitDef): { number: string; unit: string } {
   const micro = toMicro(q)
   // Largest power in [0, ...prefixPowers] for which |value| / 10^p >= 1.
   // Values below every threshold fall back to the smallest power.
@@ -74,7 +74,12 @@ export function formatAmount(q: Quantity, unit: UnitDef): string {
   const frac = (thousandths % 1000n).toString().padStart(3, '0').replace(/0+$/, '')
   const number = `${sign}${int}${frac ? `.${frac}` : ''}`
   const prefix = p === 0 ? '' : (SI_PREFIXES[p]?.symbol ?? '')
-  return `${number} ${prefix}${unit.symbol}`
+  return { number, unit: `${prefix}${unit.symbol}` }
+}
+
+export function formatAmount(q: Quantity, unit: UnitDef): string {
+  const { number, unit: symbol } = formatAmountParts(q, unit)
+  return `${number} ${symbol}`
 }
 
 export function parseAmount(input: string, unit: UnitDef): Quantity | null {

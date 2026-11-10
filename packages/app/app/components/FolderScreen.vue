@@ -1,0 +1,62 @@
+<script setup lang="ts">
+import { createSearch } from '@graymatter/core'
+import { folderView, searchRows } from '~/lib/views'
+
+const props = defineProps<{ folderId: string | null }>()
+
+const route = useRoute()
+const router = useRouter()
+const { state } = useWorkspace()
+
+const snapshot = computed(() => state.snapshot)
+const routeQuery = computed(() => (typeof route.query.q === 'string' ? route.query.q : ''))
+
+// The field keeps its own value so fast typing never waits for the router.
+const text = ref(routeQuery.value)
+watch(routeQuery, (q) => {
+  if (q !== text.value) text.value = q
+})
+watch(text, (q) => {
+  if (q === routeQuery.value) return
+  const { q: _drop, ...rest } = route.query
+  void router.replace({ query: q ? { ...rest, q } : rest })
+})
+
+const query = computed(() => text.value.trim())
+const view = computed(() => (snapshot.value ? folderView(snapshot.value, props.folderId) : null))
+const search = computed(() => (snapshot.value ? createSearch(snapshot.value) : null))
+const rows = computed(() =>
+  snapshot.value && search.value && query.value ? searchRows(snapshot.value, search.value.search(query.value)) : [],
+)
+
+const noInventories = computed(
+  () =>
+    !snapshot.value &&
+    !state.refreshing &&
+    state.inventories.length === 0 &&
+    state.sources.every((s) => s.status === 'ready' || s.status === 'read_only'),
+)
+</script>
+
+<template>
+  <EmptyState v-if="noInventories" :text="$t('empty.noInventories')" />
+  <div v-else-if="!snapshot" class="grid grid-cols-1 gap-3.5" aria-hidden="true">
+    <Skeleton class="h-[46px] rounded-field" />
+    <Skeleton class="h-40 rounded-card" />
+  </div>
+  <template v-else>
+    <SearchField v-model="text" />
+    <SearchResults v-if="query" :rows="rows" :query="query" />
+    <EmptyState v-else-if="!view" :text="$t('empty.folderGone')">
+      <NuxtLink to="/" class="min-h-11 content-center text-sm font-semibold text-primary underline-offset-4 hover:underline">
+        {{ $t('empty.backTo', { name: snapshot.inventory.name }) }}
+      </NuxtLink>
+    </EmptyState>
+    <template v-else>
+      <Breadcrumbs v-if="view.crumbs.length > 0" :root-name="snapshot.inventory.name" :crumbs="view.crumbs" />
+      <FolderList v-if="view.folders.length > 0" :folders="view.folders" />
+      <ItemList v-if="view.items.length > 0" :items="view.items" />
+      <EmptyState v-if="view.folders.length === 0 && view.items.length === 0" :text="$t('empty.folder')" />
+    </template>
+  </template>
+</template>

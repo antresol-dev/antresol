@@ -52,7 +52,7 @@
 
 ## Перед началом
 
-1. **Node ≥ 24.15.** Nuxt 4.6 требует `^22.22.3 || ^24.15.0 || >=26`, а на машине владельца через nvm стоит 24.14.0. Перед Task 3 контроллер выполняет `nvm install 24 && nvm alias default 24`. Это ставит последнюю 24.x только для пользователя и откатывается через `nvm alias default 24.14.0`. Затем `node -v` должен показать ≥ 24.15.
+1. **Node ≥ 24.15.** Nuxt 4.6 требует `^22.22.3 || ^24.15.0 || >=26`, а на машине владельца через nvm стоит 24.14.0. Контроллер уже выполнил `nvm install 24 && nvm alias default 24` (откат: `nvm alias default 24.14.0`). Но shell инструментов наследует PATH с 24.14. Поэтому Task 3 закрепляет Node в проекте через `devEngines.runtime`: pnpm сам ставит нужную версию в `node_modules/.bin`, и все скрипты `pnpm …` работают на ней независимо от PATH.
 2. **Пакеты** ставятся из публичного реестра через проектный `.npmrc`. pnpm запускается из корня.
 3. **Тестовая база Neon есть.** `GM_NEON_TEST_URL` лежит в git-ignored `.env.local` в корне. Тесты на реальном Neon сами пропускаются, если переменной нет.
 
@@ -254,6 +254,7 @@ select (select count(*) from information_schema.tables where table_schema = 'pub
   - HTTP: `sql.transaction(queries, { isolationLevel: 'RepeatableRead', readOnly: true })`.
   - WS: `BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY` … `COMMIT` на одном клиенте.
 - `loadInventory` выполняет свои 11 выражений одним `readBatch`.
+- `readBatch` в исполнителях Neon превращает сетевые сбои в `StorageError('unavailable')` по тем же правилам, что `query` и `batch` из Task 1.
 
 - [ ] **Step 1: Write the failing tests**
   - `read-batch.test.ts` (PGlite):
@@ -274,6 +275,7 @@ select (select count(*) from information_schema.tables where table_schema = 'pub
 - Create: `.nvmrc` (`24`)
 - Modify: корневой `package.json`:
   - `"engines": { "node": ">=24.15" }`;
+  - `"devEngines": { "runtime": { "name": "node", "version": "^24.15.0", "onFail": "download" } }`: pnpm ставит Node этой версии в `node_modules/.bin`, скрипты не зависят от PATH;
   - скрипты `dev` = `pnpm --filter @graymatter/app dev`, `build` = `pnpm --filter @graymatter/app generate`, `lint` = `pnpm -r lint`.
 - Create: `packages/app/{package.json,nuxt.config.ts,vitest.config.ts,eslint.config.mjs,components.json}`
 - Create: `packages/app/i18n/locales/en.json`, `app/app.vue`, `app/layouts/default.vue`, `app/pages/index.vue` (временная страница), `app/assets/css/main.css`
@@ -312,7 +314,7 @@ select (select count(*) from information_schema.tables where table_schema = 'pub
 
   Сырые подписи в скопированных компонентах UI (например `sr-only` «Close») переводятся на ключи `ui.*`.
 - `vitest.config.ts` (app): `name: '@graymatter/app'`, `environment: 'node'`, `include: ['test/**/*.test.ts']`, `setupFiles: ['fake-indexeddb/auto']`.
-- Временная `index.vue` показывает `t('app.name')`. Её заменит Task 8.
+- Временная `index.vue` показывает `t('app.name')`. Task 7 добавит в неё имя текущего инвентаря, а Task 8 заменит её экраном папки.
 
 - [ ] **Step 1: Write the failing test** — `theme.test.ts`.
   - `import css from '../app/assets/css/main.css?raw'`. Разобрать переменные `:root` и `.dark` регуляркой `--([\w-]+):\s*(#[0-9a-fA-F]{6})`.
@@ -364,7 +366,7 @@ select (select count(*) from information_schema.tables where table_schema = 'pub
 - [ ] **Step 2: Implement** по Interfaces.
 - [ ] **Step 3: Run** ту же сборку и проверку:
   ```
-  pnpm --filter @graymatter/app generate && node -e "const m=require('./packages/app/.output/public/manifest.webmanifest');if(m.name!=='GrayMatter'||!m.icons.some(i=>i.sizes==='512x512'))process.exit(1)" && test -f packages/app/.output/public/sw.js
+  pnpm --filter @graymatter/app generate && node -e "const m=JSON.parse(require('fs').readFileSync('./packages/app/.output/public/manifest.webmanifest','utf8'));if(m.name!=='GrayMatter'||!m.icons.some(i=>i.sizes==='512x512'))process.exit(1)" && test -f packages/app/.output/public/sw.js
   ```
   Expected: exit 0.
 - [ ] **Step 4: Проверить в браузере.**
@@ -597,7 +599,7 @@ select (select count(*) from information_schema.tables where table_schema = 'pub
   - `AppSheet` — обёртка над `Dialog`: на ширине < 768 px прижата к низу экрана на всю ширину, шире — по центру, max-width 480. Все формы плана открываются в ней.
 - **Плагин:**
   1. Создаёт workspace: `openDeviceDb()`, `drivers: { neon: createNeonDriver(), ...(import.meta.dev ? { 'dev-pglite': createDemoDriver() } : {}) }`, `navigator.userAgent`.
-  2. Вызывает `start()`.
+  2. Вызывает `startFromCache()` и отдаёт его промис как `$workspaceReady`. После него вызывает `refresh()`; вместе это то же, что `start()`.
   3. На `online` вызывает `refresh()`, на `visibilitychange` → visible вызывает `refreshIfStale(15 * 60_000)`.
 - **Middleware:** ждёт `useWorkspaceReady()`. Если источников нет и маршрут не `/welcome` и не `/settings/**` → `/welcome`.
 - **Экраны** (тексты — ключи `en.json`):
@@ -638,11 +640,11 @@ select (select count(*) from information_schema.tables where table_schema = 'pub
 - [ ] **Step 4: Run** `pnpm test && pnpm typecheck && pnpm lint`. Expected: зелёное.
 - [ ] **Step 5: Проверить в браузере** (`pnpm dev`, ширина 360 и 1280, обе темы):
   1. Первый запуск ведёт на Welcome.
-  2. «Use demo data» → корень Electronics.
+  2. «Use demo data» → главная страница. До Task 8 это временная `index.vue`; Task 7 дописывает в неё имя текущего инвентаря и `AppStatus`, поэтому видно «Electronics».
   3. В Settings видно источник «Demo» со статусом Ready.
   4. Смена темы работает и переживает перезагрузку.
   5. Форма Neon со строкой `postgresql://u@h/db` показывает «missing password».
-  6. DevTools → Offline, перезагрузка: баннер offline, копия видна.
+  6. Баннер offline в браузере здесь не проверяется: демо-источник локальный и от сети не зависит. Логику покрывают тесты Task 6, на Neon её проверяет владелец при приёмке.
 
   Снимки приложить к отчёту.
 - [ ] **Step 6: Commit** — `feat(app): app shell, onboarding and settings for sources, device and theme`
@@ -695,7 +697,7 @@ select (select count(*) from information_schema.tables where table_schema = 'pub
     - разделители с отступом 68.
   - **Поиск по вводу:** `createSearch(snapshot)` пересоздаётся при смене снимка. Непустой запрос заменяет содержимое папки на `SearchResults`: имя, вариант, путь, количество. Пустой результат — «Nothing found for “{q}”». Запрос хранится в `?q=`.
   - **Пустые состояния:**
-    - нет инвентарей — «Create your first inventory», кнопка открывает создание из Task 9;
+    - нет инвентарей — «Create your first inventory» (кнопку создания к этому состоянию добавляет Task 9);
     - пустая папка — «This folder is empty»;
     - `folderView` вернул `null` — «This folder was archived or deleted» и ссылка «Back to {inventory}».
   - **От 1024 px:** слева панель 280 px с `FolderTree`, текущая папка выделена. Справа колонка до 720 px. Строки предметов пока не нажимаются.
@@ -726,7 +728,7 @@ select (select count(*) from information_schema.tables where table_schema = 'pub
 
 **Files:**
 - Create: `app/lib/currencies.ts`, `app/components/{InventorySwitcher,InventoryForm,ConfirmSheet}.vue`
-- Modify: `app/components/FolderHeader.vue`, `i18n/locales/en.json`
+- Modify: `app/components/FolderHeader.vue`, `app/components/FolderScreen.vue` (кнопка «Create inventory» в пустом состоянии «нет инвентарей»), `i18n/locales/en.json`
 - Test: `packages/app/test/currencies.test.ts`
 
 **Interfaces:**

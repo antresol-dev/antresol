@@ -1,4 +1,5 @@
 import type { Id, InventorySnapshot } from '@graymatter/core'
+import { pathOf, snapshotIndex } from './views'
 
 export type Section = 'items' | 'archive' | 'dictionaries' | 'settings'
 
@@ -57,4 +58,17 @@ export function treeCurrent(
     return item.folderId ?? 'root'
   }
   return null
+}
+
+/** The open folder or item screen shows `folderId` itself, a folder below it or an item below it: archiving that
+ *  folder leaves the screen with nothing to show. */
+export function showsInside(
+  s: InventorySnapshot | null,
+  routeName: string | null | undefined,
+  params: Record<string, string | string[]>,
+  folderId: Id,
+): boolean {
+  const current = treeCurrent(s, routeName, params)
+  if (!s || current === null || current === 'root') return false
+  return pathOf(snapshotIndex(s), current).some((f) => f.id === folderId)
 }

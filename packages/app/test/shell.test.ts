@@ -1,7 +1,7 @@
 import { newId, type InventorySnapshot } from '@graymatter/core'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
-import { inventoryScoped, NAV_SECTIONS, sectionOf, showsTree, treeCurrent } from '../app/lib/shell'
+import { inventoryScoped, NAV_SECTIONS, sectionOf, showsInside, showsTree, treeCurrent } from '../app/lib/shell'
 import type { SourceConfig } from '../app/lib/types'
 
 const cfg: SourceConfig = {
@@ -15,6 +15,8 @@ const cfg: SourceConfig = {
 
 let snap: InventorySnapshot
 let opamps: string
+let ics: string
+let resistors: string
 let tl072: string
 
 beforeAll(async () => {
@@ -22,6 +24,8 @@ beforeAll(async () => {
   const inventoryId = (await storage.listInventories()).find((i) => i.name === 'Electronics')!.id
   snap = await storage.loadInventory(inventoryId)
   opamps = snap.folders.find((f) => f.name === 'Op-amps')!.id
+  ics = snap.folders.find((f) => f.name === 'ICs')!.id
+  resistors = snap.folders.find((f) => f.name === 'Resistors')!.id
   tl072 = snap.items.find((i) => i.name === 'TL072')!.id
 })
 
@@ -60,5 +64,19 @@ describe('shell', () => {
     const s = structuredClone(snap)
     s.items.find((i) => i.id === tl072)!.folderId = null
     expect(treeCurrent(s, 'item-id', { id: tl072 })).toBe('root')
+  })
+
+  it('tells whether the open screen is inside a folder', () => {
+    // The folder itself, a folder below it, an item below it.
+    expect(showsInside(snap, 'folder-id', { id: ics }, ics)).toBe(true)
+    expect(showsInside(snap, 'folder-id', { id: opamps }, ics)).toBe(true)
+    expect(showsInside(snap, 'item-id', { id: tl072 }, ics)).toBe(true)
+    // The parent, a sibling branch, the root and screens outside the tree.
+    expect(showsInside(snap, 'folder-id', { id: ics }, opamps)).toBe(false)
+    expect(showsInside(snap, 'folder-id', { id: resistors }, ics)).toBe(false)
+    expect(showsInside(snap, 'index', {}, ics)).toBe(false)
+    expect(showsInside(snap, 'archive', {}, ics)).toBe(false)
+    expect(showsInside(null, 'folder-id', { id: ics }, ics)).toBe(false)
+    expect(showsInside(snap, 'folder-id', { id: newId() }, ics)).toBe(false)
   })
 })

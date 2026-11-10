@@ -84,7 +84,8 @@ const prices = computed(() => {
       </Button>
       <RowMenu
         class="size-11"
-        :label="$t('stockActions.moreFor')"
+        :label="$t('item.stock')"
+        :button-label="$t('stockActions.moreFor')"
         :actions="setAction.map((a) => ({ ...a, disabled: locked }))"
         @select="emit('open', 'set')"
       />

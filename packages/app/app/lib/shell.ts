@@ -63,6 +63,19 @@ export function treeCurrent(
   return null
 }
 
+/** aria-current of a tree row (`current`: it is treeCurrent's row): 'page' when the screen is the row itself (the root on
+ *  index, the folder on its own screen), 'true' when it is current for another screen (an item card's folder). */
+export function treeAriaCurrent(
+  row: Id | 'root',
+  current: boolean,
+  routeName: string | null | undefined,
+  params: Record<string, string | string[]>,
+): 'page' | 'true' | undefined {
+  if (!current) return undefined
+  const page = row === 'root' ? routeName === 'index' : routeName === 'folder-id' && idParam(params) === row
+  return page ? 'page' : 'true'
+}
+
 /** The open folder or item screen shows `folderId` itself, a folder below it or an item below it: archiving that
  *  folder leaves the screen with nothing to show. */
 export function showsInside(

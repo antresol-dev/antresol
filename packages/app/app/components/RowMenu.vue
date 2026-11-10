@@ -28,7 +28,13 @@ const triggerAttrs = computed(() => ({
   ),
 }))
 
-defineProps<{ label: string; actions: RowMenuAction[] }>()
+defineProps<{
+  /** The row's name: the sheet's title, and the "⋯" button reads "More actions for {label}". */
+  label: string
+  actions: RowMenuAction[]
+  /** The "⋯" button's whole accessible name, where the menu belongs to something other than a named row. */
+  buttonLabel?: string
+}>()
 const emit = defineEmits<{ select: [key: string] }>()
 
 const menuOpen = ref(false)
@@ -53,7 +59,7 @@ defineExpose({
 <template>
   <DropdownMenu v-model:open="menuOpen">
     <DropdownMenuTrigger as-child>
-      <button type="button" v-bind="triggerAttrs" :aria-label="$t('rowMenu.more', { name: label })">
+      <button type="button" v-bind="triggerAttrs" :aria-label="buttonLabel ?? $t('rowMenu.more', { name: label })">
         <Ellipsis class="size-4" aria-hidden="true" />
       </button>
     </DropdownMenuTrigger>

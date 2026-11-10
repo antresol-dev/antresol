@@ -65,6 +65,7 @@
     "attributes": "Attributes",
     "differsByVariant": "Differs by variant",
     "noValue": "—",
+    "noValueLabel": "No value",
     "addAttribute": "Add attribute",
     "editValue": "Edit value",
     "removeAttribute": "Remove",

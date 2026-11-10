@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Archive, Boxes, ChevronRight, Folder, FolderInput, FolderPlus, Pencil, Plus } from '@lucide/vue'
+import { treeAriaCurrent } from '~/lib/shell'
 import type { TreeRow } from '~/lib/tree-state'
 import type RowMenu from './RowMenu.vue'
 
@@ -17,6 +18,12 @@ const emit = defineEmits<{ toggle: [id: string] }>()
 const { t } = useI18n()
 const { state } = useWorkspace()
 const { open } = useFolderDialog()
+const route = useRoute()
+
+// 'page' on the folder's own screen; on an item card its folder is current but not the page.
+const ariaCurrent = computed(() =>
+  treeAriaCurrent(props.root ? 'root' : props.row.id, props.row.current, typeof route.name === 'string' ? route.name : null, route.params),
+)
 
 const indents = computed(() => (props.level ?? 0) < MAX_INDENT)
 const panel = computed(() => props.variant === 'panel')
@@ -87,7 +94,7 @@ const pressHandlers = computed(() =>
       <!-- The link stretches over the whole row (after:inset-0); the chevron and the actions sit above it. -->
       <NuxtLink
         :to="to"
-        :aria-current="row.current ? 'page' : undefined"
+        :aria-current="ariaCurrent"
         :class="[
           'flex min-w-0 flex-1 items-center gap-1.5 self-stretch outline-none after:absolute after:inset-0 after:rounded-icon focus-visible:after:ring-2 focus-visible:after:ring-ring',
           root ? '' : 'select-none [-webkit-touch-callout:none]',

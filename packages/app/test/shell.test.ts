@@ -8,6 +8,7 @@ import {
   sectionOf,
   showsInside,
   showsTree,
+  treeAriaCurrent,
   treeCurrent,
 } from '../app/lib/shell'
 import type { SourceConfig } from '../app/lib/types'
@@ -66,6 +67,15 @@ describe('shell', () => {
     expect(treeCurrent(null, 'index', {})).toBeNull()
     expect(treeCurrent(snap, 'archive', {})).toBeNull()
     expect(treeCurrent(snap, 'folder-id', {})).toBeNull()
+  })
+
+  it('marks the current tree row as the page only on its own screen', () => {
+    expect(treeAriaCurrent('root', true, 'index', {})).toBe('page')
+    expect(treeAriaCurrent(opamps, true, 'folder-id', { id: opamps })).toBe('page')
+    // On an item card its folder (or the root) is current, but it isn't the page.
+    expect(treeAriaCurrent(opamps, true, 'item-id', { id: tl072 })).toBe('true')
+    expect(treeAriaCurrent('root', true, 'item-id', { id: tl072 })).toBe('true')
+    expect(treeAriaCurrent(ics, false, 'folder-id', { id: opamps })).toBeUndefined()
   })
 
   it('puts an item without a folder on the root row', () => {

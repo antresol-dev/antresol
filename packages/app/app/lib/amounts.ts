@@ -1,9 +1,10 @@
 import { BUILTIN_UNITS, getCurrency, parseAmount, parseMoney, customUnitKey, type InventorySnapshot, type Quantity, type UnitDef } from '@graymatter/core'
+import { byName } from './views'
 
-/** Built-ins in BUILTIN_UNITS order, then custom units by name. */
+/** Built-ins in BUILTIN_UNITS order, then custom units by name in the lists' order (as on Tags & fields). */
 export function unitChoices(s: InventorySnapshot): UnitDef[] {
   const custom = [...s.units]
-    .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+    .sort(byName)
     .map((u) => ({ key: customUnitKey(u.id), name: u.name, symbol: u.symbol, prefixPowers: u.prefixPowers }))
   return [...Object.values(BUILTIN_UNITS), ...custom]
 }

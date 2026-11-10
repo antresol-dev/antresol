@@ -28,7 +28,10 @@ const actions = computed(() => [
         <dt class="min-w-0 text-[15px] text-muted-foreground wrap-anywhere">{{ a.name }}</dt>
         <dd class="ml-auto min-w-0 text-right text-[15px] wrap-anywhere">
           <template v-if="a.perVariant"><span class="text-muted-foreground">{{ $t('item.differsByVariant') }}</span></template>
-          <template v-else-if="a.value === null"><span class="text-muted-foreground">{{ $t('item.noValue') }}</span></template>
+          <template v-else-if="a.value === null">
+            <span class="text-muted-foreground" aria-hidden="true">{{ $t('item.noValue') }}</span>
+            <span class="sr-only">{{ $t('item.noValueLabel') }}</span>
+          </template>
           <template v-else><span class="font-semibold">{{ a.value }}</span></template>
         </dd>
         <RowMenu

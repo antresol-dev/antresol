@@ -7,6 +7,7 @@ import {
   type Tag,
   type UnitDef,
 } from '@graymatter/core'
+import { byName } from './views'
 
 export interface DictionaryView {
   tags: { tag: Tag; itemCount: number }[]
@@ -15,7 +16,6 @@ export interface DictionaryView {
   units: { unit: UnitDef; custom: CustomUnit | null; itemCount: number }[]
 }
 
-const byName = (a: string, b: string): number => a.localeCompare(b, 'en', { sensitivity: 'base' })
 const bump = (m: Map<string, number>, k: string): void => void m.set(k, (m.get(k) ?? 0) + 1)
 
 /** Counts include archived items: deleting a tag, attribute or unit affects them too (core's unit_in_use counts them). */
@@ -33,15 +33,15 @@ export function dictionaryView(s: InventorySnapshot): DictionaryView {
 
   return {
     tags: [...s.tags]
-      .sort((a, b) => byName(a.name, b.name))
+      .sort(byName)
       .map((tag) => ({ tag, itemCount: tagCount.get(tag.id) ?? 0 })),
     attributes: [...s.attributes]
-      .sort((a, b) => byName(a.name, b.name))
+      .sort(byName)
       .map((attribute) => ({ attribute, itemCount: attrCount.get(attribute.id) ?? 0 })),
     units: [
       ...Object.values(BUILTIN_UNITS).map((unit) => ({ unit, custom: null, itemCount: unitCount.get(unit.key) ?? 0 })),
       ...[...s.units]
-        .sort((a, b) => byName(a.name, b.name))
+        .sort(byName)
         .map((custom) => {
           const key = customUnitKey(custom.id)
           return {

@@ -1,6 +1,7 @@
 import { BUILTIN_UNITS, newId, type InventorySnapshot } from '@graymatter/core'
 import { describe, expect, it } from 'vitest'
 import { parseAmountText, parseMoneyText, unitChoices } from '../app/lib/amounts'
+import { dictionaryView } from '../app/lib/dictionaries'
 
 const pcs = BUILTIN_UNITS.pcs
 const m = BUILTIN_UNITS.m
@@ -45,5 +46,14 @@ describe('unitChoices', () => {
     const keys = unitChoices(s).map((u) => u.name)
     expect(keys).toEqual(['Pieces', 'Meters', 'Grams', 'Liters', 'Box', 'Roll'])
     expect(unitChoices(s)[4]!.key).toBe(`custom:${b.id}`)
+  })
+
+  it('orders custom units like Tags & fields: case-insensitive, numbers in numeric order', () => {
+    const unit = (name: string) => ({ id: newId(), name, symbol: name.slice(0, 2), prefixPowers: [] })
+    const units = ['Roll 10', 'roll 9', 'Box', 'bag'].map(unit)
+    const s = { units, items: [], tags: [], attributes: [], itemAttributes: [] } as unknown as InventorySnapshot
+    const custom = unitChoices(s).slice(Object.keys(BUILTIN_UNITS).length)
+    expect(custom.map((u) => u.name)).toEqual(['bag', 'Box', 'roll 9', 'Roll 10'])
+    expect(custom.map((u) => u.key)).toEqual(dictionaryView(s).units.filter((u) => u.custom).map((u) => u.unit.key))
   })
 })

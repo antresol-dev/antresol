@@ -28,6 +28,8 @@ const shortCrumbs = computed(() => collapseCrumbs(crumbs.value))
 
 const iconButton =
   'grid size-11 shrink-0 place-items-center rounded-field text-icon outline-none transition-colors duration-150 hover:bg-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring'
+// tabindex -1: where focus lands when a sheet closes and the control that opened it is gone (AppSheet).
+const heading = 'rounded-md text-2xl font-bold tracking-[-0.02em] outline-none focus-visible:ring-2 focus-visible:ring-ring'
 const crumbLink =
   'min-w-0 truncate rounded-md outline-none transition-colors duration-150 hover:bg-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring'
 </script>
@@ -64,7 +66,7 @@ const crumbLink =
         </div>
         <div class="flex min-w-0 items-end justify-between gap-3">
           <div class="min-w-0 flex-1">
-            <h1 :class="['text-2xl font-bold tracking-[-0.02em]', wrapTitle ? 'wrap-anywhere' : 'truncate']">{{ title }}</h1>
+            <h1 tabindex="-1" :class="[heading, wrapTitle ? 'wrap-anywhere' : 'truncate']">{{ title }}</h1>
             <p v-if="subtitle" class="mt-0.5 truncate text-[13px] font-semibold text-muted-foreground">{{ subtitle }}</p>
           </div>
           <div v-if="$slots.actions" class="flex shrink-0 items-center gap-1.5">
@@ -110,7 +112,7 @@ const crumbLink =
             </NuxtLink>
           </template>
         </nav>
-        <h1 :class="['text-2xl font-bold tracking-[-0.02em]', wrapTitle ? 'wrap-anywhere' : 'truncate']">{{ title }}</h1>
+        <h1 tabindex="-1" :class="[heading, wrapTitle ? 'wrap-anywhere' : 'truncate']">{{ title }}</h1>
       </template>
 
       <AppStatus />

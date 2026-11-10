@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PgExecutor } from '../src/executor'
-import { APP_SCHEMA_VERSION, MIGRATION_LOCK_KEY, ensureSchema } from '../src/migrator'
+import { APP_SCHEMA_VERSION, MIGRATION_LOCK_KEY, ensureSchema, isConcurrentMigration } from '../src/migrator'
 import { sql } from '../src/sql'
 import { makeExecutor } from './helpers'
 
@@ -47,17 +47,53 @@ describe('ensureSchema', () => {
 describe('ensureSchema concurrency', () => {
   function recording(exec: PgExecutor, onBatch?: (seen: number) => Promise<void>) {
     const batches: string[][] = []
+    const rejections: unknown[] = []
     const wrapped: PgExecutor = {
       ...exec,
       query: (s) => exec.query(s),
       batch: async (statements) => {
         batches.push(statements.map((s) => s.text))
         if (onBatch) await onBatch(batches.length)
-        return exec.batch(statements)
+        try {
+          return await exec.batch(statements)
+        } catch (e) {
+          rejections.push(e)
+          throw e
+        }
       },
     }
-    return { wrapped, batches }
+    return { wrapped, batches, rejections }
   }
+
+  it('creates gm_meta only after taking the lock', async () => {
+    const { wrapped, batches } = recording(await makeExecutor())
+    await ensureSchema(wrapped)
+    const first = batches[0] as string[]
+    expect(first[0]).toBe(`select pg_advisory_xact_lock(${MIGRATION_LOCK_KEY})`)
+    expect(first[1]).toContain('create table if not exists gm_meta')
+    for (const b of batches) {
+      const touch = b.findIndex((t) => t.includes('gm_meta'))
+      const lock = b.findIndex((t) => t.includes('pg_advisory_xact_lock'))
+      expect(lock).toBeGreaterThanOrEqual(0)
+      expect(lock).toBeLessThan(touch)
+    }
+  })
+
+  it('fails clearly on a non-integer schema_version', async () => {
+    const exec = await makeExecutor()
+    await ensureSchema(exec)
+    await exec.batch([sql`update gm_meta set value = 'abc' where key = 'schema_version'`])
+    await expect(ensureSchema(exec)).rejects.toThrow('schema_version is not a non-negative integer')
+  })
+
+  it('isConcurrentMigration matches precisely', () => {
+    const make = (message: string, code?: string) => Object.assign(new Error(message), { code })
+    expect(isConcurrentMigration(make('gm_concurrent_migration', 'GM001'))).toBe(true)
+    expect(isConcurrentMigration(make('gm_concurrent_migration', '23505'))).toBe(false)
+    expect(isConcurrentMigration(make('something else', 'GM001'))).toBe(false)
+    expect(isConcurrentMigration('gm_concurrent_migration')).toBe(false)
+    expect(isConcurrentMigration(null)).toBe(false)
+  })
 
   it('starts every migration batch with the advisory lock and a version guard', async () => {
     const { wrapped, batches } = recording(await makeExecutor())
@@ -74,7 +110,7 @@ describe('ensureSchema concurrency', () => {
     const exec = await makeExecutor()
     let raced = false
     // Right before the wrapped device's first migration batch, another device finishes the whole migration.
-    const { wrapped, batches } = recording(exec, async (seen) => {
+    const { wrapped, batches, rejections } = recording(exec, async (seen) => {
       if (raced || seen < 2) return
       raced = true
       await ensureSchema(exec)
@@ -86,7 +122,10 @@ describe('ensureSchema concurrency', () => {
     })
     expect(raced).toBe(true)
     // gm_meta create + exactly one rejected migration batch; nothing re-applied.
-    expect(batches.filter((b) => b[0]?.startsWith('select pg_advisory_xact_lock'))).toHaveLength(1)
+    expect(batches.filter((b) => b.some((t) => t.includes('gm_concurrent_migration')))).toHaveLength(1)
+    expect(rejections).toHaveLength(1)
+    expect(isConcurrentMigration(rejections[0])).toBe(true)
+    expect((rejections[0] as { code?: string }).code).toBe('GM001')
     expect(await exec.query(sql`select 1 from gm_meta where key = 'schema_version'`)).toHaveLength(1)
   })
 

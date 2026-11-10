@@ -50,11 +50,20 @@ end $$`,
 
 async function readVersion(exec: PgExecutor): Promise<number> {
   const rows = await exec.query<{ value: string }>(sql`select value from gm_meta where key = 'schema_version'`)
-  return rows[0] ? Number(rows[0].value) : 0
+  if (!rows[0]) return 0
+  const version = Number(rows[0].value)
+  if (!Number.isInteger(version) || version < 0) {
+    throw new Error('gm_meta.schema_version is not a non-negative integer')
+  }
+  return version
 }
 
 export async function ensureSchema(exec: PgExecutor): Promise<SchemaStatus> {
-  await exec.batch([sql`create table if not exists gm_meta (key text primary key, value text not null)`])
+  // Under the lock, so two devices on a brand-new database cannot race on the create (23505 / 42P07).
+  await exec.batch([
+    { text: `select pg_advisory_xact_lock(${MIGRATION_LOCK_KEY})`, params: [] },
+    sql`create table if not exists gm_meta (key text primary key, value text not null)`,
+  ])
   for (;;) {
     const dbVersion = await readVersion(exec)
     if (dbVersion > APP_SCHEMA_VERSION) return { state: 'newer', dbVersion, appVersion: APP_SCHEMA_VERSION }

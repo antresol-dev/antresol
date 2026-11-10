@@ -90,6 +90,9 @@
   - Проверка обновления раз в час, пока вкладка открыта (`registration.update()`).
   - При `offlineReady` — одноразовый toast «Ready to work offline».
 - **`theme-color`.** Мета-теги с `media="(prefers-color-scheme: light)"` → `#F7F7F8` и `dark` → `#0E0E10`. При ручном выборе темы (`useColorMode`) один мета-тег без `media` обновляется под выбранную тему. В манифесте `theme_color` и `background_color` — светлые, как сейчас.
+- **Мелкие баги из ночного UI-обзора:**
+  - начертание Manrope 800 (`font-extrabold`) используется, но не загружается: добавить вес 800 в `fonts.families` (свой hunk в `nuxt.config.ts`) или заменить 800 на 700 — выбрать загрузку веса;
+  - тосты на телефоне ложатся поверх нижней панели поиска и «+»: `<Toaster>` получает отступ снизу на высоту `MobileDock` плюс safe area ниже 1024 px (CSS-переменная `--dock-h` из `MobileDock`), на компьютере — внизу по центру основной колонки.
 - **Ярлыки** (`manifest.shortcuts`): «Add item» → `./?action=add`, «Search» → `./?action=search`. Layout при старте читает `action` и открывает `useQuickAdd().open()` или `paletteOpen`, затем убирает параметр через `router.replace`. Логика разбора — чистая функция в `lib/shell.ts` с тестом: `launchAction(query) → 'add' | 'search' | null`.
 - [ ] **Step 1: Failing tests:** `launchAction({ action: 'add' })` → `'add'`, `'search'` → `'search'`, прочее → `null`; `nuxt-config`-тест на `registerType: 'prompt'` и два ярлыка.
 - [ ] **Step 2–4:** fail → implement → pass.
@@ -161,6 +164,10 @@
   3. **Develop:** `pnpm install`, `pnpm dev`, демо-данные на `/welcome`, `pnpm test`, тестовая база через `GM_NEON_TEST_URL` в `.env.local` (имя базы оканчивается на `_test`), телефон через `adb reverse tcp:3000 tcp:3000`.
   4. **Deploy your own:** fork → Settings → Pages → GitHub Actions → push в `master`.
   5. **Privacy:** нет сервера и аккаунтов, строка подключения хранится в IndexedDB устройства, CSP.
+     - **Общий origin GitHub Pages.** Все проекты аккаунта на Pages делят origin `<user>.github.io`, а IndexedDB привязан к origin. Любой другой Pages-сайт этого аккаунта мог бы прочитать строку подключения.
+     - **Рекомендация README:** до ввода настоящих данных подключить свой поддомен (файл `CNAME`, бесплатный HTTPS) или выложить на хостинг с отдельным origin на проект (Cloudflare Pages `*.pages.dev`).
+     - Смена origin позже теряет данные устройства: источник придётся добавить заново, данные в Neon не пострадают.
+     - **[решение Claude]** workflow остаётся на GitHub Pages: не нужен новый аккаунт. Поддомен — решение владельца.
 - [ ] **Step 1:** Файлы и проверки.
 - [ ] **Step 2: Commit:** `ci: deploy the PWA to GitHub Pages; docs: README for the revived app`
 
@@ -257,6 +264,61 @@ exportSource(sourceId: string): Promise<BackupFile>   // listInventories + loadI
   - опечатка в длинном слове по-прежнему работает (существующий тест).
 - [ ] **Step 2–4:** fail → implement → pass; `pnpm test` целиком (поиск используют `views`, палитра и тесты app).
 - [ ] **Step 5: Commit:** `fix(core): search keeps decimal points in values so 4.7k never matches 47k`
+
+---
+
+### Task 8: Идемпотентные записи и правка только изменённых полей
+
+**[решение Claude, добавлено по ночному архитектурному обзору]**
+- **D6 — повтор после таймаута создаёт дубль.** Если запись сохранилась, а ответ не дошёл, повтор с теми же id создаёт дубль движения или предмета. Id создаются при отправке (`stock-forms.ts`, `quick-add.ts`), а вставки в `packages/storage-postgres/src/commands/*.ts` без `on conflict (id) do nothing`. Повтор должен быть безопасным — это же основа будущей офлайн-очереди.
+- **D7 — устаревшая форма откатывает чужое переименование.** Формы правки шлют все поля (`ItemForm.vue`, `FolderForm.vue`, `VariantForm.vue`, `InventoryForm.vue`), хотя команды ядра `*.update` принимают необязательные поля. Устаревшая форма на одном устройстве откатывает переименование, сделанное на другом.
+
+**Files:** `packages/storage-postgres/src/commands/*.ts` и тесты; формы выше; при необходимости `lib/*-form.ts`-помощник `changedFields(before, after)` с тестом.
+
+- **Вставки с id от клиента** — `on conflict (id) do nothing`: `inventories`, `folders`, `items`, `variants`, `movements`, `tags`, `attributes`, `custom_units`, `photos`.
+  - Команда с составными вставками (например `item.create` с первым получением) при повторе ничего не дублирует.
+  - Повторная `stock.transfer` с теми же `outMovementId`/`inMovementId` не создаёт вторую пару.
+- **Формы правки** отправляют только изменённые поля. Ничего не изменилось — «Save» выключен.
+  - `tagIds` — отправляются целиком, только если набор изменился.
+- [ ] **Step 1: Failing tests** (`storage-postgres` на PGlite):
+  - повторный `apply` того же `item.create` (с `initialReceipt`) оставляет один предмет и одно движение;
+  - то же для `stock.receive`, `stock.transfer`, `variant.createMany`, `folder.create`, `tag.create`, `photo.add`;
+  - `changedFields({name:'A',description:null},{name:'B',description:null})` → `{ name: 'B' }`.
+- [ ] **Step 2–4:** fail → implement → pass; `pnpm test` целиком (тесты Neon пропускаются без `.env.local`).
+- [ ] **Step 5: Commit:** `fix: idempotent inserts for client ids; edit forms send only changed fields`
+
+---
+
+### Task 9: Блокировка миграций
+
+**[решение Claude, добавлено по ночному архитектурному обзору]** D4. `migrator.ts` (`ensureSchema`) выполняет миграции без блокировки и без повторной проверки версии внутри пакета. Два устройства с новой версией одновременно: DDL-миграция падает у проигравшего, а миграция только данных выполнилась бы дважды.
+
+**Files:** `packages/storage-postgres/src/migrator.ts`, тесты.
+
+- Каждый пакет миграции начинается с `select pg_advisory_xact_lock(<константа GrayMatter>)`, затем проверка: `DO`-блок поднимает исключение `gm_concurrent_migration`, если `schema_version` уже не тот, что ожидался.
+- Проигравший перечитывает версию и продолжает с неё, без ошибки для пользователя.
+- [ ] **Step 1: Failing test:** два исполнителя PGlite на одной базе запускают `ensureSchema` одновременно → оба получают `ready`, миграции применены ровно один раз (версия и, например, отсутствие дублей в `gm_meta`).
+- [ ] **Step 2–4:** fail → implement → pass.
+- [ ] **Step 5: Commit:** `fix(storage-postgres): migrations take an advisory lock and re-check the version`
+
+---
+
+### Task 10: Счётчик ревизий — не грузить неизменённый инвентарь
+
+**[решение Claude, добавлено по ночному архитектурному обзору]** Самый вероятный путь упереться в лимит трафика Neon (5 ГБ в месяц, при превышении база отключается до конца месяца) — полная перезагрузка снимка. Здесь — дешёвая часть (R1.1): обновление, открытие приложения и возврат во вкладку не перекачивают снимок, если в базе ничего не менялось. Запись, возвращающая только изменённые строки (R1.2), — следующий план.
+
+**Files:** `packages/storage-postgres/src/{storage,queries,migrator}.ts` + новая миграция, `packages/core/src/storage.ts`, `packages/app/app/lib/{workspace,device-db}.ts`, тесты.
+
+- **Миграция:** `insert into gm_meta (key, value) values ('rev', '0') on conflict do nothing`.
+- **Запись:** каждый пакет `apply` заканчивается `update gm_meta set value = (value::bigint + 1)::text where key = 'rev'`, атомарно с записью.
+- **`listInventories`** возвращает и `rev` тем же запросом: `InventoryStorage.listInventories(): Promise<{ inventories: Inventory[]; rev: string }>` или отдельное поле — выбрать форму с наименьшей правкой вызывающих.
+- **Кеш снимка** на устройстве хранит `rev`. `loadCurrent` пропускается, если `rev` источника равен сохранённому и снимок уже в памяти или кеше.
+- [ ] **Step 1: Failing tests:**
+  - PGlite: `rev` +1 на каждый `apply`, чтение его не меняет;
+  - `workspace.test.ts`: `refresh` при неизменном `rev` не вызывает `loadInventory`, при изменённом — вызывает;
+  - запись своим устройством меняет `rev`, и следующая перезагрузка после записи идёт как раньше.
+- [ ] **Step 2–4:** fail → implement → pass.
+- [ ] **Step 5: Commit:** `perf: skip reloading an unchanged inventory using a revision counter`
 
 ---
 

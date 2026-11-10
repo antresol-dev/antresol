@@ -37,7 +37,11 @@ export type SourceProbe =
 
 export interface SourceConnection {
   storage: InventoryStorage
+  /** The schema as the connection found it when it opened. */
   status: SchemaStatus
+  /** Read-only look at the schema now, through this connection (inspectSchema): a refresh that reuses the connection
+   *  checks the schema is still the one it opened on. Rejects like `connect`, free of the password. */
+  inspect(): Promise<SchemaInspection>
   close(): Promise<void>
 }
 
@@ -117,6 +121,17 @@ export async function probeWithExecutor(
   }
 }
 
+/** A driver failure as a StorageError free of the connection string's password. */
+function sourceFailure(error: unknown, config: SourceConfig): StorageError {
+  if (error instanceof StorageError) return error
+  const raw = error instanceof Error ? error.message : String(error)
+  const failure = new StorageError('failed', redactSecret(raw, config.connectionString))
+  // Only the classifying code survives, never the original error with its text.
+  const code = errorCodes(error).find((c) => c !== 'failed')
+  if (code) failure.cause = { code }
+  return failure
+}
+
 export function createNeonDriver(
   makeExecutor: (connectionString: string) => PgExecutor = createNeonHttpExecutor,
 ): SourceDriver {
@@ -128,16 +143,17 @@ export function createNeonDriver(
         exec = makeExecutor(config.connectionString)
         const { storage, status } = await openPostgresStorage(exec)
         const opened = exec
-        return { storage, status, close: () => opened.close() }
+        const inspect = async (): Promise<SchemaInspection> => {
+          try {
+            return await inspectSchema(opened)
+          } catch (error) {
+            throw sourceFailure(error, config)
+          }
+        }
+        return { storage, status, inspect, close: () => opened.close() }
       } catch (error) {
         await exec?.close().catch(() => {})
-        if (error instanceof StorageError) throw error
-        const raw = error instanceof Error ? error.message : String(error)
-        const failure = new StorageError('failed', redactSecret(raw, config.connectionString))
-        // Only the classifying code survives, never the original error with its text.
-        const code = errorCodes(error).find((c) => c !== 'failed')
-        if (code) failure.cause = { code }
-        throw failure
+        throw sourceFailure(error, config)
       }
     },
   }

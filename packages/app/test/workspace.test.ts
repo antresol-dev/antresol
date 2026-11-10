@@ -274,15 +274,30 @@ describe('workspace', () => {
 
   it('6. a newer schema makes the source read-only', async () => {
     const h = setup()
-    await h.seed(CS('one'), 'Inv')
+    const id = await h.seed(CS('one'), 'Inv')
     await h.db.putSource(config('s1', CS('one')))
-    await h.workspace().start()
-    await h.pgs[0]!.exec(`update gm_meta set value = '${APP_SCHEMA_VERSION + 1}' where key = 'schema_version'`)
-    // The schema version is read when a connection opens; refreshes reuse the open one.
     const ws = h.workspace()
     await ws.start()
+    await h.pgs[0]!.exec(`update gm_meta set value = '${APP_SCHEMA_VERSION + 1}' where key = 'schema_version'`)
+    // The refresh reuses the open connection, yet checks the schema through it.
+    await ws.refresh()
     expect(ws.state.sources[0]!.status).toBe('read_only')
     expect(ws.state.readOnly).toBe('schema_newer')
+    const calls = h.flags.applyCalls
+    await expect(ws.apply(folderCreate(id, 'Nope'))).rejects.toMatchObject({ code: 'read_only' })
+    expect(h.flags.applyCalls).toBe(calls)
+    // A workspace started on the newer schema is read-only too.
+    const fresh = h.workspace()
+    await fresh.start()
+    expect(fresh.state.sources[0]!.status).toBe('read_only')
+    expect(fresh.state.readOnly).toBe('schema_newer')
+    // Back to this app's version: the next refresh makes the source writable again.
+    await h.pgs[0]!.exec(`update gm_meta set value = '${APP_SCHEMA_VERSION}' where key = 'schema_version'`)
+    await ws.refresh()
+    expect(ws.state.sources[0]!.status).toBe('ready')
+    expect(ws.state.readOnly).toBeNull()
+    await ws.apply(folderCreate(id, 'Shelf'))
+    expect(ws.state.snapshot?.folders.map((f) => f.name)).toEqual(['Shelf'])
   })
 
   it('7. validates before writing and refreshes the cache after a write', async () => {

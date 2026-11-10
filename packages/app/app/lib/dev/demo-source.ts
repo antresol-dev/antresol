@@ -36,7 +36,7 @@ export function createDemoDriver(options: { memory?: boolean; extras?: boolean }
     const wasEmpty = (await inspectSchema(exec)).state === 'empty'
     const { storage, status } = await openPostgresStorage(exec)
     if (wasEmpty) await seedDemo(storage, DEMO_ACTOR, { extras: options.extras ?? true })
-    return { storage, status, close: async () => {} }
+    return { storage, status, inspect: () => inspectSchema(exec), close: async () => {} }
   }
 
   // Connects of one source run one after another: two at once would both find the database empty,

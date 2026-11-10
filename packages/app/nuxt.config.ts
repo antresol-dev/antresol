@@ -1,4 +1,8 @@
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
+
+const baseURL = process.env.NUXT_APP_BASE_URL ?? '/'
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-11-10',
@@ -8,6 +12,15 @@ export default defineNuxtConfig({
   vite: {
     plugins: [tailwindcss()],
     optimizeDeps: { exclude: ['@electric-sql/pglite'] },
+  },
+  nitro: {
+    hooks: {
+      // GitHub Pages must not run Jekyll over the output (it drops _nuxt/). 404.html (the SPA fallback for deep links)
+      // is written by Nuxt itself from index.html on generate.
+      compiled: (nitro: { options: { output: { publicDir: string } } }) => {
+        writeFileSync(join(nitro.options.output.publicDir, '.nojekyll'), '')
+      },
+    },
   },
   colorMode: {
     classSuffix: '',
@@ -39,11 +52,16 @@ export default defineNuxtConfig({
     },
     workbox: {
       globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
-      navigateFallback: '/',
+      // The app shell is precached under the base URL itself ("/graymatter/"), not under "index.html".
+      navigateFallback: baseURL,
+      // Files with an extension (assets, manifest, sw) are never navigations to the app shell.
+      navigateFallbackDenylist: [/\/[^/?]+\.[^/]+$/],
     },
     devOptions: { enabled: false },
   },
   app: {
+    // GitHub Pages project sites live under /<repo>/; set NUXT_APP_BASE_URL=/graymatter/ for that build.
+    baseURL,
     head: {
       title: 'GrayMatter',
       // resizes-content: on Android the keyboard shrinks the layout viewport, so bottom sheets sit above it

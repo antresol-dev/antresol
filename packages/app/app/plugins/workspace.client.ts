@@ -1,5 +1,4 @@
 import { openDeviceDb } from '~/lib/device-db'
-import { createDemoDriver } from '~/lib/dev/demo-source'
 import { createNeonDriver } from '~/lib/sources'
 import { createWorkspace } from '~/lib/workspace'
 
@@ -8,10 +7,10 @@ const STALE_AFTER_MS = 15 * 60_000
 const ONLINE_DEBOUNCE_MS = 2_000
 
 export default defineNuxtPlugin(async () => {
-  const isDev = import.meta.dev
   const workspace = createWorkspace({
     db: await openDeviceDb(),
-    drivers: { neon: createNeonDriver(), ...(isDev ? { 'dev-pglite': createDemoDriver() } : {}) },
+    // No dev-pglite driver in production: a demo source saved on the device shows as unavailable (unsupported_source).
+    drivers: { neon: createNeonDriver(), ...(import.meta.dev ? { 'dev-pglite': (await import('~/lib/dev/demo-source')).createDemoDriver() } : {}) },
     userAgent: navigator.userAgent,
   })
 

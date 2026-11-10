@@ -60,6 +60,8 @@ export interface Index {
   activeVariantCount: Map<Id, number>
   /** url of the photo with the lowest position and no variant. */
   covers: Map<Id, string>
+  /** Lowest-position photo of each variant. */
+  variantCovers: Map<Id, string>
   paths: Map<Id, Folder[]>
 }
 
@@ -115,16 +117,18 @@ function buildIndex(s: InventorySnapshot): Index {
 
   const coverPos = new Map<Id, number>()
   const covers = new Map<Id, string>()
+  const variantPos = new Map<Id, number>()
+  const variantCovers = new Map<Id, string>()
   for (const p of s.photos) {
-    if (p.variantId !== null) continue
-    const best = coverPos.get(p.itemId)
+    const [pos, urls, key] = p.variantId === null ? [coverPos, covers, p.itemId] : [variantPos, variantCovers, p.variantId]
+    const best = pos.get(key)
     if (best === undefined || p.position < best) {
-      coverPos.set(p.itemId, p.position)
-      covers.set(p.itemId, p.url)
+      pos.set(key, p.position)
+      urls.set(key, p.url)
     }
   }
 
-  return { items, folders, childFolders, folderItems, subtreeCounts, stockByItem, buckets, variants, activeVariantCount, covers, paths: new Map() }
+  return { items, folders, childFolders, folderItems, subtreeCounts, stockByItem, buckets, variants, activeVariantCount, covers, variantCovers, paths: new Map() }
 }
 
 /** @internal The index of a snapshot, built on first use. */
@@ -223,6 +227,8 @@ export interface SearchRow {
   unit: string
   outOfStock: boolean
   path: string
+  /** The matched variant's photo, else the item's cover. */
+  coverUrl: string | null
 }
 
 export function searchRows(s: InventorySnapshot, hits: SearchHit[]): SearchRow[] {
@@ -244,6 +250,7 @@ export function searchRows(s: InventorySnapshot, hits: SearchHit[]): SearchRow[]
       ...amount(s, item, quantity),
       outOfStock: isEmpty(quantity),
       path: item.folderId === null ? '' : pathOf(ix, item.folderId).map((f) => f.name).join(' / '),
+      coverUrl: (variant && hit.variantId !== null ? ix.variantCovers.get(hit.variantId) : undefined) ?? ix.covers.get(item.id) ?? null,
     })
   }
   return rows

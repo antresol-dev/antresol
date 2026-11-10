@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { getCurrency, type Id } from '@graymatter/core'
-import { ChevronDown } from '@lucide/vue'
+import { ChevronDown, X } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,7 +10,7 @@ import { buildQuickAdd } from '~/lib/quick-add'
 import { folderChoices, pathOf, snapshotIndex } from '~/lib/views'
 
 const props = defineProps<{ name: string; folderId: Id | null }>()
-const emit = defineEmits<{ done: [added: { id: Id; name: string }] }>()
+const emit = defineEmits<{ done: [added: { id: Id; name: string; photoFailed: boolean }] }>()
 
 const workspace = useWorkspace()
 const { state } = workspace
@@ -22,6 +22,16 @@ const amount = ref('')
 const price = ref('')
 const url = ref('')
 const picking = ref(false)
+const photo = ref<File | null>(null)
+const preview = computed(() => (photo.value ? URL.createObjectURL(photo.value) : null))
+watch(preview, (_, old) => {
+  if (old) URL.revokeObjectURL(old)
+})
+onBeforeUnmount(() => {
+  if (preview.value) URL.revokeObjectURL(preview.value)
+})
+// The photo field is there only if this source can store photos.
+const canPhoto = computed(() => !!state.current && workspace.fileStoreFor(state.current.sourceId) !== null)
 // The sheet around the form locks while this is set.
 const busy = defineModel<boolean>('busy', { default: false })
 const errorKey = ref<string | null>(null)
@@ -63,7 +73,16 @@ async function submit(): Promise<void> {
   errorKey.value = null
   try {
     await workspace.apply(built.command)
-    emit('done', { id: built.command.id, name: built.command.name })
+    // The sheet stays locked through the upload; a failed photo leaves the item and says so.
+    let photoFailed = false
+    if (photo.value && canPhoto.value) {
+      try {
+        await workspace.addPhotos(built.command.id, [photo.value])
+      } catch {
+        photoFailed = true
+      }
+    }
+    emit('done', { id: built.command.id, name: built.command.name, photoFailed })
   } catch (e) {
     errorKey.value = errorMessageKey(e)
   } finally {
@@ -129,6 +148,21 @@ async function submit(): Promise<void> {
         <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
       </Label>
       <Input id="quick-add-url" v-model="url" type="url" autocomplete="off" class="h-11 rounded-field bg-surface" />
+    </div>
+
+    <div v-if="canPhoto" class="grid gap-1.5">
+      <Label>
+        {{ $t('quickAdd.photo') }}
+        <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
+      </Label>
+      <div v-if="preview" class="flex items-center gap-3">
+        <img :src="preview" alt="" class="size-[42px] shrink-0 rounded-thumb object-cover" >
+        <span class="min-w-0 flex-1 truncate text-sm text-muted-foreground">{{ photo?.name }}</span>
+        <Button type="button" variant="ghost" size="icon" class="size-11 shrink-0" :aria-label="$t('quickAdd.removePhoto')" :disabled="busy" @click="photo = null">
+          <X class="size-4" aria-hidden="true" />
+        </Button>
+      </div>
+      <PhotoPicker v-else :disabled="busy" @pick="photo = $event[0] ?? null" />
     </div>
 
     <p id="quick-add-error" role="alert" class="text-sm text-destructive">

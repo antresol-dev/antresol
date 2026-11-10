@@ -214,6 +214,29 @@ describe('index and edge cases', () => {
     expect(folderView(onlyVariant, idOf(onlyVariant, 'Resistors'))!.items[0]!.coverUrl).toBeNull()
   })
 
+  it('gives search rows the cover, and the variant photo when a variant matched', () => {
+    const s = clone()
+    const item = s.items.find((i) => i.name === 'Резистор 0,25 Вт')!
+    const variant = s.variants.find((v) => v.itemId === item.id && v.name === '10k')!
+    s.photos = [
+      photo(item.id, null, 0, 'cover.jpg'),
+      photo(item.id, variant.id, 3, 'v-late.jpg'),
+      photo(item.id, variant.id, 1, 'v-early.jpg'),
+    ]
+    const rows = searchRows(s, [
+      { itemId: item.id, variantId: variant.id },
+      { itemId: item.id, variantId: null },
+    ])
+    expect(rows.map((r) => r.coverUrl)).toEqual(['v-early.jpg', 'cover.jpg'])
+    // Snapshots are indexed once, so each case gets its own.
+    const coverOnly = clone()
+    coverOnly.photos = [photo(item.id, null, 0, 'cover.jpg')]
+    expect(searchRows(coverOnly, [{ itemId: item.id, variantId: variant.id }])[0]!.coverUrl).toBe('cover.jpg')
+    const none = clone()
+    none.photos = []
+    expect(searchRows(none, [{ itemId: item.id, variantId: null }])[0]!.coverUrl).toBeNull()
+  })
+
   it('falls back to pcs for an unknown unit', () => {
     const s = clone()
     s.items.find((i) => i.name === 'TL072')!.unitKey = 'custom:gone'

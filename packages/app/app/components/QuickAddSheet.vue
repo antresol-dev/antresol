@@ -33,11 +33,11 @@ const open = computed({
   },
 })
 
-function added({ id, name }: { id: Id; name: string }): void {
+function added({ id, name, photoFailed }: { id: Id; name: string; photoFailed: boolean }): void {
   close()
-  toast.success(t('quickAdd.added', { name }), {
-    action: { label: t('quickAdd.open'), onClick: () => void router.push(`/item/${id}`) },
-  })
+  const action = { label: t('quickAdd.open'), onClick: () => void router.push(`/item/${id}`) }
+  if (photoFailed) toast.warning(t('quickAdd.photoFailed'), { action })
+  else toast.success(t('quickAdd.added', { name }), { action })
 }
 </script>
 

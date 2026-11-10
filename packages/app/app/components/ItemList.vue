@@ -70,7 +70,7 @@ const rows = computed(() =>
           @click.capture="press.onClickCapture"
         >
           <span class="flex size-[42px] shrink-0 items-center justify-center overflow-hidden rounded-thumb bg-thumb text-thumb-foreground">
-            <img v-if="item.coverUrl" :src="item.coverUrl" alt="" loading="lazy" class="size-full object-cover" >
+            <PhotoImg v-if="item.coverUrl" :url="item.coverUrl" size="thumb" alt="" class="size-full object-cover" />
             <Cpu v-else class="size-5" stroke-width="1.75" aria-hidden="true" />
           </span>
           <span class="flex min-w-0 grow flex-col gap-0.5">

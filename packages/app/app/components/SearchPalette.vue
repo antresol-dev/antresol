@@ -327,8 +327,9 @@ const kbdClass =
                 @click="run(row)"
               >
                 <template v-if="row.kind === 'item'">
-                  <span class="grid size-8 shrink-0 place-items-center rounded-icon bg-thumb text-thumb-foreground">
-                    <Cpu class="size-4" stroke-width="1.75" aria-hidden="true" />
+                  <span class="grid size-8 shrink-0 place-items-center overflow-hidden rounded-icon bg-thumb text-thumb-foreground">
+                    <PhotoImg v-if="row.hit.coverUrl" :url="row.hit.coverUrl" size="thumb" alt="" class="size-full object-cover" />
+                    <Cpu v-else class="size-4" stroke-width="1.75" aria-hidden="true" />
                   </span>
                   <span class="flex min-w-0 flex-1 flex-col">
                     <span class="truncate text-sm font-bold" :class="row.hit.outOfStock && 'text-dimmed-foreground'">

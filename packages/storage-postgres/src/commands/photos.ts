@@ -9,7 +9,8 @@ export function photoStatements(c: PhotoCommand, actor: Actor): Statement[] {
       return [
         sql`insert into photos (id, item_id, variant_id, provider, file_id, url, position, created_by)
             values (${c.id}, ${c.itemId}, ${c.variantId}, ${c.provider}, ${c.fileId}, ${c.url},
-                    (select coalesce(max(position), -1) + 1 from photos where item_id = ${c.itemId}), ${actor.device})`,
+                    (select coalesce(max(position), -1) + 1 from photos where item_id = ${c.itemId}), ${actor.device})
+            on conflict (id) do nothing`,
       ]
     case 'photo.remove':
       return [sql`delete from photos where id = ${c.id}`]

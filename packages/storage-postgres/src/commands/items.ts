@@ -14,19 +14,29 @@ export function itemStatements(c: ItemCommand, actor: Actor): Statement[] {
   const by = actor.device
   switch (c.type) {
     case 'item.create': {
-      const statements = [
-        sql`insert into items (id, inventory_id, folder_id, name, description, unit_key, created_by, updated_by)
-            values (${c.id}, ${c.inventoryId}, ${c.folderId}, ${c.name}, ${c.description}, ${c.unitKey}, ${by}, ${by})`,
-        insertTags(c.id, c.tagIds),
+      // One statement: tags and the receipt hang off the row this insert actually created, so replaying the same
+      // command (a retry after a timeout) is a no-op as a whole instead of re-adding tags or a second movement.
+      const receipt = c.initialReceipt
+        ? (() => {
+            const r = c.initialReceipt
+            return sql`, mov as (
+              insert into movements (id, inventory_id, item_id, variant_id, kind, quantity, total_price, source_url, note, created_by)
+              select ${r.movementId}::uuid, ${c.inventoryId}::uuid, ins.id, null, 'receipt', ${r.quantity}::numeric,
+                     ${r.totalPrice}::bigint, ${r.sourceUrl}, null, ${by} from ins
+              on conflict (id) do nothing
+            )`
+          })()
+        : sql``
+      return [
+        sql`with ins as (
+              insert into items (id, inventory_id, folder_id, name, description, unit_key, created_by, updated_by)
+              values (${c.id}, ${c.inventoryId}, ${c.folderId}, ${c.name}, ${c.description}, ${c.unitKey}, ${by}, ${by})
+              on conflict (id) do nothing
+              returning id
+            )${receipt}
+            insert into item_tags (item_id, tag_id)
+            select distinct ins.id, t from ins, unnest(${c.tagIds}::uuid[]) as t`,
       ]
-      if (c.initialReceipt) {
-        const r = c.initialReceipt
-        statements.push(
-          sql`insert into movements (id, inventory_id, item_id, variant_id, kind, quantity, total_price, source_url, note, created_by)
-              values (${r.movementId}, ${c.inventoryId}, ${c.id}, null, 'receipt', ${r.quantity}, ${r.totalPrice}, ${r.sourceUrl}, null, ${by})`,
-        )
-      }
-      return statements
     }
     case 'item.update': {
       const statements = [

@@ -17,7 +17,8 @@ export function dictionaryStatements(c: DictionaryCommand, actor: Actor): Statem
     case 'tag.create':
       return [
         sql`insert into tags (id, inventory_id, name, created_by, updated_by)
-            values (${c.id}, ${c.inventoryId}, ${c.name}, ${by}, ${by})`,
+            values (${c.id}, ${c.inventoryId}, ${c.name}, ${by}, ${by})
+            on conflict (id) do nothing`,
       ]
     case 'tag.rename':
       return [
@@ -28,7 +29,8 @@ export function dictionaryStatements(c: DictionaryCommand, actor: Actor): Statem
     case 'attribute.create':
       return [
         sql`insert into attributes (id, inventory_id, name, kind, options, created_by, updated_by)
-            values (${c.id}, ${c.inventoryId}, ${c.name}, ${c.kind}, ${c.options}::text[], ${by}, ${by})`,
+            values (${c.id}, ${c.inventoryId}, ${c.name}, ${c.kind}, ${c.options}::text[], ${by}, ${by})
+            on conflict (id) do nothing`,
       ]
     case 'attribute.update':
       return [
@@ -41,7 +43,8 @@ export function dictionaryStatements(c: DictionaryCommand, actor: Actor): Statem
     case 'unit.create':
       return [
         sql`insert into custom_units (id, inventory_id, name, symbol, prefix_powers, created_by, updated_by)
-            values (${c.id}, ${c.inventoryId}, ${c.name}, ${c.symbol}, ${c.prefixPowers}::smallint[], ${by}, ${by})`,
+            values (${c.id}, ${c.inventoryId}, ${c.name}, ${c.symbol}, ${c.prefixPowers}::smallint[], ${by}, ${by})
+            on conflict (id) do nothing`,
       ]
     case 'unit.update':
       return [

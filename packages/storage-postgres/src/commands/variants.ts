@@ -15,7 +15,8 @@ export function variantStatements(c: VariantCommand, actor: Actor): Statement[] 
             select n.id, ${c.itemId}, n.name,
                    (select coalesce(max(position), -1) from variants where item_id = ${c.itemId}) + n.ord::int,
                    ${by}, ${by}
-            from unnest(${ids}::uuid[], ${names}::text[]) with ordinality as n(id, name, ord)`,
+            from unnest(${ids}::uuid[], ${names}::text[]) with ordinality as n(id, name, ord)
+            on conflict (id) do nothing`,
       ]
     }
     case 'variant.update':

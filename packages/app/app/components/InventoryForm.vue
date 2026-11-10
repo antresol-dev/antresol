@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { currencyOptions } from '~/lib/currencies'
+import { changedFields } from '~/lib/changed-fields'
 import { errorMessageKey } from '~/lib/errors'
 
 const props = defineProps<{ mode: 'create' | 'rename' }>()
@@ -63,8 +64,18 @@ const errorKey = ref<string | null>(null)
 
 const options = computed(() => currencyOptions(search.value))
 const selected = computed(() => CURRENCIES[currency.value])
+// Rename sends only what differs from the inventory as it was opened: a stale form must not revert another device's edit.
+const changes = computed(() =>
+  changedFields(
+    { name: existing?.name ?? '', description: existing?.description ?? null },
+    { name: name.value.trim(), description: description.value.trim() || null },
+  ),
+)
 const canSubmit = computed(
-  () => !busy.value && !state.readOnly && (props.mode === 'rename' ? !!existing : !!sourceId.value),
+  () =>
+    !busy.value &&
+    !state.readOnly &&
+    (props.mode === 'rename' ? !!existing && Object.keys(changes.value).length > 0 : !!sourceId.value),
 )
 
 watch(comboOpen, (open) => {
@@ -83,8 +94,7 @@ async function submit(): Promise<void> {
       await workspace.apply({
         type: 'inventory.update',
         id: existing.id,
-        name: name.value.trim(),
-        description: description.value.trim() || null,
+        ...changes.value,
       })
     }
     emit('done')

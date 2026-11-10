@@ -104,3 +104,9 @@ export function currentInventoryName(state: {
   )
   return entry?.inventory.name ?? ''
 }
+
+/** The PWA shortcut in the launch URL (`?action=add` / `?action=search`); anything else gives null. */
+export function launchAction(query: Record<string, unknown>): 'add' | 'search' | null {
+  const action = query.action
+  return action === 'add' || action === 'search' ? action : null
+}

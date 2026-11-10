@@ -180,3 +180,11 @@
     display: none;
   }
 }
+
+/* Below 1024 px the dock covers the bottom of the screen (its height and safe area come from MobileDock as --dock-h), so
+   toasts sit just above it. */
+@media (max-width: 1023.98px) {
+  [data-sonner-toaster][data-y-position='bottom'] {
+    bottom: calc(var(--dock-h, env(safe-area-inset-bottom, 0px)) + 8px) !important;
+  }
+}

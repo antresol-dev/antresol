@@ -30,6 +30,7 @@
     },
     "confirmInventory": "Inventory “{name}” and everything in it will be deleted for good. This can’t be undone."
   },
+  "update": { "available": "New version available", "reload": "Reload", "offlineReady": "Ready to work offline" },
   "tree": { "expand": "Expand {name}", "collapse": "Collapse {name}" },
   "search": {
     "label": "Search",

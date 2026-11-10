@@ -8,7 +8,8 @@ export default defineNuxtConfig({
   compatibilityDate: '2026-11-10',
   ssr: false,
   modules: ['@nuxtjs/color-mode', '@nuxt/fonts', '@nuxtjs/i18n', 'shadcn-nuxt', '@nuxt/eslint', '@vite-pwa/nuxt'],
-  css: ['~/assets/css/main.css'],
+  // vue-sonner ships its toast styles separately; without them toasts render unpositioned.
+  css: ['vue-sonner/style.css', '~/assets/css/main.css'],
   vite: {
     plugins: [tailwindcss()],
     optimizeDeps: { exclude: ['@electric-sql/pglite'] },
@@ -29,7 +30,7 @@ export default defineNuxtConfig({
     storageKey: 'gm-color-mode',
   },
   fonts: {
-    families: [{ name: 'Manrope', provider: 'google', weights: [400, 500, 600, 700] }],
+    families: [{ name: 'Manrope', provider: 'google', weights: [400, 500, 600, 700, 800] }],
   },
   i18n: {
     defaultLocale: 'en',
@@ -39,7 +40,7 @@ export default defineNuxtConfig({
   shadcn: { prefix: '', componentDir: './app/components/ui' },
   pwa: {
     pwaAssets: { config: true },
-    registerType: 'autoUpdate',
+    registerType: 'prompt',
     manifest: {
       name: 'GrayMatter',
       short_name: 'GrayMatter',
@@ -49,6 +50,11 @@ export default defineNuxtConfig({
       theme_color: '#F7F7F8',
       start_url: '.',
       scope: '.',
+      // Relative to the manifest, so they work under /graymatter/ too. The layout reads and clears `action`.
+      shortcuts: [
+        { name: 'Add item', url: './?action=add' },
+        { name: 'Search', url: './?action=search' },
+      ],
     },
     workbox: {
       globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
@@ -64,6 +70,11 @@ export default defineNuxtConfig({
     baseURL,
     head: {
       title: 'GrayMatter',
+      // Browser chrome follows the system theme; a manual choice is added by app.vue. Same values as --background.
+      meta: [
+        { name: 'theme-color', content: '#F7F7F8', media: '(prefers-color-scheme: light)' },
+        { name: 'theme-color', content: '#0E0E10', media: '(prefers-color-scheme: dark)' },
+      ],
       // resizes-content: on Android the keyboard shrinks the layout viewport, so bottom sheets sit above it
       // instead of behind it (Chrome's default, resizes-visual, keeps fixed elements under the keyboard).
       viewport: 'width=device-width, initial-scale=1, interactive-widget=resizes-content',

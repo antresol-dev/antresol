@@ -4,6 +4,7 @@ import { createDemoDriver } from '../app/lib/dev/demo-source'
 import {
   currentInventoryName,
   inventoryScoped,
+  launchAction,
   NAV_SECTIONS,
   sectionOf,
   showsInside,
@@ -116,5 +117,18 @@ describe('shell', () => {
     expect(currentInventoryName({ snapshot: snap, current: workshop, inventories: listed })).toBe('Workshop')
     expect(currentInventoryName({ snapshot: null, current: workshop, inventories: [] })).toBe('')
     expect(currentInventoryName({ snapshot: snap, current: null, inventories: listed })).toBe('')
+  })
+})
+
+describe('launchAction', () => {
+  it('reads the PWA shortcut from the query', () => {
+    expect(launchAction({ action: 'add' })).toBe('add')
+    expect(launchAction({ action: 'search' })).toBe('search')
+  })
+  it('ignores anything else', () => {
+    expect(launchAction({})).toBeNull()
+    expect(launchAction({ action: 'nope' })).toBeNull()
+    expect(launchAction({ action: ['add', 'search'] })).toBeNull()
+    expect(launchAction({ action: null })).toBeNull()
   })
 })

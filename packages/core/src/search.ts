@@ -18,8 +18,20 @@ interface Doc {
 
 const DEFAULT_LIMIT = 50
 
-/** Lowercase, keep only letters and digits: "TL-072" -> "tl072". */
-const compact = (s: string): string => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '')
+/** A decimal comma between digits is a decimal point: "4,7k" -> "4.7k". */
+const decimalComma = (s: string): string => s.replace(/(\p{N}),(?=\p{N})/gu, '$1.')
+
+/** Lowercase, keep letters, digits and decimal points between digits: "TL-072" -> "tl072", "4.7k" -> "4.7k". */
+const compact = (s: string): string =>
+  decimalComma(s.toLowerCase())
+    .replace(/[^\p{L}\p{N}.]+/gu, '')
+    .replace(/(?<!\p{N})\.|\.(?!\p{N})/gu, '')
+
+/** Split on whitespace and punctuation, but keep a point between digits inside the token ("4.7k"). */
+const tokenize = (s: string): string[] =>
+  decimalComma(s)
+    .split(/(?<!\p{N})\.|\.(?!\p{N})|[^\p{L}\p{N}.]+/u)
+    .filter((t) => t !== '')
 
 /** Ranking tiers: exact beats prefix beats fuzzy; score only orders hits within a tier. */
 const TIERS = [
@@ -84,6 +96,7 @@ export function createSearch(s: InventorySnapshot): { search(query: string, limi
 
   const index = new MiniSearch<Doc>({
     fields: ['name', 'compact', 'extra'],
+    tokenize,
     storeFields: ['itemId', 'variantId'],
     searchOptions: { boost: { name: 2 } },
   })

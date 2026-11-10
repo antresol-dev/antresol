@@ -81,3 +81,27 @@ describe('ranking', () => {
     expect(r.search('резистор 10k')[0]).toEqual({ itemId: 'Резистор', variantId: 'v10k' })
   })
 })
+
+describe('decimal values', () => {
+  const { search: s } = createSearch(
+    makeSnapshot({
+      items: [item('r47', 'Resistor'), item('r4.7', 'Resistor'), item('r4k7', 'Resistor'), item('cap', 'Cap')],
+      variants: [variant('v47k', 'r47', '47k'), variant('v4.7k', 'r4.7', '4.7k'), variant('v4k7', 'r4k7', '4k7'), variant('v4n7', 'cap', '4n7')],
+    }),
+  )
+  const hits = (q: string) => s(q).map((h) => h.itemId)
+  it('4.7k ranks the 4.7k variant first and never returns 47k', () => {
+    expect(s('4.7k')[0]).toEqual({ itemId: 'r4.7', variantId: 'v4.7k' })
+    expect(hits('4.7k')).not.toContain('r47')
+  })
+  it('4,7k behaves like 4.7k', () => {
+    expect(s('4,7k')).toEqual(s('4.7k'))
+  })
+  it('47k finds 47k, not 4.7k', () => {
+    expect(s('47k')[0]).toEqual({ itemId: 'r47', variantId: 'v47k' })
+    expect(hits('47k')).not.toContain('r4.7')
+  })
+  it('other punctuation is still ignored', () => {
+    for (const q of ['tl-072', 'TL072', 'tl 072']) expect(search(q)[0]?.itemId).toBe('tl072')
+  })
+})

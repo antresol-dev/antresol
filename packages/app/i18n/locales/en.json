@@ -185,9 +185,10 @@
     "create": "Create",
     "save": "Save"
   },
+  "rowMenu": { "more": "More actions for {name}" },
   "folderMenu": {
-    "label": "Folder actions",
     "new": "New folder",
+    "newIn": "New folder in {name}",
     "rename": "Rename",
     "renameTitle": "Rename folder",
     "move": "Move",

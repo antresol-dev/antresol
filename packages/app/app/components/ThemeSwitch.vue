@@ -9,14 +9,14 @@ const options = ['system', 'light', 'dark'] as const
 <template>
   <RadioGroup
     :model-value="colorMode.preference"
-    class="grid gap-0"
+    class="grid gap-0.5"
     @update:model-value="(v) => (colorMode.preference = String(v))"
   >
     <Label
       v-for="option in options"
       :key="option"
       :for="`theme-${option}`"
-      class="min-h-11 cursor-pointer text-base font-medium"
+      class="-mx-2 min-h-11 cursor-pointer rounded-lg px-2 text-base font-medium transition-colors duration-150 hover:bg-hover"
     >
       <RadioGroupItem :id="`theme-${option}`" :value="option" class="size-5" />
       {{ $t(`settings.appearance.${option}`) }}

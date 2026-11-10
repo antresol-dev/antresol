@@ -87,8 +87,8 @@ function retry(): void {
 
 <template>
   <ScreenHeader :title="title" :subtitle="subtitle" :crumbs="crumbs" :current="current">
-    <template v-if="view" #actions>
-      <FolderMenu />
+    <template v-if="view" #actions="{ compact }">
+      <FolderActions :folder-id="folderId" :compact="compact" />
     </template>
   </ScreenHeader>
   <ScreenBody>

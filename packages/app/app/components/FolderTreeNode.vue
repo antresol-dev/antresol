@@ -1,26 +1,64 @@
 <script setup lang="ts">
-import { Boxes, ChevronRight, Folder } from '@lucide/vue'
+import { Archive, Boxes, ChevronRight, Folder, FolderInput, FolderPlus, Pencil, Plus } from '@lucide/vue'
 import type { TreeRow } from '~/lib/tree-state'
+import type RowMenu from './RowMenu.vue'
 
 const props = defineProps<{
   row: TreeRow
   variant: 'panel' | 'drawer'
-  /** The inventory root: Boxes icon, links to `/`, never has a chevron. */
+  /** The inventory root: Boxes icon, links to `/`, never has a chevron or row actions. */
   root?: boolean
 }>()
 const emit = defineEmits<{ toggle: [id: string] }>()
+
+const { t } = useI18n()
+const { state } = useWorkspace()
+const { open } = useFolderDialog()
 
 const panel = computed(() => props.variant === 'panel')
 const to = computed(() => (props.root ? '/' : `/folder/${props.row.id}`))
 // Drawer rows are touch targets: 44 px tall with a 44 px chevron; the guide line runs under the parent's chevron.
 const chevronSize = computed(() => (panel.value ? 'size-[18px]' : 'size-11'))
+const actionSize = computed(() => (panel.value ? 'size-[22px] rounded-md' : 'size-8 rounded-lg'))
+
+const locked = computed(() => !!state.readOnly || state.saving)
+const actions = computed(() => [
+  { key: 'create', label: t('folderMenu.new'), icon: FolderPlus, disabled: locked.value },
+  { key: 'rename', label: t('folderMenu.rename'), icon: Pencil, disabled: locked.value },
+  { key: 'move', label: t('folderMenu.move'), icon: FolderInput, disabled: locked.value },
+  { key: 'archive', label: t('folderMenu.archive'), icon: Archive, destructive: true, disabled: locked.value },
+])
+
+function select(key: string): void {
+  const folderId = props.row.id
+  if (key === 'create') open({ kind: 'create', parentId: folderId })
+  else if (key === 'rename' || key === 'move' || key === 'archive') open({ kind: key, folderId })
+}
+
+// A long press on a folder row (in the drawer, or the panel on a touch screen) opens the row menu as a sheet.
+const menu = useTemplateRef<InstanceType<typeof RowMenu>>('rowMenu')
+const press = useLongPress(() => menu.value?.openSheet())
+// Object syntax on a component: `clickCapture` becomes onClickCapture, a capture-phase click listener on the <a>.
+const pressHandlers = computed(() =>
+  props.root
+    ? {}
+    : {
+        pointerdown: press.onPointerdown,
+        pointermove: press.onPointermove,
+        pointerup: press.onPointerup,
+        pointercancel: press.onPointercancel,
+        contextmenu: press.onContextmenu,
+        clickCapture: press.onClickCapture,
+      },
+)
 </script>
 
 <template>
   <li class="flex flex-col gap-0.5">
+    <!-- `group`: the row reveals its "+" and "⋯" (.row-action) on hover and focus. The count keeps its colour. -->
     <div
       :class="[
-        'relative flex items-center gap-1.5 rounded-icon pr-2 text-sm font-semibold transition-colors duration-150',
+        'group relative flex items-center gap-1.5 rounded-icon pr-2 text-sm font-semibold transition-colors duration-150',
         panel ? 'h-8 pl-1' : 'min-h-11',
         row.current ? 'bg-accent-soft text-accent-soft-foreground' : 'text-icon hover:bg-hover hover:text-foreground',
       ]"
@@ -42,16 +80,37 @@ const chevronSize = computed(() => (panel.value ? 'size-[18px]' : 'size-11'))
         />
       </button>
       <span v-else :class="[chevronSize, 'shrink-0']" aria-hidden="true" />
-      <!-- The link stretches over the whole row (after:inset-0); the chevron sits above it. -->
+      <!-- The link stretches over the whole row (after:inset-0); the chevron and the actions sit above it. -->
       <NuxtLink
         :to="to"
         :aria-current="row.current ? 'page' : undefined"
-        class="flex min-w-0 flex-1 items-center gap-1.5 self-stretch outline-none after:absolute after:inset-0 after:rounded-icon focus-visible:after:ring-2 focus-visible:after:ring-ring"
+        :class="[
+          'flex min-w-0 flex-1 items-center gap-1.5 self-stretch outline-none after:absolute after:inset-0 after:rounded-icon focus-visible:after:ring-2 focus-visible:after:ring-ring',
+          root ? '' : 'select-none [-webkit-touch-callout:none]',
+        ]"
+        v-on="pressHandlers"
       >
         <Boxes v-if="root" class="size-4 shrink-0" aria-hidden="true" />
         <Folder v-else :class="['size-4 shrink-0', row.current ? '' : 'text-primary']" aria-hidden="true" />
         <span class="min-w-0 flex-1 truncate">{{ row.name }}</span>
       </NuxtLink>
+      <template v-if="!root">
+        <span class="row-action relative z-10 -mr-1 flex shrink-0 items-center gap-px">
+          <button
+            type="button"
+            :class="[
+              actionSize,
+              'grid place-items-center text-icon outline-none transition-colors duration-150 hover:bg-chip hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
+            ]"
+            :aria-label="$t('folderMenu.newIn', { name: row.name })"
+            :disabled="locked"
+            @click="open({ kind: 'create', parentId: row.id })"
+          >
+            <Plus class="size-3.5" aria-hidden="true" />
+          </button>
+          <RowMenu ref="rowMenu" :class="actionSize" :label="row.name" :actions="actions" @select="select" />
+        </span>
+      </template>
       <span
         :class="['shrink-0 text-xs font-bold tabular-nums', row.current ? 'text-accent-soft-foreground' : 'text-subtle-foreground']"
       >

@@ -30,6 +30,9 @@ const sheetOpen = computed({
   },
 })
 
+// Neutral hover; the text keeps its colour.
+const sourceAction = 'h-11 rounded-field transition-colors duration-150 hover:bg-hover'
+
 async function confirmRemove(): Promise<void> {
   const target = removing.value
   removing.value = null
@@ -57,10 +60,10 @@ async function confirmRemove(): Promise<void> {
             </div>
             <p v-if="s.reason" class="break-words text-sm text-destructive">{{ $t(`errors.probe.${s.reason}`) }}</p>
             <div class="-mx-2 flex">
-              <Button v-if="s.config.kind === 'neon'" as-child variant="ghost" class="h-11 text-primary">
+              <Button v-if="s.config.kind === 'neon'" as-child variant="ghost" :class="[sourceAction, 'text-primary']">
                 <NuxtLink :to="`/settings/sources/${s.config.id}`">{{ $t('settings.sources.edit') }}</NuxtLink>
               </Button>
-              <Button variant="ghost" class="h-11 text-destructive" @click="removing = s.config">
+              <Button variant="ghost" :class="[sourceAction, 'text-destructive']" @click="removing = s.config">
                 {{ $t('settings.sources.remove') }}
               </Button>
             </div>
@@ -101,7 +104,7 @@ async function confirmRemove(): Promise<void> {
         :description="$t('settings.sources.removeConfirm', { name: removing?.name ?? '' })"
       >
         <template #footer>
-          <Button variant="outline" class="h-11 rounded-field" @click="removing = null">{{ $t('ui.cancel') }}</Button>
+          <Button variant="outline" class="h-11 rounded-field bg-surface" @click="removing = null">{{ $t('ui.cancel') }}</Button>
           <Button
             variant="destructive"
             class="h-11 rounded-field bg-destructive text-primary-foreground hover:bg-destructive/90 dark:bg-destructive dark:hover:bg-destructive/90"

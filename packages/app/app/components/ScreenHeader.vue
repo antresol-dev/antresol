@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useMediaQuery } from '@vueuse/core'
 import { ChevronRight, Loader2, Menu } from '@lucide/vue'
+import { MENU_BUTTON_ID } from '~/composables/useShell'
 import { collapseCrumbs } from '~/lib/views'
 
 const props = defineProps<{
@@ -74,7 +75,15 @@ const crumbLink =
 
       <template v-else>
         <div class="-mx-3 flex min-w-0 items-center">
-          <button type="button" :class="iconButton" :aria-label="$t('nav.menu')" @click="drawerOpen = true">
+          <button
+            :id="MENU_BUTTON_ID"
+            type="button"
+            :class="iconButton"
+            :aria-label="$t('nav.menu')"
+            aria-haspopup="dialog"
+            :aria-expanded="drawerOpen"
+            @click="drawerOpen = true"
+          >
             <Menu class="size-5" aria-hidden="true" />
           </button>
           <NavArrows />
@@ -83,7 +92,8 @@ const crumbLink =
             <Loader2 class="size-4 animate-spin" aria-hidden="true" />
             <span class="sr-only">{{ $t('status.saving') }}</span>
           </span>
-          <div v-if="$slots.actions" class="flex shrink-0 items-center gap-0.5">
+          <!-- No gap: at 360 px ☰, the arrows, the saving indicator and four 44 px actions fill the row exactly. -->
+          <div v-if="$slots.actions" class="flex shrink-0 items-center">
             <slot name="actions" :compact="true" />
           </div>
         </div>

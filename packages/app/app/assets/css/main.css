@@ -103,9 +103,16 @@
   --radius-icon: 10px;
   --radius-fab: 18px;
 
-  /* Navigation drawer: slides in from the left (motion-safe only) while its backdrop fades. */
+  /* Layers. Movement is used under motion-safe: only; backdrops fade (opacity only) in both modes.
+     Navigation drawer: slides in from the left. Bottom sheets: slide up; from 768 px they are centred windows that
+     appear with a slight scale, like dropdown menus. Translate utilities use the `translate` property, so these
+     transforms add to them instead of replacing them. */
   --animate-drawer-in: drawer-in 200ms ease-out;
   --animate-drawer-out: drawer-out 200ms ease-in;
+  --animate-sheet-in: sheet-in 200ms ease-out;
+  --animate-sheet-out: sheet-out 160ms ease-in;
+  --animate-pop-in: pop-in 160ms ease-out;
+  --animate-pop-out: pop-out 120ms ease-in;
   --animate-fade-in: fade-in 200ms ease-out;
   --animate-fade-out: fade-out 200ms ease-in;
 
@@ -114,6 +121,18 @@
   }
   @keyframes drawer-out {
     to { transform: translateX(-100%); }
+  }
+  @keyframes sheet-in {
+    from { transform: translateY(100%); }
+  }
+  @keyframes sheet-out {
+    to { transform: translateY(100%); }
+  }
+  @keyframes pop-in {
+    from { opacity: 0; transform: scale(0.97); }
+  }
+  @keyframes pop-out {
+    to { opacity: 0; transform: scale(0.97); }
   }
   @keyframes fade-in {
     from { opacity: 0; }
@@ -132,5 +151,32 @@
     background-color: var(--background);
     color: var(--foreground);
     font-family: 'Manrope', system-ui, sans-serif;
+  }
+}
+
+/* "⋯" and "+" in list and tree rows (design 6.7). The row carries `group`.
+   - With a pointer that hovers: hidden until the row is hovered, holds focus or its menu is open; fades in.
+   - Touch below 1024 px: not shown, a long press opens the same menu.
+   - Touch from 1024 px (three columns on a tablet): always shown, there is no hover to reveal them.
+   Unlayered on purpose: it must beat the display and transition utilities on the same element. */
+.row-action {
+  transition-property: opacity, background-color, color;
+  transition-duration: 150ms;
+  transition-timing-function: ease;
+}
+@media (hover: hover) {
+  .row-action {
+    opacity: 0;
+  }
+  .group:hover .row-action,
+  .group:focus-within .row-action,
+  .row-action[data-state='open'],
+  .row-action:has([data-state='open']) {
+    opacity: 1;
+  }
+}
+@media (hover: none) and (max-width: 1023.98px) {
+  .row-action {
+    display: none;
   }
 }

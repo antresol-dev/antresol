@@ -27,6 +27,15 @@ const menuOpen = ref(false)
 const dialog = ref<'create' | 'rename' | 'archive' | null>(null)
 const archiving = ref(false)
 
+// The Android back gesture closes the dropdown; below 768 px the menu is an AppSheet, which watches by itself.
+const dropdownOpen = computed({
+  get: () => desktop.value && menuOpen.value,
+  set: (open: boolean) => {
+    menuOpen.value = open
+  },
+})
+useCloseWatcher(dropdownOpen)
+
 const isCurrent = (e: InventoryEntry): boolean =>
   e.ref.sourceId === state.current?.sourceId && e.ref.inventoryId === state.current?.inventoryId
 
@@ -88,7 +97,8 @@ async function archive(): Promise<void> {
   try {
     await workspace.apply({ type: 'archive', target: 'inventory', id: current.inventoryId, archiveId: newId() })
     dialog.value = null
-    await router.push('/')
+    // force: a new history entry stamped with the inventory that is now current.
+    await router.push({ path: '/', force: true })
   } catch (e) {
     toast.error(t(errorMessageKey(e)))
   } finally {
@@ -96,7 +106,11 @@ async function archive(): Promise<void> {
   }
 }
 
-const itemClass = 'flex min-h-11 w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm disabled:opacity-50'
+// Menu items show focus with their highlight; buttons in the sheet get the focus ring.
+const itemClass = computed(() => [
+  'flex min-h-11 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm outline-none transition-colors duration-150 hover:bg-hover disabled:pointer-events-none disabled:opacity-50',
+  desktop.value ? '' : 'focus-visible:ring-2 focus-visible:ring-ring',
+])
 </script>
 
 <template>
@@ -114,7 +128,7 @@ const itemClass = 'flex min-h-11 w-full items-center gap-2 rounded-sm px-2 py-1.
     </button>
   </DefineTrigger>
   <DefineContent>
-    <div class="grid gap-1">
+    <div class="grid gap-0.5">
       <template v-for="group in groups" :key="group.label">
         <component
           :is="desktop ? DropdownMenuLabel : 'p'"
@@ -176,7 +190,10 @@ const itemClass = 'flex min-h-11 w-full items-center gap-2 rounded-sm px-2 py-1.
     <DropdownMenuTrigger as-child>
       <ReuseTrigger />
     </DropdownMenuTrigger>
-    <DropdownMenuContent align="start" class="w-72 bg-surface p-1.5">
+    <DropdownMenuContent
+      align="start"
+      class="w-72 rounded-thumb bg-surface p-1.5 motion-safe:data-[state=open]:animate-pop-in motion-safe:data-[state=closed]:animate-pop-out"
+    >
       <ReuseContent />
     </DropdownMenuContent>
   </DropdownMenu>

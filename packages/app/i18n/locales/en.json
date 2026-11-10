@@ -92,6 +92,28 @@
       "newer": "Save (read-only)"
     }
   },
+  "inventory": {
+    "switchTitle": "Inventories",
+    "new": "New inventory",
+    "create": "Create inventory",
+    "rename": "Rename “{name}”",
+    "renameTitle": "Rename inventory",
+    "archive": "Archive “{name}”",
+    "archiveTitle": "Archive inventory",
+    "archiveAction": "Archive",
+    "archiveConfirm": "Archive “{name}”? It disappears from the list. You can restore it from the Archive."
+  },
+  "inventoryForm": {
+    "name": "Name",
+    "currency": "Currency",
+    "currencySearch": "Search currency",
+    "currencyNone": "No matching currency",
+    "source": "Source",
+    "description": "Description",
+    "optional": "Optional",
+    "create": "Create",
+    "save": "Save"
+  },
   "errors": {
     "unknown": "Something went wrong. Try again.",
     "domain": {

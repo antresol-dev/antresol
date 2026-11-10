@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { createSearch } from '@graymatter/core'
+import { Button } from '@/components/ui/button'
 import { folderView, searchRows } from '~/lib/views'
 
 const props = defineProps<{ folderId: string | null }>()
@@ -29,6 +30,7 @@ const rows = computed(() =>
   snapshot.value && search.value && query.value ? searchRows(snapshot.value, search.value.search(query.value)) : [],
 )
 
+const creating = ref(false)
 const noInventories = computed(
   () =>
     !snapshot.value &&
@@ -39,7 +41,14 @@ const noInventories = computed(
 </script>
 
 <template>
-  <EmptyState v-if="noInventories" :text="$t('empty.noInventories')" />
+  <EmptyState v-if="noInventories" :text="$t('empty.noInventories')">
+    <Button class="h-11 rounded-field" :disabled="!!state.readOnly" @click="creating = true">
+      {{ $t('inventory.create') }}
+    </Button>
+    <AppSheet v-model:open="creating" :title="$t('inventory.new')">
+      <InventoryForm v-if="creating" mode="create" @done="creating = false" />
+    </AppSheet>
+  </EmptyState>
   <div v-else-if="!snapshot" class="grid grid-cols-1 gap-3.5" aria-hidden="true">
     <Skeleton class="h-[46px] rounded-field" />
     <Skeleton class="h-40 rounded-card" />

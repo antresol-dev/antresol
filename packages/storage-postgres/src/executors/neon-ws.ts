@@ -1,5 +1,6 @@
 import { neonConfig, Pool } from '@neondatabase/serverless'
 import type { PgExecutor } from '../executor'
+import { unavailable } from './errors'
 
 export function createNeonWsExecutor(connectionString: string): PgExecutor {
   // Pool has no per-instance option for this; the driver exposes it as a global setting.
@@ -11,7 +12,12 @@ export function createNeonWsExecutor(connectionString: string): PgExecutor {
       return result.rows as Row[]
     },
     async batch(statements) {
-      const client = await pool.connect()
+      let client
+      try {
+        client = await pool.connect()
+      } catch (e) {
+        throw unavailable(e)
+      }
       try {
         await client.query('BEGIN')
         for (const s of statements) await client.query(s.text, s.params)

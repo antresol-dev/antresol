@@ -10,7 +10,13 @@ export interface SchemaStatus {
   dbVersion: number
   appVersion: number
 }
-export type StorageErrorCode = 'read_only' | 'unavailable' | 'failed'
+export const STORAGE_ERROR_CODES = ['read_only', 'unavailable', 'not_found', 'incompatible', 'failed'] as const
+export type StorageErrorCode = (typeof STORAGE_ERROR_CODES)[number]
+
+export type SchemaInspection =
+  | { state: 'empty' }
+  | { state: 'foreign' }
+  | { state: 'current' | 'older' | 'newer'; dbVersion: number; appVersion: number }
 
 export class StorageError extends Error {
   readonly code: StorageErrorCode

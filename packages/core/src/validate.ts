@@ -7,21 +7,23 @@ import { cmpQ, parseQuantity, type Quantity } from './quantity'
 import { customUnitKey, resolveUnit, SI_PREFIXES } from './units'
 import { isInSubtree } from './tree'
 
-export type DomainErrorCode =
-  | 'name_required'
-  | 'name_too_long'
-  | 'duplicate_name'
-  | 'invalid_currency'
-  | 'invalid_quantity'
-  | 'invalid_price'
-  | 'invalid_url'
-  | 'invalid_option'
-  | 'insufficient_stock'
-  | 'folder_cycle'
-  | 'not_found'
-  | 'archived'
-  | 'not_archived'
-  | 'unit_in_use'
+export const DOMAIN_ERROR_CODES = [
+  'name_required',
+  'name_too_long',
+  'duplicate_name',
+  'invalid_currency',
+  'invalid_quantity',
+  'invalid_price',
+  'invalid_url',
+  'invalid_option',
+  'insufficient_stock',
+  'folder_cycle',
+  'not_found',
+  'archived',
+  'not_archived',
+  'unit_in_use',
+] as const
+export type DomainErrorCode = (typeof DOMAIN_ERROR_CODES)[number]
 
 export class DomainError extends Error {
   readonly code: DomainErrorCode

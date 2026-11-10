@@ -1,4 +1,4 @@
-import type { Id, InventorySnapshot, Movement, Inventory } from '@graymatter/core'
+import { StorageError, type Id, type InventorySnapshot, type Movement, type Inventory } from '@graymatter/core'
 import type { PgExecutor } from './executor'
 import * as rows from './rows'
 import { sql } from './sql'
@@ -85,7 +85,7 @@ export async function loadInventory(exec: PgExecutor, id: Id): Promise<Inventory
       ),
     ])
   const inventory = inv[0]
-  if (!inventory) throw new Error(`inventory not found: ${id}`)
+  if (!inventory) throw new StorageError('not_found', `inventory not found: ${id}`)
   return {
     inventory: rows.toInventory(inventory),
     folders: folders.map(rows.toFolder),

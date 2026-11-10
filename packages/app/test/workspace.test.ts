@@ -739,7 +739,15 @@ describe('workspace', () => {
     const ws = h.workspace()
     await ws.start()
     const itemA = await itemWithStock(ws, a)
-    await ws.applyTo({ sourceId: 's1', inventoryId: b }, { type: 'archive', target: 'inventory', id: b, archiveId: newId() })
+    const refB = { sourceId: 's1', inventoryId: b }
+    const oldItem = newId()
+    await ws.applyTo(refB, {
+      type: 'item.create', id: oldItem, inventoryId: b, folderId: null, name: 'Old bolt', description: null,
+      unitKey: 'pcs', tagIds: [], initialReceipt: null,
+    })
+    await ws.applyTo(refB, { type: 'stock.receive', movementId: newId(), itemId: oldItem, variantId: null, quantity: '8', totalPrice: null, sourceUrl: null, note: null })
+    await ws.applyTo(refB, { type: 'archive', target: 'item', id: oldItem, archiveId: newId() })
+    await ws.applyTo(refB, { type: 'archive', target: 'inventory', id: b, archiveId: newId() })
     const backup = await ws.exportSource('s1')
     expect(backup).toMatchObject({
       format: 'graymatter-backup',
@@ -750,6 +758,8 @@ describe('workspace', () => {
     expect(backup.inventories.map((i) => i.snapshot.inventory.name).sort()).toEqual(['Active', 'Old'])
     const archived = backup.inventories.find((i) => i.snapshot.inventory.id === b)!
     expect(archived.snapshot.inventory.archivedAt).not.toBeNull()
+    expect(archived.snapshot.items.map((i) => [i.id, i.archivedAt !== null])).toEqual([[oldItem, true]])
+    expect(archived.movements.map((m) => [m.itemId, m.quantity])).toEqual([[oldItem, '8']])
     const active = backup.inventories.find((i) => i.snapshot.inventory.id === a)!
     expect(active.movements.map((m) => [m.itemId, m.kind, m.quantity])).toEqual([
       [itemA, 'receipt', '37'],

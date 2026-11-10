@@ -33,6 +33,8 @@ export function backupFileName(sourceName: string, at: Date): string {
   return `graymatter-${slug || 'source'}-${at.toISOString().slice(0, 10)}.json`
 }
 
+export const REVOKE_DELAY_MS = 10_000
+
 /** Saves the backup through a temporary link; the object URL is revoked afterwards. */
 export function downloadBackup(backup: BackupFile, at: Date): void {
   const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' }))
@@ -43,7 +45,10 @@ export function downloadBackup(backup: BackupFile, at: Date): void {
     document.body.append(a)
     a.click()
     a.remove()
-  } finally {
+  } catch (e) {
     URL.revokeObjectURL(url)
+    throw e
   }
+  // Safari and some Firefox versions start the download after click() returns: revoke later.
+  setTimeout(() => URL.revokeObjectURL(url), REVOKE_DELAY_MS)
 }

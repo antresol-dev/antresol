@@ -84,7 +84,7 @@ async function confirmRemove(): Promise<void> {
               <Button
                 variant="ghost"
                 :class="[sourceAction, 'text-primary']"
-                :disabled="exporting !== null"
+                :disabled="exporting !== null || (s.status !== 'ready' && s.status !== 'read_only')"
                 @click="exportBackup(s.config)"
               >
                 {{ exporting === s.config.id ? $t('settings.sources.exporting') : $t('settings.sources.exportBackup') }}

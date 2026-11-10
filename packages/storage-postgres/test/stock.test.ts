@@ -79,17 +79,24 @@ describe('stock journal', () => {
 
   it('loadAllMovements returns every movement of an inventory, oldest first, and no other inventory\'s', async () => {
     const { storage, inv, item } = await setup()
-    const other = await setup()
+    const otherInv = newId()
+    const otherItem = newId()
+    await storage.apply({ type: 'inventory.create', id: otherInv, name: 'B', description: null, currency: 'USD' }, TEST_ACTOR)
+    await storage.apply(
+      { type: 'item.create', id: otherItem, inventoryId: otherInv, folderId: null, name: 'O', description: null, unitKey: 'pcs', tagIds: [], initialReceipt: null },
+      TEST_ACTOR,
+    )
     const second = newId()
     await storage.apply(
       { type: 'item.create', id: second, inventoryId: inv, folderId: null, name: 'S', description: null, unitKey: 'pcs', tagIds: [], initialReceipt: null },
       TEST_ACTOR,
     )
     for (let i = 1; i <= 11; i++) await storage.apply(receive(i % 2 ? item : second, String(i), null), TEST_ACTOR)
-    await other.storage.apply(receive(other.item, '99', null), TEST_ACTOR)
+    await storage.apply(receive(otherItem, '99', null), TEST_ACTOR)
     const all = await storage.loadAllMovements(inv)
     expect(all.map((x) => x.quantity)).toEqual(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11'])
     expect(new Set(all.map((x) => x.itemId))).toEqual(new Set([item, second]))
+    expect((await storage.loadAllMovements(otherInv)).map((x) => x.quantity)).toEqual(['99'])
     expect(await storage.loadAllMovements(newId())).toEqual([])
   })
 

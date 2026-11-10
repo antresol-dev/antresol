@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Archive, Boxes, SlidersHorizontal } from '@lucide/vue'
+import { Archive, Boxes, SlidersHorizontal, Tags } from '@lucide/vue'
 import type { Component } from 'vue'
 import { NAV_SECTIONS, sectionOf, type Section } from '~/lib/shell'
 
@@ -12,7 +12,7 @@ const section = computed(() => sectionOf(typeof route.name === 'string' ? route.
 // "page" only on the section's own page; on a page inside it (a folder, a source) the highlight is "true".
 const current = (key: Section, to: string): 'page' | 'true' | undefined =>
   section.value !== key ? undefined : route.path === to ? 'page' : 'true'
-const icons: Partial<Record<Exclude<Section, 'settings'>, Component>> = { items: Boxes, archive: Archive }
+const icons: Record<Exclude<Section, 'settings'>, Component> = { items: Boxes, dictionaries: Tags, archive: Archive }
 
 // The rail grows and its column scrolls; in the drawer the tree card takes the free height and scrolls itself.
 // Rows hover with a foreground tint: bg-hover is almost the rail's own colour.
@@ -40,7 +40,7 @@ const linkState = (key: Section): string =>
       <ul class="grid gap-0.5">
         <li v-for="s in NAV_SECTIONS" :key="s.key">
           <NuxtLink :to="s.to" :class="[link, linkState(s.key)]" :aria-current="current(s.key, s.to)">
-            <component :is="icons[s.key] ?? Boxes" class="size-[18px] shrink-0" aria-hidden="true" />
+            <component :is="icons[s.key]" class="size-[18px] shrink-0" aria-hidden="true" />
             {{ $t(`nav.${s.key}`) }}
           </NuxtLink>
         </li>

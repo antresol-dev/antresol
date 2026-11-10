@@ -5,9 +5,10 @@ import type { InventoryEntry } from './workspace'
 
 export type Section = 'items' | 'archive' | 'dictionaries' | 'settings'
 
-/** Sections in the app panel between the inventory switcher and Settings. Task 12 adds dictionaries. */
+/** Sections in the app panel between the inventory switcher and Settings. */
 export const NAV_SECTIONS: { key: Exclude<Section, 'settings'>; to: string }[] = [
   { key: 'items', to: '/' },
+  { key: 'dictionaries', to: '/dictionaries' },
   { key: 'archive', to: '/archive' },
 ]
 

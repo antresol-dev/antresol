@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Boxes, SlidersHorizontal } from '@lucide/vue'
+import { Archive, Boxes, SlidersHorizontal } from '@lucide/vue'
 import type { Component } from 'vue'
 import { NAV_SECTIONS, sectionOf, type Section } from '~/lib/shell'
 
@@ -9,7 +9,7 @@ const route = useRoute()
 const { state } = useWorkspace()
 
 const section = computed(() => sectionOf(typeof route.name === 'string' ? route.name : null))
-const icons: Partial<Record<Exclude<Section, 'settings'>, Component>> = { items: Boxes }
+const icons: Partial<Record<Exclude<Section, 'settings'>, Component>> = { items: Boxes, archive: Archive }
 
 // The rail grows and its column scrolls; in the drawer the tree card takes the free height and scrolls itself.
 const link =

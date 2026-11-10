@@ -5,8 +5,9 @@ import type { SourceConfig } from '../types'
 
 const DEMO_ACTOR: Actor = { device: 'Demo' }
 
-/** Dev only: PGlite in the browser (idb://graymatter-dev-<sourceId>) or in memory when memory=true; seeds demo data on an empty database. */
-export function createDemoDriver(options: { memory?: boolean } = {}): SourceDriver {
+/** extras (default true): archived records (this task) and tags and attributes (Task 11) on top of the base data.
+ *  Dev only: PGlite in the browser (idb://graymatter-dev-<sourceId>) or in memory when memory=true; seeds demo data on an empty database. */
+export function createDemoDriver(options: { memory?: boolean; extras?: boolean } = {}): SourceDriver {
   // One database per source id for the lifetime of the page, shared by probe and every connection:
   // closing a connection must not close the database a newer connection uses.
   const dbs = new Map<string, Promise<PgExecutor>>()
@@ -30,13 +31,13 @@ export function createDemoDriver(options: { memory?: boolean } = {}): SourceDriv
       const exec = await executorFor(config)
       const wasEmpty = (await inspectSchema(exec)).state === 'empty'
       const { storage, status } = await openPostgresStorage(exec)
-      if (wasEmpty) await seedDemo(storage, DEMO_ACTOR)
+      if (wasEmpty) await seedDemo(storage, DEMO_ACTOR, { extras: options.extras ?? true })
       return { storage, status, close: async () => {} }
     },
   }
 }
 
-export async function seedDemo(storage: InventoryStorage, actor: Actor): Promise<void> {
+export async function seedDemo(storage: InventoryStorage, actor: Actor, options: { extras?: boolean } = {}): Promise<void> {
   const run = (command: Command): Promise<void> => storage.apply(command, actor)
 
   const inv = newId()
@@ -89,4 +90,17 @@ export async function seedDemo(storage: InventoryStorage, actor: Actor): Promise
   })
 
   await run({ type: 'inventory.create', id: newId(), name: 'Workshop', description: null, currency: 'EUR' })
+
+  if (options.extras ?? true) {
+    const archive = (target: 'folder' | 'item' | 'variant' | 'inventory', id: string): Promise<void> =>
+      run({ type: 'archive', target, id, archiveId: newId() })
+    const old = await folder('Old projects')
+    await item('LM741', old, { quantity: '2', totalPrice: null })
+    await archive('folder', old)
+    await archive('item', await item('CD4017', ics, { quantity: '3', totalPrice: null }))
+    await archive('variant', variants[2]!.id)
+    const spare = newId()
+    await run({ type: 'inventory.create', id: spare, name: 'Archive test', description: null, currency: 'USD' })
+    await archive('inventory', spare)
+  }
 }

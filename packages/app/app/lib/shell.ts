@@ -2,8 +2,11 @@ import type { Id, InventorySnapshot } from '@graymatter/core'
 
 export type Section = 'items' | 'archive' | 'dictionaries' | 'settings'
 
-/** Sections in the app panel between the inventory switcher and Settings. Task 3 adds archive, Task 12 adds dictionaries. */
-export const NAV_SECTIONS: { key: Exclude<Section, 'settings'>; to: string }[] = [{ key: 'items', to: '/' }]
+/** Sections in the app panel between the inventory switcher and Settings. Task 12 adds dictionaries. */
+export const NAV_SECTIONS: { key: Exclude<Section, 'settings'>; to: string }[] = [
+  { key: 'items', to: '/' },
+  { key: 'archive', to: '/archive' },
+]
 
 const SECTION_BY_ROUTE: Record<string, Section> = {
   'index': 'items',

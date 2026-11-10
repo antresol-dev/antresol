@@ -99,6 +99,13 @@ function retry(): void {
       <AppSheet v-model:open="creating" :title="$t('inventory.new')">
         <InventoryForm v-if="creating" mode="create" @done="creating = false" />
       </AppSheet>
+      <NuxtLink
+        v-if="state.archivedInventories.length > 0"
+        to="/archive"
+        class="min-h-11 content-center rounded-md text-sm font-semibold text-primary underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+      >
+        {{ $t('archive.open') }}
+      </NuxtLink>
     </EmptyState>
     <EmptyState v-else-if="blocker?.kind === 'offline'" :text="$t('empty.offlineNoCopy')">
       <Button variant="outline" class="h-11 rounded-field bg-surface" @click="retry">{{ $t('status.retry') }}</Button>

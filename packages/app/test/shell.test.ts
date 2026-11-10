@@ -18,7 +18,7 @@ let opamps: string
 let tl072: string
 
 beforeAll(async () => {
-  const { storage } = await createDemoDriver({ memory: true }).connect(cfg)
+  const { storage } = await createDemoDriver({ memory: true, extras: false }).connect(cfg)
   const inventoryId = (await storage.listInventories()).find((i) => i.name === 'Electronics')!.id
   snap = await storage.loadInventory(inventoryId)
   opamps = snap.folders.find((f) => f.name === 'Op-amps')!.id
@@ -27,7 +27,7 @@ beforeAll(async () => {
 
 describe('shell', () => {
   it('lists the sections of the app panel', () => {
-    expect(NAV_SECTIONS).toEqual([{ key: 'items', to: '/' }])
+    expect(NAV_SECTIONS.map((s) => s.key)).toEqual(['items', 'archive'])
   })
 
   it('maps routes to sections', () => {

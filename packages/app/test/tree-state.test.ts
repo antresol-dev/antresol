@@ -22,7 +22,7 @@ let passive: string
 let resistors: string
 
 beforeAll(async () => {
-  storage = (await createDemoDriver({ memory: true }).connect(cfg)).storage
+  storage = (await createDemoDriver({ memory: true, extras: false }).connect(cfg)).storage
   inventoryId = (await storage.listInventories()).find((i) => i.name === 'Electronics')!.id
   snap = await storage.loadInventory(inventoryId)
   const idOf = (name: string): string => snap.folders.find((f) => f.name === name)!.id

@@ -30,7 +30,7 @@ const idOf = (s: InventorySnapshot, name: string): string => s.folders.find((f) 
 const names = (xs: { name: string }[]): string[] => xs.map((x) => x.name)
 
 beforeAll(async () => {
-  const conn = await createDemoDriver({ memory: true }).connect(cfg)
+  const conn = await createDemoDriver({ memory: true, extras: false }).connect(cfg)
   storage = conn.storage
   inventoryId = (await storage.listInventories()).find((i) => i.name === 'Electronics')!.id
   snap = await storage.loadInventory(inventoryId)

@@ -4,10 +4,30 @@
   "nav": {
     "sections": "Sections",
     "items": "Items",
+    "archive": "Archive",
     "settings": "Settings",
     "menu": "Menu",
     "back": "Back",
     "forward": "Forward"
+  },
+  "archive": {
+    "title": "Archive",
+    "inventories": "Inventories",
+    "empty": "Nothing in the archive",
+    "restore": "Restore",
+    "restored": "“{name}” restored",
+    "delete": "Delete permanently",
+    "deleteTitle": "Delete permanently",
+    "deleteConfirm": "Delete",
+    "withItems": "with {count} item | with {count} items",
+    "archivedOn": "Archived {date}",
+    "open": "Open archive",
+    "confirm": {
+      "folder": "“{name}” and everything archived inside it will be deleted for good, with their history. This can’t be undone.",
+      "item": "“{name}”, its variants and history will be deleted for good. This can’t be undone.",
+      "variant": "Variant “{name}” and its history will be deleted for good. This can’t be undone."
+    },
+    "confirmInventory": "Inventory “{name}” and everything in it will be deleted for good. This can’t be undone."
   },
   "tree": { "expand": "Expand {name}", "collapse": "Collapse {name}" },
   "search": { "label": "Search", "placeholder": "Search: TL072, 10k, 0805…", "nothing": "Nothing found for “{q}”" },

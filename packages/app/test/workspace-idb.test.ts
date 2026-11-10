@@ -8,7 +8,7 @@ describe('workspace on a real IndexedDB', () => {
   it('adds a source and selects its first inventory', async () => {
     const ws = createWorkspace({
       db: await openDeviceDb(),
-      drivers: { 'dev-pglite': createDemoDriver({ memory: true }) },
+      drivers: { 'dev-pglite': createDemoDriver({ memory: true, extras: false }) },
       userAgent: 'test',
     })
     await ws.startFromCache()

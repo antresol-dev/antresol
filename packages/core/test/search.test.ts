@@ -81,3 +81,54 @@ describe('ranking', () => {
     expect(r.search('резистор 10k')[0]).toEqual({ itemId: 'Резистор', variantId: 'v10k' })
   })
 })
+
+describe('decimal values', () => {
+  const { search: s } = createSearch(
+    makeSnapshot({
+      items: [item('r47', 'Resistor'), item('r4.7', 'Resistor'), item('r4k7', 'Resistor'), item('cap', 'Cap')],
+      variants: [variant('v47k', 'r47', '47k'), variant('v4.7k', 'r4.7', '4.7k'), variant('v4k7', 'r4k7', '4k7'), variant('v4n7', 'cap', '4n7')],
+    }),
+  )
+  const hits = (q: string) => s(q).map((h) => h.itemId)
+  it('4.7k ranks the 4.7k variant first and never returns 47k', () => {
+    expect(s('4.7k')[0]).toEqual({ itemId: 'r4.7', variantId: 'v4.7k' })
+    expect(hits('4.7k')).not.toContain('r47')
+  })
+  it('4,7k behaves like 4.7k', () => {
+    expect(s('4,7k')).toEqual(s('4.7k'))
+  })
+  it('47k finds 47k, not 4.7k', () => {
+    expect(s('47k')[0]).toEqual({ itemId: 'r47', variantId: 'v47k' })
+    expect(hits('47k')).not.toContain('r4.7')
+  })
+  it('4.7k does not return the 4n7 cap; 4k7 stays its own token', () => {
+    expect(hits('4.7k')).not.toContain('cap')
+    expect(s('4k7')[0]).toEqual({ itemId: 'r4k7', variantId: 'v4k7' })
+    expect(hits('4k7')).not.toContain('r4.7')
+  })
+  it('other punctuation is still ignored', () => {
+    for (const q of ['tl-072', 'TL072', 'tl 072']) expect(search(q)[0]?.itemId).toBe('tl072')
+  })
+  it('"Res 4. 7" is not a 4.7 value', () => {
+    const { search: q } = createSearch(
+      makeSnapshot({ items: [item('bad', 'Res 4. 7'), item('good', 'Res'), item('g2', 'Other')], variants: [variant('vg', 'good', '4.7')] }),
+    )
+    expect(q('4.7').map((h) => h.itemId)).toEqual(['good'])
+  })
+  it.each([
+    ['4,7k', '4.7k'],
+    ['3,3V', '3.3v'],
+    ['v1.2.3', '1.2.3'],
+    ['set 5. 10 pcs', '5.10'],
+  ])('indexed "%s" is found by "%s" only where intended', (data, query) => {
+    const { search: q } = createSearch(makeSnapshot({ items: [item('x', data)] }))
+    const found = q(query).map((h) => h.itemId)
+    if (data === 'set 5. 10 pcs') expect(found).toEqual([])
+    else expect(found).toEqual(['x'])
+  })
+  it('odd inputs do not throw and a 4. prefix lists 4.7k', () => {
+    expect(() => s('.5')).not.toThrow()
+    expect(() => s('1.')).not.toThrow()
+    expect(hits('4.')).toContain('r4.7')
+  })
+})

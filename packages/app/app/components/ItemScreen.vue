@@ -109,7 +109,8 @@ async function archiveVariant(): Promise<void> {
   }
 }
 
-// Attributes: add one or edit its value in a sheet, remove at once; a variant's own values in another sheet.
+// Attributes: add one or edit its value in a sheet, remove after a confirmation (the variants' values go too); a
+// variant's own values in another sheet.
 const attributeOpen = ref(false)
 const attributeId = ref<Id | null>(null)
 const valuesId = ref<Id | null>(null)
@@ -117,11 +118,33 @@ function openAttribute(id: Id | null): void {
   attributeId.value = id
   attributeOpen.value = true
 }
-async function removeAttribute(id: Id): Promise<void> {
+const removeId = ref<Id | null>(null)
+const removeBusy = ref(false)
+// The attribute's name as it was when the sheet opened: it stays while the sheet animates out.
+const removeName = ref('')
+const removeOpen = computed({
+  get: () => removeId.value !== null,
+  set: (open: boolean) => {
+    if (!open && !removeBusy.value) removeId.value = null
+  },
+})
+function askRemoveAttribute(id: Id): void {
+  const row = view.value?.attributes.find((a) => a.attributeId === id)
+  if (!row) return
+  removeName.value = row.name
+  removeId.value = id
+}
+async function removeAttribute(): Promise<void> {
+  const id = removeId.value
+  if (!id || removeBusy.value) return
+  removeBusy.value = true
   try {
     await workspace.apply({ type: 'item.removeAttribute', itemId: props.itemId, attributeId: id })
+    removeId.value = null
   } catch (e) {
     toast.error(t(errorMessageKey(e)))
+  } finally {
+    removeBusy.value = false
   }
 }
 
@@ -200,7 +223,16 @@ const linkClass =
         :attributes="view.attributes"
         @add="openAttribute(null)"
         @edit="openAttribute"
-        @remove="removeAttribute"
+        @remove="askRemoveAttribute"
+      />
+      <ConfirmSheet
+        v-model:open="removeOpen"
+        :title="$t('item.removeAttributeTitle')"
+        :description="$t('item.removeAttributeConfirm', { name: removeName })"
+        :confirm-label="$t(removeBusy ? 'status.saving' : 'item.removeAttribute')"
+        :busy="removeBusy"
+        destructive
+        @confirm="removeAttribute"
       />
       <AttributeValueSheet :view="view" :open="attributeOpen" :attribute-id="attributeId" @close="attributeOpen = false" />
       <VariantValuesSheet :view="view" :variant-id="valuesId" @close="valuesId = null" />

@@ -110,7 +110,7 @@ async function remove(): Promise<void> {
       :title="$t('dictionaries.attributeDeleteTitle')"
       :description="
         shown?.kind === 'delete'
-          ? $t('dictionaries.attributeDeleteConfirm', { name: shown.attribute.name, count: shown.count })
+          ? $t('dictionaries.attributeDeleteConfirm', { name: shown.attribute.name, count: shown.count }, shown.count)
           : ''
       "
       :confirm-label="$t(deleting ? 'status.saving' : 'dictionaries.delete')"

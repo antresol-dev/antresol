@@ -1,5 +1,6 @@
 import { BUILTIN_UNITS, customUnitKey, newId, type Command, type InventorySnapshot, type InventoryStorage } from '@graymatter/core'
 import { beforeAll, describe, expect, it } from 'vitest'
+import en from '../i18n/locales/en.json'
 import { dictionaryView } from '../app/lib/dictionaries'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import type { SourceConfig } from '../app/lib/types'
@@ -50,6 +51,16 @@ beforeAll(async () => {
   }
   await run({ type: 'archive', target: 'item', id: archivedItem, archiveId: newId() })
   snap = await storage.loadInventory(inventoryId)
+})
+
+describe('texts with an item count', () => {
+  it.each(['itemCount', 'tagDeleteConfirm', 'attributeDeleteConfirm'] as const)('%s has a singular and a plural form', (key) => {
+    const forms = en.dictionaries[key].split(' | ')
+    expect(forms).toHaveLength(2)
+    expect(forms[0]).toContain('{count} item')
+    expect(forms[0]).not.toContain('{count} items')
+    expect(forms[1]).toContain('{count} items')
+  })
 })
 
 describe('dictionaryView', () => {

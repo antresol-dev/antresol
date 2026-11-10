@@ -138,7 +138,7 @@ async function remove(): Promise<void> {
       v-model:open="deleteOpen"
       :title="$t('dictionaries.tagDeleteTitle')"
       :description="
-        shown?.kind === 'delete' ? $t('dictionaries.tagDeleteConfirm', { name: shown.tag.name, count: shown.count }) : ''
+        shown?.kind === 'delete' ? $t('dictionaries.tagDeleteConfirm', { name: shown.tag.name, count: shown.count }, shown.count) : ''
       "
       :confirm-label="$t(busy ? 'status.saving' : 'dictionaries.delete')"
       :busy="busy"

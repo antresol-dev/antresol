@@ -104,3 +104,25 @@ export function currentInventoryName(state: {
   )
   return entry?.inventory.name ?? ''
 }
+
+/** The PWA shortcut in the launch URL (`?action=add` / `?action=search`); anything else gives null. */
+export function launchAction(query: Record<string, unknown>): 'add' | 'search' | null {
+  const action = query.action
+  return action === 'add' || action === 'search' ? action : null
+}
+
+const THEME_COLOR = { light: '#F7F7F8', dark: '#0E0E10' } as const // the --background tokens
+
+/** `theme-color` metas: both media-scoped ones while the preference is "system"; otherwise one for the chosen theme. */
+export function themeColorMeta(
+  preference: string,
+  resolved: string,
+): { key: string; name: string; content: string; media?: string }[] {
+  if (preference === 'system') {
+    return [
+      { key: 'theme-color-light', name: 'theme-color', content: THEME_COLOR.light, media: '(prefers-color-scheme: light)' },
+      { key: 'theme-color-dark', name: 'theme-color', content: THEME_COLOR.dark, media: '(prefers-color-scheme: dark)' },
+    ]
+  }
+  return [{ key: 'theme-color', name: 'theme-color', content: resolved === 'dark' ? THEME_COLOR.dark : THEME_COLOR.light }]
+}

@@ -4,6 +4,8 @@ import { createDemoDriver } from '../app/lib/dev/demo-source'
 import {
   currentInventoryName,
   inventoryScoped,
+  launchAction,
+  themeColorMeta,
   NAV_SECTIONS,
   sectionOf,
   showsInside,
@@ -116,5 +118,39 @@ describe('shell', () => {
     expect(currentInventoryName({ snapshot: snap, current: workshop, inventories: listed })).toBe('Workshop')
     expect(currentInventoryName({ snapshot: null, current: workshop, inventories: [] })).toBe('')
     expect(currentInventoryName({ snapshot: snap, current: null, inventories: listed })).toBe('')
+  })
+})
+
+describe('launchAction', () => {
+  it('reads the PWA shortcut from the query', () => {
+    expect(launchAction({ action: 'add' })).toBe('add')
+    expect(launchAction({ action: 'search' })).toBe('search')
+  })
+  it('ignores anything else', () => {
+    expect(launchAction({})).toBeNull()
+    expect(launchAction({ action: 'nope' })).toBeNull()
+    expect(launchAction({ action: ['add', 'search'] })).toBeNull()
+    expect(launchAction({ action: null })).toBeNull()
+  })
+})
+
+describe('themeColorMeta', () => {
+  it('system: one tag per colour scheme', () => {
+    expect(themeColorMeta('system', 'dark')).toEqual([
+      { key: 'theme-color-light', name: 'theme-color', content: '#F7F7F8', media: '(prefers-color-scheme: light)' },
+      { key: 'theme-color-dark', name: 'theme-color', content: '#0E0E10', media: '(prefers-color-scheme: dark)' },
+    ])
+  })
+  it('manual choice: a single tag without media', () => {
+    expect(themeColorMeta('dark', 'dark')).toEqual([{ key: 'theme-color', name: 'theme-color', content: '#0E0E10' }])
+    expect(themeColorMeta('light', 'light')).toEqual([{ key: 'theme-color', name: 'theme-color', content: '#F7F7F8' }])
+  })
+})
+
+describe('themeColorMeta tokens', () => {
+  it('matches the --background tokens of both themes', async () => {
+    const { default: css } = await import('../app/assets/css/main.css?raw')
+    const bg = [...css.matchAll(/--background:\s*(#[0-9a-fA-F]{6})/g)].map((m) => m[1]!.toUpperCase())
+    expect(themeColorMeta('system', 'light').map((m) => m.content)).toEqual(bg)
   })
 })

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { useEventListener, useMediaQuery } from '@vueuse/core'
+import { until, useEventListener, useMediaQuery } from '@vueuse/core'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { NAV_DRAWER_ID } from '~/composables/useShell'
-import { showsTree } from '~/lib/shell'
+import { launchAction, showsTree } from '~/lib/shell'
 import { swipeAction } from '~/lib/swipe'
 
 const route = useRoute()
@@ -13,6 +13,23 @@ const { dialog: itemDialog } = useItemDialog()
 // Below 1024 px one column and the page scrolls; from 1024 px three full-height columns, each scrolling on its own.
 const desktop = useMediaQuery('(min-width: 1024px)')
 const withTree = computed(() => showsTree(typeof route.name === 'string' ? route.name : null))
+// Launched from a PWA shortcut (`?action=add` / `?action=search`): open that UI once, then drop the parameter. Add needs
+// a writable inventory; search needs one at all. Both wait for the workspace to load.
+const quickAdd = useQuickAdd()
+const router = useRouter()
+const launch = launchAction(route.query)
+if (launch) {
+  void router.replace({ query: { ...route.query, action: undefined } })
+  // A one-shot wait for an inventory (never on the welcome page with no sources: it gives up after 10 s), dropped if the
+  // user navigates first.
+  const startPath = route.path
+  void until(() => state.current).toBeTruthy({ timeout: 10_000, throwOnTimeout: false }).then(() => {
+    if (!state.current || route.path !== startPath) return
+    // A read-only inventory can't take new items; the quieter fallback is the search palette.
+    if (launch === 'add' && !state.readOnly) quickAdd.open()
+    else paletteOpen.value = true
+  })
+}
 // Tooltips on icon buttons wait a moment, so moving across the header doesn't flash them.
 const TOOLTIP_DELAY = 400
 

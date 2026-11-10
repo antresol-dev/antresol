@@ -9,4 +9,20 @@ describe('nuxt config', () => {
   it('lets the on-screen keyboard shrink the layout so bottom sheets stay above it', () => {
     expect(config.app?.head?.viewport).toBe('width=device-width, initial-scale=1, interactive-widget=resizes-content')
   })
+
+  it('asks before updating the service worker', () => {
+    expect(config.pwa?.registerType).toBe('prompt')
+  })
+
+  it('offers Add item and Search as app shortcuts, relative to the base path', () => {
+    const shortcuts = config.pwa?.manifest && config.pwa.manifest.shortcuts
+    expect(shortcuts?.map((s) => [s.name, s.url])).toEqual([
+      ['Add item', './?action=add'],
+      ['Search', './?action=search'],
+    ])
+  })
+
+  it('loads Manrope 800 (font-extrabold)', () => {
+    expect(config.fonts?.families?.[0]).toMatchObject({ name: 'Manrope', weights: [400, 500, 600, 700, 800] })
+  })
 })

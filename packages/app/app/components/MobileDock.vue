@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useElementSize } from '@vueuse/core'
 import { Plus, Search } from '@lucide/vue'
 import { currentInventoryName, sectionOf } from '~/lib/shell'
 
@@ -13,12 +14,23 @@ const section = computed(() => sectionOf(typeof route.name === 'string' ? route.
 const shown = computed(() => !!state.current && section.value !== null)
 const canAdd = computed(() => section.value === 'items' && !state.readOnly)
 const name = computed(() => currentInventoryName(state))
+
+// The dock's full height (bar, fade strip, safe area) as --dock-h on <html>, so the toasts, rendered elsewhere, sit above it.
+const dock = ref<HTMLElement | null>(null)
+const { height } = useElementSize(dock, undefined, { box: 'border-box' })
+watchEffect(() => {
+  const root = document.documentElement.style
+  if (dock.value && height.value > 0) root.setProperty('--dock-h', `${height.value}px`)
+  else root.removeProperty('--dock-h')
+})
+onBeforeUnmount(() => document.documentElement.style.removeProperty('--dock-h'))
 </script>
 
 <template>
   <!-- The strip fades to transparent upwards and lets taps through; only the bar takes them. -->
   <div
     v-if="shown"
+    ref="dock"
     class="pointer-events-none fixed inset-x-0 bottom-0 z-30 bg-linear-to-t from-background from-70% to-transparent pt-3.5 pb-[calc(1rem+env(safe-area-inset-bottom))] lg:hidden"
   >
     <div class="mx-auto flex w-full max-w-[720px] items-center gap-2.5 px-4">

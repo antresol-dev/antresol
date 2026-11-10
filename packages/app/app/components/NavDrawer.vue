@@ -2,7 +2,7 @@
 import { useMediaQuery } from '@vueuse/core'
 import { DialogContent, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui'
 import { DialogOverlay } from '@/components/ui/dialog'
-import { MENU_BUTTON_ID } from '~/composables/useShell'
+import { MENU_BUTTON_ID, NAV_DRAWER_ID } from '~/composables/useShell'
 
 const { drawerOpen } = useShell()
 const router = useRouter()
@@ -35,6 +35,7 @@ function returnFocus(event: Event): void {
     <DialogPortal>
       <DialogOverlay />
       <DialogContent
+        :id="NAV_DRAWER_ID"
         :aria-describedby="undefined"
         class="fixed inset-y-0 left-0 z-50 flex w-[86%] max-w-[340px] flex-col bg-rail shadow-xl outline-none motion-safe:data-[state=open]:animate-drawer-in motion-safe:data-[state=closed]:animate-drawer-out motion-reduce:animate-none"
         @close-auto-focus="returnFocus"

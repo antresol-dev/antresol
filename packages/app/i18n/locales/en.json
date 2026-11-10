@@ -30,7 +30,18 @@
     "confirmInventory": "Inventory “{name}” and everything in it will be deleted for good. This can’t be undone."
   },
   "tree": { "expand": "Expand {name}", "collapse": "Collapse {name}" },
-  "search": { "label": "Search", "placeholder": "Search: TL072, 10k, 0805…", "nothing": "Nothing found for “{q}”" },
+  "search": {
+    "label": "Search",
+    "field": "Search {name}",
+    "clear": "Clear",
+    "results": "Search results",
+    "nothing": "Nothing found for “{q}”",
+    "group": { "items": "Items", "folders": "Folders", "actions": "Actions" },
+    "switchTo": "Switch to {name}",
+    "key": { "move": "↑↓", "open": "↵", "close": "esc" },
+    "hint": { "move": "move", "open": "open", "close": "close" },
+    "shortcut": { "mac": "⌘K", "other": "Ctrl K" }
+  },
   "folder": {
     "path": "Path",
     "tree": "Folders",

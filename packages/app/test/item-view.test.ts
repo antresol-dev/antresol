@@ -1,5 +1,5 @@
 import { createSearch, itemStock, newId, type Command, type InventorySnapshot, type InventoryStorage, type Movement } from '@graymatter/core'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import { attributeChoices, attributeWrites, itemView, journalRows, looseTransferOffer } from '../app/lib/item-view'
 import type { SourceConfig } from '../app/lib/types'
@@ -24,8 +24,12 @@ let resistor: string
 
 const demoItem = (name: string): string => s.items.find((i) => i.name === name)!.id
 
+// One database for the file, closed at the end.
+const driver = createDemoDriver({ memory: true, extras: false })
+afterAll(() => driver.close())
+
 beforeAll(async () => {
-  storage = (await createDemoDriver({ memory: true, extras: false }).connect(cfg)).storage
+  storage = (await driver.connect(cfg)).storage
   inventoryId = (await storage.listInventories()).find((i) => i.name === 'Electronics')!.id
   s = await storage.loadInventory(inventoryId)
   tl072 = demoItem('TL072')

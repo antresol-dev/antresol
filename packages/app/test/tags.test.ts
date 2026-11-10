@@ -1,5 +1,5 @@
 import { newId, type Command, type InventorySnapshot, type InventoryStorage } from '@graymatter/core'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import { tagMatches } from '../app/lib/tags'
 import type { SourceConfig } from '../app/lib/types'
@@ -15,8 +15,12 @@ const cfg: SourceConfig = {
 
 let snap: InventorySnapshot
 
+// One database for the file, closed at the end.
+const driver = createDemoDriver({ memory: true, extras: false })
+afterAll(() => driver.close())
+
 beforeAll(async () => {
-  const conn = await createDemoDriver({ memory: true, extras: false }).connect(cfg)
+  const conn = await driver.connect(cfg)
   const storage: InventoryStorage = conn.storage
   const inventoryId = (await storage.listInventories()).find((i) => i.name === 'Electronics')!.id
   for (const name of ['Audio', 'Lab', 'Zeta', 'Alpha']) {

@@ -1,5 +1,5 @@
 import { createSearch, newId, type Actor, type Id, type InventorySnapshot, type InventoryStorage } from '@graymatter/core'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import {
   bottomUp,
@@ -43,8 +43,12 @@ async function createFolder(name: string, parentId: Id | null = null): Promise<I
   return id
 }
 
+// One database for the file, closed at the end.
+const driver = createDemoDriver({ memory: true, extras: false })
+afterAll(() => driver.close())
+
 beforeAll(async () => {
-  const conn = await createDemoDriver({ memory: true, extras: false }).connect(cfg)
+  const conn = await driver.connect(cfg)
   storage = conn.storage
   inventories = (await storage.listInventories()).map((inventory) => ({
     ref: { sourceId: cfg.id, inventoryId: inventory.id },

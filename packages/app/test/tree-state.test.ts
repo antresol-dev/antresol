@@ -1,5 +1,5 @@
 import { newId, type InventorySnapshot, type InventoryStorage } from '@graymatter/core'
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import { loadTreeOpen, openPath, saveTreeOpen, toggleOpen, treeRows } from '../app/lib/tree-state'
 import type { SourceConfig } from '../app/lib/types'
@@ -21,8 +21,12 @@ let opamps: string
 let passive: string
 let resistors: string
 
+// One database for the file, closed at the end.
+const driver = createDemoDriver({ memory: true, extras: false })
+afterAll(() => driver.close())
+
 beforeAll(async () => {
-  storage = (await createDemoDriver({ memory: true, extras: false }).connect(cfg)).storage
+  storage = (await driver.connect(cfg)).storage
   inventoryId = (await storage.listInventories()).find((i) => i.name === 'Electronics')!.id
   snap = await storage.loadInventory(inventoryId)
   const idOf = (name: string): string => snap.folders.find((f) => f.name === name)!.id

@@ -1,7 +1,7 @@
 import { newId, type Command, type InventorySnapshot, type InventoryStorage } from '@graymatter/core'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { archiveEntries } from '../app/lib/archive'
-import { createDemoDriver } from '../app/lib/dev/demo-source'
+import { createDemoDriver, seedDemo } from '../app/lib/dev/demo-source'
 import type { SourceConfig } from '../app/lib/types'
 
 const cfg: SourceConfig = {
@@ -17,9 +17,18 @@ let storage: InventoryStorage
 let inventoryId: string
 let snap: InventorySnapshot
 
+// One database for the file, closed at the end.
+const driver = createDemoDriver({ memory: true, extras: false })
+beforeAll(async () => {
+  storage = (await driver.connect(cfg)).storage
+})
+afterAll(() => driver.close())
+
+// Every test archives and restores: each gets a fresh copy of the demo data, a new inventory in the same database.
 beforeEach(async () => {
-  storage = (await createDemoDriver({ memory: true, extras: false }).connect(cfg)).storage
-  inventoryId = (await storage.listInventories()).find((i) => i.name === 'Electronics')!.id
+  const before = new Set((await storage.listInventories()).map((i) => i.id))
+  await seedDemo(storage, { device: 'Test' }, { extras: false })
+  inventoryId = (await storage.listInventories()).find((i) => i.name === 'Electronics' && !before.has(i.id))!.id
   snap = await storage.loadInventory(inventoryId)
 })
 

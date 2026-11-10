@@ -1,5 +1,5 @@
 import { newId, type Id, type InventorySnapshot, type InventoryStorage } from '@graymatter/core'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import { buildQuickAdd, type QuickAddInput } from '../app/lib/quick-add'
 import type { SourceConfig } from '../app/lib/types'
@@ -17,8 +17,12 @@ let storage: InventoryStorage
 let snap: InventorySnapshot
 let ics: Id
 
+// One database for the file, closed at the end.
+const driver = createDemoDriver({ memory: true, extras: false })
+afterAll(() => driver.close())
+
 beforeAll(async () => {
-  const conn = await createDemoDriver({ memory: true, extras: false }).connect(cfg)
+  const conn = await driver.connect(cfg)
   storage = conn.storage
   const id = (await storage.listInventories()).find((i) => i.name === 'Electronics')!.id
   snap = await storage.loadInventory(id)

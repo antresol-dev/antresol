@@ -1,5 +1,5 @@
 import { BUILTIN_UNITS, customUnitKey, newId, type Command, type InventorySnapshot, type InventoryStorage } from '@graymatter/core'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import en from '../i18n/locales/en.json'
 import { dictionaryView } from '../app/lib/dictionaries'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
@@ -26,8 +26,12 @@ const archivedItem = newId()
 
 const run = (c: Command) => storage.apply(c, { device: 'Test' })
 
+// One database for the file, closed at the end.
+const driver = createDemoDriver({ memory: true, extras: false })
+afterAll(() => driver.close())
+
 beforeAll(async () => {
-  const conn = await createDemoDriver({ memory: true, extras: false }).connect(cfg)
+  const conn = await driver.connect(cfg)
   storage = conn.storage
   inventoryId = (await storage.listInventories()).find((i) => i.name === 'Electronics')!.id
   // Custom units created in reverse name order: the view sorts them.

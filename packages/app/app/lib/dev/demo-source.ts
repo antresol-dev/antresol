@@ -5,12 +5,19 @@ import type { SourceConfig } from '../types'
 
 const DEMO_ACTOR: Actor = { device: 'Demo' }
 
+export interface DemoDriver extends SourceDriver {
+  /** Closes every database the driver opened. The app never calls it (they live as long as the page); tests do. */
+  close(): Promise<void>
+}
+
 /** extras (default true): archived records (this task) and tags and attributes (Task 11) on top of the base data.
  *  Dev only: PGlite in the browser (idb://graymatter-dev-<sourceId>) or in memory when memory=true; seeds demo data on an empty database. */
-export function createDemoDriver(options: { memory?: boolean; extras?: boolean } = {}): SourceDriver {
+export function createDemoDriver(options: { memory?: boolean; extras?: boolean } = {}): DemoDriver {
   // One database per source id for the lifetime of the page, shared by probe and every connection:
   // closing a connection must not close the database a newer connection uses.
   const dbs = new Map<string, Promise<PgExecutor>>()
+  // The real close of every database opened, for close().
+  const closers: (() => Promise<void>)[] = []
   const executorFor = (config: SourceConfig): Promise<PgExecutor> => {
     let pending = dbs.get(config.id)
     if (!pending) {
@@ -19,6 +26,7 @@ export function createDemoDriver(options: { memory?: boolean; extras?: boolean }
         const db = options.memory ? new PGlite() : new PGlite(`idb://graymatter-dev-${config.id}`)
         await db.waitReady
         const exec = createPgliteExecutor(db)
+        closers.push(exec.close)
         return { ...exec, close: async () => {} }
       })
       // A failed open is not kept: the next connect or probe tries again.
@@ -54,6 +62,11 @@ export function createDemoDriver(options: { memory?: boolean; extras?: boolean }
       }
       run.then(forget, forget)
       return run
+    },
+    async close() {
+      await Promise.allSettled([...connects.values(), ...dbs.values()])
+      dbs.clear()
+      await Promise.all(closers.splice(0).map((close) => close().catch(() => {})))
     },
   }
 }

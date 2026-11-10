@@ -1,5 +1,5 @@
 import { newId, type InventorySnapshot } from '@graymatter/core'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import {
   currentInventoryName,
@@ -28,8 +28,12 @@ let ics: string
 let resistors: string
 let tl072: string
 
+// One database for the file, closed at the end.
+const driver = createDemoDriver({ memory: true, extras: false })
+afterAll(() => driver.close())
+
 beforeAll(async () => {
-  const { storage } = await createDemoDriver({ memory: true, extras: false }).connect(cfg)
+  const { storage } = await driver.connect(cfg)
   const inventoryId = (await storage.listInventories()).find((i) => i.name === 'Electronics')!.id
   snap = await storage.loadInventory(inventoryId)
   opamps = snap.folders.find((f) => f.name === 'Op-amps')!.id

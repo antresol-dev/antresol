@@ -9,7 +9,7 @@ import {
   type InventoryStorage,
   type Photo,
 } from '@graymatter/core'
-import { beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import type { SourceConfig } from '../app/lib/types'
 import {
@@ -40,8 +40,12 @@ let snap: InventorySnapshot
 const idOf = (s: InventorySnapshot, name: string): string => s.folders.find((f) => f.name === name)!.id
 const names = (xs: { name: string }[]): string[] => xs.map((x) => x.name)
 
+// One database for the file, closed at the end.
+const driver = createDemoDriver({ memory: true, extras: false })
+afterAll(() => driver.close())
+
 beforeAll(async () => {
-  const conn = await createDemoDriver({ memory: true, extras: false }).connect(cfg)
+  const conn = await driver.connect(cfg)
   storage = conn.storage
   inventoryId = (await storage.listInventories()).find((i) => i.name === 'Electronics')!.id
   snap = await storage.loadInventory(inventoryId)
@@ -169,7 +173,7 @@ describe('index and edge cases', () => {
 
   it('agrees with core itemStock for every item, with stock in an archived variant', async () => {
     // Its own source: the shared one has ICs archived by an earlier test.
-    const own = (await createDemoDriver({ memory: true, extras: false }).connect({ ...cfg, id: 'agree' })).storage
+    const own = (await driver.connect({ ...cfg, id: 'agree' })).storage
     const inv = (await own.listInventories()).find((i) => i.name === 'Electronics')!.id
     let s = await own.loadInventory(inv)
     const resistor = s.items.find((i) => i.name === 'Резистор 0,25 Вт')!.id

@@ -1,6 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { PGlite } from '@electric-sql/pglite'
-import { createPgliteExecutor } from '../src/executors/pglite'
 import { inspectSchema } from '../src/inspect'
 import { APP_SCHEMA_VERSION } from '../src/migrator'
 import { openPostgresStorage } from '../src/storage'
@@ -24,7 +22,7 @@ describe('inspectSchema', () => {
   })
 
   it('reports a database with foreign tables as foreign and refuses to open it without writing', async () => {
-    const exec = createPgliteExecutor(new PGlite())
+    const exec = await makeExecutor()
     await exec.batch([sql`create table customers (id int)`])
     expect(await inspectSchema(exec)).toEqual({ state: 'foreign' })
     await expect(openPostgresStorage(exec)).rejects.toMatchObject({ code: 'incompatible' })

@@ -23,9 +23,7 @@ const decimalComma = (s: string): string => s.replace(/(\p{N}),(?=\p{N})/gu, '$1
 
 /** Lowercase, keep letters, digits and decimal points between digits: "TL-072" -> "tl072", "4.7k" -> "4.7k". */
 const compact = (s: string): string =>
-  decimalComma(s.toLowerCase())
-    .replace(/[^\p{L}\p{N}.]+/gu, '')
-    .replace(/(?<!\p{N})\.|\.(?!\p{N})/gu, '')
+  decimalComma(s.toLowerCase()).replace(/(?<=\p{N})\.(?=\p{N})|[^\p{L}\p{N}]+/gu, (m) => (m === '.' ? '.' : ''))
 
 /** Split on whitespace and punctuation, but keep a point between digits inside the token ("4.7k"). */
 const tokenize = (s: string): string[] =>

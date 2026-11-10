@@ -46,7 +46,11 @@ const linkClass =
 </script>
 
 <template>
-  <ScreenHeader :title="title" :crumbs="crumbs" wrap-title />
+  <ScreenHeader :title="title" :crumbs="crumbs" wrap-title>
+    <template v-if="view" #actions="{ compact }">
+      <ItemActions :item-id="itemId" :compact="compact" />
+    </template>
+  </ScreenHeader>
   <ScreenBody>
     <template v-if="view && snapshot">
       <div v-if="view.item.description || view.tags.length > 0" class="grid min-w-0 gap-2.5">

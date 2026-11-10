@@ -9,16 +9,17 @@ const route = useRoute()
 const { state } = useWorkspace()
 const { drawerOpen, paletteOpen } = useShell()
 const { dialog: folderDialog } = useFolderDialog()
+const { dialog: itemDialog } = useItemDialog()
 // Below 1024 px one column and the page scrolls; from 1024 px three full-height columns, each scrolling on its own.
 const desktop = useMediaQuery('(min-width: 1024px)')
 const withTree = computed(() => showsTree(typeof route.name === 'string' ? route.name : null))
 // Tooltips on icon buttons wait a moment, so moving across the header doesn't flash them.
 const TOOLTIP_DELAY = 400
 
-// An open layer other than the phone menu: the palette, a folder sheet, or any open Reka sheet or "⋯" menu.
+// An open layer other than the phone menu: the palette, a folder or item sheet, or any open Reka sheet or "⋯" menu.
 const OTHER_LAYERS = `[role="dialog"][data-state="open"]:not(#${NAV_DRAWER_ID}), [role="menu"][data-state="open"]`
 const layerOpen = (): boolean =>
-  paletteOpen.value || folderDialog.value !== null || document.querySelector(OTHER_LAYERS) !== null
+  paletteOpen.value || folderDialog.value !== null || itemDialog.value !== null || document.querySelector(OTHER_LAYERS) !== null
 
 // ⌘K / Ctrl+K opens the palette anywhere and closes it again. The physical K key counts on non-Latin layouts.
 const isK = (e: KeyboardEvent): boolean =>
@@ -94,6 +95,7 @@ useEventListener(
       <MobileDock />
       <NavDrawer />
       <FolderDialogs />
+      <ItemDialogs />
       <QuickAddSheet />
       <SearchPalette />
     </div>

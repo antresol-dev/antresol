@@ -197,6 +197,27 @@
     "create": "Create",
     "save": "Save"
   },
+  "itemMenu": {
+    "edit": "Edit",
+    "move": "Move",
+    "archive": "Archive",
+    "editTitle": "Edit item",
+    "moveTitle": "Move item",
+    "moveHint": "Choose the folder for this item.",
+    "archiveTitle": "Archive item?",
+    "archiveConfirm": "“{name}” moves to the archive with its variants and history. You can restore it from the archive."
+  },
+  "itemForm": {
+    "name": "Name",
+    "description": "Description",
+    "unit": "Unit",
+    "tags": "Tags",
+    "optional": "Optional",
+    "filterTags": "Find or add a tag",
+    "createTag": "Create tag “{name}”",
+    "noTags": "No tags yet",
+    "save": "Save"
+  },
   "rowMenu": { "more": "More actions for {name}" },
   "folderMenu": {
     "new": "New folder",

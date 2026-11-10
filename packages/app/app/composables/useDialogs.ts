@@ -20,6 +20,21 @@ export function useFolderDialog(): { dialog: Ref<FolderDialog | null>; open(d: F
   }
 }
 
+export type ItemDialog = { kind: 'edit' | 'move' | 'archive'; itemId: Id }
+
+export function useItemDialog(): { dialog: Ref<ItemDialog | null>; open(d: ItemDialog): void; close(): void } {
+  const dialog = useState<ItemDialog | null>('item-dialog', () => null)
+  return {
+    dialog,
+    open: (d) => {
+      dialog.value = d
+    },
+    close: () => {
+      dialog.value = null
+    },
+  }
+}
+
 export interface QuickAddState {
   name: string
   folderId: Id | null

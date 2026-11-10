@@ -431,14 +431,10 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       const conn = conns.get(sourceId)
       if (!conn) throw new StorageError('unavailable')
       const normalized = normalizeCommand(command)
-      const invalid = validateCommand(normalized, await snapshotFor(conn))
+      const snapshot = await guarded(sourceId, () => snapshotFor(conn))
+      const invalid = validateCommand(normalized, snapshot)
       if (invalid) throw invalid
-      try {
-        await conn.storage.apply(normalized, { device: state.deviceName })
-      } catch (error) {
-        if (error instanceof StorageError && error.code === 'unavailable') markFailure(sourceId, error)
-        throw redactError(error, sourceId)
-      }
+      await guarded(sourceId, () => conn.storage.apply(normalized, { device: state.deviceName }))
       if (isRelistCommand(command)) {
         await relist(sourceId)
         await resolveCurrent()
@@ -467,11 +463,16 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     const status = cur ? statusOf(cur.sourceId) : null
     const conn = cur && conns.get(cur.sourceId)
     if (!cur || !conn || status === 'unreachable' || status === 'error') throw new StorageError('unavailable')
+    return guarded(cur.sourceId, () => conn.storage.loadMovements(itemId))
+  }
+
+  /** Runs a storage call: an `unavailable` failure marks the source, any failure is redacted. */
+  async function guarded<T>(sourceId: string, call: () => Promise<T>): Promise<T> {
     try {
-      return await conn.storage.loadMovements(itemId)
+      return await call()
     } catch (error) {
-      if (error instanceof StorageError && error.code === 'unavailable') markFailure(cur.sourceId, error)
-      throw redactError(error, cur.sourceId)
+      if (error instanceof StorageError && error.code === 'unavailable') markFailure(sourceId, error)
+      throw redactError(error, sourceId)
     }
   }
 

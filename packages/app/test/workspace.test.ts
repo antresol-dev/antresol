@@ -38,6 +38,7 @@ function harness() {
     applyCalls: 0,
     /** loadInventory fails with this after listInventories succeeded. */
     loadError: null as Error | null,
+    loadErrorFor: null as { id: Id; error: Error } | null,
     movementCalls: 0,
     movementError: null as Error | null,
   }
@@ -77,6 +78,7 @@ function harness() {
       const storage = Object.create(conn.storage) as typeof conn.storage
       storage.loadInventory = async (id) => {
         if (flags.loadError) throw flags.loadError
+        if (flags.loadErrorFor?.id === id) throw flags.loadErrorFor.error
         if (flags.missing.has(id)) throw new StorageError('not_found')
         const result = await conn.storage.loadInventory(id)
         const loadGate = flags.loadGate
@@ -679,5 +681,23 @@ describe('workspace', () => {
     h.flags.movementError = new StorageError('unavailable')
     await expect(ws.loadMovements(itemId)).rejects.toMatchObject({ code: 'unavailable' })
     expect(ws.state.sources[0]!.status).toBe('unreachable')
+  })
+
+  it('34. applyTo redacts and marks a failing read of the target inventory', async () => {
+    const { h, ws, b } = await archivedSetup()
+    const target = ws.state.archivedInventories[0]!
+    const restore: Command = { type: 'restore', archiveId: target.inventory.archiveId! }
+    h.flags.loadErrorFor = { id: b, error: new StorageError('failed', 'boom pw-one') }
+    const failed = await ws.applyTo(target.ref, restore).then(
+      () => null,
+      (e: unknown) => e as Error,
+    )
+    expect(failed).toMatchObject({ code: 'failed', message: 'boom ***' })
+    expect((failed as { cause?: unknown }).cause).toBeUndefined()
+    expect(ws.state.sources[0]!.status).toBe('ready')
+    h.flags.loadErrorFor = { id: b, error: new StorageError('unavailable') }
+    await expect(ws.applyTo(target.ref, restore)).rejects.toMatchObject({ code: 'unavailable' })
+    expect(ws.state.sources[0]!.status).toBe('unreachable')
+    expect(ws.state.readOnly).toBe('offline')
   })
 })

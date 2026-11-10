@@ -12,6 +12,7 @@ const { state } = useWorkspace()
         <Loader2 class="size-4 animate-spin" aria-hidden="true" />
         <span class="sr-only">{{ $t('status.saving') }}</span>
       </span>
+      <FolderMenu />
       <NuxtLink
         to="/settings"
         class="flex size-11 items-center justify-center rounded-full border border-border bg-surface text-icon"

@@ -114,6 +114,19 @@
     "create": "Create",
     "save": "Save"
   },
+  "folderMenu": {
+    "label": "Folder actions",
+    "new": "New folder",
+    "rename": "Rename",
+    "renameTitle": "Rename folder",
+    "move": "Move",
+    "moveTitle": "Move folder",
+    "moveHint": "Choose where this folder goes.",
+    "archive": "Archive",
+    "archiveTitle": "Archive folder",
+    "archiveConfirm": "Archive “{name}” and everything in it? You can restore it from the Archive."
+  },
+  "folderForm": { "name": "Name", "description": "Description", "optional": "Optional", "create": "Create", "save": "Save" },
   "errors": {
     "unknown": "Something went wrong. Try again.",
     "domain": {

@@ -259,3 +259,28 @@ export function folderTree(s: InventorySnapshot): TreeNode[] {
     (ix.childFolders.get(parentId) ?? []).map((f) => ({ id: f.id, name: f.name, children: build(f.id) }))
   return build(null)
 }
+
+export interface MoveTarget {
+  /** null is the inventory root; its name is the inventory name. */
+  id: Id | null
+  name: string
+  depth: number
+  /** The folder's present parent. */
+  current: boolean
+}
+
+/** Root first, then active folders depth-first by name; excludes the folder itself and its subtree. */
+export function moveTargets(s: InventorySnapshot, folderId: Id): MoveTarget[] {
+  const ix = indexOf(s)
+  const parentId = ix.folders.get(folderId)?.parentId ?? null
+  const out: MoveTarget[] = [{ id: null, name: s.inventory.name, depth: 0, current: parentId === null }]
+  const walk = (pid: Id | null, depth: number): void => {
+    for (const f of ix.childFolders.get(pid) ?? []) {
+      if (f.id === folderId) continue
+      out.push({ id: f.id, name: f.name, depth, current: f.id === parentId })
+      walk(f.id, depth + 1)
+    }
+  }
+  walk(null, 1)
+  return out
+}

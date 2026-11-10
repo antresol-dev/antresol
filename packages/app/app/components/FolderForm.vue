@@ -1,0 +1,84 @@
+<script setup lang="ts">
+import { newId, type Folder, type Id } from '@graymatter/core'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { errorMessageKey } from '~/lib/errors'
+
+const props = defineProps<{ mode: 'create' | 'rename'; parentId: Id | null; folder: Folder | null }>()
+const emit = defineEmits<{ done: [] }>()
+
+const workspace = useWorkspace()
+const { state } = workspace
+
+const existing = props.mode === 'rename' ? props.folder : null
+const name = ref(existing?.name ?? '')
+const description = ref(existing?.description ?? '')
+const busy = ref(false)
+const errorKey = ref<string | null>(null)
+
+const canSubmit = computed(
+  () => !busy.value && !state.readOnly && !!state.snapshot && (props.mode === 'create' || !!existing),
+)
+
+async function submit(): Promise<void> {
+  const snapshot = state.snapshot
+  if (!canSubmit.value || !snapshot) return
+  busy.value = true
+  errorKey.value = null
+  try {
+    if (props.mode === 'create') {
+      await workspace.apply({
+        type: 'folder.create',
+        id: newId(),
+        inventoryId: snapshot.inventory.id,
+        parentId: props.parentId,
+        name: name.value.trim(),
+        description: description.value.trim() || null,
+      })
+    } else if (existing) {
+      await workspace.apply({
+        type: 'folder.update',
+        id: existing.id,
+        name: name.value.trim(),
+        description: description.value.trim() || null,
+      })
+    }
+    emit('done')
+  } catch (e) {
+    errorKey.value = errorMessageKey(e)
+  } finally {
+    busy.value = false
+  }
+}
+</script>
+
+<template>
+  <form class="grid gap-3.5" novalidate @submit.prevent="submit">
+    <div class="grid gap-1.5">
+      <Label for="folder-name">{{ $t('folderForm.name') }}</Label>
+      <Input
+        id="folder-name"
+        v-model="name"
+        autocomplete="off"
+        autofocus
+        :aria-invalid="errorKey ? true : undefined"
+        aria-describedby="folder-form-error"
+        class="h-11 rounded-field bg-surface"
+      />
+    </div>
+    <div class="grid gap-1.5">
+      <Label for="folder-description">
+        {{ $t('folderForm.description') }}
+        <span class="font-normal text-subtle-foreground">· {{ $t('folderForm.optional') }}</span>
+      </Label>
+      <Input id="folder-description" v-model="description" autocomplete="off" class="h-11 rounded-field bg-surface" />
+    </div>
+    <p id="folder-form-error" role="alert" class="text-sm text-destructive">
+      <template v-if="errorKey">{{ $t(errorKey) }}</template>
+    </p>
+    <Button type="submit" class="h-11 rounded-field" :disabled="!canSubmit">
+      {{ $t(busy ? 'status.saving' : mode === 'create' ? 'folderForm.create' : 'folderForm.save') }}
+    </Button>
+  </form>
+</template>

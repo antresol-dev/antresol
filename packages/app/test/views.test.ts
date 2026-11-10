@@ -2,7 +2,7 @@ import { createSearch, itemStock, newId, type InventorySnapshot, type InventoryS
 import { beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import type { SourceConfig } from '../app/lib/types'
-import { collapseCrumbs, folderTree, folderView, indexStats, searchRows, type Crumb } from '../app/lib/views'
+import { collapseCrumbs, folderTree, folderView, indexStats, moveTargets, searchRows, type Crumb } from '../app/lib/views'
 
 const cfg: SourceConfig = {
   id: 'demo',
@@ -168,5 +168,30 @@ describe('index and edge cases', () => {
     tl.folderId = null
     const [root] = searchRows(s, [{ itemId: tl.id, variantId: null }])
     expect(root!.path).toBe('')
+  })
+})
+
+describe('moveTargets', () => {
+  it('puts the root first and excludes the folder and its subtree', () => {
+    const t = moveTargets(snap, idOf(snap, 'ICs'))
+    expect(t[0]).toEqual({ id: null, name: snap.inventory.name, depth: 0, current: true })
+    expect(names(t)).not.toContain('ICs')
+    expect(names(t)).not.toContain('Op-amps')
+    const passive = t.find((x) => x.name === 'Passive components')!
+    expect(passive.depth).toBe(1)
+    expect(passive.current).toBe(false)
+    expect(t.find((x) => x.name === 'Resistors')!.depth).toBe(2)
+    expect(t.map((x) => x.name).slice(1, 3)).toEqual(['Passive components', 'Resistors'])
+  })
+
+  it('marks the present parent as current', () => {
+    const t = moveTargets(snap, idOf(snap, 'Op-amps'))
+    expect(t.filter((x) => x.current).map((x) => x.name)).toEqual(['ICs'])
+    expect(t[0]!.current).toBe(false)
+  })
+
+  it('does not offer the moved folder\'s descendants', () => {
+    const t = moveTargets(snap, idOf(snap, 'Passive components'))
+    expect(names(t)).not.toContain('Resistors')
   })
 })

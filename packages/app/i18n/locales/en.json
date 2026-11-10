@@ -9,11 +9,15 @@
     "noInventories": "Create your first inventory",
     "folder": "This folder is empty",
     "folderGone": "This folder was archived or deleted",
+    "offlineNoCopy": "Can’t reach your source and there is no saved copy on this device yet.",
+    "sourceFailed": "Can’t open {source}: {reason}",
     "backTo": "Back to {name}"
   },
   "status": {
     "saving": "Saving…",
     "offline": "Offline. Showing the copy from {time}. Changes are off.",
+    "offlineNoCopy": "Offline. Changes are off.",
+    "retry": "Retry",
     "schemaNewer": "Updated by a newer GrayMatter. Update the app to make changes.",
     "sourceError": "Can’t open {source}: {reason}",
     "fix": "Fix",
@@ -79,7 +83,7 @@
       "missing_database": "The connection string has a missing database name."
     },
     "result": {
-      "empty": "Empty database. GrayMatter will set it up.",
+      "empty": "This source is empty. GrayMatter will set it up.",
       "older": "An older GrayMatter source. It will be upgraded.",
       "current": "Ready to use.",
       "newer": "This source was updated by a newer GrayMatter",
@@ -155,8 +159,9 @@
     "probe": {
       "unreachable": "Can’t reach the source. Check your connection.",
       "auth": "The source rejected the login. Check the connection string.",
-      "no_database": "That database doesn’t exist. Check the connection string.",
-      "failed": "Couldn’t check the source. Try again."
+      "no_database": "The source wasn’t found. Check the connection string.",
+      "failed": "Couldn’t check the source. Try again.",
+      "incompatible": "This source isn’t a GrayMatter source."
     }
   }
 }

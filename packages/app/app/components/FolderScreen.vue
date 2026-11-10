@@ -7,7 +7,8 @@ const props = defineProps<{ folderId: string | null }>()
 
 const route = useRoute()
 const router = useRouter()
-const { state } = useWorkspace()
+const workspace = useWorkspace()
+const { state } = workspace
 
 const snapshot = computed(() => state.snapshot)
 const routeQuery = computed(() => (typeof route.query.q === 'string' ? route.query.q : ''))
@@ -38,6 +39,24 @@ const noInventories = computed(
     state.inventories.length === 0 &&
     state.sources.every((s) => s.status === 'ready' || s.status === 'read_only'),
 )
+
+// No snapshot and nothing loading: say why instead of showing a skeleton forever.
+const blocker = computed(() => {
+  if (snapshot.value || state.refreshing || noInventories.value) return null
+  const current = state.current ? state.sources.find((s) => s.config.id === state.current?.sourceId) : null
+  const source = current ?? state.sources.find((s) => s.status === 'unreachable' || s.status === 'error')
+  if (!source) return null
+  if (source.status === 'unreachable') return { kind: 'offline' as const, source }
+  if (source.status === 'error') return { kind: 'error' as const, source }
+  return null
+})
+const fixTo = computed(() =>
+  blocker.value?.source.config.kind === 'neon' ? `/settings/sources/${blocker.value.source.config.id}` : '/settings',
+)
+
+function retry(): void {
+  void workspace.refresh().catch(() => {})
+}
 </script>
 
 <template>
@@ -48,6 +67,17 @@ const noInventories = computed(
     <AppSheet v-model:open="creating" :title="$t('inventory.new')">
       <InventoryForm v-if="creating" mode="create" @done="creating = false" />
     </AppSheet>
+  </EmptyState>
+  <EmptyState v-else-if="blocker?.kind === 'offline'" :text="$t('empty.offlineNoCopy')">
+    <Button variant="outline" class="h-11 rounded-field bg-surface" @click="retry">{{ $t('status.retry') }}</Button>
+  </EmptyState>
+  <EmptyState
+    v-else-if="blocker?.kind === 'error'"
+    :text="$t('empty.sourceFailed', { source: blocker.source.config.name, reason: $t(`errors.probe.${blocker.source.reason ?? 'failed'}`) })"
+  >
+    <NuxtLink :to="fixTo" class="min-h-11 content-center text-sm font-semibold text-primary underline-offset-4 hover:underline">
+      {{ $t('status.fix') }}
+    </NuxtLink>
   </EmptyState>
   <div v-else-if="!snapshot" class="grid grid-cols-1 gap-3.5" aria-hidden="true">
     <Skeleton class="h-[46px] rounded-field" />

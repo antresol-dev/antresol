@@ -86,3 +86,13 @@ function failingExecutor(error: Error): PgExecutor {
   return { query: fail, batch: fail, readBatch: fail, close: async () => {} }
 }
 
+describe('createNeonDriver connect redaction', () => {
+  it('redacts the password from an error thrown while making the executor', async () => {
+    const driver = createNeonDriver(() => {
+      throw new Error('Database connection string is not a valid URL: postgresql://u:secret@h/db')
+    })
+    const error = await driver.connect(cfg()).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(StorageError)
+    expect((error as StorageError).message).not.toContain('secret')
+  })
+})

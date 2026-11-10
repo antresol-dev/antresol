@@ -136,7 +136,7 @@ const itemClass = 'flex min-h-11 w-full items-center gap-2 rounded-sm px-2 py-1.
           :is="desktop ? DropdownMenuItem : 'button'"
           :type="desktop ? undefined : 'button'"
           :disabled="locked"
-          :class="[itemClass, 'text-destructive']"
+          :class="[itemClass, 'text-destructive focus:bg-background focus:text-destructive']"
           @click="openDialog('archive')"
         >
           <Archive class="size-4 shrink-0" aria-hidden="true" />

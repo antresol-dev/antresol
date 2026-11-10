@@ -70,22 +70,34 @@ export function redactSecret(message: string, connectionString: string): string 
   return result
 }
 
-function errorCode(error: unknown): string | undefined {
-  if (typeof error === 'object' && error !== null) {
-    const code = (error as { code?: unknown }).code
-    if (typeof code === 'string') return code
-    const cause = (error as { cause?: unknown }).cause
-    if (cause && cause !== error) return errorCode(cause)
+/** Error codes along the cause chain, outermost first (a StorageError('failed') wraps the driver's own code). */
+function errorCodes(error: unknown): string[] {
+  const codes: string[] = []
+  for (let e: unknown = error, depth = 0; typeof e === 'object' && e !== null && depth < 5; depth++) {
+    const code = (e as { code?: unknown }).code
+    if (typeof code === 'string') codes.push(code)
+    const cause = (e as { cause?: unknown }).cause
+    if (!cause || cause === e) break
+    e = cause
   }
-  return undefined
+  return codes
+}
+
+export type FailureReason = ProbeFailure | 'incompatible'
+
+/** Classifies a source failure for the UI; the same mapping the probe uses. */
+export function classifyFailure(error: unknown): FailureReason {
+  const codes = errorCodes(error)
+  if (codes.includes('unavailable')) return 'unreachable'
+  if (codes.includes('28P01')) return 'auth'
+  if (codes.includes('3D000')) return 'no_database'
+  if (codes.includes('incompatible')) return 'incompatible'
+  return 'failed'
 }
 
 function failureReason(error: unknown): ProbeFailure {
-  const code = errorCode(error)
-  if (code === 'unavailable') return 'unreachable'
-  if (code === '28P01') return 'auth'
-  if (code === '3D000') return 'no_database'
-  return 'failed'
+  const reason = classifyFailure(error)
+  return reason === 'incompatible' ? 'failed' : reason
 }
 
 /** Probe against a freshly made executor: read-only, executor closed afterwards. */
@@ -111,15 +123,21 @@ export function createNeonDriver(
   return {
     probe: (config) => probeWithExecutor(() => makeExecutor(config.connectionString), config),
     async connect(config) {
-      const exec = makeExecutor(config.connectionString)
+      let exec: PgExecutor | null = null
       try {
+        exec = makeExecutor(config.connectionString)
         const { storage, status } = await openPostgresStorage(exec)
-        return { storage, status, close: () => exec.close() }
+        const opened = exec
+        return { storage, status, close: () => opened.close() }
       } catch (error) {
-        await exec.close().catch(() => {})
+        await exec?.close().catch(() => {})
         if (error instanceof StorageError) throw error
         const raw = error instanceof Error ? error.message : String(error)
-        throw new StorageError('failed', redactSecret(raw, config.connectionString))
+        const failure = new StorageError('failed', redactSecret(raw, config.connectionString))
+        // Only the classifying code survives, never the original error with its text.
+        const code = errorCodes(error).find((c) => c !== 'failed')
+        if (code) failure.cause = { code }
+        throw failure
       }
     },
   }

@@ -42,8 +42,8 @@ async function choose(parentId: Id | null, current: boolean): Promise<void> {
           type="button"
           :disabled="locked && !target.current"
           :aria-current="target.current ? 'true' : undefined"
-          class="flex min-h-11 w-full items-center gap-2 rounded-sm py-1.5 pr-2 text-left text-sm disabled:opacity-50"
-          :class="target.current ? 'bg-accent-soft font-semibold text-accent-on-soft' : ''"
+          class="flex min-h-11 w-full items-center gap-2 rounded-sm py-1.5 pr-2 text-left text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          :class="target.current ? 'bg-accent-soft font-semibold text-accent-soft-foreground' : ''"
           :style="{ paddingLeft: `${8 + Math.min(target.depth * 16, 64)}px` }"
           @click="choose(target.id, target.current)"
         >

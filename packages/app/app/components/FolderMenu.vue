@@ -88,7 +88,7 @@ const itemClass = 'min-h-11 gap-2 px-2 text-sm'
             <FolderInput class="size-4 shrink-0" aria-hidden="true" />
             {{ $t('folderMenu.move') }}
           </DropdownMenuItem>
-          <DropdownMenuItem :disabled="locked" :class="[itemClass, 'text-destructive']" @select="dialog = 'archive'">
+          <DropdownMenuItem :disabled="locked" :class="[itemClass, 'text-destructive focus:bg-background focus:text-destructive']" @select="dialog = 'archive'">
             <Archive class="size-4 shrink-0" aria-hidden="true" />
             {{ $t('folderMenu.archive') }}
           </DropdownMenuItem>

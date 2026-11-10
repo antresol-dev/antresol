@@ -35,6 +35,9 @@ function harness() {
     loadBlocked: false,
     missing: new Set<string>(),
     applyError: null as Error | null,
+    applyCalls: 0,
+    /** loadInventory fails with this after listInventories succeeded. */
+    loadError: null as Error | null,
   }
 
   const addDatabase = (connectionString: string): PGlite => {
@@ -71,6 +74,7 @@ function harness() {
       const conn = await inner.connect(cfg)
       const storage = Object.create(conn.storage) as typeof conn.storage
       storage.loadInventory = async (id) => {
+        if (flags.loadError) throw flags.loadError
         if (flags.missing.has(id)) throw new StorageError('not_found')
         const result = await conn.storage.loadInventory(id)
         const loadGate = flags.loadGate
@@ -82,6 +86,7 @@ function harness() {
         return result
       }
       storage.apply = async (command, actor) => {
+        flags.applyCalls++
         if (flags.applyError) throw flags.applyError
         return conn.storage.apply(command, actor)
       }
@@ -468,5 +473,99 @@ describe('workspace', () => {
     await ws.start()
     h.flags.applyError = new StorageError('failed', 'boom pw-one')
     await expect(ws.apply(folderCreate(id, 'X'))).rejects.toMatchObject({ code: 'failed', message: 'boom ***' })
+  })
+
+  it('21. mid-session loss: a failed write goes read-only, refuses without a storage call, refresh recovers', async () => {
+    const h = setup()
+    const id = await h.seed(CS('one'), 'Inv')
+    await h.db.putSource(config('s1', CS('one')))
+    const ws = h.workspace()
+    await ws.start()
+    expect(ws.state.readOnly).toBeNull()
+    h.flags.applyError = new StorageError('unavailable')
+    await expect(ws.apply(folderCreate(id, 'A'))).rejects.toMatchObject({ code: 'unavailable' })
+    expect(ws.state.readOnly).toBe('offline')
+    h.flags.applyError = null
+    const calls = h.flags.applyCalls
+    await expect(ws.apply(folderCreate(id, 'B'))).rejects.toMatchObject({ code: 'read_only' })
+    expect(h.flags.applyCalls).toBe(calls)
+    await ws.refresh()
+    expect(ws.state.readOnly).toBeNull()
+    await ws.apply(folderCreate(id, 'C'))
+    expect(ws.state.snapshot?.folders.map((f) => f.name)).toEqual(['C'])
+  })
+
+  it('22. refreshIfStale refreshes regardless of age while a source is unreachable or in error', async () => {
+    const h = setup()
+    const id = await h.seed(CS('one'), 'Inv')
+    await h.db.putSource(config('s1', CS('one')))
+    const ws = h.workspace()
+    await ws.start()
+    h.flags.applyError = new StorageError('unavailable')
+    await ws.apply(folderCreate(id, 'A')).catch(() => {})
+    h.flags.applyError = null
+    expect(ws.state.sources[0]!.status).toBe('unreachable')
+    const lists = h.flags.listCalls
+    await ws.refreshIfStale(15 * 60_000)
+    expect(h.flags.listCalls).toBeGreaterThan(lists)
+    expect(ws.state.readOnly).toBeNull()
+  })
+
+  it('23. a load failure after a successful list does not count as a refresh', async () => {
+    const h = setup()
+    await h.seed(CS('one'), 'Inv')
+    await h.db.putSource(config('s1', CS('one')))
+    const ws = h.workspace()
+    await ws.startFromCache()
+    h.flags.loadError = new StorageError('unavailable')
+    await ws.refresh()
+    expect(ws.state.sources[0]!.status).toBe('unreachable')
+    expect(ws.state.lastRefreshAt).toBeNull()
+    h.flags.loadError = null
+    const lists = h.flags.listCalls
+    await ws.refreshIfStale(15 * 60_000)
+    expect(h.flags.listCalls).toBeGreaterThan(lists)
+    expect(ws.state.lastRefreshAt).not.toBeNull()
+  })
+
+  it('24. a write issued while the first refresh is still connecting waits for it and succeeds', async () => {
+    const h = setup()
+    const id = await h.seed(CS('one'), 'Inv')
+    await h.db.putSource(config('s1', CS('one')))
+    await h.workspace().start()
+    const ws = h.workspace()
+    await ws.startFromCache()
+    const gate = h.gate()
+    h.flags.connectGate = gate.promise
+    const refresh = ws.refresh()
+    await vi.waitFor(() => expect(h.flags.connectGate).toBeNull())
+    const write = ws.apply(folderCreate(id, 'Early'))
+    gate.open()
+    await Promise.all([refresh, write])
+    expect(ws.state.snapshot?.folders.map((f) => f.name)).toEqual(['Early'])
+  })
+
+  it('25. a source failing with a login error records the classified reason', async () => {
+    const h = setup()
+    await h.db.putSource(config('s1', CS('nope')))
+    const ws = h.workspace()
+    await ws.start()
+    const source = ws.state.sources[0]!
+    expect(source.status).toBe('error')
+    expect(source.reason).toBe('auth')
+    expect(source.error).not.toContain('pw-nope')
+  })
+
+  it('26. an unreachable source records the unreachable reason', async () => {
+    const h = setup()
+    await h.seed(CS('one'), 'Inv')
+    await h.db.putSource(config('s1', CS('one')))
+    h.flags.offline = true
+    const ws = h.workspace()
+    await ws.start()
+    expect(ws.state.sources[0]!.reason).toBe('unreachable')
+    h.flags.offline = false
+    await ws.refresh()
+    expect(ws.state.sources[0]!.reason).toBeNull()
   })
 })

@@ -11,7 +11,7 @@ import {
 import { markRaw, reactive } from 'vue'
 import type { DeviceDb } from './device-db'
 import { defaultDeviceName } from './device-name'
-import { redactSecret, type SourceConnection, type SourceDriver } from './sources'
+import { classifyFailure, redactSecret, type FailureReason, type SourceConnection, type SourceDriver } from './sources'
 import type { InventoryRef, SourceConfig, SourceKind } from './types'
 
 export interface InventoryEntry {
@@ -23,8 +23,10 @@ export type SourceStatus = 'connecting' | 'ready' | 'read_only' | 'unreachable' 
 export interface SourceState {
   config: SourceConfig
   status: SourceStatus
-  /** Already redacted. */
+  /** Already redacted; kept for debugging, never rendered. */
   error: string | null
+  /** Classified failure shown to the user instead of `error`. */
+  reason: FailureReason | null
 }
 export type ReadOnlyReason = 'offline' | 'schema_newer' | 'source_error'
 
@@ -144,8 +146,13 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       status === 'unreachable' ? 'offline' : status === 'read_only' ? 'schema_newer' : status === 'error' ? 'source_error' : null
   }
 
-  function setSource(config: SourceConfig, status: SourceStatus, error: string | null): void {
-    const entry: SourceState = { config, status, error }
+  function setSource(
+    config: SourceConfig,
+    status: SourceStatus,
+    error: string | null,
+    reason: FailureReason | null,
+  ): void {
+    const entry: SourceState = { config, status, error, reason }
     const index = state.sources.findIndex((s) => s.config.id === config.id)
     if (index >= 0) state.sources[index] = entry
     else state.sources.push(entry)
@@ -197,9 +204,13 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     }
   }
 
-  function failureStatus(error: unknown, config: SourceConfig): { status: SourceStatus; error: string | null } {
-    if (error instanceof StorageError && error.code === 'unavailable') return { status: 'unreachable', error: null }
-    return { status: 'error', error: redactSecret(errorMessage(error), config.connectionString) }
+  function failureStatus(
+    error: unknown,
+    config: SourceConfig,
+  ): { status: SourceStatus; error: string | null; reason: FailureReason } {
+    const reason = classifyFailure(error)
+    if (error instanceof StorageError && error.code === 'unavailable') return { status: 'unreachable', error: null, reason }
+    return { status: 'error', error: redactSecret(errorMessage(error), config.connectionString), reason }
   }
 
   async function applyOutcome(config: SourceConfig, outcome: Outcome): Promise<void> {
@@ -208,19 +219,19 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       conns.set(config.id, outcome.conn)
       if (old && old !== outcome.conn) await old.close().catch(() => {})
       listings.set(config.id, outcome.inventories)
-      setSource(config, outcome.conn.status.state === 'newer' ? 'read_only' : 'ready', null)
+      setSource(config, outcome.conn.status.state === 'newer' ? 'read_only' : 'ready', null, null)
     } else {
       await dropConnection(config.id)
-      const { status, error } = failureStatus(outcome.error, config)
-      setSource(config, status, error)
+      const { status, error, reason } = failureStatus(outcome.error, config)
+      setSource(config, status, error, reason)
     }
   }
 
   function markFailure(sourceId: string, error: unknown): void {
     const config = state.sources.find((s) => s.config.id === sourceId)?.config
     if (!config) return
-    const { status, error: text } = failureStatus(error, config)
-    setSource(config, status, text)
+    const { status, error: text, reason } = failureStatus(error, config)
+    setSource(config, status, text, reason)
   }
 
   async function relist(sourceId: string): Promise<void> {
@@ -315,7 +326,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     const [settings, configs] = await Promise.all([db.getSettings(), db.getSources()])
     state.persistent = db.persistent
     state.deviceName = settings.deviceName ?? defaultDeviceName(deps.userAgent)
-    state.sources = configs.map((config) => ({ config, status: 'connecting', error: null }))
+    state.sources = configs.map((config) => ({ config, status: 'connecting', error: null, reason: null }))
     state.current = settings.current
     recompute()
     const cached = settings.current ? await db.getSnapshot(settings.current) : null
@@ -339,6 +350,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
         config,
         status: previous.get(config.id)?.status ?? 'connecting',
         error: previous.get(config.id)?.error ?? null,
+        reason: previous.get(config.id)?.reason ?? null,
       }))
       recompute()
       const outcomes = await Promise.all(
@@ -357,7 +369,9 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       }
       rebuildInventories()
       await resolveCurrent()
-      if (complete) state.lastRefreshAt = nowIso()
+      // A failed load (or a source lost meanwhile) is not a refresh: the next trigger must retry.
+      const cur = state.current
+      if (complete && (!cur || isConnected(statusOf(cur.sourceId)))) state.lastRefreshAt = nowIso()
     } finally {
       state.refreshing = false
     }
@@ -399,6 +413,8 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     snapshotFor: (conn: SourceConnection) => Promise<InventorySnapshot | null>,
   ): Promise<void> {
     return enqueue(async () => {
+      // First refresh still connecting: wait for it rather than failing with a misleading "can't reach".
+      if (!conns.has(sourceId) && refreshing) await refreshing.catch(() => {})
       const status = statusOf(sourceId)
       if (status === 'unreachable' || status === 'read_only' || status === 'error') throw new StorageError('read_only')
       const conn = conns.get(sourceId)
@@ -442,7 +458,8 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     refresh,
     async refreshIfStale(maxAgeMs) {
       const last = state.lastRefreshAt ? Date.parse(state.lastRefreshAt) : null
-      if (last === null || now().getTime() - last >= maxAgeMs) await refresh()
+      const failing = state.sources.some((s) => s.status === 'unreachable' || s.status === 'error')
+      if (failing || last === null || now().getTime() - last >= maxAgeMs) await refresh()
     },
     async start() {
       await startFromCache()
@@ -474,7 +491,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       const config: SourceConfig = { ...old, ...patch }
       bumpGeneration(id)
       await db.putSource(config)
-      setSource(config, 'connecting', null)
+      setSource(config, 'connecting', null, null)
       const outcome = await attempt(config)
       await applyOutcome(config, outcome)
       rebuildInventories()

@@ -40,6 +40,11 @@ const pairs: [string, string][] = [
   ['accent-soft-foreground', 'accent-soft'],
   ['dimmed-foreground', 'surface'],
   ['destructive', 'surface'],
+  // status badges (text on surface with a border, ready on accent-soft)
+  ['subtle-foreground', 'surface'],
+  ['accent-soft-foreground', 'accent-soft'],
+  // destructive menu item: text on its focused background
+  ['destructive', 'background'],
 ]
 
 describe.each(Object.keys(themes))('%s theme contrast', (name) => {

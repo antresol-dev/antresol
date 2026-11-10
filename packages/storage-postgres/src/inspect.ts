@@ -23,10 +23,14 @@ const IGNORED_SQL = IGNORED_SCHEMAS.map((n) => `'${n}'`).join(', ')
 
 /** Read-only look at what the database holds; never writes. */
 export async function inspectSchema(exec: PgExecutor): Promise<SchemaInspection> {
-  // IGNORED_SQL is a constant list of identifiers, not input.
+  // IGNORED_SQL is a constant list of identifiers, not input. Only ordinary and partitioned tables count, and
+  // not the ones an extension owns (pg_depend deptype 'e'), so a fresh platform database stays empty.
   const [counts] = await exec.query<{ tables: number; meta: number }>({
-    text: `select (select count(*) from information_schema.tables
-                    where table_schema not in (${IGNORED_SQL}) and table_schema !~ '^pg_(toast_)?temp_')::int as tables,
+    text: `select (select count(*) from pg_class c join pg_namespace n on n.oid = c.relnamespace
+                    where c.relkind in ('r', 'p')
+                      and n.nspname not in (${IGNORED_SQL}) and n.nspname !~ '^pg_(toast_)?temp_'
+                      and not exists (select 1 from pg_depend d
+                                       where d.classid = 'pg_class'::regclass and d.objid = c.oid and d.deptype = 'e'))::int as tables,
                    (select count(*) from information_schema.tables where table_schema = 'public' and table_name = 'gm_meta')::int as meta`,
     params: [],
   })

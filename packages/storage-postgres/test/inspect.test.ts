@@ -50,4 +50,18 @@ describe('inspectSchema', () => {
     await exec.batch([sql`create schema myschema`, sql`create table myschema.customers (id int)`])
     expect(await inspectSchema(exec)).toMatchObject({ state: 'current' })
   })
+
+  it('ignores a view or a sequence alone in another schema', async () => {
+    const exec = await makeExecutor()
+    await exec.batch([sql`create schema myschema`, sql`create sequence myschema.seq`, sql`create view myschema.v as select 1 as x`])
+    expect(await inspectSchema(exec)).toEqual({ state: 'empty' })
+  })
+
+  it('counts a partitioned table in another schema as foreign', async () => {
+    const exec = await makeExecutor()
+    await exec.batch([sql`create schema myschema`, sql`create table myschema.p (id int) partition by range (id)`])
+    expect(await inspectSchema(exec)).toEqual({ state: 'foreign' })
+  })
+
+  // No extension-owned table test: PGlite's bundled extensions create no tables, so there is nothing cheap to build.
 })

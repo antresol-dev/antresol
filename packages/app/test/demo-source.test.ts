@@ -129,6 +129,7 @@ describe('demo source', () => {
     const probe = await demo({ memory: true, extras: false }).connect(cfg)
     await probe.close()
     const total = pglite.transactions
+    expect(total).toBeGreaterThanOrEqual(3)
 
     const driver = demo({ memory: true, extras: false })
     pglite.transactions = 0

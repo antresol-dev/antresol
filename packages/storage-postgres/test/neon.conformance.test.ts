@@ -10,7 +10,7 @@ describe('assertTestDatabase', () => {
     expect(() => assertTestDatabase('postgres://u:p@h/graymatter')).toThrow(/must end with "_test"/)
   })
   it('accepts a _test database and ignores the query string', () => {
-    expect(() => assertTestDatabase('postgres://u:p@h/graymatter_test?sslmode=require')).not.toThrow(/must end with "_test"/)
+    expect(() => assertTestDatabase('postgres://u:p@h/graymatter_test?sslmode=require')).not.toThrow()
   })
   it('rejects a _test suffix that only appears in the query string', () => {
     expect(() => assertTestDatabase('postgres://u:p@h/graymatter?x=_test')).toThrow(/must end with "_test"/)
@@ -48,6 +48,10 @@ describe.skipIf(!url)('Neon conformance', () => {
         exec = make()
       })
       afterAll(() => exec.close())
+
+      it('reports the freshly reset database as empty', async () => {
+        expect(await inspectSchema(exec)).toEqual({ state: 'empty' })
+      })
 
       it('runs the stock scenario', async () => {
         const { storage } = await openPostgresStorage(exec)

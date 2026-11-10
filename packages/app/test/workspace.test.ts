@@ -52,6 +52,8 @@ function harness() {
     movementError: null as Error | null,
   }
 
+  const directConns: { close(): Promise<void> }[] = []
+
   const addDatabase = (connectionString: string): PGlite => {
     const pg = new PGlite()
     pgs.push(pg)
@@ -156,7 +158,11 @@ function harness() {
     return id
   }
 
-  const direct = async (connectionString: string) => (await inner.connect(config('direct', connectionString))).storage
+  const direct = async (connectionString: string) => {
+    const conn = await inner.connect(config('direct', connectionString))
+    directConns.push(conn)
+    return conn.storage
+  }
 
   const gate = (): { promise: Promise<void>; open: () => void } => {
     let open!: () => void
@@ -177,7 +183,7 @@ function harness() {
     return hold
   }
 
-  return { gate, holdDb, pgs, flags, db, workspace, seed, direct, addDatabase }
+  return { gate, holdDb, pgs, directConns, flags, db, workspace, seed, direct, addDatabase }
 }
 
 const folderCreate = (inventoryId: Id, name: string, id: Id = newId()): Command => ({
@@ -192,6 +198,7 @@ const folderCreate = (inventoryId: Id, name: string, id: Id = newId()): Command 
 let current: ReturnType<typeof harness>
 const setup = () => (current = harness())
 afterEach(async () => {
+  await Promise.all(current?.directConns.map((c) => c.close().catch(() => {})) ?? [])
   await Promise.all(current?.pgs.map((p) => p.close().catch(() => {})) ?? [])
 })
 

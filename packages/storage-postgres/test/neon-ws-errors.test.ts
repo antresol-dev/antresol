@@ -90,7 +90,7 @@ describe('neon ws executor errors', () => {
     expect(pool.releases).toBe(1)
   })
 
-  it('does not roll back after a failed COMMIT twice and releases once', async () => {
+  it('issues one ROLLBACK after a failed COMMIT and releases once', async () => {
     const failure = new Error('commit failed')
     pool.failOn.set('COMMIT', failure)
     const exec = createNeonWsExecutor(URL)

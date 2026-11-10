@@ -45,6 +45,7 @@ function harness() {
     loadGate: null as Promise<void> | null,
     loadBlocked: false,
     missing: new Set<string>(),
+    exportCalls: 0,
     applyError: null as Error | null,
     applyCalls: 0,
     /** loadInventory fails with this after listInventories succeeded. */
@@ -105,6 +106,12 @@ function harness() {
           await loadGate
         }
         return result
+      }
+      storage.exportInventory = async (id) => {
+        flags.exportCalls++
+        if (flags.loadError) throw flags.loadError
+        if (flags.missing.has(id)) throw new StorageError('not_found')
+        return conn.storage.exportInventory(id)
       }
       storage.apply = async (command, actor) => {
         flags.applyCalls++
@@ -779,6 +786,21 @@ describe('workspace', () => {
     for (const forbidden of ['connectionString', 'postgresql://', 'pw-one', 'uploadcarePublicKey', 'pk_secret_key']) {
       expect(text).not.toContain(forbidden)
     }
+  })
+
+  it('export reads each inventory with one exportInventory call and skips one that disappears midway', async () => {
+    const h = setup()
+    const a = await h.seed(CS('one'), 'Keep')
+    const b = await h.seed(CS('one'), 'Gone')
+    await h.db.putSource(config('s1', CS('one')))
+    const ws = h.workspace()
+    await ws.start()
+    h.flags.missing.add(b)
+    const loadsBefore = h.flags.loadCalls
+    const backup = await ws.exportSource('s1')
+    expect(backup.inventories.map((i) => i.snapshot.inventory.id)).toEqual([a])
+    expect(h.flags.exportCalls).toBe(2)
+    expect(h.flags.loadCalls).toBe(loadsBefore)
   })
 
   it('export fails with unavailable when the source is offline, and when a read fails midway', async () => {

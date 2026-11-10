@@ -100,6 +100,17 @@ describe('stock journal', () => {
     expect(await storage.loadAllMovements(newId())).toEqual([])
   })
 
+  it('exportInventory returns the snapshot and the movements together, and not_found for an unknown inventory', async () => {
+    const { storage, inv, item } = await setup()
+    await storage.apply(receive(item, '1', null), TEST_ACTOR)
+    await storage.apply(receive(item, '2', null), TEST_ACTOR)
+    const out = await storage.exportInventory(inv)
+    expect(out.snapshot).toEqual(await storage.loadInventory(inv))
+    expect(out.movements).toEqual(await storage.loadAllMovements(inv))
+    expect(out.movements.map((x) => x.quantity)).toEqual(['1', '2'])
+    await expect(storage.exportInventory(newId())).rejects.toMatchObject({ code: 'not_found' })
+  })
+
   it('stock.set to the current quantity adds no movement', async () => {
     const { storage, item } = await setup()
     await storage.apply(receive(item, '10', null), TEST_ACTOR)

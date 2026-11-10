@@ -16,7 +16,7 @@ import { createUploadcareStore } from '@graymatter/files-uploadcare'
 import { APP_SCHEMA_VERSION } from '@graymatter/storage-postgres'
 import { markRaw, reactive } from 'vue'
 import { buildBackup, type BackupFile } from './backup'
-import { createDeviceFileStore } from './device-files'
+import { createDeviceFileStore, releaseDeviceUrls } from './device-files'
 import { prepareImage as defaultPrepareImage } from './images'
 import { defaultDeviceName } from './device-name'
 import { classifyFailure, redactSecret, type FailureReason, type SourceConnection } from './sources'
@@ -647,8 +647,14 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     return guarded(sourceId, conn, async () => {
       const inventories = []
       for (const { id } of (await conn.storage.listInventories()).inventories) {
-        const snapshot = await conn.storage.loadInventory(id)
-        inventories.push({ snapshot, movements: await conn.storage.loadAllMovements(id) })
+        try {
+          // One read transaction per inventory: the snapshot and its movements agree.
+          inventories.push(await conn.storage.exportInventory(id))
+        } catch (e) {
+          // Removed since the list was read: not part of the backup.
+          if (e instanceof StorageError && e.code === 'not_found') continue
+          throw e
+        }
       }
       return buildBackup({
         exportedAt: nowIso(),
@@ -750,6 +756,8 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       listings.delete(id)
       await db.deleteSource(id)
       await db.deleteListing(id)
+      // Object URLs of device photos (the demo source) are no longer needed.
+      releaseDeviceUrls()
       // A refresh that read the device before this removal was saved must not bring the source back.
       bumpGeneration(id)
       state.sources = state.sources.filter((s) => s.config.id !== id)

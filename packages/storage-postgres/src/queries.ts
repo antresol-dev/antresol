@@ -22,8 +22,24 @@ export async function listInventories(exec: PgExecutor): Promise<{ inventories: 
 
 /** Fixed number of queries (one per kind of data), in one read-only snapshot transaction; archived records included. */
 export async function loadInventory(exec: PgExecutor, id: Id): Promise<InventorySnapshot> {
-  const [inv, folders, items, variants, tags, attributes, units, itemAttrs, variantAttrs, photos, stock] =
-    (await exec.readBatch([
+  return toSnapshot((await exec.readBatch(snapshotStatements(id))) as SnapshotRows, id)
+}
+
+/** The snapshot and every movement of the inventory, in ONE read-only snapshot transaction (one round trip), so a
+ *  backup never mixes two states. Throws `not_found` when the inventory does not exist. */
+export async function exportInventory(
+  exec: PgExecutor,
+  id: Id,
+): Promise<{ snapshot: InventorySnapshot; movements: Movement[] }> {
+  const result = await exec.readBatch([...snapshotStatements(id), movementsStatement(id)])
+  const snapshot = toSnapshot(result.slice(0, SNAPSHOT_STATEMENTS) as SnapshotRows, id)
+  return { snapshot, movements: (result[SNAPSHOT_STATEMENTS] ?? []).map(rows.toMovement) }
+}
+
+const SNAPSHOT_STATEMENTS = 11
+
+function snapshotStatements(id: Id) {
+  return [
       sql`select id, name, description, currency::text as currency, ${raw(`${AUDIT}, ${ARCHIVE}`)}
             from inventories where id = ${id}`,
       sql`select id, inventory_id, parent_id, name, description, ${raw(`${AUDIT}, ${ARCHIVE}`)}
@@ -67,7 +83,13 @@ export async function loadInventory(exec: PgExecutor, id: Id): Promise<Inventory
                       filter (where kind = 'receipt' and total_price is not null))[1] as last_at
             from movements where inventory_id = ${id}
             group by item_id, variant_id order by item_id, variant_id nulls first`,
-    ])) as SnapshotRows
+  ]
+}
+
+function toSnapshot(
+  [inv, folders, items, variants, tags, attributes, units, itemAttrs, variantAttrs, photos, stock]: SnapshotRows,
+  id: Id,
+): InventorySnapshot {
   const inventory = inv[0]
   if (!inventory) throw new StorageError('not_found', `inventory not found: ${id}`)
   return {
@@ -97,12 +119,13 @@ export async function loadMovements(exec: PgExecutor, itemId: Id): Promise<Movem
 
 /** Oldest first: one constant statement by `inventory_id` (the order names the column, not the `seq::text` alias). */
 export async function loadAllMovements(exec: PgExecutor, inventoryId: Id): Promise<Movement[]> {
-  const result = await exec.query(
-    sql`select id, seq::text as seq, item_id, variant_id, kind, quantity::text as quantity,
+  return (await exec.query(movementsStatement(inventoryId))).map(rows.toMovement)
+}
+
+function movementsStatement(inventoryId: Id) {
+  return sql`select id, seq::text as seq, item_id, variant_id, kind, quantity::text as quantity,
                total_price::text as total_price, source_url, note, transfer_id, created_at, created_by
-        from movements m where inventory_id = ${inventoryId} order by m.seq asc`,
-  )
-  return result.map(rows.toMovement)
+        from movements m where inventory_id = ${inventoryId} order by m.seq asc`
 }
 
 type R = Record<string, unknown>[]

@@ -35,6 +35,7 @@ export async function openPostgresStorage(
     loadInventory: (id) => wrapFailure(() => queries.loadInventory(exec, id)),
     loadMovements: (itemId) => wrapFailure(() => queries.loadMovements(exec, itemId)),
     loadAllMovements: (inventoryId) => wrapFailure(() => queries.loadAllMovements(exec, inventoryId)),
+    exportInventory: (id) => wrapFailure(() => queries.exportInventory(exec, id)),
     async apply(command, actor) {
       if (readOnly) throw new StorageError('read_only')
       // Idempotent: canonicalizes quantities etc. even if the caller skipped normalization.

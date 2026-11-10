@@ -29,13 +29,16 @@ export class StorageError extends Error {
 
 export interface InventoryStorage {
   readonly readOnly: boolean
-  /** `rev`: the source's revision counter, read in the same snapshot as the list. It grows with every `apply`, so an
-   *  unchanged `rev` means nothing in the source changed. Opaque: compare for equality only. */
+  /** `rev`: the source's revision counter, read in the same snapshot as the list. It changes with every `apply`, so an
+   *  unchanged `rev` means nothing in the source changed. Opaque: compare for equality only, never for order. */
   listInventories(): Promise<{ inventories: Inventory[]; rev: string }>
   loadInventory(id: Id): Promise<InventorySnapshot>
   /** Newest first (seq desc). */
   loadMovements(itemId: Id): Promise<Movement[]>
   /** Every movement of the inventory, all items (archived included), newest last (seq asc). */
   loadAllMovements(inventoryId: Id): Promise<Movement[]>
+  /** The snapshot and every movement (seq asc) read in ONE read-only snapshot transaction: a consistent backup.
+   *  Rejects with `not_found` when the inventory does not exist. */
+  exportInventory(id: Id): Promise<{ snapshot: InventorySnapshot; movements: Movement[] }>
   apply(command: Command, actor: Actor): Promise<void>
 }

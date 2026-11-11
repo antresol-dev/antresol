@@ -26,6 +26,12 @@ importers:
       '@graymatter/core':
         specifier: workspace:*
         version: link:../core
+      '@graymatter/files-cloudinary':
+        specifier: workspace:*
+        version: link:../files-cloudinary
+      '@graymatter/files-imgur':
+        specifier: workspace:*
+        version: link:../files-imgur
       '@graymatter/files-uploadcare':
         specifier: workspace:*
         version: link:../files-uploadcare
@@ -129,6 +135,18 @@ importers:
       uuidv7:
         specifier: ^1.2.1
         version: 1.2.1
+
+  packages/files-cloudinary:
+    dependencies:
+      '@graymatter/core':
+        specifier: workspace:*
+        version: link:../core
+
+  packages/files-imgur:
+    dependencies:
+      '@graymatter/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/files-uploadcare:
     dependencies:

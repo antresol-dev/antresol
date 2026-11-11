@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { errorMessageKey } from '~/lib/errors'
 import { canSaveSource, checkConnectionString, createNeonDriver, type SourceProbe } from '~/lib/sources'
-import type { SourceConfig } from '~/lib/types'
+import type { PhotoStore, SourceConfig } from '~/lib/types'
 
 const props = defineProps<{ source?: SourceConfig }>()
 
@@ -17,6 +17,19 @@ const driver = createNeonDriver()
 
 const name = ref(props.source?.name ?? t('sourceForm.defaultName'))
 const connectionString = ref(props.source?.connectionString ?? '')
+const PHOTO_STORES: readonly PhotoStore[] = ['uploadcare', 'cloudinary', 'imgur']
+const KEY_LINKS: Record<PhotoStore, string> = {
+  uploadcare: 'https://app.uploadcare.com/',
+  cloudinary: 'https://console.cloudinary.com/settings/upload/presets',
+  imgur: 'https://api.imgur.com/oauth2/addclient',
+}
+function keyLink(p: PhotoStore): string {
+  return KEY_LINKS[p]
+}
+const photoStore = ref<PhotoStore>(props.source?.photoStore ?? 'uploadcare')
+const cloudinaryCloud = ref(props.source?.cloudinaryCloudName ?? '')
+const cloudinaryPreset = ref(props.source?.cloudinaryUploadPreset ?? '')
+const imgurClientId = ref(props.source?.imgurClientId ?? '')
 const uploadcareKey = ref(props.source?.uploadcarePublicKey ?? '')
 const uploadcareCdn = ref(props.source?.uploadcareCdnBase ?? '')
 const cdnProblem = ref(false)
@@ -34,6 +47,7 @@ function cdnBase(): string | null {
 }
 
 function cdnValid(): boolean {
+  if (photoStore.value !== 'uploadcare') return true
   const v = cdnBase()
   return v === null || isUploadcareCdnBase(v)
 }
@@ -42,8 +56,12 @@ const draft = (): Omit<SourceConfig, 'id' | 'createdAt'> => ({
   kind: 'neon',
   name: name.value.trim() || t('sourceForm.defaultName'),
   connectionString: connectionString.value.trim(),
+  photoStore: photoStore.value,
   uploadcarePublicKey: uploadcareKey.value.trim() || null,
   uploadcareCdnBase: cdnBase(),
+  cloudinaryCloudName: cloudinaryCloud.value.trim() || null,
+  cloudinaryUploadPreset: cloudinaryPreset.value.trim() || null,
+  imgurClientId: imgurClientId.value.trim() || null,
 })
 
 watch(uploadcareCdn, () => {
@@ -142,6 +160,24 @@ async function save(): Promise<void> {
       </p>
     </div>
 
+    <fieldset class="grid gap-1.5">
+      <legend class="mb-1.5 text-sm font-medium">{{ $t('sourceForm.photoStore') }}</legend>
+      <div class="flex gap-2" role="group" :aria-label="$t('sourceForm.photoStore')">
+        <Button
+          v-for="p in PHOTO_STORES"
+          :key="p"
+          type="button"
+          size="sm"
+          :variant="photoStore === p ? 'default' : 'outline'"
+          :aria-pressed="photoStore === p"
+          class="h-9 flex-1 rounded-field"
+          @click="photoStore = p"
+        >{{ $t(`sourceForm.store.${p}`) }}</Button>
+      </div>
+      <p class="text-sm text-subtle-foreground">{{ $t('sourceForm.photoStoreHint') }}</p>
+    </fieldset>
+
+    <template v-if="photoStore === 'uploadcare'">
     <div class="grid gap-1.5">
       <Label for="source-key">
         {{ $t('sourceForm.uploadcareKey') }}
@@ -151,7 +187,7 @@ async function save(): Promise<void> {
       <p class="text-sm text-subtle-foreground">
         {{ $t('sourceForm.uploadcareKeyHint') }}
         <a
-          href="https://app.uploadcare.com/"
+          :href="keyLink('uploadcare')"
           target="_blank"
           rel="noopener noreferrer"
           class="underline underline-offset-2"
@@ -179,6 +215,72 @@ async function save(): Promise<void> {
       <p class="text-sm text-subtle-foreground">{{ $t('sourceForm.uploadcareCdnHint') }}</p>
       <p id="source-cdn-problem" role="alert" class="text-sm text-destructive">
         <template v-if="cdnProblem">{{ $t('sourceForm.problem.cdn') }}</template>
+      </p>
+    </div>
+
+    </template>
+
+    <template v-else-if="photoStore === 'cloudinary'">
+      <div class="grid gap-1.5">
+        <Label for="source-cloud">
+          {{ $t('sourceForm.cloudinaryCloud') }}
+          <span class="font-normal text-subtle-foreground">· {{ $t('sourceForm.optional') }}</span>
+        </Label>
+        <Input
+          id="source-cloud"
+          v-model="cloudinaryCloud"
+          autocomplete="off"
+          autocapitalize="off"
+          spellcheck="false"
+          class="h-11 rounded-field bg-surface"
+        />
+      </div>
+      <div class="grid gap-1.5">
+        <Label for="source-preset">
+          {{ $t('sourceForm.cloudinaryPreset') }}
+          <span class="font-normal text-subtle-foreground">· {{ $t('sourceForm.optional') }}</span>
+        </Label>
+        <Input
+          id="source-preset"
+          v-model="cloudinaryPreset"
+          autocomplete="off"
+          autocapitalize="off"
+          spellcheck="false"
+          class="h-11 rounded-field bg-surface"
+        />
+        <p class="text-sm text-subtle-foreground">
+          {{ $t('sourceForm.cloudinaryHint') }}
+          <a
+            :href="keyLink('cloudinary')"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="underline underline-offset-2"
+          >{{ $t('sourceForm.cloudinaryLink') }}</a>
+        </p>
+      </div>
+    </template>
+
+    <div v-else class="grid gap-1.5">
+      <Label for="source-imgur">
+        {{ $t('sourceForm.imgurClientId') }}
+        <span class="font-normal text-subtle-foreground">· {{ $t('sourceForm.optional') }}</span>
+      </Label>
+      <Input
+        id="source-imgur"
+        v-model="imgurClientId"
+        autocomplete="off"
+        autocapitalize="off"
+        spellcheck="false"
+        class="h-11 rounded-field bg-surface"
+      />
+      <p class="text-sm text-subtle-foreground">
+        {{ $t('sourceForm.imgurHint') }}
+        <a
+          :href="keyLink('imgur')"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="underline underline-offset-2"
+        >{{ $t('sourceForm.imgurLink') }}</a>
       </p>
     </div>
 

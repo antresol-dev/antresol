@@ -12,6 +12,8 @@
   },
   "dependencies": {
     "@graymatter/core": "workspace:*",
+    "@graymatter/files-cloudinary": "workspace:*",
+    "@graymatter/files-imgur": "workspace:*",
     "@graymatter/files-uploadcare": "workspace:*",
     "@graymatter/storage-postgres": "workspace:*",
     "@lucide/vue": "^1.70.0",

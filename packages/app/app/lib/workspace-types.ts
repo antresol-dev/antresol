@@ -101,7 +101,7 @@ export interface Workspace {
   /** Read-only copy of every inventory of a connected source (archived included) with all movements. Rejects with
    *  `unavailable` when the source is offline or failing; never returns a partial backup. */
   exportSource(sourceId: string): Promise<BackupFile>
-  /** Uploadcare for a Neon source with a public key, the device store for the demo source, otherwise null. */
+  /** The chosen photo store (Uploadcare by default) for a Neon source with its keys, the device store for the demo source, otherwise null. */
   fileStoreFor(sourceId: string): FileStore | null
   /** Prepares, uploads and records each file in order (photo.add with newId, provider, fileId, url). Stops at the first failure
    *  and rejects with it; photos already added stay. onProgress(doneCount) after each file. */
@@ -117,7 +117,17 @@ export interface Workspace {
    *  meanwhile, resolves without applying its outcome. */
   updateSource(
     id: string,
-    patch: Partial<Pick<SourceConfig, 'name' | 'connectionString' | 'uploadcarePublicKey' | 'uploadcareCdnBase'>>,
+    patch: Partial<Pick<
+        SourceConfig,
+        | 'name'
+        | 'connectionString'
+        | 'photoStore'
+        | 'uploadcarePublicKey'
+        | 'uploadcareCdnBase'
+        | 'cloudinaryCloudName'
+        | 'cloudinaryUploadPreset'
+        | 'imgurClientId'
+      >>,
   ): Promise<void>
   removeSource(id: string): Promise<void>
   setDeviceName(name: string): Promise<void>

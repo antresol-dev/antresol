@@ -1,17 +1,18 @@
 <script setup lang="ts">
-import { Pencil, Plus, Trash2 } from '@lucide/vue'
+import { Pencil, Plus, Split, Trash2 } from '@lucide/vue'
 import type { Id } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
 import type { AttributeRow } from '~/lib/item-view'
 
 defineProps<{ attributes: AttributeRow[] }>()
-const emit = defineEmits<{ add: []; edit: [attributeId: Id]; remove: [attributeId: Id] }>()
+const emit = defineEmits<{ add: []; edit: [attributeId: Id]; axis: [attributeId: Id]; remove: [attributeId: Id] }>()
 
 const { t } = useI18n()
 const { state } = useWorkspace()
 const locked = computed(() => !!state.readOnly || state.saving)
 const actions = computed(() => [
   { key: 'edit', label: t('item.editValue'), icon: Pencil, disabled: locked.value },
+  { key: 'axis', label: t('item.makeAxis'), icon: Split, disabled: locked.value },
   { key: 'remove', label: t('item.removeAttribute'), icon: Trash2, destructive: true, disabled: locked.value },
 ])
 </script>
@@ -27,18 +28,17 @@ const actions = computed(() => [
       >
         <dt class="min-w-0 text-[15px] text-muted-foreground wrap-anywhere">{{ a.name }}</dt>
         <dd class="ml-auto min-w-0 text-right text-[15px] wrap-anywhere">
-          <template v-if="a.perVariant"><span class="text-muted-foreground">{{ $t('item.differsByVariant') }}</span></template>
-          <template v-else-if="a.value === null">
+          <template v-if="a.display === null">
             <span class="text-muted-foreground" aria-hidden="true">{{ $t('item.noValue') }}</span>
             <span class="sr-only">{{ $t('item.noValueLabel') }}</span>
           </template>
-          <template v-else><span class="font-semibold">{{ a.value }}</span></template>
+          <template v-else><span class="font-semibold">{{ a.display }}</span></template>
         </dd>
         <RowMenu
           class="size-11"
           :label="a.name"
           :actions="actions"
-          @select="(key) => (key === 'edit' ? emit('edit', a.attributeId) : emit('remove', a.attributeId))"
+          @select="(key) => (key === 'edit' ? emit('edit', a.attributeId) : key === 'axis' ? emit('axis', a.attributeId) : emit('remove', a.attributeId))"
         />
       </div>
     </dl>

@@ -42,7 +42,11 @@ function select(row: { attribute: Attribute; itemCount: number }, key: string): 
   else if (key === 'delete') open({ kind: 'delete', attribute: row.attribute, count: row.itemCount })
 }
 const typeLabel = (a: Attribute): string =>
-  a.kind === 'enum' ? t('dictionaries.attributeList', { options: a.options.join(', ') }) : t('dictionaries.attributeText')
+  a.kind === 'enum'
+    ? t('dictionaries.attributeList', { options: a.options.join(', ') })
+    : a.kind === 'number'
+      ? t(a.unit ? 'attributeForm.typeNumberUnit' : 'attributeForm.typeNumber', { unit: a.unit })
+      : t('dictionaries.attributeText')
 
 async function remove(): Promise<void> {
   const cur = target.value

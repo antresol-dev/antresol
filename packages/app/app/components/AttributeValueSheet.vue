@@ -3,11 +3,11 @@ import type { Id } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
 import { errorMessageKey } from '~/lib/errors'
-import { attributeChoices, attributeWrites, type ItemView } from '~/lib/item-view'
+import { attributeChoices, type ItemView } from '~/lib/item-view'
 
-// Gives an item an attribute (picking one or making a new one) or edits its value: one value for the item, or one per variant.
+// Gives an item a shared attribute (picking one or making a new one) or edits its value. Variants' own values are edited
+// with the variant.
 const props = defineProps<{ view: ItemView; open: boolean; attributeId: Id | null }>()
 const emit = defineEmits<{ close: [] }>()
 
@@ -22,14 +22,11 @@ const open = computed({
   },
 })
 
-const variants = computed(() => props.view.buckets.flatMap((b) => (b.variantId !== null && b.name !== null ? [{ id: b.variantId, name: b.name }] : [])))
-const hasVariants = computed(() => variants.value.length > 0)
 const choices = computed(() => (state.snapshot ? attributeChoices(state.snapshot, props.view.item.id) : []))
 
 const choice = ref('')
-const shared = ref('')
-const perVariant = ref(false)
-const values = ref<Record<string, string>>({})
+const value = ref<string | null>(null)
+const inputError = ref<string | null>(null)
 const formBusy = ref(false)
 const saving = ref(false)
 const errorKey = ref<string | null>(null)
@@ -44,17 +41,8 @@ function load(): void {
   const id = props.attributeId
   choice.value = id ?? choices.value[0]?.id ?? NEW
   const row = id ? props.view.attributes.find((a) => a.attributeId === id) : undefined
-  shared.value = row?.value ?? ''
-  perVariant.value = row?.perVariant ?? false
-  loadVariantValues()
-}
-function loadVariantValues(): void {
-  const snapshot = state.snapshot
-  const found: Record<string, string> = {}
-  for (const v of variants.value) {
-    found[v.id] = snapshot?.variantAttributeValues.find((x) => x.variantId === v.id && x.attributeId === choice.value)?.value ?? ''
-  }
-  values.value = found
+  value.value = row?.value ?? null
+  inputError.value = null
 }
 watch(
   () => props.open,
@@ -66,9 +54,8 @@ watch(
 // Picking another attribute starts its values over.
 watch(choice, (id, was) => {
   if (!was || id === was || !adding.value) return
-  shared.value = ''
-  perVariant.value = false
-  loadVariantValues()
+  value.value = null
+  inputError.value = null
 })
 
 function created(id: Id): void {
@@ -76,7 +63,7 @@ function created(id: Id): void {
   choice.value = id
 }
 
-const canSave = computed(() => !locked.value && !state.readOnly && !!attribute.value && !creating.value)
+const canSave = computed(() => !locked.value && !state.readOnly && !!attribute.value && !creating.value && !inputError.value)
 
 async function save(): Promise<void> {
   const a = attribute.value
@@ -84,10 +71,7 @@ async function save(): Promise<void> {
   saving.value = true
   errorKey.value = null
   try {
-    const snapshot = state.snapshot
-    if (!snapshot) return
-    const input = perVariant.value && hasVariants.value ? { variants: values.value } : { shared: shared.value }
-    for (const command of attributeWrites(snapshot, props.view.item.id, a.id, input)) await workspace.apply(command)
+    await workspace.apply({ type: 'item.setAttribute', itemId: props.view.item.id, attributeId: a.id, value: value.value })
     emit('close')
   } catch (e) {
     errorKey.value = errorMessageKey(e)
@@ -118,31 +102,17 @@ async function save(): Promise<void> {
       </div>
       <AttributeForm v-if="creating" v-model:busy="formBusy" :attribute="null" @done="created" />
       <template v-else-if="attribute">
-        <label v-if="hasVariants" class="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm font-semibold">
-          {{ $t('item.differsByVariant') }}
-          <Switch v-model="perVariant" :disabled="locked" />
-        </label>
-        <template v-if="perVariant && hasVariants">
+        <div class="grid gap-1.5">
+          <Label for="attribute-value">{{ $t('attributeSheet.value') }}</Label>
           <AttributeValueField
-            v-for="v in variants"
-            :id="`attribute-value-${v.id}`"
-            :key="v.id"
-            v-model="values[v.id]!"
-            :label="v.name"
-            :kind="attribute.kind"
-            :options="attribute.options"
+            id="attribute-value"
+            v-model="value"
+            :attribute="attribute"
             :disabled="locked"
+            @update:error="(key) => (inputError = key)"
           />
-        </template>
-        <AttributeValueField
-          v-else
-          id="attribute-value"
-          v-model="shared"
-          :label="$t('attributeSheet.value')"
-          :kind="attribute.kind"
-          :options="attribute.options"
-          :disabled="locked"
-        />
+        </div>
+        <p v-if="inputError" class="text-sm text-destructive">{{ $t(inputError) }}</p>
         <p role="alert" class="text-sm text-destructive">
           <template v-if="errorKey">{{ $t(errorKey) }}</template>
         </p>

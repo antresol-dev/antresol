@@ -65,7 +65,7 @@ const rows = computed(() =>
   props.buckets.map((b) => ({
     ...b,
     key: b.variantId ?? 'none',
-    sub: [...b.values.map((v) => v.value), b.description].filter((x): x is string => !!x).join(' · '),
+    sub: b.description ?? '',
   })),
 )
 
@@ -84,8 +84,7 @@ watch(() => props.highlight, reveal)
 </script>
 
 <template>
-  <section class="grid min-w-0 grid-cols-1 gap-2">
-    <h2 class="px-1 text-[13px] font-semibold text-subtle-foreground">{{ $t('item.variantsTitle') }}</h2>
+  <section class="grid min-w-0 grid-cols-1" :aria-label="$t('item.variantsTitle')">
     <ul ref="list" class="overflow-hidden rounded-card border border-border bg-surface py-1">
       <li
         v-for="row in rows"

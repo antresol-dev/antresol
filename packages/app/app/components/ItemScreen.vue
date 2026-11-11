@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { newId, type Id } from '@graymatter/core'
+import { newId, variantLabel, type Id } from '@graymatter/core'
 import { Plus } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { toast } from 'vue-sonner'
@@ -92,7 +92,7 @@ const archiveBusy = ref(false)
 function askArchive(id: Id): void {
   const v = variantOf(id)
   if (!v) return
-  sheetVariant.value = { id, name: v.name }
+  sheetVariant.value = { id, name: variantLabel(snapshot.value!, v) }
   archiveId.value = id
 }
 async function archiveVariant(): Promise<void> {
@@ -123,7 +123,7 @@ const photoOpen = computed({
 function askPhoto(id: Id): void {
   const v = variantOf(id)
   if (!v) return
-  photoVariant.value = { id, name: v.name }
+  photoVariant.value = { id, name: variantLabel(snapshot.value!, v) }
   photoId.value = id
 }
 async function pickVariantPhoto(files: File[]): Promise<void> {

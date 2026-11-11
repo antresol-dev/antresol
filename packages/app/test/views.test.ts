@@ -5,6 +5,7 @@ import {
   itemStock,
   newId,
   resolveUnit,
+  variantLabel,
   type InventorySnapshot,
   type InventoryStorage,
   type Photo,
@@ -50,6 +51,10 @@ beforeAll(async () => {
   inventoryId = (await storage.listInventories()).inventories.find((i) => i.name === 'Electronics')!.id
   snap = await storage.loadInventory(inventoryId)
 })
+
+/** A demo resistor's variant by its value (`10k` finds `10 kΩ`): variants have no names, only labels. */
+const byValue = (s: InventorySnapshot, itemId: string, value: string) =>
+  s.variants.find((v) => v.itemId === itemId && variantLabel(s, v).replace(/\s/g, '').toLowerCase().startsWith(value))!
 
 describe('folderView', () => {
   it('lists root folders by name with subtree item counts', () => {
@@ -114,7 +119,7 @@ describe('searchRows', () => {
   it('describes a variant hit with its path', () => {
     const hits = createSearch(snap).search('10k')
     const rows = searchRows(snap, hits)
-    const row = rows.find((r) => r.variantName === '10k')!
+    const row = rows.find((r) => r.variantName === variantLabel(snap, byValue(snap, snap.items.find((i) => i.name === 'Резистор 0,25 Вт')!.id, '10k')))!
     expect(row.number).toBe('100')
     expect(row.path).toBe('Passive components / Resistors')
   })
@@ -177,7 +182,7 @@ describe('index and edge cases', () => {
     const inv = (await own.listInventories()).inventories.find((i) => i.name === 'Electronics')!.id
     let s = await own.loadInventory(inv)
     const resistor = s.items.find((i) => i.name === 'Резистор 0,25 Вт')!.id
-    const v100k = s.variants.find((v) => v.itemId === resistor && v.name === '100k')!.id
+    const v100k = byValue(s, resistor, '100k').id
     await own.apply(
       { type: 'stock.receive', movementId: newId(), itemId: resistor, variantId: v100k, quantity: '7', totalPrice: null, sourceUrl: null, note: null },
       { device: 'Test' },
@@ -217,7 +222,7 @@ describe('index and edge cases', () => {
   it('gives search rows the cover, and the variant photo when a variant matched', () => {
     const s = clone()
     const item = s.items.find((i) => i.name === 'Резистор 0,25 Вт')!
-    const variant = s.variants.find((v) => v.itemId === item.id && v.name === '10k')!
+    const variant = byValue(s, item.id, '10k')
     s.photos = [
       photo(item.id, null, 0, 'cover.jpg'),
       photo(item.id, variant.id, 3, 'v-late.jpg'),

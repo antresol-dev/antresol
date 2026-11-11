@@ -2,12 +2,16 @@ import {
   addQ,
   BUILTIN_UNITS,
   cmpQ,
+  compareVariants,
   formatAmountParts,
+  formatAttributeValue,
+  itemAxes,
   negQ,
   resolveUnit,
   unitPrice,
+  variantLabel,
   type Attribute,
-  type Command,
+  type AttributeKind,
   type Folder,
   type Id,
   type InventorySnapshot,
@@ -34,17 +38,30 @@ export interface BucketRow {
   lastUnitPrice: number | null
   /** The variant's photo (one at most); null for the no-variant bucket. */
   photo: Photo | null
-  /** Per-variant attribute values (only attributes marked per-variant), by attribute name. */
-  values: { attributeId: Id; name: string; value: string | null }[]
+  /** The variant's value on each of the item's axes, in axis order; `display` is `—` for an empty one. */
+  values: { attributeId: Id; name: string; value: string | null; display: string }[]
+  /** An axis has no value (an old or partly edited variant). */
+  incomplete: boolean
 }
+export interface AxisRow {
+  attributeId: Id
+  name: string
+  kind: AttributeKind
+  options: string[]
+  unit: string
+  siPrefixes: boolean
+}
+/** A shared attribute of the item (axes are in `ItemView.axes`). */
 export interface AttributeRow {
   attributeId: Id
   name: string
-  kind: 'text' | 'enum'
+  kind: AttributeKind
   options: string[]
+  unit: string
+  siPrefixes: boolean
   value: string | null
-  /** The item's value is empty and the item has active variants: values live on the variants. */
-  perVariant: boolean
+  /** The value as shown (numbers by the attribute's unit rules); null when empty. */
+  display: string | null
 }
 export interface ItemView {
   item: Item
@@ -53,9 +70,12 @@ export interface ItemView {
   currency: string
   tags: { id: Id; name: string }[]
   total: { quantity: Quantity; number: string; unit: string; outOfStock: boolean; avgUnitPrice: number | null; lastUnitPrice: number | null }
-  /** The no-variant bucket first when shown, then active variants by position. */
+  /** The no-variant bucket first when shown, then active variants by their axis values. */
   buckets: BucketRow[]
   hasVariants: boolean
+  /** The attributes the variants differ by, in axis order. */
+  axes: AxisRow[]
+  /** Shared attributes only, by name. */
   attributes: AttributeRow[]
   /** The item's own photos (variantId null) by position; the first is the cover. */
   photos: Photo[]
@@ -98,36 +118,6 @@ export function attributeChoices(s: InventorySnapshot, itemId: Id): Attribute[] 
   return s.attributes.filter((a) => !attached.has(a.id)).sort(byName)
 }
 
-/** What to store for an attribute of an item: one value for the item, or one value per variant (a variant left out keeps its value). */
-export type AttributeInput = { shared: string } | { variants: Record<Id, string> }
-
-/**
- * The commands that store the input, in order. Per variant: the item's own value is emptied, then only the variants whose
- * value changed are written. Shared: the item's value is set, then every active variant that still has a value of its own
- * is cleared (search indexes them even while the item's value hides them). Blank text counts as no value.
- */
-export function attributeWrites(s: InventorySnapshot, itemId: Id, attributeId: Id, input: AttributeInput): Command[] {
-  const variants = s.variants.filter((v) => v.itemId === itemId && v.archivedAt === null)
-  const current = (variantId: Id): string | null =>
-    valueOf(s.variantAttributeValues.find((x) => x.variantId === variantId && x.attributeId === attributeId)?.value ?? null)
-  const set = (variantId: Id, value: string | null): Command => ({ type: 'variant.setAttribute', variantId, attributeId, value })
-  if ('shared' in input) {
-    const value = input.shared.trim() === '' ? null : input.shared.trim()
-    return [
-      { type: 'item.setAttribute', itemId, attributeId, value },
-      ...variants.filter((v) => current(v.id) !== null).map((v) => set(v.id, null)),
-    ]
-  }
-  const writes: Command[] = [{ type: 'item.setAttribute', itemId, attributeId, value: null }]
-  for (const v of variants) {
-    const text = input.variants[v.id]
-    if (text === undefined) continue
-    const next = text.trim() === '' ? null : text.trim()
-    if (next !== current(v.id)) writes.push(set(v.id, next))
-  }
-  return writes
-}
-
 /** null when the item is missing, archived, or its folder chain is archived or missing. */
 export function itemView(s: InventorySnapshot, itemId: Id): ItemView | null {
   const ix = snapshotIndex(s)
@@ -140,28 +130,38 @@ export function itemView(s: InventorySnapshot, itemId: Id): ItemView | null {
   }
   const unit = unitOf(s, item)
 
-  const variants = s.variants
-    .filter((v) => v.itemId === itemId && v.archivedAt === null)
-    .sort((a, b) => a.position - b.position || byName(a, b))
+  const variants = s.variants.filter((v) => v.itemId === itemId && v.archivedAt === null).sort((a, b) => compareVariants(s, a, b))
   const hasVariants = variants.length > 0
+
+  const axisAttributes = itemAxes(s, itemId)
+  const axes: AxisRow[] = axisAttributes.map((a) => ({
+    attributeId: a.id,
+    name: a.name,
+    kind: a.kind,
+    options: a.options,
+    unit: a.unit,
+    siPrefixes: a.siPrefixes,
+  }))
 
   const definitions = new Map(s.attributes.map((a) => [a.id, a] as const))
   const attributes: AttributeRow[] = s.itemAttributes
-    .filter((a) => a.itemId === itemId)
+    .filter((a) => a.itemId === itemId && a.axisPosition === null)
     .flatMap((a) => {
       const def = definitions.get(a.attributeId)
       if (!def) return []
       const value = valueOf(a.value)
-      return [{ attributeId: def.id, name: def.name, kind: def.kind, options: def.options, value, perVariant: value === null && hasVariants }]
+      const display = value === null ? null : formatAttributeValue(def, value)
+      return [{ attributeId: def.id, name: def.name, kind: def.kind, options: def.options, unit: def.unit, siPrefixes: def.siPrefixes, value, display }]
     })
     .sort((a, b) => byName(a, b) || compareIds(a.attributeId, b.attributeId))
-  const perVariant = attributes.filter((a) => a.perVariant)
 
-  const valueKey = (variantId: Id, attributeId: Id): string => `${variantId}\u0000${attributeId}`
-  const variantValues = new Map<string, string | null>()
-  if (perVariant.length > 0) {
-    const ids = new Set(variants.map((v) => v.id))
-    for (const v of s.variantAttributeValues) if (ids.has(v.variantId)) variantValues.set(valueKey(v.variantId, v.attributeId), valueOf(v.value))
+  const variantValues = new Map<Id, Map<Id, string | null>>()
+  const activeIds = new Set(variants.map((v) => v.id))
+  for (const v of s.variantAttributeValues) {
+    if (!activeIds.has(v.variantId)) continue
+    const own = variantValues.get(v.variantId) ?? new Map<Id, string | null>()
+    own.set(v.attributeId, valueOf(v.value))
+    variantValues.set(v.variantId, own)
   }
 
   const lines = ix.stockByItem.get(itemId) ?? []
@@ -186,17 +186,17 @@ export function itemView(s: InventorySnapshot, itemId: Id): ItemView | null {
       lastUnitPrice: sum.lastUnitPrice,
       photo: variantId === null ? null : (photoOf.get(variantId) ?? null),
       values,
+      incomplete: values.some((x) => x.value === null),
     }
   }
   const buckets: BucketRow[] = []
   if (!hasVariants || cmpQ(lineOf.get(null)?.quantity ?? '0', '0') !== 0) buckets.push(bucket(null, null, null, []))
   for (const v of variants) {
-    const values = perVariant.map((a) => ({
-      attributeId: a.attributeId,
-      name: a.name,
-      value: variantValues.get(valueKey(v.id, a.attributeId)) ?? null,
-    }))
-    buckets.push(bucket(v.id, v.name, v.description, values))
+    const values = axisAttributes.map((a) => {
+      const value = variantValues.get(v.id)?.get(a.id) ?? null
+      return { attributeId: a.id, name: a.name, value, display: value === null ? '—' : formatAttributeValue(a, value) }
+    })
+    buckets.push(bucket(v.id, variantLabel(s, v), v.description, values))
   }
 
   // Same rule as core's itemStock: every bucket except archived variants.
@@ -225,6 +225,7 @@ export function itemView(s: InventorySnapshot, itemId: Id): ItemView | null {
     },
     buckets,
     hasVariants,
+    axes,
     attributes,
     photos: s.photos.filter((p) => p.itemId === itemId && p.variantId === null).sort((a, b) => a.position - b.position),
   }
@@ -249,7 +250,7 @@ export interface JournalRow {
   /** '+37', '−5' (U+2212); transfers show the moved amount without a sign. */
   number: string
   unit: string
-  /** Variant name; null = no variant. Unused for transfers. */
+  /** Variant label (its axis values); null = no variant. Unused for transfers. */
   variantName: string | null
   transfer: { from: string | null; to: string | null } | null
   totalPrice: number | null
@@ -278,7 +279,7 @@ const MINUS = '−'
 export function journalRows(s: InventorySnapshot, itemId: Id, movements: Movement[]): JournalRow[] {
   const ix = snapshotIndex(s)
   const unit = unitOf(s, ix.items.get(itemId))
-  // Archived variants keep their names in the index, so old movements still name them.
+  // Archived variants keep their labels in the index, so old movements still name them.
   const nameOf = (variantId: Id | null): string | null => (variantId === null ? null : (ix.variants.get(variantId)?.name ?? null))
 
   const rows: JournalRow[] = []

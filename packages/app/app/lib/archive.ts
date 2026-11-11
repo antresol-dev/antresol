@@ -1,4 +1,4 @@
-import type { Id, InventorySnapshot } from '@graymatter/core'
+import { variantLabel, type Id, type InventorySnapshot } from '@graymatter/core'
 
 export interface ArchiveEntry {
   archiveId: Id
@@ -85,7 +85,7 @@ export function archiveEntries(s: InventorySnapshot): ArchiveEntry[] {
       archiveId: v.archiveId,
       target: 'variant',
       id: v.id,
-      name: v.name,
+      name: variantLabel(s, v),
       itemName: item?.name ?? null,
       path: pathOf(item?.folderId ?? null),
       archivedAt: v.archivedAt,

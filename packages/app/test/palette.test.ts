@@ -1,4 +1,4 @@
-import { createSearch, newId, type Actor, type Id, type InventorySnapshot, type InventoryStorage } from '@graymatter/core'
+import { createSearch, newId, variantLabel, type Actor, type Id, type InventorySnapshot, type InventoryStorage } from '@graymatter/core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import {
@@ -135,14 +135,18 @@ describe('palette', () => {
     const keys = groups.flatMap((g) => g.rows.map((r) => r.key))
     expect(new Set(keys).size).toBe(keys.length)
 
-    // A variant hit highlights the variant's name; the empty query lists only the actions.
+    const resistor = snap.items.find((i) => i.name === 'Резистор 0,25 Вт')!
+    const label10k = variantLabel(snap, snap.variants.find((v) => v.itemId === resistor.id && variantLabel(snap, v).replace(/\s/g, '').toLowerCase().startsWith('10k'))!)
+    // A variant hit highlights the variant's label; the empty query lists only the actions.
     const [variantRow] = paletteResults(snap, createSearch(snap), { ...ctx, query: '10k' }, label)[0]!.rows
     expect(variantRow).toMatchObject({
       kind: 'item',
-      hit: { name: 'Резистор 0,25 Вт', variantName: '10k' },
+      hit: { name: 'Резистор 0,25 Вт', variantName: label10k },
       name: [{ text: 'Резистор 0,25 Вт', match: false }],
-      variant: [{ text: '10k', match: true }],
     })
+    expect(variantRow).toMatchObject({ variant: expect.any(Array) })
+    // The variant line shows its label (axis values), not a name.
+    expect((variantRow as { variant: { text: string }[] }).variant.map((p) => p.text).join('')).toBe(label10k)
     expect(paletteResults(snap, createSearch(snap), { ...ctx, query: '' }, label).map((g) => g.key)).toEqual(['actions'])
     expect(paletteResults(null, null, { ...ctx, query: 'ne' }, label).map((g) => g.key)).toEqual(['actions'])
     // Nothing found: only the offer to add it, and nothing at all when writing is off.

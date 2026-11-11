@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Id } from '@graymatter/core'
 import { toast } from 'vue-sonner'
+import { takeDraft, type QuickAddDraft } from '~/lib/quick-add-draft'
 import type { QuickAddState } from '~/composables/useDialogs'
 
 // The quick add sheet for the whole app: the "+" button, the header button and the palette open it through useQuickAdd().
@@ -13,6 +14,7 @@ const receive = useReceive()
 // What the form starts from: the values as they were when the sheet opened. They stay while it animates out, and a
 // counter gives every opening a fresh form.
 const shown = shallowRef<QuickAddState>({ name: '', folderId: null, url: '' })
+const draft = shallowRef<QuickAddDraft | null>(null)
 const openings = ref(0)
 const busy = ref(false)
 // The inventory changed underneath (desktop Back, Alt+←): the item would go to the old one. A write in flight finishes first.
@@ -21,7 +23,10 @@ watch(
   state,
   (s) => {
     if (!s) return
-    shown.value = s
+    // Back from "Open" on a match: the form as it was left, unless this opening brings its own name or link.
+    const inventoryId = workspace.state.snapshot?.inventory.id
+    draft.value = inventoryId ? takeDraft(inventoryId, s) : null
+    shown.value = draft.value ? { name: draft.value.name, folderId: draft.value.folderId, url: draft.value.url } : s
     openings.value++
     // A sleeping database answers slowly: wake it while the person types.
     void workspace.warmUp()
@@ -66,6 +71,7 @@ function added({ id, name, photoFailed }: { id: Id; name: string; photoFailed: b
       :name="shown.name"
       :folder-id="shown.folderId"
       :url="shown.url"
+      :draft="draft"
       @done="added"
       @receive="receiveInto"
       @open="openItem"

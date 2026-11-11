@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { pricePreview } from '~/lib/amounts'
 import { errorMessageKey } from '~/lib/errors'
 import { bucketDescription, type ItemView } from '~/lib/item-view'
 import { buildStockCommand, type StockMode } from '~/lib/stock-forms'
@@ -104,6 +105,7 @@ const summary = computed(() => (state.snapshot ? bucketDescription(state.snapsho
 // The item has one unit: AmountField shows its symbol and no select.
 const unitKey = computed(() => props.view.unit.key)
 const units = computed(() => [props.view.unit])
+const pricePreviewOf = computed(() => pricePreview(price.value, props.view.currency))
 const currencySymbol = computed(() => getCurrency(props.view.currency)?.symbol ?? props.view.currency)
 const canSubmit = computed(() => !busy.value && !state.readOnly && (mode.value !== 'transfer' || toKey.value !== ''))
 /** Why the last retry failed, under the "not confirmed" line; nothing more when the source just did not answer again. */
@@ -189,8 +191,9 @@ function settle(outcome: SendOutcome): void {
               <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-semibold text-muted-foreground">
                 {{ currencySymbol }}
               </span>
-              <Input id="stock-price" v-model="price" inputmode="decimal" autocomplete="off" class="h-11 pl-10" />
+              <Input id="stock-price" v-model="price" inputmode="text" autocomplete="off" class="h-11 pl-10" />
             </div>
+            <ExpressionHint :preview="pricePreviewOf" />
           </div>
           <div class="grid gap-1.5">
             <Label for="stock-url">

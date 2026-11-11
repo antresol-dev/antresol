@@ -5,7 +5,7 @@ import { ChevronDown, X } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { unitChoices } from '~/lib/amounts'
+import { pricePreview, unitChoices } from '~/lib/amounts'
 import { errorMessageKey } from '~/lib/errors'
 import { clearDraft, linkNeedsAmount, saveDraft, type QuickAddDraft } from '~/lib/quick-add-draft'
 import { buildQuickAdd, existingMatches, type MatchRow } from '~/lib/quick-add'
@@ -67,6 +67,7 @@ const folderPath = computed(() => {
   const folders = folderId.value === null ? [] : pathOf(snapshotIndex(s), folderId.value)
   return [s.inventory.name, ...folders.map((f) => f.name)].join(' / ')
 })
+const pricePreviewOf = computed(() => pricePreview(price.value, snapshot.value?.inventory.currency ?? ''))
 const currencySymbol = computed(() => {
   const code = snapshot.value?.inventory.currency
   return (code && getCurrency(code)?.symbol) || code || ''
@@ -226,12 +227,13 @@ async function send(command: ItemCreate): Promise<void> {
           <Input
             id="quick-add-price"
             v-model="price"
-            inputmode="decimal"
+            inputmode="text"
             autocomplete="off"
             aria-describedby="quick-add-price-hint"
             class="h-11 pl-10"
           />
         </div>
+        <ExpressionHint :preview="pricePreviewOf" />
         <p id="quick-add-price-hint" class="text-xs text-subtle-foreground">{{ $t('quickAdd.priceHint') }}</p>
       </div>
 

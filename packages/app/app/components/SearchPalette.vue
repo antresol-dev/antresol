@@ -73,6 +73,7 @@ const actionIcon = (a: PaletteAction): Component =>
         ? FolderPlus
         : ArrowLeftRight
 const groupLabels = computed(() => ({
+  nearest: t('search.group.nearest'),
   items: t('search.group.items'),
   folders: t('search.group.folders'),
   actions: t('search.group.actions'),
@@ -186,7 +187,10 @@ async function run(row: PaletteRow): Promise<void> {
   // Focus goes back before anything opens next, so a sheet returns it to the same place when it closes.
   await nextTick()
   handBackFocus()
-  if (row.kind === 'item') {
+  if (row.kind === 'nearest') {
+    const { below, above } = row.suggestion
+    await openNearest((below ?? above)!)
+  } else if (row.kind === 'item') {
     const { itemId, variantId } = row.hit
     void router.push({ path: `/item/${itemId}`, query: variantId ? { variant: variantId } : {} })
   } else if (row.kind === 'folder') {
@@ -194,6 +198,13 @@ async function run(row: PaletteRow): Promise<void> {
   } else {
     await act(row.action)
   }
+}
+
+async function openNearest(e: { itemId: string; variantId: string | null }): Promise<void> {
+  paletteOpen.value = false
+  await nextTick()
+  handBackFocus()
+  void router.push({ path: `/item/${e.itemId}`, query: e.variantId ? { variant: e.variantId } : {} })
 }
 
 async function act(action: PaletteAction): Promise<void> {
@@ -360,6 +371,24 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
                   <span class="shrink-0 text-sm font-extrabold tabular-nums" :class="row.hit.outOfStock && 'text-muted-foreground'">
                     {{ row.hit.number }}
                     <span class="text-xs font-semibold text-muted-foreground">{{ row.hit.unit }}</span>
+                  </span>
+                </template>
+                <template v-else-if="row.kind === 'nearest'">
+                  <span class="min-w-0 flex-1 text-sm font-semibold">
+                    {{ $t('search.noValue', { wanted: row.suggestion.wanted }) }}
+                    <template v-for="(e, i) in [row.suggestion.below, row.suggestion.above]" :key="i">
+                      <template v-if="e">
+                        <span v-if="i === 1 && row.suggestion.below" aria-hidden="true"> · </span>
+                        <button
+                          type="button"
+                          class="font-extrabold tabular-nums underline-offset-4 hover:underline"
+                          :aria-label="$t('search.openNearest', { value: e.value })"
+                          @click.stop="openNearest(e)"
+                        >
+                          {{ $t('search.nearestHit', { value: e.value, stock: e.stock }) }}
+                        </button>
+                      </template>
+                    </template>
                   </span>
                 </template>
                 <template v-else-if="row.kind === 'folder'">

@@ -62,6 +62,8 @@ watch(
 )
 const bought = computed(() => (snapshot.value ? boughtRows(receipts.value, snapshot.value).slice(0, 3) : []))
 
+const nearestChips = computed(() => chips.value.filter((c) => c.nearest))
+
 const chipLabel = (c: ValueChip): string =>
   c.inStock
     ? t(c.number ? 'share.valueIn' : 'share.valueInMixed', { value: c.text, number: c.number })
@@ -78,6 +80,9 @@ async function leaveThen(next: () => void): Promise<void> {
 }
 function openItem(m: MatchRow): void {
   void leaveThen(() => void router.push({ path: `/item/${m.itemId}`, query: m.variantId ? { variant: m.variantId } : {} }))
+}
+function openNearest(e: { itemId: string; variantId: string | null }): void {
+  void leaveThen(() => void router.push({ path: `/item/${e.itemId}`, query: e.variantId ? { variant: e.variantId } : {} }))
 }
 function receiveInto(m: MatchRow): void {
   // An item with variants: receiving "into the item" would go to the stock kept without a variant. Its card asks which.
@@ -114,6 +119,25 @@ function addNew(): void {
               <template v-else-if="c.number !== null"> · {{ c.number }}</template>
               <template v-else> — {{ $t('share.no') }}</template>
             </span>
+          </li>
+        </ul>
+
+        <ul v-if="nearestChips.length > 0" class="grid gap-1" :aria-label="$t('share.nearest')">
+          <li v-for="c in nearestChips" :key="c.text" class="text-sm text-subtle-foreground">
+            {{ $t('share.noValue', { wanted: c.nearest!.wanted }) }}
+            <template v-for="(e, i) in [c.nearest!.below, c.nearest!.above]" :key="i">
+              <template v-if="e">
+                <span v-if="i === 1 && c.nearest!.below" aria-hidden="true"> · </span>
+                <button
+                  type="button"
+                  class="pressable inline-flex min-h-11 items-center font-bold text-foreground tabular-nums underline-offset-4 hover:underline"
+                  :aria-label="$t('share.openNearest', { value: e.value })"
+                  @click="openNearest(e)"
+                >
+                  {{ $t('share.nearestHit', { value: e.value, stock: e.stock }) }}
+                </button>
+              </template>
+            </template>
           </li>
         </ul>
 

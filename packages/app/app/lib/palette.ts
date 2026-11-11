@@ -1,4 +1,5 @@
 import type { Folder, Id, InventorySnapshot, SearchHit } from '@graymatter/core'
+import { nearestSuggestion, type NearestSuggestion } from './nearest'
 import { isShareLike, type ShareInput } from './share'
 import type { InventoryRef } from './types'
 import { byName, pathOf, searchRows, snapshotIndex, type SearchRow } from './views'
@@ -130,11 +131,12 @@ export function paletteActions(ctx: PaletteContext, labelOf: (a: PaletteAction) 
 }
 
 export type PaletteRow =
+  | { kind: 'nearest'; key: string; suggestion: NearestSuggestion }
   | { kind: 'item'; key: string; hit: SearchRow; name: TextPart[]; variant: TextPart[] | null }
   | { kind: 'folder'; key: string; hit: FolderHit; name: TextPart[] }
   | { kind: 'action'; key: string; action: PaletteAction; label: string }
 export interface PaletteGroup {
-  key: 'items' | 'folders' | 'actions'
+  key: 'nearest' | 'items' | 'folders' | 'actions'
   rows: PaletteRow[]
 }
 
@@ -149,7 +151,7 @@ const actionKey = (a: PaletteAction): string =>
       ? `action:switch:${a.ref.sourceId}:${a.ref.inventoryId}`
       : `action:go:${a.section}`
 
-/** Items (core search's best 20, in its order, names and variants highlighted), Folders (matchFolders), Actions
+/** Nearest (the suggestion row when the query is a value nobody has), Items (core search's best 20, in its order, names and variants highlighted), Folders (matchFolders), Actions
  *  (paletteActions); groups without rows are dropped. Rows have keys unique across the groups. */
 export function paletteResults(
   s: InventorySnapshot | null,
@@ -177,7 +179,11 @@ export function paletteResults(
     action,
     label: labelOf(action),
   }))
+  // "No 4.7 kΩ — nearest: 4.3 kΩ (12) · 5.1 kΩ (40)": the query reads as a value of a number attribute nothing holds.
+  const suggestion = s && q ? nearestSuggestion(s, q) : null
+  const nearest: PaletteRow[] = suggestion ? [{ kind: 'nearest', key: 'nearest', suggestion }] : []
   const groups: PaletteGroup[] = [
+    { key: 'nearest', rows: nearest },
     { key: 'items', rows: items },
     { key: 'folders', rows: folders },
     { key: 'actions', rows: actions },

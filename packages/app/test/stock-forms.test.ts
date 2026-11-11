@@ -28,6 +28,13 @@ describe('buildStockCommand', () => {
     expect(buildStockCommand('receive', input({ amount: '' }), ctx, ids)).toEqual({ errorKey: 'stockForm.invalidAmount' })
   })
 
+  it('receive: expressions in the amount and the price', () => {
+    const r = buildStockCommand('receive', input({ amount: '2.5m + 120cm', price: '12.5 * 2' }), ctx, ids)
+    expect('command' in r && r.command).toMatchObject({ quantity: '3.7', totalPrice: 2500 })
+    expect(buildStockCommand('use', input({ amount: '1/0' }), ctx, ids)).toEqual({ errorKey: 'stockForm.invalidAmount' })
+    expect(buildStockCommand('receive', input({ amount: '2', price: '1+' }), ctx, ids)).toEqual({ errorKey: 'stockForm.invalidPrice' })
+  })
+
   it('use: needs a positive amount', () => {
     expect(buildStockCommand('use', input({ amount: '0' }), ctx, ids)).toEqual({ errorKey: 'stockForm.invalidAmount' })
     const r = buildStockCommand('use', input({ amount: '3', note: 'project' }), ctx, ids)

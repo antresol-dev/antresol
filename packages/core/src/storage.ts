@@ -1,6 +1,7 @@
 import type { Command } from './commands'
 import type { Id } from './ids'
 import type { Inventory, InventorySnapshot, Movement } from './model'
+import type { SnapshotPatch } from './patch'
 
 export interface Actor {
   device: string
@@ -17,6 +18,16 @@ export type SchemaInspection =
   | { state: 'empty' }
   | { state: 'foreign' }
   | { state: 'current' | 'older' | 'newer'; dbVersion: number; appVersion: number }
+
+export interface ApplyResult {
+  /** Revision before this write, read under a lock on the revision row: no other write committed in between.
+   *  Null when the row was missing. */
+  prevRev: string | null
+  /** Revision after this write. */
+  rev: string
+  /** What the command touched, read in the same transaction after the write; null for wide commands (reload). */
+  patch: SnapshotPatch | null
+}
 
 export class StorageError extends Error {
   readonly code: StorageErrorCode
@@ -43,5 +54,7 @@ export interface InventoryStorage {
   /** The snapshot and every movement (seq asc) read in ONE read-only snapshot transaction: a consistent backup.
    *  Rejects with `not_found` when the inventory does not exist. */
   exportInventory(id: Id): Promise<{ snapshot: InventorySnapshot; movements: Movement[] }>
-  apply(command: Command, actor: Actor): Promise<void>
+  /** One atomic write: the command, the revision bump and the reads of what it touched. Opaque revisions, like
+   *  `listInventories`' rev. */
+  apply(command: Command, actor: Actor): Promise<ApplyResult>
 }

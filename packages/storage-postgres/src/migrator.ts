@@ -33,10 +33,12 @@ export function isConcurrentMigration(e: unknown): boolean {
   return code === CONCURRENT_MIGRATION_SQLSTATE && e.message.includes(CONCURRENT_MIGRATION_MESSAGE)
 }
 
-/** Gives `gm_meta.rev` a new unique value (see storage.ts for why it is opaque); creates the row if it is missing. */
+/** Gives `gm_meta.rev` a new unique value (see storage.ts for why it is opaque); creates the row if it is missing.
+ *  Returns the new value (`apply` reports it; a migration ignores it). */
 export const REV_BUMP: Statement = {
   text: `insert into gm_meta (key, value) values ('rev', gen_random_uuid()::text)
-  on conflict (key) do update set value = excluded.value`,
+  on conflict (key) do update set value = excluded.value
+  returning value`,
   params: [],
 }
 

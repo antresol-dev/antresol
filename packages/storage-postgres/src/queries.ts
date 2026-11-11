@@ -1,7 +1,7 @@
 import { StorageError, type Id, type InventorySnapshot, type Movement, type Inventory } from '@graymatter/core'
 import type { PgExecutor } from './executor'
 import * as rows from './rows'
-import { sql } from './sql'
+import { sql, type Statement } from './sql'
 
 const AUDIT = 'created_at, updated_at, created_by, updated_by'
 const ARCHIVE = 'archived_at, archive_id'
@@ -47,51 +47,86 @@ export async function exportInventory(
 
 const SNAPSHOT_STATEMENTS = 11
 
+/**
+ * The snapshot's reads, each over a filter, so a write can read the same columns with the same row mappers for just the
+ * rows it touched (commands/reads.ts): a patched snapshot equals a fresh load by construction.
+ * - `inventoryId`: an SQL expression for the inventory's id.
+ * - `where`: a condition on the item, aliased `i`, that every per-item read joins to (`i.inventory_id = $1` for the
+ *   whole inventory, `i.id = $1` for one item's slice).
+ * - stock's `where`: a condition on `movements` columns, whose `inventory_id` is the item's.
+ */
+export const snapshotSql = {
+  inventory: (inventoryId: Statement) =>
+    sql`select id, name, description, currency::text as currency, ${raw(`${AUDIT}, ${ARCHIVE}`)}
+          from inventories where id = ${inventoryId}`,
+  folders: (inventoryId: Statement) =>
+    sql`select id, inventory_id, parent_id, name, description, ${raw(`${AUDIT}, ${ARCHIVE}`)}
+          from folders where inventory_id = ${inventoryId} order by name, id`,
+  items: (where: Statement) =>
+    sql`select i.id, i.inventory_id, i.folder_id, i.name, i.description, i.unit_key,
+                 i.created_at, i.updated_at, i.created_by, i.updated_by, i.archived_at, i.archive_id,
+                 coalesce((select array_agg(it.tag_id::text order by it.tag_id) from item_tags it
+                           where it.item_id = i.id), '{}') as tag_ids
+          from items i where ${where} order by i.name, i.id`,
+  variants: (where: Statement) =>
+    sql`select v.id, v.item_id, v.name, v.description, v.position::text as position,
+                 v.created_at, v.updated_at, v.created_by, v.updated_by, v.archived_at, v.archive_id
+          from variants v join items i on i.id = v.item_id
+          where ${where} order by v.item_id, v.position, v.id`,
+  tags: (inventoryId: Statement) =>
+    sql`select id, inventory_id, name, ${raw(AUDIT)} from tags where inventory_id = ${inventoryId} order by name, id`,
+  attributes: (inventoryId: Statement) =>
+    sql`select id, inventory_id, name, kind, options, ${raw(AUDIT)}
+          from attributes where inventory_id = ${inventoryId} order by name, id`,
+  units: (inventoryId: Statement) =>
+    sql`select id, inventory_id, name, symbol, prefix_powers, ${raw(AUDIT)}
+          from custom_units where inventory_id = ${inventoryId} order by name, id`,
+  itemAttributes: (where: Statement) =>
+    sql`select ia.item_id, ia.attribute_id, ia.value
+          from item_attributes ia join items i on i.id = ia.item_id
+          where ${where} order by ia.item_id, ia.attribute_id`,
+  variantAttributeValues: (where: Statement) =>
+    sql`select va.variant_id, va.attribute_id, va.value
+          from variant_attribute_values va
+          join variants v on v.id = va.variant_id join items i on i.id = v.item_id
+          where ${where} order by va.variant_id, va.attribute_id`,
+  photos: (where: Statement) =>
+    sql`select p.id, p.item_id, p.variant_id, p.provider, p.file_id, p.url, p.position::text as position,
+                 p.created_at, p.created_by
+          from photos p join items i on i.id = p.item_id
+          where ${where} order by p.item_id, p.position, p.id`,
+  stock: (where: Statement) =>
+    sql`select item_id, variant_id,
+                 sum(quantity)::text as quantity,
+                 coalesce(sum(quantity) filter (where kind = 'receipt' and total_price is not null), 0)::text
+                   as priced_quantity,
+                 coalesce(sum(total_price) filter (where kind = 'receipt' and total_price is not null), 0)::text
+                   as priced_total,
+                 (array_agg(total_price order by seq desc)
+                    filter (where kind = 'receipt' and total_price is not null))[1]::text as last_total_price,
+                 (array_agg(quantity order by seq desc)
+                    filter (where kind = 'receipt' and total_price is not null))[1]::text as last_quantity,
+                 (array_agg(created_at order by seq desc)
+                    filter (where kind = 'receipt' and total_price is not null))[1] as last_at
+          from movements where ${where}
+          group by item_id, variant_id order by item_id, variant_id nulls first`,
+}
+
 function snapshotStatements(id: Id) {
+  const inventoryId = sql`${id}`
+  const ofInventory = sql`i.inventory_id = ${id}`
   return [
-      sql`select id, name, description, currency::text as currency, ${raw(`${AUDIT}, ${ARCHIVE}`)}
-            from inventories where id = ${id}`,
-      sql`select id, inventory_id, parent_id, name, description, ${raw(`${AUDIT}, ${ARCHIVE}`)}
-            from folders where inventory_id = ${id} order by name, id`,
-      sql`select i.id, i.inventory_id, i.folder_id, i.name, i.description, i.unit_key,
-                   i.created_at, i.updated_at, i.created_by, i.updated_by, i.archived_at, i.archive_id,
-                   coalesce((select array_agg(it.tag_id::text order by it.tag_id) from item_tags it
-                             where it.item_id = i.id), '{}') as tag_ids
-            from items i where i.inventory_id = ${id} order by i.name, i.id`,
-      sql`select v.id, v.item_id, v.name, v.description, v.position::text as position,
-                   v.created_at, v.updated_at, v.created_by, v.updated_by, v.archived_at, v.archive_id
-            from variants v join items i on i.id = v.item_id
-            where i.inventory_id = ${id} order by v.item_id, v.position, v.id`,
-      sql`select id, inventory_id, name, ${raw(AUDIT)} from tags where inventory_id = ${id} order by name, id`,
-      sql`select id, inventory_id, name, kind, options, ${raw(AUDIT)}
-            from attributes where inventory_id = ${id} order by name, id`,
-      sql`select id, inventory_id, name, symbol, prefix_powers, ${raw(AUDIT)}
-            from custom_units where inventory_id = ${id} order by name, id`,
-      sql`select ia.item_id, ia.attribute_id, ia.value
-            from item_attributes ia join items i on i.id = ia.item_id
-            where i.inventory_id = ${id} order by ia.item_id, ia.attribute_id`,
-      sql`select va.variant_id, va.attribute_id, va.value
-            from variant_attribute_values va
-            join variants v on v.id = va.variant_id join items i on i.id = v.item_id
-            where i.inventory_id = ${id} order by va.variant_id, va.attribute_id`,
-      sql`select p.id, p.item_id, p.variant_id, p.provider, p.file_id, p.url, p.position::text as position,
-                   p.created_at, p.created_by
-            from photos p join items i on i.id = p.item_id
-            where i.inventory_id = ${id} order by p.item_id, p.position, p.id`,
-      sql`select item_id, variant_id,
-                   sum(quantity)::text as quantity,
-                   coalesce(sum(quantity) filter (where kind = 'receipt' and total_price is not null), 0)::text
-                     as priced_quantity,
-                   coalesce(sum(total_price) filter (where kind = 'receipt' and total_price is not null), 0)::text
-                     as priced_total,
-                   (array_agg(total_price order by seq desc)
-                      filter (where kind = 'receipt' and total_price is not null))[1]::text as last_total_price,
-                   (array_agg(quantity order by seq desc)
-                      filter (where kind = 'receipt' and total_price is not null))[1]::text as last_quantity,
-                   (array_agg(created_at order by seq desc)
-                      filter (where kind = 'receipt' and total_price is not null))[1] as last_at
-            from movements where inventory_id = ${id}
-            group by item_id, variant_id order by item_id, variant_id nulls first`,
+    snapshotSql.inventory(inventoryId),
+    snapshotSql.folders(inventoryId),
+    snapshotSql.items(ofInventory),
+    snapshotSql.variants(ofInventory),
+    snapshotSql.tags(inventoryId),
+    snapshotSql.attributes(inventoryId),
+    snapshotSql.units(inventoryId),
+    snapshotSql.itemAttributes(ofInventory),
+    snapshotSql.variantAttributeValues(ofInventory),
+    snapshotSql.photos(ofInventory),
+    snapshotSql.stock(sql`inventory_id = ${id}`),
   ]
 }
 

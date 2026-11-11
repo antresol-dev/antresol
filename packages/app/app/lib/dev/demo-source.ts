@@ -80,7 +80,9 @@ export function createDemoDriver(options: { memory?: boolean; extras?: boolean }
 }
 
 export async function seedDemo(storage: InventoryStorage, actor: Actor, options: { extras?: boolean } = {}): Promise<void> {
-  const run = (command: Command): Promise<void> => storage.apply(command, actor)
+  const run = async (command: Command): Promise<void> => {
+    await storage.apply(command, actor)
+  }
 
   const inv = newId()
   await run({ type: 'inventory.create', id: inv, name: 'Electronics', description: null, currency: 'USD' })

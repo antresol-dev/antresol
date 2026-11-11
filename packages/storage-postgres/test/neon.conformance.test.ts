@@ -93,6 +93,58 @@ describe.skipIf(!url)('Neon conformance', () => {
         expect(result[3]).toEqual([{ x: 1 }, { x: 3 }])
       })
 
+      it('apply returns rows and revisions', async () => {
+        const { storage } = await openPostgresStorage(exec)
+        const inv = newId()
+        const item = newId()
+        const photo = newId()
+        const before = (await storage.listInventories()).rev
+        const created = await storage.apply(
+          { type: 'inventory.create', id: inv, name: `rows-${name}`, description: null, currency: 'USD' },
+          TEST_ACTOR,
+        )
+        expect(created.prevRev).toBe(before)
+        expect(created.patch).toMatchObject({ inventoryId: inv, itemIds: [], inventory: { id: inv } })
+        await storage.apply(
+          { type: 'item.create', id: item, inventoryId: inv, folderId: null, name: 'R', description: null, unitKey: 'pcs', tagIds: [], initialReceipt: null },
+          TEST_ACTOR,
+        )
+        await storage.apply(
+          { type: 'photo.add', id: photo, itemId: item, variantId: null, provider: 'imgbb', fileId: 'f', url: 'https://i.example/f' },
+          TEST_ACTOR,
+        )
+        // Resolved before the delete, through a transaction-local setting read by the later statements.
+        const removed = await storage.apply({ type: 'photo.remove', id: photo }, TEST_ACTOR)
+        expect(removed.patch).toMatchObject({ inventoryId: inv, itemIds: [item], items: [{ id: item }], photos: [] })
+        expect(removed.rev).toBe((await storage.listInventories()).rev)
+        const received = await storage.apply(
+          { type: 'stock.receive', movementId: newId(), itemId: item, variantId: null, quantity: '4' as Quantity, totalPrice: 120, sourceUrl: null, note: null },
+          TEST_ACTOR,
+        )
+        expect(received.prevRev).toBe(removed.rev)
+        expect(received.patch!.stock).toEqual((await storage.loadInventory(inv)).stock)
+      })
+
+      it('concurrent applies are serialized on the revision row', async () => {
+        const other = make()
+        try {
+          const { storage: a } = await openPostgresStorage(exec)
+          const { storage: b } = await openPostgresStorage(other)
+          const inv = newId()
+          await a.apply({ type: 'inventory.create', id: inv, name: `race-${name}`, description: null, currency: 'USD' }, TEST_ACTOR)
+          const folder = (id: string) =>
+            ({ type: 'folder.create', id, inventoryId: inv, parentId: null, name: id, description: null }) as const
+          for (let round = 0; round < 3; round++) {
+            const [ra, rb] = await Promise.all([a.apply(folder(newId()), TEST_ACTOR), b.apply(folder(newId()), TEST_ACTOR)])
+            // Whichever committed second read, under the lock, exactly the revision the first one wrote.
+            const revs = JSON.stringify([ra.prevRev, ra.rev, rb.prevRev, rb.rev])
+            expect(ra.prevRev === rb.rev || rb.prevRev === ra.rev, revs).toBe(true)
+          }
+        } finally {
+          await other.close()
+        }
+      })
+
       it.skipIf(name !== 'http')('loads an inventory snapshot in one fetch', async () => {
         const { storage } = await openPostgresStorage(exec)
         const inv = newId()

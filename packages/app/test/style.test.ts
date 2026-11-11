@@ -425,6 +425,16 @@ describe('glass (menus, select lists, combobox lists)', () => {
   })
 })
 
+describe('glass under prefers-contrast: more', () => {
+  it('is the opaque popover surface without blur', () => {
+    const block = /@media \(prefers-contrast: more\) \{\s*\.glass \{([^}]*)\}/.exec(css)?.[1] ?? ''
+    expect(block).toMatch(/background-color:\s*var\(--popover\)/)
+    expect(block).toMatch(/background-image:\s*none/)
+    expect(block).toMatch(/(^|[^-])backdrop-filter:\s*none/)
+    expect(block).toMatch(/-webkit-backdrop-filter:\s*none/)
+  })
+})
+
 describe('base styles and utilities', () => {
   /** The body of `@layer <name> { … }`. */
   function layer(name: string): string {

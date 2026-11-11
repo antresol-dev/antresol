@@ -1,31 +1,118 @@
 @import "tailwindcss";
 
+/*
+ * GrayMatter design system "Hybrid v2" (spec 2026-11-11 §4.1): the owner's mock-up board 6 at depth 0.9, light 1.2,
+ * shade 0.7, flat surface, painted accent button. The shadow numbers are the mock-up's hybrid2 sh() computed once.
+ *
+ * Utilities: plain classes in @layer components, so a Tailwind utility on the same element always wins (no variants
+ * such as md:raised). The interactive states are unlayered, so they also win over a bg-* utility.
+ *   raised               button, R(4,10), radius 14. Button variant "outline".
+ *   raised-sm            icon button and "Add…" tile, R(3,7), radius 14. Button "outline" with an icon size.
+ *   raised-card          card (stock, photo block), R(6,14), radius 20. Padding is yours: p-4.5 (18 px).
+ *   painted              the accent button: painted --paint (default --accent), --paint-foreground text, bevel.
+ *                        Button "default". painted-destructive repaints it with --destructive (Button "destructive").
+ *   pressable            hover, press and transitions. Hover tints towards the accent (no movement); press sinks the
+ *                        shadows inside and scales raised controls to 0.97 (raised-sm) / 0.985 (raised, painted).
+ *                        Alone it is the flat ghost control (Button "ghost"): accent 8 % on hover, 16 % pressed.
+ *                        Text without its own text-* utility turns --accent-ink on hover. Radius 14.
+ *   pill                 the −/+ stepper body, R(3,8), radius 14. Its halves: `pill-step pressable`, seam between.
+ *   row-selected         selected row (tree folder, palette row, current variant): accent gradient 17 % → 8 %, text
+ *                        and icons --accent-ink, radius 14; a pill inside takes the accent's shadow.
+ *   rounded-card 20 / rounded-field 14 / rounded-chip 10 / rounded-full: the only radii (rounded-thumb and
+ *                        rounded-icon = 10, rounded-fab = 14 are older names on the same scale).
+ *
+ * Tokens (:root light, .dark dark; Tailwind colours of the same names):
+ *   text      --foreground (ink), --muted-foreground, --subtle-foreground, --dimmed-foreground, --icon, --accent-ink
+ *             (accent-coloured text, links: text-accent-ink, not text-primary), --selected-muted, --destructive,
+ *             --warning
+ *   surfaces  --background = --surface (flat), --hover, --pressed, --ghost-hover, --ghost-pressed, --chip, --thumb,
+ *             --field (inputs), --rail, --popover, --accent-soft, --selected-from/--selected-to
+ *   accent    --accent (from lib/accent.ts: --accent-light / --accent-dark on <html>), --accent-foreground,
+ *             --primary = --accent, --ring = --accent
+ *   lines     --divider, --border, --input, --tree-line, --pill-seam
+ *   shadows   colours --shadow-dark, --shadow-light, --shadow-hover, --shadow-pressed, --shadow-selected; lists
+ *             --raised-shadow(-hover|-pressed), --raised-sm-shadow(-hover|-pressed), --card-shadow, --pill-shadow,
+ *             --pill-shadow-selected, --step-shadow-pressed, --flat-shadow
+ * Every text/background pair is at 4.5:1 or better in both themes for every accent: test/style.test.ts.
+ */
+
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --radius: 16px;
-  --background: #F7F7F8;
-  --surface: #FFFFFF;
-  --border: #EDEDF0;
-  --divider: #F0F0F2;
-  --foreground: #18181B;
-  --muted-foreground: #71717A;
-  --subtle-foreground: #63636B;
-  --chip: #ECECEF;
-  --primary: #4F46E5;
-  --primary-foreground: #FFFFFF;
-  --accent-soft: #EEF2FF;
-  --accent-soft-foreground: #4F46E5;
-  --thumb: #F4F4F5;
-  --thumb-foreground: #A1A1AA;
-  --dimmed-foreground: #52525B;
-  --icon: #3F3F46;
-  --destructive: #DC2626;
-  --warning: #B45309;
-  --hover: #F1F1F4;
-  --rail: #EFEFF2;
-  --tree-line: #DCDCE2;
+  color-scheme: light;
 
+  /* Accent */
+  --accent: var(--accent-light, #4F46E5);
+  --accent-foreground: #FFFFFF;
+  --accent-ink: color-mix(in srgb, var(--accent) 82%, #000000);
+  --accent-soft: color-mix(in srgb, var(--background) 88%, var(--accent));
+  --accent-soft-foreground: var(--accent-ink);
+
+  /* Surfaces. Cards and buttons are the page's own colour, raised by shadow. */
+  --background: #EDEFF3;
+  --surface: #EDEFF3;
+  --hover: color-mix(in srgb, var(--background) 93%, var(--accent));
+  --pressed: color-mix(in srgb, var(--background) 88%, var(--accent));
+  --ghost-hover: color-mix(in srgb, var(--accent) 8%, transparent);
+  --ghost-pressed: color-mix(in srgb, var(--accent) 16%, transparent);
+  --selected-from: color-mix(in srgb, var(--accent) 17%, transparent);
+  --selected-to: color-mix(in srgb, var(--accent) 8%, transparent);
+  --selected-pill: color-mix(in srgb, var(--background) 92%, var(--accent));
+  --chip: #DDE1E8;
+  --thumb: #E2E5EB;
+  --field: #F6F7F9;
+  --rail: #E4E7ED;
+
+  /* Text */
+  --foreground: #1C2030;
+  --muted-foreground: #565D6E;
+  --subtle-foreground: #565D6E;
+  --dimmed-foreground: #474D5A;
+  --selected-muted: #4B5263;
+  --thumb-foreground: #565D6E;
+  --icon: #2F3442;
+  --destructive: #B91C1C;
+  --destructive-foreground: #FFFFFF;
+  --warning: #92400E;
+
+  /* Lines */
+  --divider: #D9DDE5;
+  --border: #D9DDE5;
+  --input: #CDD2DB;
+  --tree-line: #CDD2DB;
+  --pill-seam: rgba(150, 160, 180, 0.22);
+
+  /* Shadow colours. The tinted ones are the mock-up's DKa(k): mix(accent, base, share) at k · shade. */
+  --shadow-dark: rgba(150, 160, 180, 0.29);
+  --shadow-light: rgba(255, 255, 255, 0.96);
+  --shade-base: #1C2030;
+  --shade-share: 55%;
+  --tint-shadow: color-mix(in srgb, var(--accent) var(--shade-share), var(--shade-base));
+  --shadow-hover: color-mix(in srgb, var(--tint-shadow) 21%, transparent);
+  --shadow-pressed: color-mix(in srgb, var(--tint-shadow) 29.4%, transparent);
+  --shadow-selected: color-mix(in srgb, var(--tint-shadow) 35%, transparent);
+  --painted-alpha: 38.5%;
+  /* The painted button darkens on hover in the light theme: lightening (the mock-up's +12 % white) takes white text
+     under 4.5:1 on green, blue and orange. */
+  --paint-toward: #000000;
+
+  /* Shadow lists. Outer and inset pairs are always both listed (the unused one at zero), so raised ↔ pressed animates
+     instead of jumping. R(x, b) and I(x, b) as in the mock-up. */
+  --flat-shadow: 0px 0px 0px transparent, 0px 0px 0px transparent, inset 0px 0px 0px transparent, inset 0px 0px 0px transparent;
+  --raised-shadow: 3.1px 3.1px 7.9px var(--shadow-dark), -4.3px -4.3px 10.8px var(--shadow-light), inset 0px 0px 0px transparent, inset 0px 0px 0px transparent;
+  --raised-shadow-hover: 3.1px 3.1px 7.9px var(--shadow-hover), -4.3px -4.3px 10.8px var(--shadow-light), inset 0px 0px 0px transparent, inset 0px 0px 0px transparent;
+  --raised-shadow-pressed: 0px 0px 0px transparent, 0px 0px 0px transparent, inset 2.3px 2.3px 5.5px var(--shadow-pressed), inset -3.2px -3.2px 7.6px var(--shadow-light);
+  --raised-sm-shadow: 2.3px 2.3px 5.5px var(--shadow-dark), -3.2px -3.2px 7.6px var(--shadow-light), inset 0px 0px 0px transparent, inset 0px 0px 0px transparent;
+  --raised-sm-shadow-hover: 2.3px 2.3px 5.5px var(--shadow-hover), -3.2px -3.2px 7.6px var(--shadow-light), inset 0px 0px 0px transparent, inset 0px 0px 0px transparent;
+  --raised-sm-shadow-pressed: 0px 0px 0px transparent, 0px 0px 0px transparent, inset 1.9px 1.9px 4.8px var(--shadow-pressed), inset -2.7px -2.7px 6.5px var(--shadow-light);
+  --card-shadow: 4.7px 4.7px 11.1px var(--shadow-dark), -6.5px -6.5px 15.1px var(--shadow-light);
+  --pill-shadow: 2.3px 2.3px 6.3px var(--shadow-dark), -3.2px -3.2px 8.6px var(--shadow-light);
+  --pill-shadow-selected: 2.3px 2.3px 6.3px var(--shadow-selected), -3.2px -3.2px 8.6px var(--shadow-light);
+  --step-shadow-pressed: 0px 0px 0px transparent, 0px 0px 0px transparent, inset 1.6px 1.6px 4px var(--shadow-pressed), inset -2.2px -2.2px 5.4px var(--shadow-light);
+
+  /* shadcn-vue names */
+  --primary: var(--accent);
+  --primary-foreground: var(--accent-foreground);
   --card: var(--surface);
   --card-foreground: var(--foreground);
   --popover: var(--surface);
@@ -33,34 +120,64 @@
   --secondary: var(--chip);
   --secondary-foreground: var(--foreground);
   --muted: var(--thumb);
-  --accent: var(--accent-soft);
-  --accent-foreground: var(--accent-soft-foreground);
-  --input: var(--border);
-  --ring: var(--primary);
+  --ring: var(--accent);
 }
 
+/* "Dark classic" palette in the Hybrid structure. The accent is its light variant, which carries dark text. */
 .dark {
-  --background: #0E0E10;
-  --surface: #18181B;
-  --border: #27272A;
-  --divider: #222225;
-  --foreground: #F4F4F5;
-  --muted-foreground: #A1A1AA;
-  --subtle-foreground: #A1A1AA;
-  --chip: #232327;
-  --primary: #818CF8;
-  --primary-foreground: #0E0E10;
-  --accent-soft: #1E1B4B;
-  --accent-soft-foreground: #A5B4FC;
-  --thumb: #232327;
-  --thumb-foreground: #71717A;
-  --dimmed-foreground: #D4D4D8;
-  --icon: #D4D4D8;
+  color-scheme: dark;
+
+  --accent: var(--accent-dark, #B0ACF3);
+  --accent-foreground: #16181D;
+  --accent-ink: var(--accent);
+
+  --background: #24272E;
+  --surface: #24272E;
+  /* Lighter than in the light theme: muted text on the selected row stays at 4.5:1. */
+  --selected-from: color-mix(in srgb, var(--accent) 12%, transparent);
+  --selected-to: color-mix(in srgb, var(--accent) 6%, transparent);
+  --chip: #2E323A;
+  --thumb: #2B2E36;
+  --field: #1E2026;
+  --rail: #1F2228;
+
+  --foreground: #E7E9EE;
+  --muted-foreground: #A0A6B3;
+  --subtle-foreground: #A0A6B3;
+  --dimmed-foreground: #BFC4CE;
+  --selected-muted: #B4B9C4;
+  --thumb-foreground: #A0A6B3;
+  --icon: #D4D8E0;
   --destructive: #F87171;
+  --destructive-foreground: #16181D;
   --warning: #FBBF24;
-  --hover: #1F1F23;
-  --rail: #131316;
-  --tree-line: #2E2E33;
+
+  --divider: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.12);
+  --tree-line: #3A3F49;
+  --pill-seam: rgba(255, 255, 255, 0.06);
+
+  --shadow-dark: rgba(0, 0, 0, 0.55);
+  --shadow-light: rgba(255, 255, 255, 0.06);
+  --shade-base: #000000;
+  --shade-share: 25%;
+  --shadow-hover: color-mix(in srgb, var(--tint-shadow) 60%, transparent);
+  --shadow-pressed: color-mix(in srgb, var(--tint-shadow) 65%, transparent);
+  --shadow-selected: color-mix(in srgb, var(--tint-shadow) 62%, transparent);
+  --painted-alpha: 70%;
+  --paint-toward: #FFFFFF;
+}
+
+/* The radius scale (spec 4.2): cards and sheets, buttons/fields/row tiles, chips and nested elements, circles.
+   A nested element is never rounder than its parent: its radius ≤ the parent's − the gap between them. */
+@theme {
+  --radius-card: 20px;
+  --radius-field: 14px;
+  --radius-chip: 10px;
+  --radius-thumb: var(--radius-chip);
+  --radius-icon: var(--radius-chip);
+  --radius-fab: var(--radius-field);
 }
 
 @theme inline {
@@ -76,13 +193,17 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-accent-soft: var(--accent-soft);
   --color-accent-soft-foreground: var(--accent-soft-foreground);
+  --color-accent-ink: var(--accent-ink);
   --color-thumb: var(--thumb);
   --color-thumb-foreground: var(--thumb-foreground);
   --color-dimmed-foreground: var(--dimmed-foreground);
   --color-icon: var(--icon);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-warning: var(--warning);
   --color-hover: var(--hover);
+  --color-pressed: var(--pressed);
+  --color-field: var(--field);
   --color-rail: var(--rail);
   --color-tree-line: var(--tree-line);
   --color-card: var(--card);
@@ -96,12 +217,6 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-input: var(--input);
   --color-ring: var(--ring);
-
-  --radius-field: 14px;
-  --radius-card: 16px;
-  --radius-thumb: 12px;
-  --radius-icon: 10px;
-  --radius-fab: 18px;
 
   /* Layers. Movement is used under motion-safe: only; backdrops fade (opacity only) in both modes.
      Navigation drawer: slides in from the left. Bottom sheets: slide up; from 768 px they are centred windows that
@@ -151,6 +266,169 @@
     background-color: var(--background);
     color: var(--foreground);
     font-family: 'Manrope', system-ui, sans-serif;
+  }
+
+  /* Keyboard focus: a visible accent ring; a shadow alone is not enough (spec 4.1). outline-none opts out. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Everything that can be clicked shows the pointer (spec 4.2); disabled things do not. Zero specificity, so a
+     cursor-* utility wins and the disabled rule wins over the pointer one. */
+  :where(button:not(:disabled), [role='button'], a[href], summary, label[for], select, [role='menuitem'], [role='menuitemcheckbox'], [role='menuitemradio'], [role='option'], [role='tab'], [role='radio'], [role='checkbox'], [role='switch']) {
+    cursor: pointer;
+  }
+  :where(:disabled, [aria-disabled='true'], [data-disabled]) {
+    cursor: default;
+  }
+}
+
+@layer components {
+  /* Order matters: the kinds below override the ghost defaults of .pressable. */
+  .pressable {
+    --hover-bg: var(--ghost-hover);
+    --active-bg: var(--ghost-pressed);
+    --hover-ink: var(--accent-ink);
+    border-radius: var(--radius-field);
+    transition:
+      background-color 180ms ease,
+      color 180ms ease,
+      box-shadow 200ms ease-out,
+      transform 120ms ease-out;
+  }
+
+  .raised {
+    --hover-bg: var(--hover);
+    --active-bg: var(--pressed);
+    --hover-shadow: var(--raised-shadow-hover);
+    --active-shadow: var(--raised-shadow-pressed);
+    --active-scale: 0.985;
+    background-color: var(--surface);
+    box-shadow: var(--raised-shadow);
+    border-radius: var(--radius-field);
+  }
+
+  .raised-sm {
+    --hover-bg: var(--hover);
+    --active-bg: var(--pressed);
+    --hover-shadow: var(--raised-sm-shadow-hover);
+    --active-shadow: var(--raised-sm-shadow-pressed);
+    --active-scale: 0.97;
+    background-color: var(--surface);
+    box-shadow: var(--raised-sm-shadow);
+    border-radius: var(--radius-field);
+  }
+
+  .raised-card {
+    background-color: var(--surface);
+    box-shadow: var(--card-shadow);
+    border-radius: var(--radius-card);
+  }
+
+  .painted {
+    --paint: var(--accent);
+    --paint-foreground: var(--accent-foreground);
+    --paint-hover: color-mix(in srgb, var(--paint) 92%, var(--paint-toward));
+    --paint-pressed: color-mix(in srgb, var(--paint) 90%, #000000);
+    --paint-deep: color-mix(in srgb, var(--paint) 55%, #000000);
+    --paint-shadow: color-mix(in srgb, color-mix(in srgb, var(--paint) var(--shade-share), var(--shade-base)) var(--painted-alpha), transparent);
+    --hover-bg: var(--paint-hover);
+    --active-bg: var(--paint-pressed);
+    --hover-ink: var(--paint-foreground);
+    --active-scale: 0.985;
+    /* R(4,10) in the paint's own shade, then a thin bevel: the painted edge catches the same top-left light. */
+    --hover-shadow:
+      3.1px 3.1px 7.9px var(--paint-shadow), -4.3px -4.3px 10.8px var(--shadow-light),
+      inset 0px 0px 0px transparent, inset 0px 0px 0px transparent,
+      inset 0.9px 0.9px 1.4px rgba(255, 255, 255, 0.3), inset -0.9px -0.9px 1.8px color-mix(in srgb, var(--paint-deep) 30%, transparent);
+    --active-shadow:
+      0px 0px 0px transparent, 0px 0px 0px transparent,
+      inset 2.3px 2.3px 5.5px color-mix(in srgb, var(--paint-deep) 55%, transparent), inset -3.2px -3.2px 7.6px rgba(255, 255, 255, 0.22),
+      inset 0px 0px 0px transparent, inset 0px 0px 0px transparent;
+    background-color: var(--paint);
+    color: var(--paint-foreground);
+    box-shadow: var(--hover-shadow);
+    border-radius: var(--radius-field);
+  }
+
+  .painted-destructive {
+    --paint: var(--destructive);
+    --paint-foreground: var(--destructive-foreground);
+  }
+
+  .pill {
+    display: inline-flex;
+    background-color: var(--surface);
+    box-shadow: var(--pill-shadow);
+    border-radius: var(--radius-field);
+  }
+
+  .pill-step {
+    --active-bg: var(--pressed);
+    --hover-shadow: var(--flat-shadow);
+    --active-shadow: var(--step-shadow-pressed);
+    box-shadow: var(--flat-shadow);
+  }
+
+  /* Each half is rounded on the pill's outer side only. */
+  .pill > .pill-step:first-child {
+    border-radius: var(--radius-field) 0 0 var(--radius-field);
+  }
+  .pill > .pill-step:last-child {
+    border-radius: 0 var(--radius-field) var(--radius-field) 0;
+  }
+  .pill > .pill-step + .pill-step {
+    border-left: 1px solid var(--pill-seam);
+  }
+
+  .row-selected {
+    --icon: var(--accent-ink);
+    --muted-foreground: var(--selected-muted);
+    --subtle-foreground: var(--selected-muted);
+    background-image: linear-gradient(90deg, var(--selected-from), var(--selected-to));
+    color: var(--accent-ink);
+    border-radius: var(--radius-field);
+  }
+
+  /* The stepper on a selected row is made of the colour it sits on; its shadow takes the accent. */
+  .row-selected .pill {
+    background-color: var(--selected-pill);
+    box-shadow: var(--pill-shadow-selected);
+  }
+
+  @media (hover: hover) {
+    .pressable:hover:not(:disabled, [aria-disabled='true'], [data-disabled]) {
+      color: var(--hover-ink);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pressable {
+      transition-property: background-color, color;
+    }
+  }
+}
+
+/* Interactive states. Unlayered on purpose: they must win over a bg-* utility on the same control (outline buttons
+   are passed bg-surface). Only the shadow-carrying kinds change their shadows and scale. */
+@media (hover: hover) {
+  .pressable:hover:not(:disabled, [aria-disabled='true'], [data-disabled]) {
+    background-color: var(--hover-bg);
+  }
+  .pressable:is(.raised, .raised-sm, .painted, .pill-step):hover:not(:disabled, [aria-disabled='true'], [data-disabled]) {
+    box-shadow: var(--hover-shadow);
+  }
+}
+.pressable:active:not(:disabled, [aria-disabled='true'], [data-disabled]) {
+  background-color: var(--active-bg);
+}
+.pressable:is(.raised, .raised-sm, .painted, .pill-step):active:not(:disabled, [aria-disabled='true'], [data-disabled]) {
+  box-shadow: var(--active-shadow);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .pressable:is(.raised, .raised-sm, .painted):active:not(:disabled, [aria-disabled='true'], [data-disabled]) {
+    transform: scale(var(--active-scale));
   }
 }
 

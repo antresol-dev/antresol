@@ -149,13 +149,13 @@ describe('launchReady', () => {
 describe('themeColorMeta', () => {
   it('system: one tag per colour scheme', () => {
     expect(themeColorMeta('system', 'dark')).toEqual([
-      { key: 'theme-color-light', name: 'theme-color', content: '#F7F7F8', media: '(prefers-color-scheme: light)' },
-      { key: 'theme-color-dark', name: 'theme-color', content: '#0E0E10', media: '(prefers-color-scheme: dark)' },
+      { key: 'theme-color-light', name: 'theme-color', content: '#EDEFF3', media: '(prefers-color-scheme: light)' },
+      { key: 'theme-color-dark', name: 'theme-color', content: '#24272E', media: '(prefers-color-scheme: dark)' },
     ])
   })
   it('manual choice: a single tag without media', () => {
-    expect(themeColorMeta('dark', 'dark')).toEqual([{ key: 'theme-color', name: 'theme-color', content: '#0E0E10' }])
-    expect(themeColorMeta('light', 'light')).toEqual([{ key: 'theme-color', name: 'theme-color', content: '#F7F7F8' }])
+    expect(themeColorMeta('dark', 'dark')).toEqual([{ key: 'theme-color', name: 'theme-color', content: '#24272E' }])
+    expect(themeColorMeta('light', 'light')).toEqual([{ key: 'theme-color', name: 'theme-color', content: '#EDEFF3' }])
   })
 })
 

@@ -120,7 +120,7 @@ export function launchReady(state: { current: InventoryRef | null; sources: { co
   return status !== 'connecting'
 }
 
-const THEME_COLOR = { light: '#F7F7F8', dark: '#0E0E10' } as const // the --background tokens
+const THEME_COLOR = { light: '#EDEFF3', dark: '#24272E' } as const // the --background tokens
 
 /** `theme-color` metas: both media-scoped ones while the preference is "system"; otherwise one for the chosen theme. */
 export function themeColorMeta(

@@ -6,7 +6,7 @@ import { toast } from 'vue-sonner'
 import type { StockTarget } from '~/components/StockSheet.vue'
 import type { LooseOffer, VariantsAdded } from '~/components/VariantsForm.vue'
 import { errorMessageKey } from '~/lib/errors'
-import { itemView } from '~/lib/item-view'
+import { bucketDescription, itemView } from '~/lib/item-view'
 import { archiveNow } from '~/lib/undo'
 import { quickStep, type StockMode } from '~/lib/stock-forms'
 
@@ -73,6 +73,8 @@ function added(a: VariantsAdded): void {
   if (a.offer) looseOffer.value = { offer: a.offer, variants: created }
 }
 const renameId = ref<Id | null>(null)
+// The line at the top of a variant's sheets (see bucketDescription).
+const describe = (variantId: Id | null): string => (snapshot.value ? bucketDescription(snapshot.value, props.itemId, variantId) : '')
 const variantOf = (id: Id) => snapshot.value?.variants.find((v) => v.id === id) ?? null
 const renaming = computed(() => (renameId.value ? variantOf(renameId.value) : null))
 const renameOpen = computed({
@@ -253,13 +255,20 @@ const linkClass =
         :variants="looseOffer?.variants ?? []"
         @close="looseOffer = null"
       />
-      <AppSheet v-model:open="renameOpen" :title="$t('item.editVariant')" :locked="renameBusy" initial-focus="#variant-name">
+      <AppSheet
+        v-model:open="renameOpen"
+        :title="$t('item.editVariant')"
+        :summary="describe(renameId)"
+        :locked="renameBusy"
+        initial-focus="#variant-name"
+      >
         <VariantForm v-if="renaming" :key="renaming.id" v-model:busy="renameBusy" :variant="renaming" @done="renameId = null" />
       </AppSheet>
       <AppSheet
         v-model:open="photoOpen"
         :title="$t('photos.variantTitle', { name: photoVariant?.name ?? '' })"
         :description="$t('photos.variantHint')"
+        :summary="describe(photoVariant?.id ?? null)"
         :locked="photoBusy"
       >
         <div v-if="!hasStore" class="grid py-2">

@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import type { Folder, Id } from '@graymatter/core'
+import { ChevronDown } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { captureBaseline, changedFields } from '~/lib/changed-fields'
 import { errorMessageKey } from '~/lib/errors'
+import { folderChoices, pathOf, snapshotIndex } from '~/lib/views'
 
 const props = defineProps<{ mode: 'create' | 'rename'; parentId: Id | null; folder: Folder | null }>()
 const emit = defineEmits<{ done: [] }>()
@@ -16,6 +18,21 @@ const { state } = workspace
 const existing = props.mode === 'rename' ? props.folder : null
 const name = ref(existing?.name ?? '')
 const description = ref(existing?.description ?? '')
+// New folder: where it goes, the current folder to begin with (or the root). The same list-picker as in "Add item".
+const parentId = ref<Id | null>(props.parentId)
+const picking = ref(false)
+const choices = computed(() => (state.snapshot ? folderChoices(state.snapshot, parentId.value) : []))
+// "Electronics / ICs": the inventory, then the folders down to the chosen one.
+const parentPath = computed(() => {
+  const s = state.snapshot
+  if (!s) return ''
+  const folders = parentId.value === null ? [] : pathOf(snapshotIndex(s), parentId.value)
+  return [s.inventory.name, ...folders.map((f) => f.name)].join(' / ')
+})
+function pick(id: Id | null): void {
+  parentId.value = id
+  picking.value = false
+}
 // The sheet around the form locks while this is set.
 const busy = defineModel<boolean>('busy', { default: false })
 const errorKey = ref<string | null>(null)
@@ -47,7 +64,7 @@ async function submit(): Promise<void> {
         type: 'folder.create',
         id: ids.folderId,
         inventoryId: snapshot.inventory.id,
-        parentId: props.parentId,
+        parentId: parentId.value,
         name: name.value.trim(),
         description: description.value.trim() || null,
       })
@@ -79,6 +96,20 @@ async function submit(): Promise<void> {
         aria-describedby="folder-form-error"
         class="h-11 rounded-field bg-surface"
       />
+    </div>
+    <div v-if="mode === 'create'" class="grid gap-1.5">
+      <Label for="folder-parent">{{ $t('folderForm.parent') }}</Label>
+      <button
+        id="folder-parent"
+        type="button"
+        :aria-expanded="picking"
+        class="flex h-11 w-full min-w-0 items-center gap-2 rounded-field border border-input bg-surface px-3 text-left text-sm outline-none transition-colors duration-150 hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring"
+        @click="picking = !picking"
+      >
+        <span class="min-w-0 flex-1 truncate">{{ parentPath }}</span>
+        <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-150 motion-reduce:transition-none" :class="picking ? 'rotate-180' : ''" aria-hidden="true" />
+      </button>
+      <FolderPickerList v-if="picking" :choices="choices" :aria-label="$t('folderForm.chooseParent')" @select="pick" />
     </div>
     <div class="grid gap-1.5">
       <Label for="folder-description">

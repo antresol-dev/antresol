@@ -2,7 +2,7 @@
 import type { Id } from '@graymatter/core'
 import { Archive, Folder, FolderInput, Pencil } from '@lucide/vue'
 import type { ComponentPublicInstance } from 'vue'
-import type { FolderRow } from '~/lib/views'
+import { piecesLabel, type FolderRow } from '~/lib/views'
 import type RowMenu from './RowMenu.vue'
 
 defineProps<{ folders: FolderRow[] }>()
@@ -60,7 +60,7 @@ function pointerdown(id: Id, e: PointerEvent): void {
           <Folder class="size-[17px]" aria-hidden="true" />
         </span>
         <span class="min-w-0 grow truncate text-[15px] font-semibold">{{ f.name }}</span>
-        <span class="shrink-0 text-[13px] font-semibold text-muted-foreground tabular-nums">{{ f.itemCount }}</span>
+        <span v-if="f.pieces !== null" class="shrink-0 text-[13px] font-semibold text-muted-foreground tabular-nums">{{ piecesLabel(f.pieces) }}</span>
       </NuxtLink>
       <!-- Always in the layout where it can show (hidden only on touch below 1024 px), so the count never moves. -->
       <RowMenu

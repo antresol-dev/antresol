@@ -22,8 +22,8 @@ export interface Crumb {
 export interface FolderRow {
   id: Id
   name: string
-  /** Active items anywhere in the subtree. */
-  itemCount: number
+  /** Pieces in stock over the active subtree (items counted in pcs only); null when no such item is in it. */
+  pieces: Quantity | null
 }
 export interface ItemRow {
   id: Id
@@ -57,8 +57,8 @@ export interface Index {
   /** Active folders and items by parent, sorted by name. */
   childFolders: Map<Id | null, Folder[]>
   folderItems: Map<Id | null, Item[]>
-  /** Active items in the whole active subtree of a folder; key null is the inventory root. */
-  subtreeCounts: Map<Id | null, number>
+  /** Pieces in stock over the active subtree of a folder (pcs items only); null = none of them; key null is the inventory root. */
+  subtreePieces: Map<Id | null, Quantity | null>
   stockByItem: Map<Id, StockLine[]>
   buckets: Map<string, StockLine>
   variants: Map<Id, { name: string; archived: boolean }>
@@ -94,18 +94,6 @@ function buildIndex(s: InventorySnapshot): Index {
   for (const list of childFolders.values()) list.sort(byName)
   for (const list of folderItems.values()) list.sort(byName)
 
-  const subtreeCounts = new Map<Id | null, number>()
-  const count = (parentId: Id | null): number => {
-    let n = folderItems.get(parentId)?.length ?? 0
-    for (const f of childFolders.get(parentId) ?? []) {
-      const sub = count(f.id)
-      subtreeCounts.set(f.id, sub)
-      n += sub
-    }
-    return n
-  }
-  subtreeCounts.set(null, count(null))
-
   const stockByItem = new Map<Id, StockLine[]>()
   const buckets = new Map<string, StockLine>()
   for (const l of s.stock) {
@@ -133,7 +121,32 @@ function buildIndex(s: InventorySnapshot): Index {
     }
   }
 
-  return { items, folders, childFolders, folderItems, subtreeCounts, stockByItem, buckets, variants, activeVariantCount, covers, variantCovers, paths: new Map() }
+  const ix: Index = {
+    items,
+    folders,
+    childFolders,
+    folderItems,
+    subtreePieces: new Map(),
+    stockByItem,
+    buckets,
+    variants,
+    activeVariantCount,
+    covers,
+    variantCovers,
+    paths: new Map(),
+  }
+  const pieces = (parentId: Id | null): Quantity | null => {
+    let sum: Quantity | null = null
+    for (const i of folderItems.get(parentId) ?? []) if (i.unitKey === 'pcs') sum = addQ(sum ?? '0', itemQuantity(ix, i.id))
+    for (const f of childFolders.get(parentId) ?? []) {
+      const sub = pieces(f.id)
+      ix.subtreePieces.set(f.id, sub)
+      if (sub !== null) sum = addQ(sum ?? '0', sub)
+    }
+    return sum
+  }
+  ix.subtreePieces.set(null, pieces(null))
+  return ix
 }
 
 /** @internal The index of a snapshot, built on first use. */
@@ -211,7 +224,7 @@ export function folderView(s: InventorySnapshot, folderId: Id | null): FolderVie
     folders: (ix.childFolders.get(folderId) ?? []).map((f) => ({
       id: f.id,
       name: f.name,
-      itemCount: ix.subtreeCounts.get(f.id) ?? 0,
+      pieces: ix.subtreePieces.get(f.id) ?? null,
     })),
     items: (ix.folderItems.get(folderId) ?? []).map((i) => itemRow(s, ix, i)),
   }
@@ -264,8 +277,8 @@ export function searchRows(s: InventorySnapshot, hits: SearchHit[]): SearchRow[]
 export interface TreeNode {
   id: Id
   name: string
-  /** Active items anywhere in the subtree, the same number as in the folder list. */
-  itemCount: number
+  /** Pieces in the subtree, the same number as in the folder list; null = no item in pcs. */
+  pieces: Quantity | null
   children: TreeNode[]
 }
 
@@ -275,15 +288,21 @@ export function folderTree(s: InventorySnapshot): TreeNode[] {
     (ix.childFolders.get(parentId) ?? []).map((f) => ({
       id: f.id,
       name: f.name,
-      itemCount: ix.subtreeCounts.get(f.id) ?? 0,
+      pieces: ix.subtreePieces.get(f.id) ?? null,
       children: build(f.id),
     }))
   return build(null)
 }
 
-/** Active items in the whole inventory (not under an archived folder). */
-export function inventoryItemCount(s: InventorySnapshot): number {
-  return snapshotIndex(s).subtreeCounts.get(null) ?? 0
+/** Pieces in the whole inventory (pcs items not under an archived folder); null when it has none. */
+export function inventoryPieces(s: InventorySnapshot): Quantity | null {
+  return snapshotIndex(s).subtreePieces.get(null) ?? null
+}
+
+/** A piece sum as the tree and lists show it: bare number, with the k/M prefix for big ones ("5", "1.2k"). */
+export function piecesLabel(q: Quantity): string {
+  const { number, unit } = formatAmountParts(q, BUILTIN_UNITS.pcs)
+  return unit === BUILTIN_UNITS.pcs.symbol ? number : `${number}${unit}`
 }
 
 export interface MoveTarget {

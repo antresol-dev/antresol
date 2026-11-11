@@ -1,7 +1,7 @@
 import { itemStock, newId, type Command, type InventorySnapshot, type InventoryStorage, type Movement } from '@graymatter/core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
-import { attributeChoices, itemView, journalRows, looseTransferOffer } from '../app/lib/item-view'
+import { attributeChoices, bucketDescription, itemView, journalRows, looseTransferOffer } from '../app/lib/item-view'
 import type { SourceConfig } from '../app/lib/types'
 
 const cfg: SourceConfig = {
@@ -353,5 +353,37 @@ describe('itemView photos', () => {
     expect(view.buckets.find((b) => b.variantId === it1.v['A'])!.photo?.fileId).toBe('varA')
     expect(view.buckets.find((b) => b.variantId === it1.v['B'])!.photo).toBeNull()
     expect(view.photos).toEqual([])
+  })
+})
+
+describe('bucketDescription', () => {
+  it('names the variant, the item and its shared attributes: 10 kΩ · Резистор 0,25 Вт · 5 %', async () => {
+    const tolerance = newId()
+    await run({ type: 'attribute.create', id: tolerance, inventoryId, name: 'Tolerance', kind: 'number', options: [], unit: '%', siPrefixes: false })
+    await run({ type: 'item.setAttribute', itemId: resistor, attributeId: tolerance, value: '5' })
+    const v = s.variants.find((x) => x.itemId === resistor && itemView(s, resistor)!.buckets.find((b) => b.variantId === x.id)?.name?.replace(/\s/g, '').toLowerCase().startsWith('10k'))!
+    expect(bucketDescription(s, resistor, v.id)).toBe('10 kΩ · Резистор 0,25 Вт · 5 %')
+  })
+
+  it('is the item name and its attributes for the item itself, three attributes at most', async () => {
+    const item = await newItem()
+    const names = ['A', 'B', 'C', 'D']
+    for (const n of names) {
+      const id = newId()
+      await run({ type: 'attribute.create', id, inventoryId, name: `${n}${made}`, kind: 'text', options: [], unit: '', siPrefixes: false })
+      await run({ type: 'item.setAttribute', itemId: item.id, attributeId: id, value: `v${n}` })
+    }
+    const name = s.items.find((i) => i.id === item.id)!.name
+    expect(bucketDescription(s, item.id, null)).toBe(`${name} · vA · vB · vC`)
+  })
+
+  it('leaves out empty attributes and gives an empty line for a missing item', async () => {
+    const item = await newItem({ variants: ['Red'] })
+    const attr = newId()
+    await run({ type: 'attribute.create', id: attr, inventoryId, name: `Note${made}`, kind: 'text', options: [], unit: '', siPrefixes: false })
+    await run({ type: 'item.setAttribute', itemId: item.id, attributeId: attr, value: '  ' })
+    const name = s.items.find((i) => i.id === item.id)!.name
+    expect(bucketDescription(s, item.id, item.v.Red!)).toBe(`Red · ${name}`)
+    expect(bucketDescription(s, newId(), null)).toBe('')
   })
 })

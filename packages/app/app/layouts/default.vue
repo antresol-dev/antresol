@@ -12,6 +12,7 @@ const { dialog: folderDialog } = useFolderDialog()
 const { dialog: itemDialog } = useItemDialog()
 // Below 1024 px one column and the page scrolls; from 1024 px three full-height columns, each scrolling on its own.
 const desktop = useMediaQuery('(min-width: 1024px)')
+const { width: treeWidth } = useTreeWidth()
 const withTree = computed(() => showsTree(typeof route.name === 'string' ? route.name : null))
 // Launched from a PWA shortcut (`?action=add` / `?action=search`): open that UI once, then drop the parameter. Add needs
 // a writable inventory; search needs one at all. Both wait for the workspace to load.
@@ -100,8 +101,9 @@ useEventListener(
     <div
       :class="[
         'min-h-dvh bg-background text-foreground lg:grid lg:h-dvh lg:overflow-hidden',
-        withTree ? 'lg:grid-cols-[212px_264px_minmax(0,1fr)]' : 'lg:grid-cols-[212px_minmax(0,1fr)]',
+        withTree ? '' : 'lg:grid-cols-[212px_minmax(0,1fr)]',
       ]"
+      :style="withTree ? { gridTemplateColumns: `212px ${treeWidth}px minmax(0, 1fr)` } : undefined"
     >
       <div v-if="desktop" class="min-h-0 overflow-y-auto bg-rail">
         <AppNav variant="rail" />

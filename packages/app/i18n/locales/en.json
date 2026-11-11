@@ -442,7 +442,16 @@
     "clear": "Clear",
     "copied": "Copied",
     "copyFailed": "Could not copy",
-    "traffic": "~{used} of {limit} this month (this device)"
+    "traffic": "~{used} of {limit} this month (this device)",
+    "uploads": "{n} photos uploaded this month (this device)"
+  },
+  "photoCache": {
+    "title": "Photo cache",
+    "hint": "Photos you have viewed are kept on this device so they open faster and without a connection.",
+    "size": "Using {size} on this device",
+    "clear": "Clear photo cache",
+    "cleared": "Photo cache cleared",
+    "failed": "Could not clear the photo cache"
   },
   "sourceForm": {
     "newTitle": "Add source",
@@ -669,7 +678,8 @@
     },
     "file": {
       "no_store": "Photos aren’t set up for this source. Check the Uploadcare key and photo address in Settings.",
-      "unsupported": "This photo can’t be opened — the format isn’t supported or the image is too large.",
+      "unsupported": "This photo can’t be opened — the format isn’t supported.",
+      "too_large_to_decode": "This photo is too big for this device’s memory to open. Try a smaller one.",
       "too_large": "This photo is too large.",
       "rejected": "The photo service rejected this photo. Check the Uploadcare key, and that signed uploads are turned off.",
       "unavailable": "Can’t reach the photo service. Check your connection.",

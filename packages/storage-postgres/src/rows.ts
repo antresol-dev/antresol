@@ -1,6 +1,7 @@
 import {
   parseQuantity,
   type Attribute,
+  type AttributeKind,
   type CustomUnit,
   type Folder,
   type Inventory,
@@ -90,7 +91,6 @@ export const toItem = (r: Row): Item => ({
 export const toVariant = (r: Row): Variant => ({
   id: r.id as string,
   itemId: r.item_id as string,
-  name: r.name as string,
   description: (r.description as string | null) ?? null,
   position: toNumber(r.position),
   ...audited(r),
@@ -108,8 +108,10 @@ export const toAttribute = (r: Row): Attribute => ({
   id: r.id as string,
   inventoryId: r.inventory_id as string,
   name: r.name as string,
-  kind: r.kind as 'text' | 'enum',
+  kind: r.kind as AttributeKind,
   options: (r.options as string[] | null) ?? [],
+  unit: (r.unit as string | null) ?? '',
+  siPrefixes: r.si_prefixes === true,
   ...audited(r),
 })
 
@@ -126,6 +128,7 @@ export const toItemAttribute = (r: Row): ItemAttribute => ({
   itemId: r.item_id as string,
   attributeId: r.attribute_id as string,
   value: (r.value as string | null) ?? null,
+  axisPosition: toNumberOrNull(r.axis_position),
 })
 
 export const toVariantAttributeValue = (r: Row): VariantAttributeValue => ({

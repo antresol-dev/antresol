@@ -1,6 +1,6 @@
 import { newId, type InventoryStorage, type Quantity } from '@graymatter/core'
 import { describe, expect, it } from 'vitest'
-import { makeStorage, TEST_ACTOR } from './helpers'
+import { makeStorage, TEST_ACTOR, variantsCreate } from './helpers'
 
 async function setup(unitKey = 'pcs') {
   const storage = await makeStorage()
@@ -37,7 +37,7 @@ describe('stock journal', () => {
     const { storage, inv, item } = await setup()
     const v1 = newId()
     const v2 = newId()
-    await storage.apply({ type: 'variant.createMany', itemId: item, variants: [{ id: v1, name: 'v1' }, { id: v2, name: 'v2' }] }, TEST_ACTOR)
+    await storage.apply(variantsCreate(item, [[v1, {}], [v2, {}]]), TEST_ACTOR)
 
     await storage.apply(receive(item, '100', 230), TEST_ACTOR)
     await storage.apply({ type: 'stock.use', movementId: newId(), itemId: item, variantId: null, quantity: q('4'), note: 'VCO' }, TEST_ACTOR)

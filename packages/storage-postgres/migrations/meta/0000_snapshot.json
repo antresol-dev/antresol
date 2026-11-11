@@ -1,5 +1,5 @@
 {
-  "id": "5ac77c1b-2607-4c05-8560-fca189a4038c",
+  "id": "6fe5b407-565f-4529-94c0-8bcf0cd459ce",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -118,7 +118,7 @@
       "checkConstraints": {
         "attributes_kind_check": {
           "name": "attributes_kind_check",
-          "value": "\"attributes\".\"kind\" in ('text', 'enum')"
+          "value": "\"attributes\".\"kind\" in ('text', 'enum', 'number')"
         }
       },
       "isRLSEnabled": false
@@ -1261,12 +1261,6 @@
         "item_id": {
           "name": "item_id",
           "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
           "primaryKey": false,
           "notNull": true
         },

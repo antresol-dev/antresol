@@ -10,7 +10,7 @@ CREATE TABLE "attributes" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"created_by" text NOT NULL,
 	"updated_by" text NOT NULL,
-	CONSTRAINT "attributes_kind_check" CHECK ("attributes"."kind" in ('text', 'enum'))
+	CONSTRAINT "attributes_kind_check" CHECK ("attributes"."kind" in ('text', 'enum', 'number'))
 );
 --> statement-breakpoint
 CREATE TABLE "custom_units" (
@@ -130,7 +130,6 @@ CREATE TABLE "variant_attribute_values" (
 CREATE TABLE "variants" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"item_id" uuid NOT NULL,
-	"name" text NOT NULL,
 	"description" text,
 	"position" integer NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,

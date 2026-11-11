@@ -19,6 +19,7 @@ const emit = defineEmits<{ close: [] }>()
 
 const workspace = useWorkspace()
 const { state } = workspace
+const { ids, renew } = useCommandIds(['movementId', 'transferId', 'outMovementId', 'inMovementId'])
 
 // What the sheet shows while it animates out.
 const shown = shallowRef<StockTarget>({ mode: 'receive', variantId: null })
@@ -50,6 +51,8 @@ watch(
   (t) => {
     if (!t) return
     shown.value = t
+    renew()
+    void workspace.warmUp()
     openings.value++
     const bucket = props.view.buckets.find((b) => b.variantId === t.variantId)
     amount.value = t.mode === 'transfer' ? (bucket?.quantity ?? '') : ''
@@ -83,6 +86,7 @@ async function submit(): Promise<void> {
     mode.value,
     { amount: amount.value, price: price.value, url: url.value, note: note.value, toVariantId: idOf(toKey.value) },
     { itemId: props.view.item.id, variantId: shown.value.variantId, unit: props.view.unit, currency: props.view.currency },
+    ids,
   )
   if ('errorKey' in built) {
     errorKey.value = built.errorKey

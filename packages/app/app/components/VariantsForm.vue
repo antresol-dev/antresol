@@ -29,6 +29,14 @@ const emit = defineEmits<{ done: [added: VariantsAdded] }>()
 const workspace = useWorkspace()
 const { state } = workspace
 const { add: addAxisTo } = useAddAxis()
+const { ids, renew } = useCommandIds(['attributeId', 'firstVariantId'])
+// One id per new variant line, kept across retries; dropped after a success.
+const lineIds = new Map<string, Id>()
+const lineId = (key: string): Id => {
+  let id = lineIds.get(key)
+  if (!id) lineIds.set(key, (id = newId()))
+  return id
+}
 
 // The sheet around the form locks while this is set.
 const busy = defineModel<boolean>('busy', { default: false })
@@ -65,7 +73,7 @@ async function addAxis(): Promise<void> {
   errorKey.value = null
   try {
     if (showCreate.value) {
-      attributeId = newId()
+      attributeId = ids.attributeId
       await workspace.apply({
         type: 'attribute.create',
         id: attributeId,
@@ -80,7 +88,8 @@ async function addAxis(): Promise<void> {
     if (attributeId === null) return
     // The new axis shows the values step by itself once the snapshot has it. A shared value that became the first variant,
     // on an item with stock outside variants, ends here instead: the stock offer goes with it.
-    const first = await addAxisTo(props.itemId, attributeId)
+    const first = await addAxisTo(props.itemId, attributeId, ids.firstVariantId)
+    renew()
     if (first) emit('done', { created: first.variants.map((v) => ({ id: v.id, label: v.name })), offer: first.offer })
   } catch (e) {
     errorKey.value = errorMessageKey(e)
@@ -102,7 +111,7 @@ async function submit(): Promise<void> {
   if (!canSubmit.value || !snapshot) return
   // Decided before the write: afterwards the item has variants and no offer.
   const offer = looseTransferOffer(snapshot, props.itemId)
-  const created = fresh.value.map((l) => ({ id: newId(), label: l.label ?? '', values: l.values ?? [] }))
+  const created = fresh.value.map((l) => ({ id: lineId(JSON.stringify(l.values ?? [])), label: l.label ?? '', values: l.values ?? [] }))
   busy.value = true
   errorKey.value = null
   try {
@@ -111,6 +120,7 @@ async function submit(): Promise<void> {
       itemId: props.itemId,
       variants: created.map((c) => ({ id: c.id, values: c.values })),
     })
+    lineIds.clear()
     emit('done', { created: created.map((c) => ({ id: c.id, label: c.label })), offer })
   } catch (e) {
     errorKey.value = errorMessageKey(e)

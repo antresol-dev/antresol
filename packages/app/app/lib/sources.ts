@@ -140,14 +140,18 @@ function sourceFailure(error: unknown, config: SourceConfig): StorageError {
 }
 
 export function createNeonDriver(
-  makeExecutor: (connectionString: string) => PgExecutor = createNeonHttpExecutor,
+  makeExecutor: (connectionString: string, options?: { onTraffic?: (bytes: number) => void }) => PgExecutor = createNeonHttpExecutor,
+  hooks?: { onTraffic?: (sourceId: string, bytes: number) => void },
 ): SourceDriver {
   return {
     probe: (config) => probeWithExecutor(() => makeExecutor(config.connectionString), config),
     async connect(config) {
       let exec: PgExecutor | null = null
       try {
-        exec = makeExecutor(config.connectionString)
+        exec = makeExecutor(
+          config.connectionString,
+          hooks?.onTraffic ? { onTraffic: (bytes) => hooks.onTraffic?.(config.id, bytes) } : undefined,
+        )
         const { storage, status } = await openPostgresStorage(exec)
         const opened = exec
         const inspect = async (): Promise<SchemaInspection> => {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { newId, type Id, type Item } from '@graymatter/core'
+import type { Id, Item } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,6 +14,7 @@ const props = defineProps<{ item: Item }>()
 const emit = defineEmits<{ done: [] }>()
 
 const workspace = useWorkspace()
+const { ids, renew } = useCommandIds(['tagId'])
 const { state } = workspace
 
 const name = ref(props.item.name)
@@ -48,9 +49,10 @@ async function createTag(tagName: string): Promise<void> {
   busy.value = true
   errorKey.value = null
   try {
-    const id = newId()
+    const id = ids.tagId
     await workspace.apply({ type: 'tag.create', id, inventoryId: s.inventory.id, name: tagName })
     tagIds.value = [...tagIds.value, id]
+    renew()
   } catch (e) {
     errorKey.value = errorMessageKey(e)
   } finally {

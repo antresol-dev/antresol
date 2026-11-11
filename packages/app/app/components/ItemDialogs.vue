@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { newId, type Id, type Item } from '@graymatter/core'
+import type { Id, Item } from '@graymatter/core'
 import { toast } from 'vue-sonner'
 import type { ItemDialog } from '~/composables/useDialogs'
 import { errorMessageKey } from '~/lib/errors'
@@ -12,6 +12,8 @@ const { state } = workspace
 const route = useRoute()
 const router = useRouter()
 const { dialog, close } = useItemDialog()
+// One archive id per opening: a retried Confirm after a timeout sends the same command.
+const { ids, renew } = useCommandIds(['archiveId'])
 
 // The last dialog and its item as they were when it opened: they stay while the sheet animates out and after an archive.
 const shown = shallowRef<ItemDialog | null>(null)
@@ -21,6 +23,7 @@ watch(
   (d) => {
     if (!d) return
     shown.value = d
+    renew()
     item.value = state.snapshot?.items.find((i) => i.id === d.itemId) ?? null
     // Gone meanwhile (archived on another device): nothing to act on.
     if (!item.value) close()
@@ -67,7 +70,7 @@ async function archive(): Promise<void> {
   busy.value = true
   let archived = false
   try {
-    await workspace.apply({ type: 'archive', target: 'item', id: target.id, archiveId: newId() })
+    await workspace.apply({ type: 'archive', target: 'item', id: target.id, archiveId: ids.archiveId })
     archived = true
     close()
   } catch (e) {

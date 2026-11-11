@@ -19,10 +19,9 @@ export function useAddAxis() {
     const s = workspace.state.snapshot
     return s ? axisAddLoss(s, itemId, attributeId) : null
   }
-  const add = async (itemId: Id, attributeId: Id): Promise<AxisAdded | null> => {
+  const add = async (itemId: Id, attributeId: Id, firstVariantId: Id = newId()): Promise<AxisAdded | null> => {
     const before = workspace.state.snapshot
     const offer = before ? looseTransferOffer(before, itemId) : null
-    const firstVariantId = newId()
     await workspace.apply({ type: 'item.addAxis', itemId, attributeId, firstVariantId })
     const after = workspace.state.snapshot
     const created = after?.variants.find((v) => v.id === firstVariantId)

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { newId, SI_PREFIXES, type CustomUnit } from '@graymatter/core'
+import { SI_PREFIXES, type CustomUnit } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -12,6 +12,7 @@ const props = defineProps<{ unit: CustomUnit | null }>()
 const emit = defineEmits<{ done: [] }>()
 
 const workspace = useWorkspace()
+const { ids } = useCommandIds(['unitId'])
 const { state } = workspace
 
 /** Largest power first. */
@@ -63,7 +64,7 @@ async function submit(): Promise<void> {
     } else {
       await workspace.apply({
         type: 'unit.create',
-        id: newId(),
+        id: ids.unitId,
         inventoryId: snapshot.inventory.id,
         name: name.value.trim(),
         symbol: symbol.value.trim(),

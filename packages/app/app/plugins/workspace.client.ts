@@ -1,5 +1,6 @@
 import { openDeviceDb } from '~/lib/device-db'
 import { createNeonDriver } from '~/lib/sources'
+import { trafficMeter } from '~/lib/traffic'
 import { createWorkspace } from '~/lib/workspace'
 import type { WorkspaceDeps } from '~/lib/workspace-types'
 
@@ -7,7 +8,7 @@ import type { WorkspaceDeps } from '~/lib/workspace-types'
 const ONLINE_DEBOUNCE_MS = 2_000
 
 export default defineNuxtPlugin(async () => {
-  const drivers: WorkspaceDeps['drivers'] = { neon: createNeonDriver() }
+  const drivers: WorkspaceDeps['drivers'] = { neon: createNeonDriver(undefined, { onTraffic: (sourceId, bytes) => trafficMeter.add(sourceId, bytes) }) }
   // No dev-pglite driver in production: a demo source saved on the device shows as unavailable (unsupported_source).
   // A plain `if` on purpose: inside a spread expression `import.meta.dev` was left unreplaced in dev, so the demo
   // driver never registered there. The dynamic import keeps PGlite out of the production bundle.

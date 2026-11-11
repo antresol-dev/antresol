@@ -366,7 +366,13 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       const old = conns.get(config.id)
       conns.set(config.id, outcome.conn)
       sourceRevs.set(config.id, outcome.rev)
-      setSource(config, outcome.conn.status.state === 'newer' ? 'read_only' : 'ready', null, null)
+      // Read-only only when the schema needs a newer app to write (min_app_schema above this app's version): a newer
+      // schema that keeps older apps writing is `ready` (soft migrations). Turning read-only, a new version of the app
+      // may be out already: look for it now rather than at the next periodic check ("Update to keep editing").
+      const status: SourceStatus = outcome.conn.status.state === 'newer' ? 'read_only' : 'ready'
+      const wasReadOnly = statusOf(config.id) === 'read_only'
+      setSource(config, status, null, null)
+      if (status === 'read_only' && !wasReadOnly) deps.checkForUpdate?.()
       const saving = storeListing(config.id, outcome.inventories)
       if (old && old !== outcome.conn) await old.close().catch(() => {})
       await saving

@@ -19,6 +19,8 @@ export default defineNuxtPlugin(async () => {
     db: await openDeviceDb(),
     drivers,
     userAgent: navigator.userAgent,
+    // A source needs a newer app: look for one now. A new version found here waits behind UpdatePrompt's toast.
+    checkForUpdate: () => void navigator.serviceWorker?.getRegistration().then((r) => r?.update()).catch(() => {}),
   })
 
   // Source failures are recorded in workspace.state; nothing else to do with a rejected refresh here.

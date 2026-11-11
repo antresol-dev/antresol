@@ -50,8 +50,17 @@ export type Command =
       unit: string
       siPrefixes: boolean
     }
-  /** The kind never changes. A new unit or prefix setting changes only how values are shown and parsed. */
-  | { type: 'attribute.update'; id: Id; name?: string; options?: string[]; unit?: string; siPrefixes?: boolean }
+  /** The kind never changes. A new unit or prefix setting changes only how values are shown and parsed. `pinned`: at
+   *  most MAX_PINNED_ATTRIBUTES per inventory; a pin over the limit is skipped (the other fields still apply). */
+  | {
+      type: 'attribute.update'
+      id: Id
+      name?: string
+      options?: string[]
+      unit?: string
+      siPrefixes?: boolean
+      pinned?: boolean
+    }
   | { type: 'attribute.delete'; id: Id }
   | { type: 'unit.create'; id: Id; inventoryId: Id; name: string; symbol: string; prefixPowers: number[] }
   | { type: 'unit.update'; id: Id; name?: string; symbol?: string; prefixPowers?: number[] }

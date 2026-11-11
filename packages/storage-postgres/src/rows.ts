@@ -112,6 +112,7 @@ export const toAttribute = (r: Row): Attribute => ({
   options: (r.options as string[] | null) ?? [],
   unit: (r.unit as string | null) ?? '',
   siPrefixes: r.si_prefixes === true,
+  pinned: r.pinned === true,
   ...audited(r),
 })
 

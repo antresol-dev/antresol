@@ -3,14 +3,8 @@ import { toStatements } from './commands'
 import { affectedReads } from './commands/reads'
 import type { PgExecutor } from './executor'
 import { inspectSchema } from './inspect'
-import { ensureSchema, REV_BUMP } from './migrator'
+import { ensureSchema, LOCK_REV, REV_BUMP } from './migrator'
 import * as queries from './queries'
-import { sql } from './sql'
-
-/** First statement of every write. Writes run READ COMMITTED, so without this lock another write could commit between
- *  reading the revision and bumping it, and that change would go unnoticed; with it, writes queue on the revision row
- *  and the value read is exactly the revision this write follows. No row (hand-edited database): nothing to lock. */
-const LOCK_REV = sql`select value from gm_meta where key = 'rev' for update`
 
 /** The revision is an opaque unique value, not a counter: a point-in-time restore cannot make a new state repeat a
  *  revision that a device cached. An upsert, so a missing row is recreated rather than leaving the bump a no-op; it
@@ -31,13 +25,15 @@ async function wrapFailure<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
+/** `appVersion`: see ensureSchema (tests stand in for an older build with it). */
 export async function openPostgresStorage(
   exec: PgExecutor,
+  options: { appVersion?: number } = {},
 ): Promise<{ storage: InventoryStorage; status: SchemaStatus }> {
   if ((await inspectSchema(exec)).state === 'foreign') {
     throw new StorageError('incompatible', 'the database holds tables that do not belong to GrayMatter')
   }
-  const status = await ensureSchema(exec)
+  const status = await ensureSchema(exec, options.appVersion)
   const readOnly = status.state === 'newer'
   const storage: InventoryStorage = {
     readOnly,

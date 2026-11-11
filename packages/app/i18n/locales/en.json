@@ -31,6 +31,10 @@
     "confirmInventory": "Inventory “{name}” and everything in it will be deleted for good. This can’t be undone."
   },
   "update": { "available": "New version available", "reload": "Reload", "offlineReady": "Ready to work offline" },
+  "updateBanner": {
+    "title": "Update to keep editing",
+    "text": "A newer GrayMatter updated this source. Changes are off until this app updates."
+  },
   "tree": { "expand": "Expand {name}", "collapse": "Collapse {name}" },
   "search": {
     "label": "Search",
@@ -260,7 +264,6 @@
     "offline": "Offline. Showing the copy from {time}. Changes are off.",
     "offlineNoCopy": "Offline. Changes are off.",
     "retry": "Retry",
-    "schemaNewer": "Updated by a newer GrayMatter. Update the app to make changes.",
     "sourceError": "Can’t open {source}: {reason}",
     "fix": "Fix",
     "notPersistent": "This browser won’t keep your sources after it closes.",
@@ -503,7 +506,8 @@
       "attribute_is_axis": "Variants differ by this attribute. Change that on the item first.",
       "not_an_axis": "Variants don’t differ by this attribute.",
       "option_in_use": "This value is still in use. Change it where it’s used first.",
-      "invalid_number": "Not a number this attribute understands."
+      "invalid_number": "Not a number this attribute understands.",
+      "too_many_pinned": "Only two attributes can show in lists. Turn one off first."
     },
     "storage": {
       "read_only": "This source is read-only right now.",

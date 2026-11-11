@@ -31,6 +31,7 @@ export const DOMAIN_ERROR_CODES = [
   'not_an_axis',
   'option_in_use',
   'invalid_number',
+  'too_many_pinned',
 ] as const
 export type DomainErrorCode = (typeof DOMAIN_ERROR_CODES)[number]
 
@@ -42,6 +43,9 @@ export class DomainError extends Error {
     this.code = code
   }
 }
+
+/** Attributes of one inventory shown in lists ("Show in lists"). */
+export const MAX_PINNED_ATTRIBUTES = 2
 
 const MAX_NAME = 200
 const MAX_UNIT = 16
@@ -380,6 +384,10 @@ function check(c: Command, s: Snap | null): void {
       checkUnit(c.unit)
       if (a.kind !== 'number' && ((c.unit !== undefined && c.unit.trim() !== '') || c.siPrefixes === true)) fail('invalid_option')
       checkDroppedOptions(s, a, c.options)
+      // Only a new pin counts: unpinning, or keeping a pin, always passes.
+      if (c.pinned === true && !a.pinned && s.attributes.filter((x) => x.pinned).length >= MAX_PINNED_ATTRIBUTES) {
+        fail('too_many_pinned')
+      }
       return
     }
     case 'attribute.delete': {

@@ -49,7 +49,7 @@ afterEach(async () => {
 
 describe('demo source', () => {
   it('keeps its browser storage under a name carrying the schema version', () => {
-    expect(demoStorageName('demo')).toBe('idb://graymatter-dev-s3-demo')
+    expect(demoStorageName('demo')).toBe('idb://graymatter-dev-s4-demo')
   })
 
   it('seeds two inventories with stock', async () => {

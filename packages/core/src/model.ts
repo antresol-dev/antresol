@@ -58,6 +58,9 @@ export interface Attribute extends Audited {
   unit: string
   /** Number kind: values are entered and shown with SI prefixes. */
   siPrefixes: boolean
+  /** "Show in lists": the value shows as a chip in list rows, the palette and the item header. At most
+   *  MAX_PINNED_ATTRIBUTES per inventory. */
+  pinned: boolean
 }
 export interface CustomUnit extends Audited {
   id: Id

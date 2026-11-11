@@ -8,6 +8,7 @@ import { defaultDeviceName } from '../app/lib/device-name'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import { createNeonDriver, type SourceDriver } from '../app/lib/sources'
 import type { InventoryRef, SourceConfig } from '../app/lib/types'
+import type { WorkspaceDeps } from '../app/lib/workspace-types'
 import { createWorkspace, defaultFileStore, FAILED_RETRY_MS, SNAPSHOT_FORMAT } from '../app/lib/workspace'
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Safari/605.1.15'
@@ -184,8 +185,8 @@ function harness() {
     provider: 'fake',
     upload: async (_blob, name) => ({ provider: 'fake', fileId: name, url: `https://cdn.test/${name}` }),
   }
-  const workspace = () =>
-    createWorkspace({ db, drivers: { neon: driver }, userAgent: UA, now, fileStores: () => fileStore, prepareImage: async (f) => f })
+  const workspace = (extra: Partial<WorkspaceDeps> = {}) =>
+    createWorkspace({ db, drivers: { neon: driver }, userAgent: UA, now, fileStores: () => fileStore, prepareImage: async (f) => f, ...extra })
 
   /** Creates a database for the connection string with one inventory, directly through storage. */
   const seed = async (connectionString: string, inventoryName: string): Promise<Id> => {
@@ -330,32 +331,64 @@ describe('workspace', () => {
     expect(await h.db.getSnapshot(old)).toBeNull()
   })
 
-  it('6. a newer schema makes the source read-only', async () => {
+  it('6. a schema that needs a newer app makes the source read-only and looks for an update', async () => {
     const h = setup()
     const id = await h.seed(CS('one'), 'Inv')
     await h.db.putSource(config('s1', CS('one')))
-    const ws = h.workspace()
+    const checkForUpdate = vi.fn()
+    const ws = h.workspace({ checkForUpdate })
     await ws.start()
-    await h.pgs[0]!.exec(`update gm_meta set value = '${APP_SCHEMA_VERSION + 1}' where key = 'schema_version'`)
+    const next = APP_SCHEMA_VERSION + 1
+    await h.pgs[0]!.exec(`update gm_meta set value = '${next}' where key in ('schema_version', 'min_app_schema')`)
     // The refresh reuses the open connection, yet checks the schema through it.
     await ws.refresh()
     expect(ws.state.sources[0]!.status).toBe('read_only')
+    // The banner "Update to keep editing" shows for exactly this reason.
     expect(ws.state.readOnly).toBe('schema_newer')
+    expect(checkForUpdate).toHaveBeenCalledTimes(1)
     const calls = h.flags.applyCalls
     await expect(ws.apply(folderCreate(id, 'Nope'))).rejects.toMatchObject({ code: 'read_only' })
     expect(h.flags.applyCalls).toBe(calls)
-    // A workspace started on the newer schema is read-only too.
-    const fresh = h.workspace()
+    // Still read-only: no second look.
+    await ws.refresh()
+    expect(checkForUpdate).toHaveBeenCalledTimes(1)
+    // A workspace started on the newer schema is read-only too, and looks once.
+    const freshCheck = vi.fn()
+    const fresh = h.workspace({ checkForUpdate: freshCheck })
     await fresh.start()
     expect(fresh.state.sources[0]!.status).toBe('read_only')
     expect(fresh.state.readOnly).toBe('schema_newer')
+    expect(freshCheck).toHaveBeenCalledTimes(1)
     // Back to this app's version: the next refresh makes the source writable again.
-    await h.pgs[0]!.exec(`update gm_meta set value = '${APP_SCHEMA_VERSION}' where key = 'schema_version'`)
+    await h.pgs[0]!.exec(`update gm_meta set value = '${APP_SCHEMA_VERSION}' where key in ('schema_version', 'min_app_schema')`)
     await ws.refresh()
     expect(ws.state.sources[0]!.status).toBe('ready')
     expect(ws.state.readOnly).toBeNull()
     await ws.apply(folderCreate(id, 'Shelf'))
     expect(ws.state.snapshot?.folders.map((f) => f.name)).toEqual(['Shelf'])
+  })
+
+  it('6b. a newer schema whose min_app_schema this app meets stays writable, no update check', async () => {
+    const h = setup()
+    const id = await h.seed(CS('one'), 'Inv')
+    await h.db.putSource(config('s1', CS('one')))
+    const checkForUpdate = vi.fn()
+    const ws = h.workspace({ checkForUpdate })
+    await ws.start()
+    // Another device's app migrated the source to the next schema, an additive one: min_app_schema stays.
+    await h.pgs[0]!.exec(`update gm_meta set value = '${APP_SCHEMA_VERSION + 1}' where key = 'schema_version'`)
+    const connects = h.flags.connectCalls
+    await ws.refresh()
+    expect(ws.state.sources[0]!.status).toBe('ready')
+    expect(ws.state.readOnly).toBeNull()
+    // The open connection stays: its schema is still one this app writes.
+    expect(h.flags.connectCalls).toBe(connects)
+    await ws.apply(folderCreate(id, 'Shelf'))
+    expect(ws.state.snapshot?.folders.map((f) => f.name)).toEqual(['Shelf'])
+    const fresh = h.workspace({ checkForUpdate })
+    await fresh.start()
+    expect(fresh.state.sources[0]!.status).toBe('ready')
+    expect(checkForUpdate).not.toHaveBeenCalled()
   })
 
   it('7. validates before writing and keeps the written copy on the device', async () => {

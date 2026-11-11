@@ -19,7 +19,8 @@ const line = computed<{ text: string; fixTo?: string; retry?: boolean } | null>(
       retry: true,
     }
   }
-  if (state.readOnly === 'schema_newer') return { text: t('status.schemaNewer') }
+  // UpdateToEditBanner explains it.
+  if (state.readOnly === 'schema_newer') return null
   if (state.readOnly === 'source_error') {
     const source = currentSource.value
     return {
@@ -39,6 +40,7 @@ function retry(): void {
 </script>
 
 <template>
+  <UpdateToEditBanner />
   <p v-if="line" role="status" class="text-sm text-subtle-foreground">
     {{ line.text }}
     <NuxtLink v-if="line.fixTo" :to="line.fixTo" class="font-semibold text-primary underline-offset-4 hover:underline">

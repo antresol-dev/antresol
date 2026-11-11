@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { errorMessageKey } from '~/lib/errors'
-import { checkConnectionString, createNeonDriver, type SourceProbe } from '~/lib/sources'
+import { canSaveSource, checkConnectionString, createNeonDriver, type SourceProbe } from '~/lib/sources'
 import type { SourceConfig } from '~/lib/types'
 
 const props = defineProps<{ source?: SourceConfig }>()
@@ -74,13 +74,15 @@ async function check(): Promise<void> {
   }
 }
 
-const inspection = computed(() => (probe.value?.ok ? probe.value.inspection.state : null))
+const inspection = computed(() => (probe.value?.ok ? probe.value.inspection : null))
+/** A database the source cannot use (foreign, or made by a pre-release build): reported as a problem, nothing to save. */
+const unusable = computed(() => inspection.value !== null && !canSaveSource(inspection.value))
 const resultKey = computed(() => {
   if (!probe.value) return null
   return probe.value.ok ? `sourceForm.result.${probe.value.inspection.state}` : errorMessageKey(probe.value)
 })
 const saveKey = computed(() =>
-  inspection.value && inspection.value !== 'foreign' ? `sourceForm.save.${inspection.value}` : null,
+  inspection.value && !unusable.value ? `sourceForm.save.${inspection.value.state}` : null,
 )
 
 async function save(): Promise<void> {
@@ -184,10 +186,10 @@ async function save(): Promise<void> {
       {{ $t(checking ? 'sourceForm.checking' : 'sourceForm.check') }}
     </Button>
 
-    <div v-if="resultKey && probe?.ok && inspection !== 'foreign'" role="status" class="grid gap-1 text-sm">
+    <div v-if="resultKey && probe?.ok && !unusable" role="status" class="grid gap-1 text-sm">
       <p>{{ $t(resultKey) }}</p>
     </div>
-    <!-- A database that is not GrayMatter's, or a failed check, is a problem: announced at once. -->
+    <!-- A database the source cannot use, or a failed check, is a problem: announced at once. -->
     <div v-else-if="resultKey" role="alert" class="grid gap-1 text-sm text-destructive">
       <p>{{ $t(resultKey) }}</p>
     </div>

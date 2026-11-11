@@ -1,7 +1,7 @@
 import MiniSearch from 'minisearch'
 import type { Id } from './ids'
 import type { Attribute, InventorySnapshot, Item, Variant } from './model'
-import { compareNumberValues, isCanonicalNumber, parseNumberValue } from './numbers'
+import { compareNumberValues, isCanonicalNumber, parseNumberValue, type NumberValue } from './numbers'
 import { variantLabel } from './variants'
 
 export interface SearchHit {
@@ -150,15 +150,21 @@ export function createSearch(s: InventorySnapshot): { search(query: string, limi
       // Each word is read by the rules of each number attribute and must equal one of that attribute's values. The
       // whole query counts as a word too ("4 k7"). A number match adds to the text match, it does not replace it.
       const words = [...new Set([...query.split(/\s+/), query.trim()].filter((w) => w !== ''))]
+      // The words as read by one set of rules (unit and prefixes), parsed once per search rather than per stored value.
+      const readings = new Map<string, NumberValue[]>()
+      const read = (attr: Attribute): NumberValue[] => {
+        const key = `${attr.siPrefixes}|${attr.unit}`
+        let parsed = readings.get(key)
+        if (!parsed) {
+          parsed = words.map((w) => parseNumberValue(w, attr)).filter((n): n is NumberValue => n !== null)
+          readings.set(key, parsed)
+        }
+        return parsed
+      }
       for (const [docId, values] of numbers) {
         const doc = docById.get(docId)
         if (!doc) continue
-        const hit = values.some(({ attr, value }) =>
-          words.some((w) => {
-            const n = parseNumberValue(w, attr)
-            return n !== null && compareNumberValues(n, value) === 0
-          }),
-        )
+        const hit = values.some(({ attr, value }) => read(attr).some((n) => compareNumberValues(n, value) === 0))
         if (!hit) continue
         const cand = { tier: 0, score: NUMBER_SCORE }
         const prev = ranks.get(docId)

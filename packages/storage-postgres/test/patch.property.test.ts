@@ -2,6 +2,7 @@ import { PGlite } from '@electric-sql/pglite'
 import {
   cmpQ,
   customUnitKey,
+  duplicateOf,
   itemAxes,
   newId,
   normalizeCommand,
@@ -41,13 +42,15 @@ const byId = (row: { id: Id }) => row.id
 
 // ---- the seeded inventory ----
 
-/** 2 folders, a tag, a custom unit nobody uses yet, four attributes (list, two numbers, text) and 3 items: one with a
- *  number axis and two variants (and stock), one with two axes and two variants, one with shared values only. */
-async function seed(): Promise<{ inv: Id; items: Id[] }> {
+/** 2 folders, a tag, a custom unit nobody uses yet, four attributes (list, two numbers, text) and 4 items: one with a
+ *  number axis and two variants (and stock), one with two axes and two variants only the list axis tells apart, one
+ *  with shared values only, one with neither. `early`: the inventory as loaded before the variants were made and the
+ *  last item's axis was taken off again. */
+async function seed(): Promise<{ inv: Id; items: Id[]; early: { snapshot: Snap; rev: string } }> {
   const inv = newId()
   const [shelf, box, tag, unit] = [newId(), newId(), newId(), newId()]
   const [color, ohm, volt, size] = [newId(), newId(), newId(), newId()]
-  const items = [newId(), newId(), newId()]
+  const items = [newId(), newId(), newId(), newId()]
   const item = (id: Id, name: string, folderId: Id | null, extra: Partial<Extract<Command, { type: 'item.create' }>>) =>
     ({
       type: 'item.create', id, inventoryId: inv, folderId, name, description: null, unitKey: 'pcs', tagIds: [],
@@ -70,16 +73,23 @@ async function seed(): Promise<{ inv: Id; items: Id[] }> {
     }),
     item(items[1]!, 'Cable', box, { unitKey: 'm' }),
     item(items[2]!, 'Glue', null, { description: 'Two-part' }),
+    item(items[3]!, 'Fuse', shelf, {}),
     axis(items[0]!, ohm),
-    variantsCreate(items[0]!, [[newId(), { [ohm]: '1000' }], [newId(), { [ohm]: '10000' }]]),
+    axis(items[3]!, volt),
     axis(items[1]!, size),
     axis(items[1]!, color),
-    variantsCreate(items[1]!, [[newId(), { [size]: 'S', [color]: 'red' }], [newId(), { [size]: 'M', [color]: 'blue' }]]),
     { type: 'item.setAttribute', itemId: items[2]!, attributeId: volt, value: '12' },
     { type: 'item.setAttribute', itemId: items[2]!, attributeId: color, value: 'blue' },
   ]
+  const later: Command[] = [
+    variantsCreate(items[0]!, [[newId(), { [ohm]: '1000' }], [newId(), { [ohm]: '10000' }]]),
+    variantsCreate(items[1]!, [[newId(), { [size]: 'S', [color]: 'red' }], [newId(), { [size]: 'S', [color]: 'blue' }]]),
+    { type: 'item.removeAxis', itemId: items[3]!, attributeId: volt },
+  ]
   for (const c of commands) await storage.apply(c, TEST_ACTOR)
-  return { inv, items }
+  const early = await storage.loadInventoryWithRev(inv)
+  for (const c of later) await storage.apply(c, TEST_ACTOR)
+  return { inv, items, early }
 }
 
 // ---- the command generator ----
@@ -504,60 +514,135 @@ function chooseType(s: Snap, n: number): Command['type'] {
   throw new Error('unreachable')
 }
 
-const stepArb = fc.record({ kind: fc.nat(), numbers: fc.array(fc.nat(), { minLength: 16, maxLength: 16 }) })
+/** `device`: who writes the step and whether the other device syncs after it (see the property). */
+const stepArb = fc.record({
+  kind: fc.nat(),
+  device: fc.nat(),
+  numbers: fc.array(fc.nat(), { minLength: 16, maxLength: 16 }),
+})
+
+const OTHER: Actor = { device: 'Other · Vitest' }
 
 /** Commands that passed validateCommand against an up-to-date copy and still failed in the database, with the reason:
  *  each one is a bug (a constraint the SQL breaks, e.g. the unique axis position), never an expected skip. */
 const refusedByDatabase: string[] = []
+/** The same for commands validated on an older copy, where a refusal can be expected: a row the command names was
+ *  deleted since (a foreign key). The app answers it with a Sync (sync spec §4.2). */
+const refusedStale: string[] = []
 
 /** Applies a command the way the app does: normalized, validated against the copy, sent. Null when skipped: rejected by
- *  validateCommand, or by the database (recorded in `refusedByDatabase`). */
-async function send(c: Command, copy: Snap, actor: Actor = TEST_ACTOR): Promise<ApplyResult | null> {
+ *  validateCommand, or by the database (recorded in `refusedByDatabase`, or in `refusedStale` for an older copy). */
+async function send(c: Command, copy: Snap, actor: Actor = TEST_ACTOR, stale = false): Promise<ApplyResult | null> {
   if (validateCommand(c, copy)) return null
   try {
     return await storage.apply(c, actor)
   } catch (e) {
     if (e instanceof StorageError && e.code === 'failed') {
-      refusedByDatabase.push(`${c.type}: ${e.message}`)
+      ;(stale ? refusedStale : refusedByDatabase).push(`${c.type}: ${e.message}`)
       return null
     }
     throw e
   }
 }
 
+// ---- rules the database keeps whatever copy a command was validated on (spec 2026-11-11 variants §4.5-4.7) ----
+
+/** Variants of the item that have another variant with the same values on every axis. */
+function duplicates(s: Snap, itemId: Id): number {
+  const values = (variantId: Id) =>
+    new Map(s.variantAttributeValues.filter((r) => r.variantId === variantId).map((r) => [r.attributeId, r.value]))
+  return s.variants.filter((v) => v.itemId === itemId && duplicateOf(s, itemId, values(v.id), v.id) !== null).length
+}
+
+/** An item with variants keeps an axis; a variant holds values on its item's axes only. */
+function checkAxes(s: Snap, label: string): void {
+  const axes = new Set(axisRows(s).map((r) => `${r.itemId}|${r.attributeId}`))
+  const withAxes = new Set(itemsWithAxes(s))
+  const itemOf = new Map(s.variants.map((v) => [v.id, v.itemId]))
+  expect(s.variants.filter((v) => !withAxes.has(v.itemId)).map(byId), `${label}: variants of an item without axes`).toEqual([])
+  expect(
+    s.variantAttributeValues.filter((r) => !axes.has(`${itemOf.get(r.variantId)}|${r.attributeId}`)),
+    `${label}: variant values off the axes`,
+  ).toEqual([])
+}
+
+/** The item and attribute of a command that takes an axis off an item. */
+const removal = (c: Command): { itemId: Id; attributeId: Id } | null =>
+  c.type === 'item.removeAxis' || c.type === 'item.removeAttribute' ? c : null
+
 describe('patch property', () => {
-  it('patch equals a fresh load after every command', { timeout: 180_000 }, async () => {
+  it('patch equals a fresh load after every command, from either device', { timeout: 180_000 }, async () => {
     const applied = new Map<Command['type'], number>()
+    let staleWrites = 0
     await fc.assert(
       fc.asyncProperty(fc.array(stepArb, { maxLength: 15, size: 'max' }), fc.context(), async (steps, ctx) => {
-        const { inv } = await seed()
-        // The local copy: patched after each write, replaced by a fresh load when a write returns no patch.
-        let copy = (await storage.loadInventoryWithRev(inv)).snapshot
+        const { inv, early } = await seed()
+        // This device's copy: patched after each write, its own or the other device's (it always holds what the database
+        // held before the write), replaced by a fresh load when a write returns no patch.
+        const loaded = await storage.loadInventoryWithRev(inv)
+        let copy = loaded.snapshot
+        let rev = loaded.rev
+        // The other device's copy and its known revision (null: marked stale), loaded before the seed's variants were
+        // made. It validates its commands on this copy, which falls behind whenever this device writes, and is patched
+        // with its own writes as the app does.
+        let theirs: { copy: Snap; rev: string | null } = { copy: early.snapshot, rev: early.rev }
         for (const [i, step] of steps.entries()) {
-          const c = normalizeCommand(GENERATORS[chooseType(copy, step.kind)].build(copy, new Picks(step.numbers)))
-          const r = await send(c, copy)
-          if (!r) continue
-          ctx.log(`#${i} ${JSON.stringify(c)} -> ${r.patch ? `patch for ${r.patch.inventoryId}` : 'reload'}`)
+          const other = step.device % 2 === 0
+          const base = other ? theirs.copy : copy
+          const behind = other && theirs.rev !== rev
+          const c = normalizeCommand(GENERATORS[chooseType(base, step.kind)].build(base, new Picks(step.numbers)))
+          const refusals = refusedStale.length
+          const r = await send(c, base, other ? OTHER : TEST_ACTOR, behind)
+          if (!r) {
+            // A write the database refused: the other device syncs at once (sync spec §4.2).
+            if (refusedStale.length > refusals) theirs = { copy, rev }
+            continue
+          }
+          const label = `#${i} ${other ? 'other ' : ''}${c.type}`
+          ctx.log(`${label} ${JSON.stringify(c)} -> ${r.patch ? `patch for ${r.patch.inventoryId}` : 'reload'}`)
           applied.set(c.type, (applied.get(c.type) ?? 0) + 1)
+          if (behind) staleWrites++
 
           if (c.type === 'deletePermanently' && c.target === 'inventory') {
-            // Nothing left to load: the inventory is gone, and so is the run.
             const list = await storage.listInventories()
             expect(r.patch).toBeNull()
             expect(r.rev).toBe(list.rev)
-            expect(list.inventories.map(byId)).not.toContain(inv)
-            return
+            // Nothing left to load: the inventory is gone, and so is the run. Only a copy that is behind (the inventory
+            // was restored since) names an inventory the database keeps.
+            if (!list.inventories.some((x) => x.id === inv)) return
+            expect(behind, `${label}: an archived inventory the database kept`).toBe(true)
           }
 
           const after = await storage.loadInventoryWithRev(inv)
           expect(r.rev).toBe(after.rev)
+          expect(r.prevRev, `${label}: the revision before the write`).toBe(rev)
+          const before = copy
           if (r.patch) {
             // A patch for another inventory (inventory.create) leaves this copy as it is, and it must still match.
             if (r.patch.inventoryId === inv) copy = patchSnapshot(copy, r.patch)
-            expect(norm(copy), `after #${i} ${c.type}`).toEqual(norm(after.snapshot))
+            expect(norm(copy), `after ${label}`).toEqual(norm(after.snapshot))
           } else {
             copy = after.snapshot
           }
+          rev = after.rev
+
+          checkAxes(copy, `after ${label}`)
+          const removed = removal(c)
+          if (removed) {
+            // Never makes variants equal; and a removal validated on an up-to-date copy is carried out, not skipped.
+            expect(duplicates(copy, removed.itemId), `${label}: equal variants`).toBeLessThanOrEqual(
+              duplicates(before, removed.itemId),
+            )
+            if (!behind) expect(itemAxes(copy, removed.itemId).map(byId)).not.toContain(removed.attributeId)
+          }
+
+          if (other) {
+            // Its rows are applied either way; a revision before the write other than the known one marks the copy stale.
+            const patched = r.patch?.inventoryId === inv ? patchSnapshot(theirs.copy, r.patch) : theirs.copy
+            theirs = r.patch ? { copy: patched, rev: r.prevRev === theirs.rev ? r.rev : null } : { copy, rev }
+          }
+          // Now and then the other device syncs: one full load when its known revision is not the source's.
+          if (step.device % 6 === 1 && theirs.rev !== rev) theirs = { copy, rev }
         }
       }),
       // A failure shrinks for at most the time limit, then reports the smallest case found so far. failOnInterrupt: a
@@ -566,6 +651,8 @@ describe('patch property', () => {
     )
     expect(COMMAND_TYPES.filter((t) => !applied.has(t)), 'command types no run applied').toEqual([])
     expect(refusedByDatabase, 'valid commands the database refused').toEqual([])
+    expect(refusedStale.filter((m) => !/foreign key/.test(m)), 'stale commands refused for another reason').toEqual([])
+    expect(staleWrites, 'writes validated on an older copy').toBeGreaterThan(100)
   })
 
   it('a foreign write between own writes shows as a different prevRev', async () => {

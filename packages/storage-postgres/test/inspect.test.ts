@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { inspectSchema } from '../src/inspect'
-import { APP_SCHEMA_VERSION } from '../src/migrator'
+import { APP_SCHEMA_VERSION, SCHEMA_BASE } from '../src/migrator'
 import { openPostgresStorage } from '../src/storage'
 import { sql } from '../src/sql'
 import { makeExecutor } from './helpers'
@@ -19,6 +19,17 @@ describe('inspectSchema', () => {
     expect(await inspectSchema(exec)).toEqual({ state: 'newer', dbVersion: v + 1, appVersion: v })
     await exec.batch([sql`update gm_meta set value = '0'`])
     expect(await inspectSchema(exec)).toEqual({ state: 'older', dbVersion: 0, appVersion: v })
+  })
+
+  it('reports a pre-release version (1..SCHEMA_BASE) as outdated, which opening refuses', async () => {
+    const exec = await makeExecutor()
+    await openPostgresStorage(exec)
+    const v = APP_SCHEMA_VERSION
+    for (const old of [1, SCHEMA_BASE]) {
+      await exec.batch([sql`update gm_meta set value = ${String(old)} where key = 'schema_version'`])
+      expect(await inspectSchema(exec)).toEqual({ state: 'outdated', dbVersion: old, appVersion: v })
+    }
+    await expect(openPostgresStorage(exec)).rejects.toMatchObject({ code: 'outdated' })
   })
 
   it('reports a database with foreign tables as foreign and refuses to open it without writing', async () => {

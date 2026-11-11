@@ -22,11 +22,49 @@ function insertTags(itemId: string, tagIds: string[]): Statement {
 // ---- axes (spec 2026-11-11 variants §4.6) ----
 // core checks the rules against the device's copy; these statements carry out the consequences from what the database
 // holds when the write runs, so a stale copy never leaves an axis with a value or a variant value on a shared attribute.
+// A removal the database state forbids is skipped, not refused: the write still bumps the revision and returns the
+// item's slice as the database has it, and the revision rules reload the device's copy (Plan 6 sync spec §4.2).
 
-/** The variants' values on the attribute: removing the axis takes them, archived variants' included. */
+/**
+ * True when the database lets the axis go (spec §4.6, §4.7), archived variants included: the item has no variants, or
+ * another axis remains and the remaining axes still tell every two variants apart. Values compare as core's
+ * `sameAxisValue` does: text without case and outer spaces, other kinds exactly, an empty value equal only to empty.
+ * Postgres `lower` follows the database's locale and may fold some non-ASCII letters unlike JavaScript (under "C", none
+ * at all): for such text this check is approximate, and core's check on the device stays the one that decides.
+ */
+function axisMayGo(itemId: Id, attributeId: Id): Statement {
+  return sql`(
+    not exists (select 1 from variants where item_id = ${itemId}::uuid)
+    or (
+      exists (select 1 from item_attributes
+              where item_id = ${itemId}::uuid and axis_position is not null and attribute_id <> ${attributeId}::uuid)
+      and not exists (
+        select 1
+        from variants v
+        where v.item_id = ${itemId}::uuid
+        group by array(
+          select case when a.kind = 'text' then lower(btrim(va.value)) else va.value end
+          from item_attributes r
+          join attributes a on a.id = r.attribute_id
+          left join variant_attribute_values va
+            on va.variant_id = v.id and va.attribute_id = r.attribute_id and btrim(va.value) <> ''
+          where r.item_id = ${itemId}::uuid and r.axis_position is not null and r.attribute_id <> ${attributeId}::uuid
+          order by r.attribute_id
+        )
+        having count(*) > 1
+      )
+    )
+  )`
+}
+
+/** The variants' values on the attribute, archived variants' included, once it is no longer an axis of the item: a
+ *  removal the database skipped keeps them. */
 function deleteVariantValues(itemId: Id, attributeId: Id): Statement {
   return sql`delete from variant_attribute_values va using variants v
-             where va.variant_id = v.id and v.item_id = ${itemId}::uuid and va.attribute_id = ${attributeId}::uuid`
+             where va.variant_id = v.id and v.item_id = ${itemId}::uuid and va.attribute_id = ${attributeId}::uuid
+               and not exists (select 1 from item_attributes
+                               where item_id = ${itemId}::uuid and attribute_id = ${attributeId}::uuid
+                                 and axis_position is not null)`
 }
 
 /**
@@ -85,8 +123,9 @@ function addAxis(c: Extract<Command, { type: 'item.addAxis' }>, by: string): Sta
 }
 
 /**
- * Axis -> shared. The item's value is the one every variant has, archived ones included: the same string byte for byte
- * (collation "C"), none empty or missing; otherwise null. Then the variants' values go and the remaining axes close up.
+ * Axis -> shared, when the database lets the axis go (`axisMayGo`). The item's value is the one every variant has,
+ * archived ones included: the same string byte for byte (collation "C"), none empty or missing; otherwise null. Then
+ * the variants' values go and the remaining axes close up.
  */
 function removeAxis(itemId: Id, attributeId: Id): Statement[] {
   return [
@@ -99,7 +138,8 @@ function removeAxis(itemId: Id, attributeId: Id): Statement[] {
           left join variant_attribute_values va on va.variant_id = v.id and va.attribute_id = ${attributeId}::uuid
           where v.item_id = ${itemId}::uuid
         )
-        where item_id = ${itemId}::uuid and attribute_id = ${attributeId}::uuid and axis_position is not null`,
+        where item_id = ${itemId}::uuid and attribute_id = ${attributeId}::uuid and axis_position is not null
+          and ${axisMayGo(itemId, attributeId)}`,
     deleteVariantValues(itemId, attributeId),
     ...renumberAxes(itemId, []),
   ]
@@ -158,9 +198,12 @@ export function itemStatements(c: ItemCommand, actor: Actor): Statement[] {
               where item_attributes.axis_position is null`,
       ]
     case 'item.removeAttribute':
-      // An axis goes as in item.removeAxis; its shared value would go with the link anyway.
+      // An axis goes as in item.removeAxis, only when the database lets it go; its shared value would go with the link
+      // anyway.
       return [
-        sql`delete from item_attributes where item_id = ${c.itemId} and attribute_id = ${c.attributeId}`,
+        sql`delete from item_attributes
+            where item_id = ${c.itemId} and attribute_id = ${c.attributeId}
+              and (axis_position is null or ${axisMayGo(c.itemId, c.attributeId)})`,
         deleteVariantValues(c.itemId, c.attributeId),
         ...renumberAxes(c.itemId, []),
       ]

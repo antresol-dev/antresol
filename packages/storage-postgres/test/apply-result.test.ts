@@ -8,6 +8,7 @@ import {
   makeExecutor,
   normItemRows,
   normSnapshot,
+  sizeAxis,
   sliceOf,
   TEST_ACTOR,
   variantsCreate,
@@ -102,9 +103,10 @@ describe('apply result', () => {
 
   it('deletePermanently of an item returns its id with no item row', async () => {
     const { run, inv } = await setup()
-    const item = newId()
+    const [item, size] = [newId(), newId()]
     await run(itemCreate(inv, item))
-    await run(variantsCreate(item, [[newId(), {}]]))
+    for (const c of sizeAxis(inv, item, size)) await run(c)
+    await run(variantsCreate(item, [[newId(), { [size]: 'S' }]]))
     await run(photoAdd(item, newId()))
     await run({ type: 'archive', target: 'item', id: item, archiveId: newId() })
     const r = await run({ type: 'deletePermanently', target: 'item', id: item })

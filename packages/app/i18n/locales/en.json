@@ -356,6 +356,7 @@
     "result": {
       "empty": "This source is empty. GrayMatter will set it up.",
       "older": "An older GrayMatter source. It will be upgraded.",
+      "outdated": "This database was made by a pre-release version of GrayMatter. Reset it to use it here.",
       "current": "Ready to use.",
       "newer": "This source was updated by a newer GrayMatter",
       "foreign": "This database already has other tables. Use an empty Neon database for GrayMatter."

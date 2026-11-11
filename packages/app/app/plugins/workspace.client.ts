@@ -3,7 +3,6 @@ import { createNeonDriver } from '~/lib/sources'
 import { createWorkspace } from '~/lib/workspace'
 import type { WorkspaceDeps } from '~/lib/workspace-types'
 
-const STALE_AFTER_MS = 15 * 60_000
 /** A flapping connection fires `online` repeatedly; one reload per window is enough. */
 const ONLINE_DEBOUNCE_MS = 2_000
 
@@ -34,7 +33,8 @@ export default defineNuxtPlugin(async () => {
     onlineTimer = setTimeout(() => quietly(workspace.refresh()), ONLINE_DEBOUNCE_MS)
   })
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') quietly(workspace.refreshIfStale(STALE_AFTER_MS))
+    // Back in the app: a check if the device's interval has passed (or a source is failing).
+    if (document.visibilityState === 'visible') quietly(workspace.syncIfDue())
     // The app may be closed while hidden: written rows not saved on the device yet are saved now.
     if (document.visibilityState === 'hidden') quietly(workspace.flushCache())
   })

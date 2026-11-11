@@ -35,6 +35,8 @@ function harness() {
     listError: null as Error | null,
     /** One-shot: the next listInventories waits for this promise first. */
     listGate: null as Promise<void> | null,
+    /** One-shot: the next listInventories reads, then runs this before answering. */
+    afterList: null as (() => Promise<void>) | null,
     /** One-shot: the next apply waits for this promise before writing. */
     applyGate: null as Promise<void> | null,
     applyBlocked: false,
@@ -154,7 +156,11 @@ function harness() {
           flags.listError = null
           throw listError
         }
-        return conn.storage.listInventories()
+        const listing = await conn.storage.listInventories()
+        const after = flags.afterList
+        flags.afterList = null
+        if (after) await after()
+        return listing
       }
       const close = async (): Promise<void> => {
         flags.closeCalls++
@@ -483,17 +489,19 @@ describe('workspace', () => {
     expect(ws.state.deviceName).toBe(defaultDeviceName(UA))
   })
 
-  it('14. refreshIfStale skips fresh data and refreshes stale data', async () => {
+  it('14. syncIfDue skips data checked within the interval and checks older data', async () => {
     const h = setup()
     await h.seed(CS('one'), 'Inv')
     await h.db.putSource(config('s1', CS('one')))
     const ws = h.workspace()
+    await ws.setCheckInterval('5m')
     await ws.refresh()
     const calls = h.flags.listCalls
-    await ws.refreshIfStale(60_000)
+    h.flags.clock += 4 * 60_000
+    await ws.syncIfDue()
     expect(h.flags.listCalls).toBe(calls)
-    h.flags.clock += 120_000
-    await ws.refreshIfStale(60_000)
+    h.flags.clock += 60_000
+    await ws.syncIfDue()
     expect(h.flags.listCalls).toBeGreaterThan(calls)
   })
 
@@ -622,7 +630,7 @@ describe('workspace', () => {
     expect(ws.state.snapshot?.folders.map((f) => f.name)).toEqual(['C'])
   })
 
-  it('22. refreshIfStale refreshes regardless of age while a source is unreachable or in error', async () => {
+  it('22. syncIfDue checks regardless of age while the current source is unreachable', async () => {
     const h = setup()
     const id = await h.seed(CS('one'), 'Inv')
     await h.db.putSource(config('s1', CS('one')))
@@ -633,7 +641,7 @@ describe('workspace', () => {
     h.flags.applyError = null
     expect(ws.state.sources[0]!.status).toBe('unreachable')
     const lists = h.flags.listCalls
-    await ws.refreshIfStale(15 * 60_000)
+    await ws.syncIfDue()
     expect(h.flags.listCalls).toBeGreaterThan(lists)
     expect(ws.state.readOnly).toBeNull()
   })
@@ -650,7 +658,7 @@ describe('workspace', () => {
     expect(ws.state.lastRefreshAt).toBeNull()
     h.flags.loadError = null
     const lists = h.flags.listCalls
-    await ws.refreshIfStale(15 * 60_000)
+    await ws.syncIfDue()
     expect(h.flags.listCalls).toBeGreaterThan(lists)
     expect(ws.state.lastRefreshAt).not.toBeNull()
   })
@@ -941,19 +949,20 @@ describe('workspace', () => {
       await ws.start()
       expect(ws.state.current?.sourceId).toBe('s1')
       expect(ws.state.sources.map((s) => s.status)).toEqual(['ready', 'error'])
-      const stale = 15 * 60_000
+      // Whatever the interval: it covers healthy sources only.
+      await ws.setCheckInterval('never')
       const connects = h.flags.connectCalls
       const lists = h.flags.listCalls
 
       h.flags.clock += FAILED_RETRY_MS - 1
-      await ws.refreshIfStale(stale)
+      await ws.syncIfDue()
       expect([h.flags.connectCalls, h.flags.listCalls]).toEqual([connects, lists])
 
       h.flags.clock += 1
-      await ws.refreshIfStale(stale)
+      await ws.syncIfDue()
       // s2 tries a new connection, s1 lists on its open one.
       expect([h.flags.connectCalls, h.flags.listCalls]).toEqual([connects + 1, lists + 1])
-      await ws.refreshIfStale(stale)
+      await ws.syncIfDue()
       expect([h.flags.connectCalls, h.flags.listCalls]).toEqual([connects + 1, lists + 1])
 
       // The current source failing still refreshes at once.
@@ -961,7 +970,7 @@ describe('workspace', () => {
       await ws.apply(folderCreate(ws.state.current!.inventoryId, 'X')).catch(() => {})
       h.flags.applyError = null
       expect(ws.state.sources[0]!.status).toBe('unreachable')
-      await ws.refreshIfStale(stale)
+      await ws.syncIfDue()
       expect(h.flags.listCalls).toBe(lists + 2)
       expect(ws.state.sources[0]!.status).toBe('ready')
     })
@@ -1544,6 +1553,252 @@ describe('workspace writes patch the local copy', () => {
     h.flags.clock += 60_000
     await ws.apply(folderCreate(inv, 'Two'))
     expect(ws.state.lastRefreshAt).toBe(checked)
+  })
+})
+
+describe('workspace sync and the check interval', () => {
+  const MINUTE = 60_000
+  /** Source s1 with one inventory per name, started; the first name sorts first and is current. */
+  const started = async (...names: string[]) => {
+    const h = setup()
+    const refs: InventoryRef[] = []
+    for (const name of names) refs.push({ sourceId: 's1', inventoryId: await h.seed(CS('one'), name) })
+    await h.db.putSource(config('s1', CS('one')))
+    const ws = h.workspace()
+    await ws.start()
+    expect(ws.state.current).toEqual(refs[0])
+    return { h, ws, refs, inv: refs[0]!.inventoryId }
+  }
+  type Ws = ReturnType<ReturnType<typeof harness>['workspace']>
+  const folderNames = (ws: Ws): string[] => ws.state.snapshot!.folders.map((f) => f.name).sort()
+
+  it('1. sync with an unchanged source lists once, loads nothing and returns unchanged', async () => {
+    const { h, ws, inv } = await started('Inv')
+    // Right after start, then after three own writes.
+    for (const writes of [0, 3]) {
+      for (let n = 0; n < writes; n++) await ws.apply(folderCreate(inv, `Shelf ${n}`))
+      const lists = h.flags.listCalls
+      const loads = h.flags.loadCalls
+      expect(await ws.sync()).toBe('unchanged')
+      expect(h.flags.listCalls).toBe(lists + 1)
+      expect(h.flags.loadCalls).toBe(loads)
+    }
+    expect(folderNames(ws)).toEqual(['Shelf 0', 'Shelf 1', 'Shelf 2'])
+  })
+
+  it('2. sync after another device wrote loads once and returns updated', async () => {
+    const { h, ws, inv } = await started('Inv')
+    await (await h.direct(CS('one'))).apply(folderCreate(inv, 'Theirs'), { device: 'other' })
+    const loads = h.flags.loadCalls
+    expect(await ws.sync()).toBe('updated')
+    expect(h.flags.loadCalls).toBe(loads + 1)
+    expect(folderNames(ws)).toEqual(['Theirs'])
+    expect(await ws.sync()).toBe('unchanged')
+    expect(h.flags.loadCalls).toBe(loads + 1)
+  })
+
+  it('3. sync lists every source', async () => {
+    const h = setup()
+    await h.seed(CS('one'), 'A')
+    await h.seed(CS('two'), 'B')
+    await h.db.putSource(config('s1', CS('one')))
+    await h.db.putSource(config('s2', CS('two')))
+    const ws = h.workspace()
+    await ws.start()
+    // An inventory created on another device shows after the next sync.
+    await h.seed(CS('two'), 'C')
+    const lists = h.flags.listCalls
+    expect(await ws.sync()).toBe('unchanged')
+    expect(h.flags.listCalls).toBe(lists + 2)
+    expect(ws.state.inventories.map((e) => e.inventory.name)).toEqual(['A', 'B', 'C'])
+  })
+
+  it('4. reloadSource loads the current inventory even when the revision matches; another cached inventory of the source loads when opened', async () => {
+    const { h, ws, refs } = await started('A', 'B')
+    const [a, b] = refs as [InventoryRef, InventoryRef]
+    await ws.selectInventory(b)
+    await ws.selectInventory(a)
+    // Both device copies are at the source's revision but wrong.
+    for (const ref of [a, b]) {
+      const cached = (await h.db.getSnapshot(ref))!
+      await h.db.putSnapshot(ref, { ...cached, snapshot: { ...cached.snapshot, inventory: { ...cached.snapshot.inventory, name: 'Wrong' } } })
+    }
+    const reopened = h.workspace()
+    await reopened.start()
+    const loads = h.flags.loadCalls
+    expect(reopened.state.snapshot!.inventory.name).toBe('Wrong')
+    expect(await reopened.sync()).toBe('unchanged')
+
+    await reopened.reloadSource('s1')
+    expect(h.flags.loadCalls).toBe(loads + 1)
+    expect(reopened.state.snapshot!.inventory.name).toBe('A')
+    await reopened.selectInventory(b)
+    expect(h.flags.loadCalls).toBe(loads + 2)
+    expect(reopened.state.snapshot!.inventory.name).toBe('B')
+    // Both reloaded copies are current again.
+    await reopened.selectInventory(a)
+    expect(h.flags.loadCalls).toBe(loads + 2)
+    expect(reopened.state.snapshot!.inventory.name).toBe('A')
+  })
+
+  it('5. syncIfDue within the interval does nothing; after it, it checks once', async () => {
+    const { h, ws } = await started('Inv')
+    expect(ws.state.checkInterval).toBe('15m')
+    const minutes = { '5m': 5, '15m': 15, '1h': 60, '6h': 360, '1d': 1440 } as const
+    for (const [interval, n] of Object.entries(minutes)) {
+      await ws.setCheckInterval(interval as keyof typeof minutes)
+      // Any successful check starts the interval again.
+      await ws.sync()
+      const lists = h.flags.listCalls
+      h.flags.clock += n * MINUTE - 1
+      await ws.syncIfDue()
+      expect(h.flags.listCalls).toBe(lists)
+      h.flags.clock += 1
+      await ws.syncIfDue()
+      expect(h.flags.listCalls).toBe(lists + 1)
+      await ws.syncIfDue()
+      expect(h.flags.listCalls).toBe(lists + 1)
+    }
+  })
+
+  it('6. with never, syncIfDue leaves a healthy source alone; sync still checks', async () => {
+    const { h, ws, inv } = await started('Inv')
+    await ws.setCheckInterval('never')
+    h.flags.clock += 7 * 1440 * MINUTE
+    const lists = h.flags.listCalls
+    await ws.syncIfDue()
+    await ws.apply(folderCreate(inv, 'Shelf'))
+    expect(h.flags.listCalls).toBe(lists)
+    expect(await ws.sync()).toBe('unchanged')
+    expect(h.flags.listCalls).toBe(lists + 1)
+  })
+
+  it('7. a failing current source is retried at once whatever the interval', async () => {
+    const { h, ws, inv } = await started('Inv')
+    for (const interval of ['never', '1d'] as const) {
+      await ws.setCheckInterval(interval)
+      h.flags.applyError = new StorageError('unavailable')
+      await expect(ws.apply(folderCreate(inv, 'X'))).rejects.toMatchObject({ code: 'unavailable' })
+      h.flags.applyError = null
+      expect(ws.state.sources[0]!.status).toBe('unreachable')
+      const lists = h.flags.listCalls
+      await ws.syncIfDue()
+      expect(h.flags.listCalls).toBe(lists + 1)
+      expect(ws.state.sources[0]!.status).toBe('ready')
+    }
+  })
+
+  it('8. a write after the interval checks first', async () => {
+    const { h, ws, inv } = await started('Inv')
+    // Another device adds a shelf; the own write puts a bin on it, which the copy before the check does not have.
+    const shelf = newId()
+    await (await h.direct(CS('one'))).apply(folderCreate(inv, 'Shelf', shelf), { device: 'other' })
+    h.flags.clock += 15 * MINUTE
+    const lists = h.flags.listCalls
+    const applies = h.flags.applyCalls
+    const gate = h.gate()
+    h.flags.applyGate = gate.promise
+    const write = ws.apply({ ...folderCreate(inv, 'Bin'), parentId: shelf } as Command)
+    await vi.waitFor(() => expect(h.flags.applyBlocked).toBe(true))
+    expect(h.flags.listCalls).toBe(lists + 1)
+    expect(h.flags.applyCalls).toBe(applies + 1)
+    gate.open()
+    await write
+    expect(folderNames(ws)).toEqual(['Bin', 'Shelf'])
+    // The next write is within the interval: it only writes.
+    await ws.apply(folderCreate(inv, 'Box'))
+    expect([h.flags.listCalls, h.flags.applyCalls]).toEqual([lists + 1, applies + 2])
+  })
+
+  it('9. the interval is kept on the device', async () => {
+    const h = setup()
+    await h.seed(CS('one'), 'Inv')
+    await h.db.putSource(config('s1', CS('one')))
+    const ws = h.workspace()
+    expect(ws.state.checkInterval).toBe('15m')
+    await ws.start()
+    expect(ws.state.checkInterval).toBe('15m')
+    await ws.setCheckInterval('1h')
+    expect(ws.state.checkInterval).toBe('1h')
+    const again = h.workspace()
+    await again.startFromCache()
+    expect(again.state.checkInterval).toBe('1h')
+  })
+
+  it('10. a refresh that leaves the shown copy stale does not count as a check', async () => {
+    const { h, ws, inv } = await started('Inv')
+    const checked = ws.state.lastRefreshAt
+    h.flags.clock += MINUTE
+    await (await h.direct(CS('one'))).apply(folderCreate(inv, 'Theirs'), { device: 'other' })
+    const gate = h.gate()
+    h.flags.loadGate = gate.promise
+    const refresh = ws.refresh()
+    // The load has read 'Theirs' and waits; another device writes again, then this one: the load cannot be placed
+    // against the own rows.
+    await vi.waitFor(() => expect(h.flags.loadBlocked).toBe(true))
+    await h.bumpRev(CS('one'))
+    await ws.apply(folderCreate(inv, 'Mine'))
+    gate.open()
+    await refresh
+    expect(ws.state.lastRefreshAt).toBe(checked)
+    // So the check comes due on time and loads the copy.
+    h.flags.clock += 14 * MINUTE
+    const loads = h.flags.loadCalls
+    await ws.syncIfDue()
+    expect(h.flags.loadCalls).toBe(loads + 1)
+    expect(folderNames(ws)).toEqual(['Mine', 'Theirs'])
+    expect(ws.state.lastRefreshAt).toBe(new Date(h.flags.clock).toISOString())
+  })
+
+  it('11. sync and reloadSource reject with unavailable when the source cannot be reached', async () => {
+    const { h, ws } = await started('Inv')
+    await expect(ws.reloadSource('nope')).rejects.toMatchObject({ code: 'not_found' })
+    h.flags.offline = true
+    await expect(ws.sync()).rejects.toMatchObject({ code: 'unavailable' })
+    await expect(ws.reloadSource('s1')).rejects.toMatchObject({ code: 'unavailable' })
+    expect(ws.state.sources[0]!.status).toBe('unreachable')
+    h.flags.offline = false
+    await expect(ws.reloadSource('s1')).resolves.toBeUndefined()
+    expect(ws.state.sources[0]!.status).toBe('ready')
+  })
+
+  it('12. sync does not ride on a refresh that listed before it was called', async () => {
+    const { h, ws, inv } = await started('Inv')
+    const gate = h.gate()
+    let listed = false
+    h.flags.afterList = async () => {
+      listed = true
+      await gate.promise
+    }
+    const running = ws.refresh()
+    await vi.waitFor(() => expect(listed).toBe(true))
+    await (await h.direct(CS('one'))).apply(folderCreate(inv, 'Theirs'), { device: 'other' })
+    const synced = ws.sync()
+    gate.open()
+    expect(await synced).toBe('updated')
+    await running
+    expect(folderNames(ws)).toEqual(['Theirs'])
+  })
+
+  it('13. the journal is read after a due check', async () => {
+    const { h, ws, inv } = await started('Inv')
+    const itemId = newId()
+    await ws.apply({
+      type: 'item.create', id: itemId, inventoryId: inv, folderId: null, name: 'Bolt', description: null, unitKey: 'pcs', tagIds: [], initialReceipt: null,
+    })
+    h.flags.clock += 15 * MINUTE
+    const lists = h.flags.listCalls
+    const listing = h.gate()
+    h.flags.listGate = listing.promise
+    const journal = ws.loadMovements(itemId)
+    await vi.waitFor(() => expect(h.flags.listGate).toBeNull())
+    expect(h.flags.movementCalls).toBe(0)
+    listing.open()
+    await journal
+    expect([h.flags.listCalls, h.flags.movementCalls]).toEqual([lists + 1, 1])
+    // Within the interval: the journal only.
+    await ws.loadMovements(itemId)
+    expect([h.flags.listCalls, h.flags.movementCalls]).toEqual([lists + 1, 2])
   })
 })
 

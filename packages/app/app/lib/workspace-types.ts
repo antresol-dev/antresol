@@ -19,6 +19,8 @@ export interface SourceState {
   reason: FailureReason | null
 }
 export type ReadOnlyReason = 'offline' | 'schema_newer' | 'source_error'
+/** How often syncIfDue checks healthy sources; 'never': not by time. A device setting. */
+export type CheckInterval = '5m' | '15m' | '1h' | '6h' | '1d' | 'never'
 
 export interface WorkspaceState {
   started: boolean
@@ -35,8 +37,11 @@ export interface WorkspaceState {
   snapshotOrigin: 'cache' | 'live' | null
   /** ISO time the shown data was loaded from the source. */
   snapshotSavedAt: string | null
-  /** Last fully successful refresh. */
+  /** Last successful check: a refresh that reached every source and left the shown copy at its source's revision, or
+   *  an own write that proved the shown copy current. The check interval counts from it. */
   lastRefreshAt: string | null
+  /** Device setting; DEFAULT_CHECK_INTERVAL until stored. */
+  checkInterval: CheckInterval
   refreshing: boolean
   saving: boolean
   readOnly: ReadOnlyReason | null
@@ -59,9 +64,20 @@ export interface Workspace {
   startFromCache(): Promise<void>
   /** List inventories on each source's open connection (connecting if needed), load the current snapshot. */
   refresh(): Promise<void>
-  /** Refreshes when the last refresh is older than `maxAgeMs` or the current source is failing; a failing source
-   *  that is not current is retried at most once per FAILED_RETRY_MS. */
-  refreshIfStale(maxAgeMs: number): Promise<void>
+  /** "Sync": a refresh that starts after this call (one already running may have listed before it). Resolves
+   *  'updated' when the shown copy was replaced by a full load meanwhile; rejects with `unavailable` when the current
+   *  inventory's source is not connected after it. */
+  sync(): Promise<'unchanged' | 'updated'>
+  /** "Reload everything": no copy of the source is trusted any more (the shown one, those on the device), then as
+   *  sync: the current inventory, if from this source, loads in full, the source's others when opened. Rejects with
+   *  `not_found` for an unknown source, with `unavailable` when it is not connected after. */
+  reloadSource(sourceId: string): Promise<void>
+  /** The one gate before data is used (return to the app, writes, the journal): refreshes at once while the current
+   *  source is failing; while another one is, at most once per FAILED_RETRY_MS; otherwise when the last successful
+   *  check is older than `checkInterval` ('never': not by time). */
+  syncIfDue(): Promise<void>
+  /** Kept on the device. */
+  setCheckInterval(value: CheckInterval): Promise<void>
   /** startFromCache() then refresh(). */
   start(): Promise<void>
   /** Saves the shown copy on the device now if a write changed it since it was last saved (otherwise that happens
@@ -69,12 +85,14 @@ export interface Workspace {
   flushCache(): Promise<void>
   /** Cached copy first, then live. */
   selectInventory(ref: InventoryRef): Promise<void>
-  /** Throws DomainError | StorageError; calls run one after another in call order. The rows the command touched go
-   *  into the shown copy; only a wide command (restore, tag/attribute/unit delete, …) loads the inventory again. */
+  /** Throws DomainError | StorageError; calls run one after another in call order. A check that is due (syncIfDue)
+   *  runs first, so the command is validated against the copy it loads. The rows the command touched go into the
+   *  shown copy; only a wide command (restore, tag/attribute/unit delete, …) loads the inventory again. */
   apply(command: Command): Promise<void>
   /** Like apply, but for any inventory of a connected source; validated against that inventory's snapshot. */
   applyTo(ref: InventoryRef, command: Command): Promise<void>
-  /** Journal of an item of the current inventory, newest first. Rejects without a network call while the source is unreachable. */
+  /** Journal of an item of the current inventory, newest first, after a check that is due (syncIfDue). Rejects
+   *  without a network call while the source is unreachable. */
   loadMovements(itemId: Id): Promise<Movement[]>
   /** Read-only copy of every inventory of a connected source (archived included) with all movements. Rejects with
    *  `unavailable` when the source is offline or failing; never returns a partial backup. */

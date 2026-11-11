@@ -1,10 +1,13 @@
 import type { Inventory, InventorySnapshot } from '@graymatter/core'
 import { createStore, del, get, getMany, keys, set, setMany, update, type UseStore } from 'idb-keyval'
 import type { InventoryRef, SourceConfig } from './types'
+import type { CheckInterval } from './workspace-types'
 
 export interface DeviceSettings {
   deviceName: string | null
   current: InventoryRef | null
+  /** Absent until chosen: DEFAULT_CHECK_INTERVAL. */
+  checkInterval?: CheckInterval
 }
 
 export interface CachedSnapshot {

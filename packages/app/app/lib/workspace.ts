@@ -24,9 +24,18 @@ import { prepareImage as defaultPrepareImage } from './images'
 import { defaultDeviceName } from './device-name'
 import { classifyFailure, redactSecret, type FailureReason, type SourceConnection } from './sources'
 import type { InventoryRef, SourceConfig } from './types'
-import type { InventoryEntry, SourceState, SourceStatus, Workspace, WorkspaceDeps, WorkspaceState } from './workspace-types'
+import type {
+  CheckInterval,
+  InventoryEntry,
+  SourceState,
+  SourceStatus,
+  Workspace,
+  WorkspaceDeps,
+  WorkspaceState,
+} from './workspace-types'
 
 export type {
+  CheckInterval,
   InventoryEntry,
   ReadOnlyReason,
   SourceState,
@@ -46,8 +55,20 @@ const cacheRev = (rev: string | null): string | null => (rev === null ? null : c
 const uncacheRev = (stored: string | null | undefined): string | null =>
   stored?.startsWith(REV_PREFIX) ? stored.slice(REV_PREFIX.length) : null
 
-/** refreshIfStale retries a failing source that is not the current one at most this often. */
+/** syncIfDue retries a failing source that is not the current one at most this often, whatever the interval. */
 export const FAILED_RETRY_MS = 5 * 60_000
+
+export const DEFAULT_CHECK_INTERVAL: CheckInterval = '15m'
+/** How long a successful check holds before syncIfDue checks again. */
+export const CHECK_INTERVAL_MS: Record<Exclude<CheckInterval, 'never'>, number> = {
+  '5m': 5 * 60_000,
+  '15m': 15 * 60_000,
+  '1h': 60 * 60_000,
+  '6h': 360 * 60_000,
+  '1d': 1440 * 60_000,
+}
+const isCheckInterval = (value: unknown): value is CheckInterval =>
+  value === 'never' || (typeof value === 'string' && Object.hasOwn(CHECK_INTERVAL_MS, value))
 
 /** A copy changed by writes is saved on the device at most this often, and at once by flushCache. */
 export const CACHE_PUT_DELAY_MS = 2_000
@@ -138,6 +159,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     snapshotOrigin: null,
     snapshotSavedAt: null,
     lastRefreshAt: null,
+    checkInterval: DEFAULT_CHECK_INTERVAL,
     refreshing: false,
     saving: false,
     readOnly: null,
@@ -512,6 +534,8 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     const [settings, configs, stored] = await Promise.all([db.getSettings(), db.getSources(), db.getListings()])
     state.persistent = db.persistent
     state.deviceName = settings.deviceName ?? defaultDeviceName(deps.userAgent)
+    // A value this app does not know (stored by a newer one) counts as unset.
+    state.checkInterval = isCheckInterval(settings.checkInterval) ? settings.checkInterval : DEFAULT_CHECK_INTERVAL
     state.sources = configs.map((config) => ({ config, status: 'connecting', error: null, reason: null }))
     // Lists of the last refresh: inventories can be switched before the first refresh and offline.
     for (const { id } of configs) {
@@ -567,16 +591,23 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       }
       rebuildInventories()
       await resolveCurrent()
-      // A failed load (or a source lost meanwhile) is not a refresh: the next trigger must retry.
+      // A failed load (or a source lost meanwhile) is not a check: the next trigger must retry. Nor is one that leaves
+      // the shown copy behind its source's revision (a load that could not be placed against own rows): the interval
+      // must not hold off the load it still needs.
       const cur = state.current
-      if (complete && (!cur || isConnected(statusOf(cur.sourceId)))) state.lastRefreshAt = nowIso()
+      if (complete && (!cur || (isConnected(statusOf(cur.sourceId)) && shownIsCurrent(cur.sourceId)))) {
+        state.lastRefreshAt = nowIso()
+      }
     } finally {
       state.refreshing = false
     }
   }
 
+  /** The shown copy is at the revision last known for its source. */
+  const shownIsCurrent = (sourceId: string): boolean => shownRev !== null && shownRev === sourceRevs.get(sourceId)
+
   function refresh(): Promise<void> {
-    // A run that started before the latest source change cannot satisfy this call.
+    // A run that started before the latest source change (or explicit check) cannot satisfy this call.
     if (refreshing && refreshingEpoch === refreshEpoch) return refreshing
     const previous = refreshing
     const run: Promise<void> = (async () => {
@@ -588,6 +619,51 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     refreshing = run
     refreshingEpoch = refreshEpoch
     return run
+  }
+
+  /** A refresh that starts after this call: a run already going may have listed the sources before it. */
+  function freshRefresh(): Promise<void> {
+    refreshEpoch++
+    return refresh()
+  }
+
+  const requireConnected = (sourceId: string): void => {
+    if (!isConnected(statusOf(sourceId))) throw new StorageError('unavailable')
+  }
+
+  async function sync(): Promise<'unchanged' | 'updated'> {
+    const applied = appliedSeq
+    await freshRefresh()
+    const cur = state.current
+    if (cur) requireConnected(cur.sourceId)
+    return appliedSeq !== applied ? 'updated' : 'unchanged'
+  }
+
+  async function reloadSource(sourceId: string): Promise<void> {
+    if (!state.sources.some((s) => s.config.id === sourceId)) throw new StorageError('not_found')
+    // Not trusted at any revision: the shown copy loads in full in the refresh below, the device copies when opened.
+    // An own write in between cannot vouch for them again (it only moves copies at the revision it started from).
+    if (state.current?.sourceId === sourceId) shownRev = null
+    const ids = (listings.get(sourceId) ?? []).map((inventory) => inventory.id)
+    await Promise.all(ids.map((inventoryId) => db.markSnapshotStale({ sourceId, inventoryId })))
+    await freshRefresh()
+    requireConnected(sourceId)
+  }
+
+  async function syncIfDue(): Promise<void> {
+    const time = now().getTime()
+    const failing = (s: SourceState): boolean => s.status === 'unreachable' || s.status === 'error'
+    const cur = state.current
+    // The current source failing: retry at once.
+    if (cur && state.sources.some((s) => s.config.id === cur.sourceId && failing(s))) return refresh()
+    if (state.sources.some(failing)) {
+      // Another source keeps failing: retry it now and then; the last attempt checked the current inventory too.
+      if (lastAttemptAt === null || time - lastAttemptAt >= FAILED_RETRY_MS) await refresh()
+      return
+    }
+    if (state.checkInterval === 'never') return
+    const last = state.lastRefreshAt ? Date.parse(state.lastRefreshAt) : null
+    if (last === null || time - last >= CHECK_INTERVAL_MS[state.checkInterval]) await refresh()
   }
 
   /** Runs `job` after all earlier writes; a failed job does not block later ones. */
@@ -619,6 +695,9 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     return enqueue(async () => {
       // First refresh still connecting: wait for it rather than failing with a misleading "can't reach".
       if (!conns.has(sourceId) && refreshing) await refreshing.catch(() => {})
+      // A check that is due goes first: a copy it loads is the one the command is validated against. No deadlock: a
+      // refresh never waits for the queue. A failing source is refused below without one.
+      if (isConnected(statusOf(sourceId))) await syncIfDue().catch(() => {})
       const status = statusOf(sourceId)
       if (status === 'unreachable' || status === 'read_only' || status === 'error') throw new StorageError('read_only')
       const conn = conns.get(sourceId)
@@ -841,12 +920,21 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     await apply({ type: 'photo.reorder', itemId, orderedIds })
   }
 
-  async function loadMovements(itemId: Id): Promise<Movement[]> {
+  /** The current inventory's source and connection; `unavailable` while it has none or is failing. */
+  function journalSource(): { sourceId: string; conn: SourceConnection } {
     const cur = state.current
     const status = cur ? statusOf(cur.sourceId) : null
     const conn = cur && conns.get(cur.sourceId)
     if (!cur || !conn || status === 'unreachable' || status === 'error') throw new StorageError('unavailable')
-    return guarded(cur.sourceId, conn, () => conn.storage.loadMovements(itemId))
+    return { sourceId: cur.sourceId, conn }
+  }
+
+  async function loadMovements(itemId: Id): Promise<Movement[]> {
+    // Fails fast first: a failing source is not retried for the journal.
+    journalSource()
+    await syncIfDue().catch(() => {})
+    const { sourceId, conn } = journalSource()
+    return guarded(sourceId, conn, () => conn.storage.loadMovements(itemId))
   }
 
   async function exportSource(sourceId: string): Promise<BackupFile> {
@@ -895,20 +983,9 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     state,
     startFromCache,
     refresh,
-    async refreshIfStale(maxAgeMs) {
-      const time = now().getTime()
-      const failing = (s: SourceState): boolean => s.status === 'unreachable' || s.status === 'error'
-      const cur = state.current
-      // The current source failing: retry at once.
-      if (cur && state.sources.some((s) => s.config.id === cur.sourceId && failing(s))) return refresh()
-      if (state.sources.some(failing)) {
-        // Another source keeps failing: retry it now and then; the last attempt loaded the current inventory.
-        if (lastAttemptAt === null || time - lastAttemptAt >= Math.min(maxAgeMs, FAILED_RETRY_MS)) await refresh()
-        return
-      }
-      const last = state.lastRefreshAt ? Date.parse(state.lastRefreshAt) : null
-      if (last === null || time - last >= maxAgeMs) await refresh()
-    },
+    sync,
+    reloadSource,
+    syncIfDue,
     async start() {
       await startFromCache()
       await refresh()
@@ -986,6 +1063,10 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       const trimmed = name.trim()
       await db.putSettings({ deviceName: trimmed || null })
       state.deviceName = trimmed || defaultDeviceName(deps.userAgent)
+    },
+    async setCheckInterval(value) {
+      await db.putSettings({ checkInterval: value })
+      state.checkInterval = value
     },
   }
 }

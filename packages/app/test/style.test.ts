@@ -302,6 +302,8 @@ describe.each(shadowThemes)('$theme shadows: the mock-up hybrid2 sh() at depth $
     ['raised-sm-shadow-pressed', 2.5, 6, 'shadow-pressed'],
     ['step-shadow-pressed', 2, 5, 'shadow-pressed'],
     ['selected-step-shadow-pressed', 2, 5, 'shadow-selected-pressed'],
+    // The folder tree's well (concave), the owner's 2026-11-12 phone pass.
+    ['well-shadow', 4, 10, 'shadow-dark'],
   ]
   it.each(pressedTokens)('--%s is I(%d, %d) after a zero outer pair', (token, x, b, darkColour) => {
     const [d, l] = sh(x, b)
@@ -639,6 +641,112 @@ describe('components and pages', () => {
         .map((m) => `${f.name}:${f.code.slice(0, m.index).split('\n').length} ${m[0]}`),
     )
     expect(problems).toEqual([])
+  })
+
+  describe('phone pass (the owner, 2026-11-12)', () => {
+    const file = (name: string) => {
+      const f = files.find((x) => x.name === name)
+      if (!f) throw new Error(`no ${name}`)
+      return f
+    }
+    const nodes = (name: string): Node[] => [...elements(file(name).ast as Node | undefined)]
+    /** Class text plus the script's string constants it names. */
+    function fullClass(name: string, n: Node): string {
+      let text = classText(n)
+      for (const m of file(name).source.matchAll(/const (\w+)\s*=\s*\n?\s*(['`])([^'`]*)\2/g)) {
+        if (new RegExp(`\\b${m[1]}\\b`).test(text)) text += ` ${m[3]}`
+      }
+      return text
+    }
+    const raisedClass = /(^|[\s'"`])(raised|raised-sm|raised-card|accent-button|painted)($|[\s'"`])/
+    const words = (text: string) => new Set(text.split(/[\s'"`,]+/))
+
+    it('the phone header\'s icon buttons are flat (☰ and the screen\'s actions): no raised, no outline Button', () => {
+      const menu = nodes('components/ScreenHeader.vue').find((n) =>
+        n.props.some((p) => p.type === 7 && p.arg?.content === 'id' && p.exp?.content === 'MENU_BUTTON_ID'),
+      )
+      expect(menu).toBeDefined()
+      expect(fullClass('components/ScreenHeader.vue', menu!)).toMatch(/\bpressable\b/)
+      expect(fullClass('components/ScreenHeader.vue', menu!)).not.toMatch(raisedClass)
+      for (const name of ['components/FolderActions.vue', 'components/ItemActions.vue']) {
+        const compact = nodes(name).filter((n) => /\bcompactButton\b/.test(classText(n)))
+        expect(compact.length, name).toBeGreaterThan(0)
+        for (const n of compact) {
+          expect(n.tag, name).toBe('Button')
+          expect(attr(n, 'variant'), `${name}:${n.loc.start.line}`).toBe('ghost')
+          expect(fullClass(name, n), `${name}:${n.loc.start.line}`).not.toMatch(raisedClass)
+        }
+      }
+    })
+
+    it('Camera and Gallery (and the desktop "Add photo") are flat bordered buttons, not raised', () => {
+      const buttons = nodes('components/PhotoPicker.vue').filter((n) => n.tag === 'Button')
+      expect(buttons.length).toBe(3)
+      for (const n of buttons) {
+        expect(attr(n, 'variant'), `line ${n.loc.start.line}`).toBe('ghost')
+        const text = fullClass('components/PhotoPicker.vue', n)
+        expect(text).not.toMatch(raisedClass)
+        expect(words(text).has('border')).toBe(true)
+      }
+    })
+
+    it('every sheet has a close button: top right, "Close", 44 px, off while the sheet is locked', () => {
+      const close = nodes('components/AppSheet.vue').find((n) =>
+        n.props.some((p) => p.type === 7 && p.arg?.content === 'aria-label' && p.exp?.content === "$t('ui.close')"),
+      )
+      expect(close).toBeDefined()
+      expect(close!.tag).toBe('button')
+      const text = words(fullClass('components/AppSheet.vue', close!))
+      for (const c of ['absolute', 'top-2', 'right-2', 'size-11', 'pressable']) expect(text.has(c), c).toBe(true)
+      expect(close!.props.some((p) => p.type === 7 && p.arg?.content === 'disabled' && p.exp?.content === 'locked')).toBe(true)
+      expect(onClick(close!)).toBe(true)
+      // The photo viewer's own close button moves to the same corner: after the counter.
+      const viewer = file('components/PhotoViewer.vue').source
+      expect(viewer.indexOf("$t('ui.close')")).toBeGreaterThan(viewer.indexOf("$t('photos.counter'"))
+    })
+
+    it('the folder tree sits in a well (concave), in the panel and in the drawer', () => {
+      const wells = (name: string) => nodes(name).filter((n) => words(classText(n)).has('concave'))
+      expect(wells('components/TreePanel.vue').length).toBe(1)
+      expect(wells('components/AppNav.vue').length).toBe(1)
+      expect(file('components/AppNav.vue').source).not.toMatch(/\braised-card\b/)
+      expect(css).toMatch(/\.concave\s*\{[^}]*box-shadow:\s*var\(--well-shadow\);/)
+    })
+
+    it('Tags & fields: section headings 17 px bold in the text colour, thinner "Add …" buttons (raised-sm, 40 px), a divider between sections', () => {
+      for (const name of ['components/TagsSection.vue', 'components/AttributesSection.vue', 'components/UnitsSection.vue']) {
+        const heading = nodes(name).find((n) => n.tag === 'h2')
+        expect(heading, name).toBeDefined()
+        const h = words(classText(heading!))
+        for (const c of ['text-[17px]', 'font-bold', 'text-foreground']) expect(h.has(c), `${name} ${c}`).toBe(true)
+        const add = nodes(name).filter((n) => n.tag === 'Button' && /\braised-sm\b/.test(classText(n)))
+        expect(add.length, name).toBe(1)
+        expect(attr(add[0]!, 'variant'), name).toBe('ghost')
+        expect(words(classText(add[0]!)).has('h-10'), name).toBe(true)
+      }
+      const sections = nodes('pages/dictionaries.vue').filter((n) => ['AttributesSection', 'UnitsSection'].includes(n.tag))
+      expect(sections.length).toBe(2)
+      for (const n of sections) expect(words(classText(n)).has('border-t'), n.tag).toBe(true)
+    })
+
+    it('Add item: the amount field and its unit select are one height (a passed h-11 wins over the select\'s own)', () => {
+      expect(readFileSync(join(appDir, 'components/ui/select/SelectTrigger.vue'), 'utf8')).not.toMatch(/data-\[size=default\]:h-/)
+      const amount = nodes('components/AmountField.vue')
+      const input = amount.find((n) => n.tag === 'Input')
+      const select = amount.find((n) => n.tag === 'SelectTrigger')
+      expect(words(classText(input!)).has('h-11')).toBe(true)
+      expect(words(classText(select!)).has('h-11')).toBe(true)
+    })
+
+    it('a duration never comes without a transition property: alone, it animates every property (sheets grew and shrank with the keyboard)', () => {
+      const problems: string[] = []
+      for (const f of files) {
+        for (const m of f.source.matchAll(/(['"`])([^'"`\n]*\bduration-\d+[^'"`\n]*)\1/g)) {
+          if (!/\btransition\b|\btransition-/.test(m[2]!)) problems.push(`${f.name}: ${m[2]}`)
+        }
+      }
+      expect(problems).toEqual([])
+    })
   })
 })
 

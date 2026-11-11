@@ -1,4 +1,4 @@
-import { addAxisPreview, duplicateOf, formatAttributeValue, variantLabel, type AttributeKind, type AxisRemoval, type Command, type Id, type InventorySnapshot } from '@graymatter/core'
+import { addAxisPreview, duplicateOf, formatAttributeValue, formatNumberValue, parseNumberValue, variantLabel, type AttributeKind, type AxisRemoval, type Command, type Id, type InventorySnapshot } from '@graymatter/core'
 import { parseNameList } from './lists'
 
 /** The unit of a number attribute is at most this many characters (the same limit as core's). */
@@ -33,6 +33,14 @@ export function attributeFormError(input: AttributeFormInput): string | null {
   if (input.kind === 'enum' && parseNameList(input.options).length === 0) return 'attributeForm.optionsRequired'
   if (input.kind === 'number' && input.unit.trim().length > MAX_UNIT_LENGTH) return 'attributeForm.unitTooLong'
   return null
+}
+
+/** What SI prefixes make of "4k7" with this unit ("4k7 → 4.7 kΩ"): the line under the attribute form's switch shows
+ *  it whether the switch is on or off, so it always says what turning prefixes on gives. */
+export function prefixExample(unit: string): string | null {
+  const rules = { unit: unit.trim(), siPrefixes: true }
+  const stored = parseNumberValue('4k7', rules)
+  return stored === null ? null : `4k7 → ${formatNumberValue(stored, rules)}`
 }
 
 /** The heading of the variants section: `by Resistance · Voltage`; nothing without axes. */

@@ -105,11 +105,12 @@ const arrow =
       <DialogTitle class="sr-only">{{ $t('photos.viewer') }}</DialogTitle>
       <DialogDescription class="sr-only">{{ $t('photos.viewer') }}</DialogDescription>
       <header class="flex min-h-14 shrink-0 items-center justify-between gap-2 px-2">
+        <!-- The close button in the top right corner, as in every sheet; the spacer keeps the counter centred. -->
+        <span class="size-11" aria-hidden="true" />
+        <span class="text-sm font-semibold text-muted-foreground tabular-nums">{{ $t('photos.counter', { n: index + 1, total }) }}</span>
         <Button variant="ghost" size="icon" :class="iconButton" :aria-label="$t('ui.close')" :disabled="busy" @click="open = false">
           <X class="size-5" aria-hidden="true" />
         </Button>
-        <span class="text-sm font-semibold text-muted-foreground tabular-nums">{{ $t('photos.counter', { n: index + 1, total }) }}</span>
-        <span class="size-11" aria-hidden="true" />
       </header>
       <div
         class="relative min-h-0 grow touch-pan-y select-none"

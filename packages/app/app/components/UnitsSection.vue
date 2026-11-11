@@ -63,8 +63,9 @@ async function remove(): Promise<void> {
 <template>
   <section class="grid min-w-0 gap-2" aria-labelledby="dictionaries-units">
     <div class="flex min-h-11 items-center justify-between gap-2 px-1">
-      <h2 id="dictionaries-units" class="text-[13px] font-semibold text-subtle-foreground">{{ $t('dictionaries.units') }}</h2>
-      <Button variant="outline" class="h-11" :disabled="locked" @click="open({ kind: 'form', unit: null })">
+      <h2 id="dictionaries-units" class="text-[17px] font-bold tracking-[-0.01em] text-foreground">{{ $t('dictionaries.units') }}</h2>
+      <!-- Thinner than the default raised button (R(3,7), 40 px): it must not outweigh the section's heading. -->
+      <Button variant="ghost" class="raised-sm h-10" :disabled="locked" @click="open({ kind: 'form', unit: null })">
         <Plus class="size-4" aria-hidden="true" />
         {{ $t('dictionaries.addUnit') }}
       </Button>

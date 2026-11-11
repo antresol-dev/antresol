@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.stubGlobal('defineNuxtConfig', <T>(config: T) => config)
 const { default: config } = await import('../nuxt.config')
@@ -61,10 +61,11 @@ describe('photoCrossorigin', () => {
 })
 
 describe('photo cache size and clearing', () => {
+  afterEach(() => vi.unstubAllGlobals())
   const fakeCaches = (store: Record<string, Record<string, number>>) => ({
     open: async (name: string) => ({
       keys: async () => Object.keys((store[name] ??= {})),
-      match: async (k: string) => ({ blob: async () => ({ size: store[name]![k] }) }),
+      match: async (k: string) => ({ headers: new Headers(), blob: async () => ({ size: store[name]![k] }) }),
     }),
     delete: async (name: string) => Reflect.deleteProperty(store, name),
   })
@@ -75,7 +76,19 @@ describe('photo cache size and clearing', () => {
     await clearPhotoCache()
     expect(store).toEqual({})
     expect(await photoCacheSize()).toBe(0)
-    vi.unstubAllGlobals()
+  })
+  it('reads the size from content-length and the body only where the header is missing', async () => {
+    const blob = vi.fn(async () => ({ size: 7 }))
+    const response = (length: string | null) => ({ headers: new Headers(length === null ? {} : { 'content-length': length }), blob })
+    const store: Record<string, ReturnType<typeof response>> = { a: response('1000'), b: response(null), c: response('2000') }
+    vi.stubGlobal('caches', {
+      open: async (name: string) => ({
+        keys: async () => (name === PHOTO_CACHE.thumbs ? Object.keys(store) : []),
+        match: async (k: string) => store[k],
+      }),
+    })
+    expect(await photoCacheSize()).toBe(3007)
+    expect(blob).toHaveBeenCalledTimes(1)
   })
   it('reports 0 and does nothing without the Cache API', async () => {
     expect(await photoCacheSize()).toBe(0)

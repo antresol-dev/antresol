@@ -22,7 +22,11 @@ describe('evaluateAmount', () => {
     ['3 * 1.5k', '4500'],
     ['2M', '2000000'],
     ['2-2', '0'],
-    ['100/3x3', '99.999999'],
+    ['100/3x3', '100'],
+    ['1/3*3', '1'],
+    ['1/3+1/3+1/3', '1'],
+    ['2/3x3/2', '1'],
+    ['(1/7)x7000000', '1000000'],
   ])('%s -> %s (pieces)', (input, value) => {
     expect(amount(input)).toEqual({ value })
   })
@@ -32,6 +36,27 @@ describe('evaluateAmount', () => {
     expect(amount('2.5 m + 1.2 m', m)).toEqual({ value: '3.7' })
     expect(amount('1/3 m', m)).toEqual({ value: '0.333333' })
     expect(amount('1km + 5mm', m)).toEqual({ value: '1000.005' })
+  })
+
+  it('reads x right after a unit or a prefix as multiplication', () => {
+    expect(amount('2mx3', m)).toEqual({ value: '6' })
+    expect(amount('2mX3', m)).toEqual({ value: '6' })
+    expect(amount('50cmx4', m)).toEqual({ value: '2' })
+    expect(amount('1.5kx3')).toEqual({ value: '4500' })
+    expect(amount('3pcsx2')).toEqual({ value: '6' })
+    expect(amount('3pcs x2')).toEqual({ value: '6' })
+    expect(amount('2qx3', m)).toEqual({ error: 'unit' })
+    expect(amount('2mx', m)).toEqual({ error: 'syntax' })
+    const box = { key: 'u:1', name: 'Boxes', symbol: 'box', prefixPowers: [] }
+    expect(amount('3box', box)).toEqual({ value: '3' })
+    expect(amount('3boxx2', box)).toEqual({ value: '6' })
+  })
+
+  it('rounds once, at the end', () => {
+    expect(evaluateAmount('1/3x3', pcs, 0)).toEqual({ value: '1' })
+    expect(evaluateAmount('0.4+0.4', pcs, 0)).toEqual({ value: '1' })
+    expect(evaluateAmount('1/8', pcs, 2)).toEqual({ value: '0.13' })
+    expect(amount('1/3000000x3')).toEqual({ value: '0.000001' })
   })
 
   it('rounds the quotient half up to the precision', () => {
@@ -75,7 +100,14 @@ describe('evaluateAmount', () => {
 })
 
 describe('evaluatePrice', () => {
-  it('keeps 4 fraction digits', () => {
+  it('evaluates at the given fraction digits, rounding once', () => {
+    expect(evaluatePrice('1/200.02', 2)).toEqual({ value: '0' })
+    expect(evaluatePrice('1/199.98', 2)).toEqual({ value: '0.01' })
+    expect(evaluatePrice('10/3', 2)).toEqual({ value: '3.33' })
+    expect(evaluatePrice('1500/7', 0)).toEqual({ value: '214' })
+    expect(evaluatePrice('10/3x3', 2)).toEqual({ value: '10' })
+  })
+  it('keeps 4 fraction digits by default', () => {
     expect(evaluatePrice('10/3')).toEqual({ value: '3.3333' })
     expect(evaluatePrice('2/3')).toEqual({ value: '0.6667' })
     expect(evaluatePrice('4,5 x 3')).toEqual({ value: '13.5' })

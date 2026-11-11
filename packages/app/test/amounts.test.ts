@@ -79,6 +79,18 @@ describe('expressions in fields', () => {
     expect(parseMoneyText('1-5', 'USD')).toBeNull()
   })
 
+  it('prices: rounded once, at the currency decimals', () => {
+    expect(parseMoneyText('1/200.02', 'USD')).toBe(0)
+    expect(parseMoneyText('1/199.98', 'USD')).toBe(1)
+    expect(parseMoneyText('100/3x3', 'USD')).toBe(10000)
+    expect(pricePreview('1/200.02', 'USD')).toEqual({ text: '0.00' })
+  })
+
+  it('amounts: x right after a unit, exact thirds', () => {
+    expect(parseAmountText('2mx3', m)).toBe('6')
+    expect(parseAmountText('1/3*3', pcs)).toBe('1')
+  })
+
   it('previews an expression only', () => {
     expect(amountPreview('2.5m + 120cm', m)).toEqual({ text: '3.7 m' })
     expect(amountPreview('2.5m', m)).toBeNull()

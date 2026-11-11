@@ -446,7 +446,7 @@
     "copied": "Copied",
     "copyFailed": "Could not copy",
     "traffic": "~{used} of {limit} this month (this device)",
-    "uploads": "{n} photos uploaded this month (this device)"
+    "uploads": "{count} photo uploaded this month (this device) | {count} photos uploaded this month (this device)"
   },
   "photoCache": {
     "title": "Photo cache",

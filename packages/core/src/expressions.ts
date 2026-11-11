@@ -2,17 +2,18 @@ import type { Quantity } from './quantity'
 import { unitSuffixPower, type UnitDef } from './units'
 
 /** Exact arithmetic for quantity and price fields (spec 2026-11-12 §E): + - * x × / ÷, parentheses, decimal point or
- *  comma, a unit prefix or the unit symbol on any number. Decimals are BigInt over a power of ten: no floats, no eval. */
+ *  comma, a unit prefix or the unit symbol on any number. Values are exact fractions of BigInts (no floats, no eval),
+ *  rounded once, at the end, to the field's precision: 1/3x3 is exactly 1. */
 
 export type ExpressionError = 'syntax' | 'unit' | 'divide_by_zero' | 'negative'
 
 const MAX_LENGTH = 200
 const MAX_DEPTH = 50
 
-/** value = n / 10^e, e >= 0 */
-interface Dec {
+/** value = n / d, d > 0, in lowest terms */
+interface Frac {
   n: bigint
-  e: number
+  d: bigint
 }
 
 class Failure extends Error {
@@ -22,32 +23,48 @@ class Failure extends Error {
 }
 
 type Token =
-  | { t: 'num'; v: Dec }
+  | { t: 'num'; v: Frac }
   | { t: 'op'; v: '+' | '-' | '*' | '/' }
   | { t: '(' | ')' }
 
 const pow10 = (k: number): bigint => 10n ** BigInt(k)
 
-function align(a: Dec, b: Dec): [bigint, bigint, number] {
-  const e = Math.max(a.e, b.e)
-  return [a.n * pow10(e - a.e), b.n * pow10(e - b.e), e]
+const abs = (a: bigint): bigint => (a < 0n ? -a : a)
+
+function gcd(a: bigint, b: bigint): bigint {
+  a = abs(a)
+  b = abs(b)
+  while (b) [a, b] = [b, a % b]
+  return a
+}
+
+function frac(n: bigint, d: bigint): Frac {
+  if (d < 0n) [n, d] = [-n, -d]
+  const g = gcd(n, d)
+  return g > 1n ? { n: n / g, d: d / g } : { n, d }
 }
 
 /** n / d rounded half away from zero; d > 0. */
 function divRound(n: bigint, d: bigint): bigint {
-  const neg = n < 0n
-  const m = neg ? -n : n
-  const q = (2n * m + d) / (2n * d)
-  return neg ? -q : q
-}
-
-/** Rescales to `digits` fraction digits, rounding half away from zero. */
-function toScale(x: Dec, digits: number): bigint {
-  return x.e <= digits ? x.n * pow10(digits - x.e) : divRound(x.n, pow10(x.e - digits))
+  const q = (2n * abs(n) + d) / (2n * d)
+  return n < 0n ? -q : q
 }
 
 const NUMBER = /^(?:\d+(?:[.,]\d*)?|[.,]\d+)/
 const SUFFIX = /^[^\s\d.,+\-*×/÷()]+/
+
+/** How much of a letter run after a number is its unit or prefix: all of it, or the part before an x that is then a
+ *  multiplication sign ("2mx3", "1.5kx3", "3pcsx2"). undefined: no valid split. */
+function splitSuffix(run: string, unit: UnitDef): { length: number; power: number } | undefined {
+  const power = unitSuffixPower(run, unit)
+  if (power !== undefined) return { length: run.length, power }
+  for (let k = 0; k < run.length; k++) {
+    if (run[k] !== 'x' && run[k] !== 'X') continue
+    const before = unitSuffixPower(run.slice(0, k), unit)
+    if (before !== undefined) return { length: k, power: before }
+  }
+  return undefined
+}
 
 function lex(input: string, unit: UnitDef): Token[] {
   const out: Token[] = []
@@ -63,21 +80,20 @@ function lex(input: string, unit: UnitDef): Token[] {
     const num = NUMBER.exec(rest())
     if (num) {
       i += num[0].length
-      const [int = '', frac = ''] = num[0].replace(',', '.').split('.')
-      let v: Dec = { n: BigInt((int + frac) || '0'), e: frac.length }
+      const [int = '', fraction = ''] = num[0].replace(',', '.').split('.')
+      let n = BigInt((int + fraction) || '0')
+      let d = pow10(fraction.length)
       skip()
       const run = SUFFIX.exec(rest())?.[0]
       if (run !== undefined) {
-        const power = unitSuffixPower(run, unit)
-        if (power !== undefined) {
-          i += run.length
-          v = power >= 0 ? { n: v.n * pow10(power), e: v.e } : { n: v.n, e: v.e - power }
-        } else if (!/^[xX]/.test(run)) {
-          throw new Failure('unit')
-        }
-        // else: the x is a multiplication sign, lexed on the next round
+        const suffix = splitSuffix(run, unit)
+        if (suffix === undefined) throw new Failure('unit')
+        // An x left after the suffix is a multiplication sign, lexed on the next round.
+        i += suffix.length
+        if (suffix.power >= 0) n *= pow10(suffix.power)
+        else d *= pow10(-suffix.power)
       }
-      out.push({ t: 'num', v })
+      out.push({ t: 'num', v: frac(n, d) })
       continue
     }
     i++
@@ -89,7 +105,8 @@ function lex(input: string, unit: UnitDef): Token[] {
   }
 }
 
-function evaluate(input: string, unit: UnitDef, digits: number): bigint {
+/** The exact value of the expression; throws Failure. */
+function evaluate(input: string, unit: UnitDef): Frac {
   if (input.length > MAX_LENGTH) throw new Failure('syntax')
   const tokens = lex(input, unit)
   let pos = 0
@@ -98,40 +115,36 @@ function evaluate(input: string, unit: UnitDef, digits: number): bigint {
   const isOp = (t: Token | undefined, ...ops: string[]): t is Extract<Token, { t: 'op' }> =>
     t?.t === 'op' && ops.includes(t.v)
 
-  function expr(): Dec {
+  function expr(): Frac {
     let left = term()
     for (let t = peek(); isOp(t, '+', '-'); t = peek()) {
       pos++
       const right = term()
-      const [a, b, e] = align(left, right)
-      left = { n: t.v === '+' ? a + b : a - b, e }
+      const sign = t.v === '+' ? 1n : -1n
+      left = frac(left.n * right.d + sign * right.n * left.d, left.d * right.d)
     }
     return left
   }
-  function term(): Dec {
+  function term(): Frac {
     let left = unary()
     for (let t = peek(); isOp(t, '*', '/'); t = peek()) {
       pos++
       const right = unary()
       if (t.v === '*') {
-        left = { n: left.n * right.n, e: left.e + right.e }
+        left = frac(left.n * right.n, left.d * right.d)
       } else {
         if (right.n === 0n) throw new Failure('divide_by_zero')
-        // (ln / 10^le) / (rn / 10^re) at `digits` fraction digits
-        const num = left.n * pow10(right.e + digits)
-        const den = right.n * pow10(left.e)
-        const neg = den < 0n
-        left = { n: divRound(neg ? -num : num, neg ? -den : den), e: digits }
+        left = frac(left.n * right.d, left.d * right.n)
       }
     }
     return left
   }
-  function unary(): Dec {
+  function unary(): Frac {
     const t = peek()
     if (isOp(t, '-', '+')) {
       pos++
       const v = unary()
-      return t.v === '-' ? { n: -v.n, e: v.e } : v
+      return t.v === '-' ? { n: -v.n, d: v.d } : v
     }
     if (t?.t === 'num') {
       pos++
@@ -151,7 +164,7 @@ function evaluate(input: string, unit: UnitDef, digits: number): bigint {
 
   const value = expr()
   if (pos !== tokens.length) throw new Failure('syntax')
-  return toScale(value, digits)
+  return value
 }
 
 function format(n: bigint, digits: number): string {
@@ -165,9 +178,9 @@ function format(n: bigint, digits: number): string {
 
 function run(input: string, unit: UnitDef, digits: number): { value: string } | { error: ExpressionError } {
   try {
-    const n = evaluate(input, unit, digits)
-    if (n < 0n) return { error: 'negative' }
-    return { value: format(n, digits) }
+    const exact = evaluate(input, unit)
+    if (exact.n < 0n) return { error: 'negative' }
+    return { value: format(divRound(exact.n * pow10(digits), exact.d), digits) }
   } catch (e) {
     if (e instanceof Failure) return { error: e.code }
     throw e
@@ -185,7 +198,8 @@ export function evaluateAmount(
 
 const NO_UNIT: UnitDef = { key: '', name: '', symbol: '', prefixPowers: [] }
 
-/** A price expression: plain numbers, 4 fraction digits (division rounds half up). */
-export function evaluatePrice(input: string): { value: string } | { error: ExpressionError } {
-  return run(input, NO_UNIT, 4)
+/** A price expression: plain numbers, rounded half away from zero once, to `fractionDigits` (the currency's decimals
+ *  when the field knows them). */
+export function evaluatePrice(input: string, fractionDigits = 4): { value: string } | { error: ExpressionError } {
+  return run(input, NO_UNIT, fractionDigits)
 }

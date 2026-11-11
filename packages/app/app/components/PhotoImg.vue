@@ -37,7 +37,16 @@ watch(
 </script>
 
 <template>
-  <img v-if="src && !failed" :src="src" :alt="alt" :crossorigin="photoCrossorigin(src)" loading="lazy" decoding="async" draggable="false" @error="failed = true" >
+  <img
+    v-if="src && !failed"
+    :crossorigin="photoCrossorigin(src)"
+    loading="lazy"
+    decoding="async"
+    :src="src"
+    :alt="alt"
+    draggable="false"
+    @error="failed = true"
+  >
   <div
     v-else
     class="grid place-items-center bg-thumb text-thumb-foreground"

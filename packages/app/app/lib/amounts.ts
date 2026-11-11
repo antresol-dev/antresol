@@ -14,7 +14,7 @@ export function unitChoices(s: InventorySnapshot): UnitDef[] {
 export const isExpression = (text: string): boolean => /[+\-*×÷/()xX]/.test(text.trim())
 
 /** Text → Quantity in the base unit. Accepts ',' as the decimal mark, the unit's prefixes ('50cm', '2.5 mm') and
- *  expressions ('2.5m + 120cm', '3 * 1.5k', '5x100'; division rounds to 6 decimals).
+ *  expressions ('2.5m + 120cm', '3 * 1.5k', '5x100'; exact, the result rounded once to 6 decimals).
  *  null: empty, not a number, negative, more than 6 decimals in the base unit, or a prefix the unit lacks. */
 export function parseAmountText(text: string, unit: UnitDef): Quantity | null {
   const q = parseAmount(text, unit)
@@ -24,24 +24,15 @@ export function parseAmountText(text: string, unit: UnitDef): Quantity | null {
   return 'value' in r ? r.value : null
 }
 
-/** Rounds a plain decimal string half away from zero to `digits` fraction digits. */
-function roundDecimal(value: string, digits: number): string {
-  const [whole = '0', frac = ''] = value.split('.')
-  if (frac.length <= digits) return value
-  const kept = BigInt(whole + frac.slice(0, digits)) + (frac.charCodeAt(digits) >= 53 ? 1n : 0n)
-  const s = kept.toString().padStart(digits + 1, '0')
-  return digits === 0 ? s : `${s.slice(0, -digits)}.${s.slice(-digits)}`
-}
-
-/** Text → integer minor units. Expressions work too ("2.30 + 1.1", "12 / 3"); a result with more decimals than the
- *  currency has is rounded to them. null: empty, invalid, negative, or (for a plain value) too many decimals. */
+/** Text → integer minor units. Expressions work too ("2.30 + 1.1", "12 / 3"), evaluated exactly and rounded once to
+ *  the currency's decimals. null: empty, invalid, negative, or (for a plain value) too many decimals. */
 export function parseMoneyText(text: string, currency: string): number | null {
   const c = getCurrency(currency)
   if (!c) return null
   const plain = parseMoney(text, c)
   if (plain !== null || !isExpression(text)) return plain
-  const r = evaluatePrice(text)
-  return 'value' in r ? parseMoney(roundDecimal(r.value, c.decimals), c) : null
+  const r = evaluatePrice(text, c.decimals)
+  return 'value' in r ? parseMoney(r.value, c) : null
 }
 
 export type ExpressionPreview = { text: string } | { errorKey: string }
@@ -59,8 +50,8 @@ export function amountPreview(text: string, unit: UnitDef): ExpressionPreview | 
 export function pricePreview(text: string, currency: string): ExpressionPreview | null {
   const c = getCurrency(currency)
   if (!c || text.trim() === '' || !isExpression(text) || parseMoney(text, c) !== null) return null
-  const r = evaluatePrice(text)
+  const r = evaluatePrice(text, c.decimals)
   if (!('value' in r)) return { errorKey: errorKeyOf(r.error) }
-  const minor = parseMoney(roundDecimal(r.value, c.decimals), c)
+  const minor = parseMoney(r.value, c)
   return minor === null ? { errorKey: errorKeyOf('syntax') } : { text: (minor / 10 ** c.decimals).toFixed(c.decimals) }
 }

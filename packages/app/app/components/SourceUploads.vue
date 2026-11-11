@@ -10,5 +10,5 @@ onMounted(async () => {
 </script>
 
 <template>
-  <p v-if="count !== null" class="text-sm text-subtle-foreground">{{ $t('diagnostics.uploads', { n: count }) }}</p>
+  <p v-if="count !== null" class="text-sm text-subtle-foreground">{{ $t('diagnostics.uploads', count) }}</p>
 </template>

@@ -229,6 +229,9 @@ async function send(command: ItemCreate): Promise<void> {
             v-model="price"
             inputmode="text"
             autocomplete="off"
+            autocapitalize="off"
+            autocorrect="off"
+            spellcheck="false"
             aria-describedby="quick-add-price-hint"
             class="h-11 pl-10"
           />

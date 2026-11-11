@@ -14,6 +14,13 @@ async function openCaches(): Promise<Cache[]> {
   return Promise.all(Object.values(PHOTO_CACHE).map((name) => caches.open(name)))
 }
 
+/** Bytes of a cached response: its content-length, or (only where that header is missing) the body read in full. */
+async function sizeOf(response: Response): Promise<number> {
+  const header = response.headers.get('content-length')
+  const length = header === null || header.trim() === '' ? NaN : Number(header)
+  return Number.isSafeInteger(length) && length >= 0 ? length : (await response.blob()).size
+}
+
 /** Bytes held by the photo caches on this device (0 where there is no Cache API). */
 export async function photoCacheSize(): Promise<number> {
   try {
@@ -21,7 +28,7 @@ export async function photoCacheSize(): Promise<number> {
     for (const cache of await openCaches()) {
       for (const request of await cache.keys()) {
         const response = await cache.match(request)
-        if (response) total += (await response.blob()).size
+        if (response) total += await sizeOf(response)
       }
     }
     return total

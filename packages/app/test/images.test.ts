@@ -40,6 +40,26 @@ const codeOf = async (p: Promise<unknown>): Promise<string | undefined> => {
   return undefined
 }
 const bitmap = () => ({ width: 4000, height: 3000, close: vi.fn() })
+/** An <img> that reads the given size from the header (0: the browser cannot read the file). */
+const stubImage = (width: number, height: number) =>
+  vi.stubGlobal(
+    'Image',
+    class {
+      naturalWidth = 0
+      naturalHeight = 0
+      onload: (() => void) | null = null
+      onerror: (() => void) | null = null
+      set src(_: string) {
+        queueMicrotask(() => {
+          if (width === 0) return this.onerror?.()
+          this.naturalWidth = width
+          this.naturalHeight = height
+          this.onload?.()
+        })
+      }
+    },
+  )
+const invalidState = () => new DOMException('The source image could not be decoded.', 'InvalidStateError')
 const fakeCanvas = (webp: boolean) => {
   const requested: string[] = []
   return {
@@ -65,6 +85,7 @@ describe('prepareImage errors', () => {
     expect(await codeOf(prepareImage(new File(['x'], 'a.heic', { type: 'image/heic' })))).toBe('unsupported')
   })
   it('says too_large_to_decode, not unsupported, when memory runs out, also for the reduced retry', async () => {
+    stubImage(4000, 3000)
     const stub = vi.fn().mockRejectedValue(new RangeError('Array buffer allocation failed'))
     vi.stubGlobal('createImageBitmap', stub)
     expect(await codeOf(prepareImage(jpeg()))).toBe('too_large_to_decode')
@@ -72,18 +93,71 @@ describe('prepareImage errors', () => {
     expect(stub.mock.calls[1]![1]).toMatchObject({ resizeWidth: MAX_SIDE })
   })
   it('retries a failed full decode at the reduced size and uses that', async () => {
+    stubImage(4000, 3000)
     const stub = vi.fn().mockRejectedValueOnce(new RangeError('out of memory')).mockResolvedValueOnce(bitmap())
     vi.stubGlobal('createImageBitmap', stub)
     vi.stubGlobal('document', { createElement: () => fakeCanvas(false).canvas })
     expect((await prepareImage(jpeg())).type).toBe('image/jpeg')
   })
   it('decodes a big file straight at the reduced size', async () => {
+    stubImage(4000, 3000)
     const stub = vi.fn().mockResolvedValue(bitmap())
     vi.stubGlobal('createImageBitmap', stub)
     vi.stubGlobal('document', { createElement: () => fakeCanvas(false).canvas })
     await prepareImage(jpeg(9 * 1024 * 1024))
     expect(stub).toHaveBeenCalledTimes(1)
     expect(stub.mock.calls[0]![1]).toMatchObject({ resizeWidth: MAX_SIDE })
+  })
+  it('reduces a tall image by its height, never upscaling the narrow side', async () => {
+    stubImage(1080, 15000)
+    const stub = vi.fn().mockResolvedValue({ width: 147, height: 2048, close: vi.fn() })
+    vi.stubGlobal('createImageBitmap', stub)
+    vi.stubGlobal('document', { createElement: () => fakeCanvas(false).canvas })
+    await prepareImage(jpeg(9 * 1024 * 1024))
+    expect(stub).toHaveBeenCalledTimes(1)
+    const options = stub.mock.calls[0]![1] as ImageBitmapOptions
+    expect(options.resizeHeight).toBe(MAX_SIDE)
+    expect(options.resizeWidth).toBeUndefined()
+  })
+  it('decodes in full an image that already fits, however big the file', async () => {
+    stubImage(1080, 1500)
+    const stub = vi.fn().mockResolvedValue({ width: 1080, height: 1500, close: vi.fn() })
+    vi.stubGlobal('createImageBitmap', stub)
+    vi.stubGlobal('document', { createElement: () => fakeCanvas(false).canvas })
+    await prepareImage(jpeg(9 * 1024 * 1024))
+    expect(stub).toHaveBeenCalledTimes(1)
+    expect(stub.mock.calls[0]![1]).toEqual({ imageOrientation: 'from-image' })
+  })
+  it('never guesses a reduced size it cannot read: a full decode, and memory trouble is reported', async () => {
+    stubImage(0, 0)
+    const stub = vi.fn().mockRejectedValue(new DOMException('The ImageBitmap could not be allocated.', 'InvalidStateError'))
+    vi.stubGlobal('createImageBitmap', stub)
+    expect(await codeOf(prepareImage(jpeg(9 * 1024 * 1024)))).toBe('too_large_to_decode')
+    expect(stub).toHaveBeenCalledTimes(1)
+    expect(stub.mock.calls[0]![1]).toEqual({ imageOrientation: 'from-image' })
+  })
+  it('retries a web image Chrome could not decode in full at the reduced size', async () => {
+    stubImage(6000, 4000)
+    const stub = vi.fn().mockRejectedValueOnce(invalidState()).mockResolvedValueOnce(bitmap())
+    vi.stubGlobal('createImageBitmap', stub)
+    vi.stubGlobal('document', { createElement: () => fakeCanvas(false).canvas })
+    expect((await prepareImage(jpeg())).type).toBe('image/jpeg')
+    expect(stub).toHaveBeenCalledTimes(2)
+    expect(stub.mock.calls[1]![1]).toMatchObject({ resizeWidth: MAX_SIDE })
+  })
+  it('says unsupported when the reduced retry cannot decode the web image either', async () => {
+    stubImage(6000, 4000)
+    const stub = vi.fn().mockRejectedValue(invalidState())
+    vi.stubGlobal('createImageBitmap', stub)
+    expect(await codeOf(prepareImage(jpeg()))).toBe('unsupported')
+    expect(stub).toHaveBeenCalledTimes(2)
+  })
+  it('does not retry HEIC the browser cannot decode', async () => {
+    stubImage(0, 0)
+    const stub = vi.fn().mockRejectedValue(invalidState())
+    vi.stubGlobal('createImageBitmap', stub)
+    expect(await codeOf(prepareImage(new File(['x'], 'a.heic', { type: 'image/heic' })))).toBe('unsupported')
+    expect(stub).toHaveBeenCalledTimes(1)
   })
   it('accepts an upper-case IMAGE/JPEG type', async () => {
     vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue(bitmap()))
@@ -100,6 +174,8 @@ describe('isOutOfMemory', () => {
   it('tells memory trouble from an undecodable file', () => {
     expect(isOutOfMemory(new RangeError('x'))).toBe(true)
     expect(isOutOfMemory(new Error('Out of memory'))).toBe(true)
+    expect(isOutOfMemory(new DOMException('The ImageBitmap could not be allocated.', 'InvalidStateError'))).toBe(true)
+    expect(isOutOfMemory(new Error('Image is too big'))).toBe(true)
     expect(isOutOfMemory(new DOMException('The source image could not be decoded.', 'InvalidStateError'))).toBe(false)
   })
 })

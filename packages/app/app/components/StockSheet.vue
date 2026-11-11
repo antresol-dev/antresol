@@ -191,7 +191,16 @@ function settle(outcome: SendOutcome): void {
               <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-semibold text-muted-foreground">
                 {{ currencySymbol }}
               </span>
-              <Input id="stock-price" v-model="price" inputmode="text" autocomplete="off" class="h-11 pl-10" />
+              <Input
+                id="stock-price"
+                v-model="price"
+                inputmode="text"
+                autocomplete="off"
+                autocapitalize="off"
+                autocorrect="off"
+                spellcheck="false"
+                class="h-11 pl-10"
+              />
             </div>
             <ExpressionHint :preview="pricePreviewOf" />
           </div>

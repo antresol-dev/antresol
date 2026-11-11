@@ -44,7 +44,7 @@ export function value(variantId: string, attributeId: string, v: string | null):
 }
 
 export function stockLine(itemId: string, variantId: string | null, quantity: string, over: Partial<StockLine> = {}): StockLine {
-  return { itemId, variantId, quantity, pricedQuantity: '0', pricedTotal: 0, lastPriced: null, ...over }
+  return { itemId, variantId, quantity, pricedQuantity: '0', pricedTotal: 0, lastPriced: null, lastCountedAt: null, ...over }
 }
 
 export function makeSnapshot(parts: Partial<InventorySnapshot> = {}): InventorySnapshot {

@@ -107,7 +107,8 @@ export const snapshotSql = {
                  (array_agg(quantity order by seq desc)
                     filter (where kind = 'receipt' and total_price is not null))[1]::text as last_quantity,
                  (array_agg(created_at order by seq desc)
-                    filter (where kind = 'receipt' and total_price is not null))[1] as last_at
+                    filter (where kind = 'receipt' and total_price is not null))[1] as last_at,
+                 max(created_at) filter (where kind = 'adjustment') as last_counted_at
           from movements where ${where}
           group by item_id, variant_id order by item_id, variant_id nulls first`,
 }

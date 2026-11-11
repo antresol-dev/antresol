@@ -113,11 +113,21 @@ describe('stock journal', () => {
     await expect(storage.exportInventory(newId())).rejects.toMatchObject({ code: 'not_found' })
   })
 
-  it('stock.set to the current quantity adds no movement', async () => {
-    const { storage, item } = await setup()
+  it('stock.set to the current quantity writes a 0 adjustment, once per movementId, and sets lastCountedAt', async () => {
+    const { storage, inv, item } = await setup()
     await storage.apply(receive(item, '10', null), TEST_ACTOR)
-    await storage.apply({ type: 'stock.set', movementId: newId(), itemId: item, variantId: null, target: q('10'), note: null }, TEST_ACTOR)
-    expect(await storage.loadMovements(item)).toHaveLength(1)
+    expect((await bucket(storage, inv, null))!.lastCountedAt).toBeNull()
+    const movementId = newId()
+    const set = { type: 'stock.set', movementId, itemId: item, variantId: null, target: q('10'), note: null } as const
+    await storage.apply(set, TEST_ACTOR)
+    const m = await storage.loadMovements(item)
+    expect(m).toHaveLength(2)
+    expect(m[0]).toMatchObject({ kind: 'adjustment', quantity: '0' })
+    const line = (await bucket(storage, inv, null))!
+    expect(line.quantity).toBe('10')
+    expect(line.lastCountedAt).toBe(m[0]!.createdAt)
+    await storage.apply(set, TEST_ACTOR)
+    expect(await storage.loadMovements(item)).toHaveLength(2)
   })
 
   it('adds fractions exactly', async () => {

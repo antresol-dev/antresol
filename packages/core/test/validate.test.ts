@@ -304,6 +304,14 @@ describe('variants by axes', () => {
     expect(ec(createMany('M', mark('Red'), mark(' red ')), s)).toBe('duplicate_variant')
     expect(ec(createMany('M', mark('Red'), mark('Blue')), s)).toBeNull()
   })
+  it('createMany treats an existing id with the same item and axis values as a retry', () => {
+    const s = electronics()
+    const retry = (id: string, itemId: string, values: Values) => ({ type: 'variant.createMany', itemId, variants: [{ id, values }] }) as Command
+    expect(ec(retry('r1k', 'R', res('1000')), s)).toBeNull()
+    expect(ec(retry('r1k', 'R', res('1001')), s)).toBe('invalid_option')
+    expect(ec(retry('c50', 'R', res('1000')), s)).toBe('invalid_option')
+    expect(ec({ type: 'variant.createMany', itemId: 'R', variants: [{ id: 'r1k', values: res('1000') }, { id: U('100'), values: res('2200') }] } as Command, s)).toBeNull()
+  })
   it('createMany refuses duplicate ids in the batch and ids of existing variants', () => {
     const dup: Command = {
       type: 'variant.createMany', itemId: 'R',

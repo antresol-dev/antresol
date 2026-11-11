@@ -108,6 +108,19 @@ describe('replaying a command with client ids is a no-op', () => {
     )
   })
 
+  it('a retried createMany (ids already stored) changes nothing', async () => {
+    const { storage, inv } = await setup()
+    const item = await plainItem(storage, inv)
+    const size = newId()
+    await storage.apply(attributeCreate(inv, size, 'Size'), TEST_ACTOR)
+    await storage.apply({ type: 'item.addAxis', itemId: item, attributeId: size, firstVariantId: newId() }, TEST_ACTOR)
+    const create = variantsCreate(item, [[newId(), { [size]: 'S' }], [newId(), { [size]: 'M' }]])
+    await storage.apply(create, TEST_ACTOR)
+    const before = await storage.loadInventory(inv)
+    await storage.apply(create, TEST_ACTOR)
+    expect(await storage.loadInventory(inv)).toEqual(before)
+  })
+
   it('item.addAxis creates the first variant once', async () => {
     const { storage, inv } = await setup()
     const item = await plainItem(storage, inv)

@@ -178,4 +178,5 @@ export const toStockLine = (r: Row): StockLine => ({
           quantity: toQuantity(r.last_quantity),
           at: toIso(r.last_at),
         },
+  lastCountedAt: r.last_counted_at === null || r.last_counted_at === undefined ? null : toIso(r.last_counted_at),
 })

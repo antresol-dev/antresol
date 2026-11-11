@@ -219,8 +219,10 @@ function checkNewVariants(s: Snap, itemId: Id, variants: { id: Id; values: { att
   const batch: Map<Id, string | null>[] = []
   const ids = new Set<Id>()
   for (const v of variants) {
-    if (ids.has(v.id) || s.variants.some((x) => x.id === v.id)) fail('invalid_option')
+    if (ids.has(v.id)) fail('invalid_option')
     ids.add(v.id)
+    const existing = s.variants.find((x) => x.id === v.id)
+    if (existing && existing.itemId !== itemId) fail('invalid_option')
     const values = new Map<Id, string | null>()
     for (const { attributeId, value } of v.values) {
       needAttribute(s, attributeId)
@@ -233,7 +235,11 @@ function checkNewVariants(s: Snap, itemId: Id, variants: { id: Id; values: { att
       if (value === null || value.trim() === '') fail('axis_value_required')
       checkValue(a, value)
     }
-    if (duplicateOf(s, itemId, values, v.id)) fail('duplicate_variant')
+    if (existing) {
+      // A retried batch: the id is already this item's variant with these axis values; storage writes nothing new.
+      const stored = new Map(s.variantAttributeValues.filter((r) => r.variantId === v.id).map((r) => [r.attributeId, r.value]))
+      if (!axes.every((a) => sameAxisValue(a, stored.get(a.id) ?? null, values.get(a.id) ?? null))) fail('invalid_option')
+    } else if (duplicateOf(s, itemId, values, v.id)) fail('duplicate_variant')
     if (batch.some((other) => axes.every((a) => sameAxisValue(a, other.get(a.id) ?? null, values.get(a.id) ?? null)))) {
       fail('duplicate_variant')
     }

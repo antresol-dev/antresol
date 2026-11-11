@@ -112,6 +112,8 @@ export interface StockLine {
   pricedQuantity: Quantity
   pricedTotal: number
   lastPriced: { totalPrice: number; quantity: Quantity; at: string } | null
+  /** Time of the bucket's last `adjustment` (a recount), if any. */
+  lastCountedAt: string | null
 }
 /** Snapshots are immutable: changes build new arrays (patchSnapshot does), because variants.ts caches lookups per array. */
 export interface InventorySnapshot {

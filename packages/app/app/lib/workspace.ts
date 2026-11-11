@@ -3,14 +3,17 @@ import {
   FileError,
   newId,
   normalizeCommand,
+  patchSnapshot,
   StorageError,
   validateCommand,
+  type ApplyResult,
   type Command,
   type FileStore,
   type Id,
   type Inventory,
   type InventorySnapshot,
   type Movement,
+  type SnapshotPatch,
 } from '@graymatter/core'
 import { createUploadcareStore } from '@graymatter/files-uploadcare'
 import { APP_SCHEMA_VERSION } from '@graymatter/storage-postgres'
@@ -38,12 +41,51 @@ export type {
  *  revision, so it is reloaded once instead of being kept. */
 export const SNAPSHOT_FORMAT = 1
 const REV_PREFIX = `${SNAPSHOT_FORMAT}:${APP_SCHEMA_VERSION}:`
-const cacheRev = (rev: string | null): string | null => (rev === null ? null : REV_PREFIX + rev)
+const cachedRev = (rev: string): string => REV_PREFIX + rev
+const cacheRev = (rev: string | null): string | null => (rev === null ? null : cachedRev(rev))
 const uncacheRev = (stored: string | null | undefined): string | null =>
   stored?.startsWith(REV_PREFIX) ? stored.slice(REV_PREFIX.length) : null
 
 /** refreshIfStale retries a failing source that is not the current one at most this often. */
 export const FAILED_RETRY_MS = 5 * 60_000
+
+/** A copy changed by writes is saved on the device at most this often, and at once by flushCache. */
+export const CACHE_PUT_DELAY_MS = 2_000
+
+/** The rows of an own write put into the shown copy while a full load of it was running. `after`: the last load
+ *  token issued then; loads up to it started before the rows were applied and may have read the source before the write. */
+interface OwnRows {
+  after: number
+  prevRev: string | null
+  rev: string
+  patch: SnapshotPatch
+}
+
+/**
+ * A load (`snapshot` at `rev`) plus the own rows it may miss, oldest first. They go on top from the write that starts
+ * at the load's revision, or from the one after the write that ends there. Null when the load's revision is neither:
+ * it cannot be ordered against them. The resulting revision is exact while each write starts where the previous one
+ * ended; a write by another device in between leaves it unknown (null).
+ */
+function catchUp(
+  snapshot: InventorySnapshot,
+  rev: string,
+  missed: OwnRows[],
+): { snapshot: InventorySnapshot; rev: string | null } | null {
+  if (missed.length === 0) return { snapshot, rev }
+  let from = missed.findIndex((w) => w.prevRev === rev)
+  if (from < 0) {
+    const ended = missed.findLastIndex((w) => w.rev === rev)
+    if (ended < 0) return null
+    from = ended + 1
+  }
+  let label: string | null = rev
+  for (const w of missed.slice(from)) {
+    snapshot = patchSnapshot(snapshot, w.patch)
+    label = label !== null && label === w.prevRev ? w.rev : null
+  }
+  return { snapshot, rev: label }
+}
 
 type Outcome =
   /** `fresh`: opened by this attempt rather than the source's open connection. */
@@ -109,9 +151,10 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   const connectionStringOf = (conn: SourceConnection): string => openedWith.get(conn) ?? ''
   /** Last known inventories (active and archived) per source; also kept on the device and while the source is unreachable. */
   const listings = new Map<string, Inventory[]>()
-  /** Revision of each source as last read by listInventories (see loadCurrent for how it is used). */
+  /** Revision of each source as last read by listInventories, or moved on by an own write that started from it (see
+   *  loadCurrent for how it is used). */
   const sourceRevs = new Map<string, string>()
-  /** The revision the shown `state.snapshot` is known to be at least as new as; null when unknown. */
+  /** The revision the shown `state.snapshot` is known to be at least as new as; null when unknown (stale). */
   let shownRev: string | null = null
   let queue: Promise<void> = Promise.resolve()
   let pendingWrites = 0
@@ -121,6 +164,13 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   /** Number of the last started snapshot load, and of the last one written to state. */
   let loadSeq = 0
   let appliedSeq = 0
+  /** Full loads still running, and the own rows put into the shown copy meanwhile (see catchUp). */
+  let loadsRunning = 0
+  let ownRows: OwnRows[] = []
+  /** The shown copy has rows a write put into it that are not saved on the device yet. */
+  let unsaved: { ref: InventoryRef; generation: number } | null = null
+  let saveTimer: ReturnType<typeof setTimeout> | undefined
+  let lastSave: Promise<void> = Promise.resolve()
   /** When the last refresh started, in ms. */
   let lastAttemptAt: number | null = null
   /** Bumped whenever a source is added, edited or removed; stale connect outcomes are discarded. */
@@ -131,7 +181,10 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     refreshEpoch++
     // The source may now be another database: revisions read from, or cached under, the old one prove nothing.
     sourceRevs.delete(id)
-    if (state.current?.sourceId === id) shownRev = null
+    if (state.current?.sourceId === id) {
+      shownRev = null
+      ownRows = []
+    }
   }
 
   const statusOf = (sourceId: string): SourceStatus | null =>
@@ -159,13 +212,49 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   function setCurrent(ref: InventoryRef | null): void {
     // Another inventory's snapshot is never shown, nor validates a write, under the new current.
     if (!sameRef(state.current, ref)) {
+      // Written rows of the copy shown so far go to the device first: opening it again then loads nothing.
+      void saveShown()
       state.snapshot = null
       state.snapshotOrigin = null
       state.snapshotSavedAt = null
       shownRev = null
+      ownRows = []
     }
     state.current = ref
     recompute()
+  }
+
+  /** Saves the shown copy with its revision if a write changed it since it was last saved. Not after its source was
+   *  edited or removed. */
+  function saveShown(): Promise<void> {
+    clearTimeout(saveTimer)
+    saveTimer = undefined
+    const pending = unsaved
+    unsaved = null
+    const snapshot = state.snapshot
+    if (
+      pending &&
+      sameRef(state.current, pending.ref) &&
+      snapshot?.inventory.id === pending.ref.inventoryId &&
+      generationOf(pending.ref.sourceId) === pending.generation
+    ) {
+      const value = { snapshot, savedAt: state.snapshotSavedAt ?? nowIso(), rev: cacheRev(shownRev) }
+      // A copy that could not be saved keeps its older rows and revision on the device: it is loaded again.
+      lastSave = db.putSnapshot(pending.ref, value).catch(() => {})
+    }
+    return lastSave
+  }
+
+  /** The shown copy of `ref` got rows from a write: saved within CACHE_PUT_DELAY_MS. */
+  function markUnsaved(ref: InventoryRef): void {
+    unsaved = { ref: { sourceId: ref.sourceId, inventoryId: ref.inventoryId }, generation: generationOf(ref.sourceId) }
+    saveTimer ??= setTimeout(() => void saveShown(), CACHE_PUT_DELAY_MS)
+  }
+
+  /** Deletes the device copy of an inventory that is gone; its unsaved rows are never saved after this. */
+  async function dropCopy(ref: InventoryRef): Promise<void> {
+    if (unsaved && sameRef(unsaved.ref, ref)) unsaved = null
+    await db.deleteSnapshot(ref)
   }
 
   function rebuildInventories(): void {
@@ -289,13 +378,17 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
    * Loads the current inventory's snapshot and shows and caches it.
    *
    * `skipIfUnchanged`: do nothing but mark the shown copy live (its saved time stays as persisted) when it is already at the source's revision. Only the
-   * refresh paths ask for this; a load after our own write never does (it must reload).
+   * refresh paths ask for this; the load after a wide write never does (it must reload).
    *
    * Ordering argument: the revision stored with a snapshot is the one `loadInventoryWithRev` read in the same
    * transaction as the snapshot, so it is exactly the revision the data is at. A write by another device that lands
    * between the listing and the load is therefore recorded as seen (it is in the snapshot), and the next refresh does
    * not load again. The skip check compares the source's known revision (`sourceRevs`, from the last listInventories)
    * with `shownRev`: a different one means the source changed since this copy was read.
+   *
+   * Own writes put their rows into the shown copy without a load. A load that started before such rows were put in may
+   * have read the source before that write: it gets them on top (catchUp), or, when its revision cannot be ordered
+   * against them, the shown copy stays and is marked stale.
    */
   async function loadCurrent(skipIfUnchanged = false): Promise<void> {
     const ref = state.current
@@ -310,23 +403,36 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     const generation = generationOf(ref.sourceId)
     // Another inventory selected, or the source edited or removed meanwhile: the result is nobody's.
     const gone = (): boolean => !sameRef(state.current, ref) || generationOf(ref.sourceId) !== generation
-    let snapshot: InventorySnapshot
-    let rev: string
-    try {
-      ;({ snapshot, rev } = await conn.storage.loadInventoryWithRev(ref.inventoryId))
-    } catch (error) {
+    loadsRunning++
+    const loaded = await conn.storage.loadInventoryWithRev(ref.inventoryId).then(
+      (value) => ({ ok: true as const, ...value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    )
+    // Own rows put into the shown copy after this load started.
+    const missed = ownRows.filter((w) => w.after >= token)
+    if (--loadsRunning === 0) ownRows = []
+    if (!loaded.ok) {
       // Only the most recently started load reports a failure.
       if (token !== loadSeq || gone()) return
-      if (error instanceof StorageError && error.code === 'not_found') {
+      if (loaded.error instanceof StorageError && loaded.error.code === 'not_found') {
         await dropMissing(ref)
         return
       }
-      markFailure(ref.sourceId, error, connectionStringOf(conn))
+      markFailure(ref.sourceId, loaded.error, connectionStringOf(conn))
       return
     }
     // A load newer than the shown one replaces it, even while a later-started load still runs or has failed.
     if (token <= appliedSeq || gone()) return
+    const caught = catchUp(loaded.snapshot, loaded.rev, missed)
+    if (!caught) {
+      // It may be older than own rows already shown: they stay, and the copy is not proven current.
+      shownRev = null
+      return
+    }
+    const { snapshot, rev } = caught
     appliedSeq = token
+    // Saved below, with these rows.
+    if (unsaved && sameRef(unsaved.ref, ref)) unsaved = null
     const savedAt = nowIso()
     state.snapshot = markRaw(snapshot)
     state.snapshotOrigin = 'live'
@@ -338,7 +444,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   /** The current inventory vanished from its (reachable) source: forget it and move to the first remaining one. */
   async function dropMissing(ref: InventoryRef): Promise<void> {
     const generation = generationOf(ref.sourceId)
-    await db.deleteSnapshot(ref)
+    await dropCopy(ref)
     if (generationOf(ref.sourceId) === generation) {
       const saving = storeListing(ref.sourceId, (listings.get(ref.sourceId) ?? []).filter((i) => i.id !== ref.inventoryId))
       rebuildInventories()
@@ -368,7 +474,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
         await loadCurrent(true)
         return
       }
-      await db.deleteSnapshot(cur)
+      await dropCopy(cur)
     }
     const first = state.inventories[0]
     if (first) {
@@ -492,11 +598,17 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     })
   }
 
+  /**
+   * One write to `target` (the inventory the command goes to), in call order with the others. The source answers with
+   * its revision before and after the write and the rows the command touched; they go into the shown copy instead of a
+   * load. See settleWrite for the rules.
+   */
   function write(
-    sourceId: string,
+    target: InventoryRef,
     command: Command,
     snapshotFor: (conn: SourceConnection) => Promise<InventorySnapshot | null>,
   ): Promise<void> {
+    const { sourceId } = target
     return enqueue(async () => {
       // First refresh still connecting: wait for it rather than failing with a misleading "can't reach".
       if (!conns.has(sourceId) && refreshing) await refreshing.catch(() => {})
@@ -508,23 +620,118 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       const snapshot = await guarded(sourceId, conn, () => snapshotFor(conn))
       const invalid = validateCommand(normalized, snapshot)
       if (invalid) throw invalid
-      await guarded(sourceId, conn, () => conn.storage.apply(normalized, { device: state.deviceName }))
-      // The source moved on: the revision known for it is stale, and the reloads below must not be skipped on it.
-      sourceRevs.delete(sourceId)
+      const generation = generationOf(sourceId)
+      const seq = appliedSeq
+      let result: ApplyResult
+      try {
+        result = await guarded(sourceId, conn, () => conn.storage.apply(normalized, { device: state.deviceName }))
+      } catch (error) {
+        await writeFailed(sourceId, error)
+        throw error
+      }
+      let reload: boolean
+      if (generationOf(sourceId) === generation) {
+        const settled = settleWrite(target, result, seq)
+        reload = settled.reload
+        // The device copies' revisions; a failure leaves an older revision there, which only costs a load.
+        if (settled.markStale) await db.markSnapshotStale(target).catch(() => {})
+        if (settled.advance) {
+          const [from, to] = settled.advance
+          await db.advanceSnapshotRevs(sourceId, from, to, target.inventoryId).catch(() => {})
+        }
+      } else {
+        // Edited or removed while the write was on its way: the answer belongs to the old connection.
+        if (state.current?.sourceId === sourceId) shownRev = null
+        reload = sameRef(state.current, target)
+      }
+      // 7. The list of inventories changed: read it again. A shown copy left to reload (stale) loads there, once.
       if (isRelistCommand(command)) {
         await relist(sourceId)
         await resolveCurrent()
-        if (command.type === 'deletePermanently') await db.deleteSnapshot({ sourceId, inventoryId: command.id })
-      } else if (state.current?.sourceId === sourceId) {
+        if (command.type === 'deletePermanently') await dropCopy({ sourceId, inventoryId: command.id })
+      } else if (reload) {
         await loadCurrent()
       }
     })
   }
 
+  /**
+   * Rules for a write the source took, applied to state in one go (no await in between).
+   *
+   * - 1. In sync: the revision before the write is the one known for the source, so no other write landed since it.
+   * - 2. The target is shown and no load replaced it during the write: the rows go on top.
+   * - 3. A load replaced it during the write. Exactly at this write's result: kept. Read right before this write: the
+   *   rows go on top. Otherwise it may be newer than the rows: kept, and marked stale.
+   * - 4. No rows (a wide command, or the target gone): marked stale and reloaded.
+   * - 5. The target is not shown: its device copy is marked stale.
+   * - 6. In sync: the source's known revision and the shown copy's (if it was at the revision before) move to the one
+   *   after, and so do the device copies of other inventories saved at the one before; the write counts as a check
+   *   when it proves the shown copy current. Not in sync: the shown copy of this source is marked stale and the
+   *   source's revision is unknown again, so no cached copy of it is trusted before the next listing.
+   */
+  function settleWrite(
+    target: InventoryRef,
+    { prevRev, rev, patch }: ApplyResult,
+    seq: number,
+  ): { reload: boolean; markStale: boolean; advance: [string, string] | null } {
+    const { sourceId } = target
+    const inSync = prevRev !== null && prevRev === sourceRevs.get(sourceId)
+    const snapshot = state.snapshot
+    const shown = sameRef(state.current, target) && snapshot?.inventory.id === target.inventoryId ? snapshot : null
+    let reload = false
+    if (shown) {
+      const loaded = appliedSeq !== seq
+      if (loaded && shownRev === rev) {
+        // 3. The load read exactly this write's result.
+      } else if (!patch || patch.inventoryId !== target.inventoryId) {
+        // 4.
+        shownRev = null
+        reload = true
+      } else if (!loaded || shownRev === prevRev) {
+        // 2, or 3 with a load read right before this write.
+        state.snapshot = markRaw(patchSnapshot(shown, patch))
+        if (loadsRunning > 0) ownRows.push({ after: loadSeq, prevRev, rev, patch })
+        markUnsaved(target)
+      } else {
+        // 3. The load may be newer than these rows.
+        shownRev = null
+      }
+    }
+    // 5.
+    const markStale = !shown
+    // 6.
+    const ofSource = state.current?.sourceId === sourceId
+    if (!inSync) {
+      sourceRevs.delete(sourceId)
+      if (ofSource) shownRev = null
+      return { reload, markStale, advance: null }
+    }
+    sourceRevs.set(sourceId, rev)
+    if (ofSource && shownRev === prevRev) shownRev = rev
+    if (ofSource && shownRev === rev) {
+      const at = nowIso()
+      state.lastRefreshAt = at
+      state.snapshotSavedAt = at
+    }
+    return { reload, markStale, advance: [cachedRev(prevRev), cachedRev(rev)] }
+  }
+
+  /** 8. Unknown outcome (`unavailable`): the write may have landed, so no revision known for the source holds. 9. The
+   *  source refused the write the shown copy allowed: the copy disagrees with it, so it is refreshed before the error
+   *  is thrown. */
+  async function writeFailed(sourceId: string, error: unknown): Promise<void> {
+    if (error instanceof StorageError && error.code === 'unavailable') {
+      sourceRevs.delete(sourceId)
+      if (state.current?.sourceId === sourceId) shownRev = null
+    } else if ((error instanceof StorageError && error.code === 'failed') || error instanceof DomainError) {
+      await refresh().catch(() => {})
+    }
+  }
+
   async function applyTo(ref: InventoryRef, command: Command): Promise<void> {
-    // Read when the job runs: earlier queued writes have reloaded the snapshot by then. Only this inventory's own
-    // snapshot counts; until selectInventory shows it, the target is read from the source.
-    await write(ref.sourceId, command, async (conn) => {
+    // Read when the job runs: earlier queued writes have put their rows into the snapshot by then. Only this
+    // inventory's own snapshot counts; until selectInventory shows it, the target is read from the source.
+    await write(ref, command, async (conn) => {
       const shown = state.snapshot
       return sameRef(state.current, ref) && shown?.inventory.id === ref.inventoryId
         ? shown
@@ -605,7 +812,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     await applyTo(cur, { type: 'photo.add', id: newId(), itemId, variantId, ...stored })
   }
 
-  /** Resolves when the writes queued so far are done (their snapshot reloads included). */
+  /** Resolves when the writes queued so far are done (their rows in the snapshot included). */
   const queueIdle = (): Promise<void> => queue
 
   /** The shown snapshot when it is the target's, otherwise the target read from its source. */
@@ -699,6 +906,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       await startFromCache()
       await refresh()
     },
+    flushCache: saveShown,
     selectInventory,
     apply,
     applyTo,
@@ -711,8 +919,8 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     makeCover,
     async createInventory({ sourceId, name, currency }) {
       const id = newId()
-      await write(sourceId, { type: 'inventory.create', id, name, description: null, currency }, async () => null)
       const ref = { sourceId, inventoryId: id }
+      await write(ref, { type: 'inventory.create', id, name, description: null, currency }, async () => null)
       await selectInventory(ref)
       return ref
     },

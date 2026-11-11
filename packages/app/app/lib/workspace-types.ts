@@ -64,9 +64,13 @@ export interface Workspace {
   refreshIfStale(maxAgeMs: number): Promise<void>
   /** startFromCache() then refresh(). */
   start(): Promise<void>
+  /** Saves the shown copy on the device now if a write changed it since it was last saved (otherwise that happens
+   *  within CACHE_PUT_DELAY_MS); resolves when it is saved. */
+  flushCache(): Promise<void>
   /** Cached copy first, then live. */
   selectInventory(ref: InventoryRef): Promise<void>
-  /** Throws DomainError | StorageError; calls run one after another in call order. */
+  /** Throws DomainError | StorageError; calls run one after another in call order. The rows the command touched go
+   *  into the shown copy; only a wide command (restore, tag/attribute/unit delete, …) loads the inventory again. */
   apply(command: Command): Promise<void>
   /** Like apply, but for any inventory of a connected source; validated against that inventory's snapshot. */
   applyTo(ref: InventoryRef, command: Command): Promise<void>

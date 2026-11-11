@@ -35,6 +35,8 @@ export default defineNuxtPlugin(async () => {
   })
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') quietly(workspace.refreshIfStale(STALE_AFTER_MS))
+    // The app may be closed while hidden: written rows not saved on the device yet are saved now.
+    if (document.visibilityState === 'hidden') quietly(workspace.flushCache())
   })
 
   return { provide: { workspace, workspaceReady: ready } }

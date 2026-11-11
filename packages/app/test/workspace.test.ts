@@ -1,5 +1,5 @@
 import { PGlite } from '@electric-sql/pglite'
-import { FileError, newId, StorageError, type Command, type FileStore, type Id } from '@graymatter/core'
+import { DomainError, FileError, newId, StorageError, type Command, type FileStore, type Id } from '@graymatter/core'
 import { APP_SCHEMA_VERSION, createPgliteExecutor, type PgExecutor } from '@graymatter/storage-postgres'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { isReactive } from 'vue'
@@ -8,7 +8,7 @@ import { defaultDeviceName } from '../app/lib/device-name'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import { createNeonDriver, type SourceDriver } from '../app/lib/sources'
 import type { InventoryRef, SourceConfig } from '../app/lib/types'
-import { createWorkspace, defaultFileStore, FAILED_RETRY_MS } from '../app/lib/workspace'
+import { createWorkspace, defaultFileStore, FAILED_RETRY_MS, SNAPSHOT_FORMAT } from '../app/lib/workspace'
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Safari/605.1.15'
 const CS = (name: string): string => `postgresql://u:pw-${name}@h/${name}`
@@ -50,6 +50,8 @@ function harness() {
     exportCalls: 0,
     applyError: null as Error | null,
     applyCalls: 0,
+    /** One-shot: the next apply writes, then runs this before answering; a throw loses the answer of a committed write. */
+    afterApply: null as (() => Promise<void>) | null,
     /** loadInventory fails with this after listInventories succeeded. */
     loadError: null as Error | null,
     loadErrorFor: null as { id: Id; error: Error } | null,
@@ -129,7 +131,11 @@ function harness() {
           await applyGate
         }
         if (flags.applyError) throw flags.applyError
-        return conn.storage.apply(command, actor)
+        const result = await conn.storage.apply(command, actor)
+        const after = flags.afterApply
+        flags.afterApply = null
+        if (after) await after()
+        return result
       }
       storage.loadMovements = async (itemId) => {
         flags.movementCalls++
@@ -160,7 +166,13 @@ function harness() {
 
   const db = createMemoryDeviceDb()
   const now = (): Date => new Date(flags.clock)
-  const workspace = () => createWorkspace({ db, drivers: { neon: driver }, userAgent: UA, now })
+  /** Photos: the file name is the file id. */
+  const fileStore: FileStore = {
+    provider: 'fake',
+    upload: async (_blob, name) => ({ provider: 'fake', fileId: name, url: `https://cdn.test/${name}` }),
+  }
+  const workspace = () =>
+    createWorkspace({ db, drivers: { neon: driver }, userAgent: UA, now, fileStores: () => fileStore, prepareImage: async (f) => f })
 
   /** Creates a database for the connection string with one inventory, directly through storage. */
   const seed = async (connectionString: string, inventoryName: string): Promise<Id> => {
@@ -333,7 +345,7 @@ describe('workspace', () => {
     expect(ws.state.snapshot?.folders.map((f) => f.name)).toEqual(['Shelf'])
   })
 
-  it('7. validates before writing and refreshes the cache after a write', async () => {
+  it('7. validates before writing and keeps the written copy on the device', async () => {
     const h = setup()
     const id = await h.seed(CS('one'), 'Inv')
     await h.db.putSource(config('s1', CS('one')))
@@ -349,6 +361,7 @@ describe('workspace', () => {
     await ws.apply(folderCreate(id, 'Shelf'))
     expect(ws.state.snapshot?.folders.map((f) => f.name)).toEqual(['Shelf'])
     expect(ws.state.snapshotOrigin).toBe('live')
+    await ws.flushCache()
     const after = (await h.db.getSnapshot(ref))!
     expect(after.savedAt).not.toBe(before)
     expect(after.snapshot.folders).toHaveLength(1)
@@ -525,7 +538,7 @@ describe('workspace', () => {
     expect(ws.state.inventories[0]!.sourceName).toBe('Renamed')
   })
 
-  it('17. a slow refresh load does not replace a newer post-write snapshot', async () => {
+  it('17. a slow refresh load that read the source before a write does not drop the written rows', async () => {
     const h = setup()
     const id = await h.seed(CS('one'), 'Inv')
     await h.db.putSource(config('s1', CS('one')))
@@ -536,11 +549,16 @@ describe('workspace', () => {
     await h.bumpRev(CS('one'))
     const refresh = ws.refresh()
     await vi.waitFor(() => expect(h.flags.loadBlocked).toBe(true))
+    const loads = h.flags.loadCalls
     await ws.apply(folderCreate(id, 'Fresh'))
+    expect(ws.state.snapshot?.folders.map((f) => f.name)).toEqual(['Fresh'])
     gate.open()
     await refresh
     expect(ws.state.snapshot?.folders.map((f) => f.name)).toEqual(['Fresh'])
     expect((await h.db.getSnapshot(ws.state.current!))!.snapshot.folders).toHaveLength(1)
+    // The load read the revision right before the write and got its rows on top: the copy is current.
+    await ws.refresh()
+    expect(h.flags.loadCalls).toBe(loads)
   })
 
   it('18. queued writes validate against the snapshot as of when they run', async () => {
@@ -980,12 +998,15 @@ describe('workspace', () => {
       expect(offline.state.archivedInventories).toEqual([])
     })
 
-    it('keeps a post-write reload when a later-started load fails', async () => {
+    it('keeps the reload after a wide write when a later-started load fails', async () => {
       const { h, ws, refs } = await started('Inv')
+      const tagId = newId()
+      await ws.apply({ type: 'tag.create', id: tagId, inventoryId: refs[0]!.inventoryId, name: 'Red' })
       const gate = h.gate()
       h.flags.loadGate = gate.promise
-      const write = ws.apply(folderCreate(refs[0]!.inventoryId, 'Fresh'))
-      // The reload after the write has read the new folder and waits.
+      // tag.delete returns no rows: the inventory is reloaded after it.
+      const write = ws.apply({ type: 'tag.delete', id: tagId })
+      // The reload after the write has read the inventory without the tag and waits.
       await vi.waitFor(() => expect(h.flags.loadBlocked).toBe(true))
       h.flags.loadError = new StorageError('unavailable')
       await ws.refresh()
@@ -993,8 +1014,8 @@ describe('workspace', () => {
       h.flags.loadError = null
       gate.open()
       await write
-      expect(ws.state.snapshot?.folders.map((f) => f.name)).toEqual(['Fresh'])
-      expect((await h.db.getSnapshot(refs[0]!))!.snapshot.folders.map((f) => f.name)).toEqual(['Fresh'])
+      expect(ws.state.snapshot?.tags).toEqual([])
+      expect((await h.db.getSnapshot(refs[0]!))!.snapshot.tags).toEqual([])
     })
 
     it('a write during selectInventory validates against the new inventory', async () => {
@@ -1187,6 +1208,310 @@ describe('workspace', () => {
       expect(ws.state.snapshot).toBeNull()
       expect(ws.state.current).toBeNull()
     })
+  })
+})
+
+describe('workspace writes patch the local copy', () => {
+  /** Source s1 with one inventory per name, started; the first name sorts first and is current. */
+  const started = async (...names: string[]) => {
+    const h = setup()
+    const refs: InventoryRef[] = []
+    for (const name of names) refs.push({ sourceId: 's1', inventoryId: await h.seed(CS('one'), name) })
+    await h.db.putSource(config('s1', CS('one')))
+    const ws = h.workspace()
+    await ws.start()
+    expect(ws.state.current).toEqual(refs[0])
+    return { h, ws, refs, inv: refs[0]!.inventoryId }
+  }
+  const createItem = (inventoryId: Id, id: Id = newId(), name = 'Bolt'): Command => ({
+    type: 'item.create', id, inventoryId, folderId: null, name, description: null, unitKey: 'pcs', tagIds: [], initialReceipt: null,
+  })
+  const receive = (itemId: Id, quantity: string): Command => ({
+    type: 'stock.receive', movementId: newId(), itemId, variantId: null, quantity, totalPrice: null, sourceUrl: null, note: null,
+  })
+  type Ws = ReturnType<ReturnType<typeof harness>['workspace']>
+  const itemIds = (ws: Ws): Id[] => ws.state.snapshot!.items.map((i) => i.id).sort()
+  const folderNames = (ws: Ws): string[] => ws.state.snapshot!.folders.map((f) => f.name).sort()
+  /** The source's revision as the device cache stores it. */
+  const cachedRevOfSource = async (h: ReturnType<typeof harness>): Promise<string> =>
+    `${SNAPSHOT_FORMAT}:${APP_SCHEMA_VERSION}:${(await (await h.direct(CS('one'))).listInventories()).rev}`
+
+  it('1. twenty stock receipts in a row load nothing', async () => {
+    const { h, ws, inv } = await started('Inv')
+    const itemId = newId()
+    const loads = h.flags.loadCalls
+    await ws.apply(createItem(inv, itemId))
+    for (let n = 1; n <= 20; n++) await ws.apply(receive(itemId, String(n)))
+    expect(h.flags.loadCalls).toBe(loads)
+    const line = ws.state.snapshot!.stock.find((l) => l.itemId === itemId && l.variantId === null)
+    expect(Number(line?.quantity)).toBe(210)
+    const fresh = await (await h.direct(CS('one'))).loadInventory(inv)
+    expect(fresh.stock.find((l) => l.itemId === itemId && l.variantId === null)).toEqual(line)
+  })
+
+  it('2. quick add with a photo loads nothing', async () => {
+    const { h, ws, inv } = await started('Inv')
+    const itemId = newId()
+    const loads = h.flags.loadCalls
+    await ws.apply(createItem(inv, itemId))
+    await ws.addPhotos(itemId, [new File(['x'], 'shot.jpg', { type: 'image/jpeg' })])
+    expect(h.flags.loadCalls).toBe(loads)
+    expect(itemIds(ws)).toEqual([itemId])
+    expect(ws.state.snapshot!.photos.map((p) => [p.itemId, p.fileId])).toEqual([[itemId, 'shot.jpg']])
+  })
+
+  it('3. a foreign write between two own writes keeps both own rows and marks the copy stale; the next refresh loads once', async () => {
+    const { h, ws, inv } = await started('Inv')
+    const mine = [newId(), newId()]
+    const loads = h.flags.loadCalls
+    await ws.apply(createItem(inv, mine[0], 'First'))
+    await (await h.direct(CS('one'))).apply(folderCreate(inv, 'Theirs'), { device: 'other' })
+    await ws.apply(createItem(inv, mine[1], 'Second'))
+    expect(itemIds(ws)).toEqual([...mine].sort())
+    // The other device's folder is not in the copy yet.
+    expect(folderNames(ws)).toEqual([])
+    expect(h.flags.loadCalls).toBe(loads)
+    await ws.refresh()
+    expect(h.flags.loadCalls).toBe(loads + 1)
+    expect(folderNames(ws)).toEqual(['Theirs'])
+    expect(itemIds(ws)).toEqual([...mine].sort())
+    await ws.refresh()
+    expect(h.flags.loadCalls).toBe(loads + 1)
+  })
+
+  it("3b. after another device wrote, an own write does not vouch for B's cached copy", async () => {
+    const { h, ws, refs } = await started('A', 'B')
+    const [a, b] = refs as [InventoryRef, InventoryRef]
+    await ws.selectInventory(b)
+    await ws.selectInventory(a)
+    await (await h.direct(CS('one'))).apply(folderCreate(b.inventoryId, 'Theirs'), { device: 'other' })
+    await ws.apply(folderCreate(a.inventoryId, 'Mine'))
+    const loads = h.flags.loadCalls
+    await ws.selectInventory(b)
+    expect(h.flags.loadCalls).toBe(loads + 1)
+    expect(folderNames(ws)).toEqual(['Theirs'])
+  })
+
+  it("4. an own write in inventory A keeps B's cached copy current", async () => {
+    const { h, ws, refs } = await started('A', 'B')
+    const [a, b] = refs as [InventoryRef, InventoryRef]
+    await ws.selectInventory(b)
+    await ws.selectInventory(a)
+    const loads = h.flags.loadCalls
+    await ws.apply(folderCreate(a.inventoryId, 'Shelf'))
+    await ws.selectInventory(b)
+    expect(h.flags.loadCalls).toBe(loads)
+    expect(ws.state.snapshot?.inventory.id).toBe(b.inventoryId)
+    expect(ws.state.snapshotOrigin).toBe('live')
+    // A's written copy was kept on the device when B was opened: back on A, nothing loads either.
+    await ws.selectInventory(a)
+    expect(h.flags.loadCalls).toBe(loads)
+    expect(folderNames(ws)).toEqual(['Shelf'])
+  })
+
+  it('5. a write to a non-current inventory marks its cached copy stale', async () => {
+    const { h, ws, refs } = await started('A', 'B')
+    const [a, b] = refs as [InventoryRef, InventoryRef]
+    await ws.selectInventory(b)
+    await ws.selectInventory(a)
+    await ws.applyTo(b, folderCreate(b.inventoryId, 'Shelf'))
+    expect((await h.db.getSnapshot(b))!.rev).toBeNull()
+    const loads = h.flags.loadCalls
+    await ws.selectInventory(b)
+    expect(h.flags.loadCalls).toBe(loads + 1)
+    expect(folderNames(ws)).toEqual(['Shelf'])
+  })
+
+  it('6. a wide command reloads the current inventory once', async () => {
+    const { h, ws, inv } = await started('Inv')
+    const tagId = newId()
+    await ws.apply({ type: 'tag.create', id: tagId, inventoryId: inv, name: 'Red' })
+    expect(ws.state.snapshot!.tags.map((t) => t.name)).toEqual(['Red'])
+    let loads = h.flags.loadCalls
+    await ws.apply({ type: 'tag.delete', id: tagId })
+    expect(h.flags.loadCalls).toBe(loads + 1)
+    expect(ws.state.snapshot!.tags).toEqual([])
+    // A wide command that also relists (restore) loads once too.
+    const itemId = newId()
+    const archiveId = newId()
+    await ws.apply(createItem(inv, itemId))
+    await ws.apply({ type: 'archive', target: 'item', id: itemId, archiveId })
+    loads = h.flags.loadCalls
+    await ws.apply({ type: 'restore', archiveId })
+    expect(h.flags.loadCalls).toBe(loads + 1)
+    expect(ws.state.snapshot!.items.find((i) => i.id === itemId)?.archivedAt).toBeNull()
+    // The reloads were at the source's revision.
+    await ws.refresh()
+    expect(h.flags.loadCalls).toBe(loads + 1)
+  })
+
+  it('6b. in sync, a write that changes the list of inventories relists and loads nothing', async () => {
+    const { h, ws, refs } = await started('A', 'B')
+    const [a, b] = refs as [InventoryRef, InventoryRef]
+    const loads = h.flags.loadCalls
+    const lists = h.flags.listCalls
+    await ws.apply({ type: 'inventory.update', id: a.inventoryId, name: 'A2' })
+    expect(ws.state.snapshot!.inventory.name).toBe('A2')
+    expect(ws.state.inventories.map((e) => e.inventory.name)).toEqual(['A2', 'B'])
+    expect(h.flags.loadCalls).toBe(loads)
+    await ws.applyTo(b, { type: 'archive', target: 'inventory', id: b.inventoryId, archiveId: newId() })
+    expect(ws.state.archivedInventories.map((e) => e.inventory.name)).toEqual(['B'])
+    expect(h.flags.listCalls).toBe(lists + 2)
+    // B, not shown, is read once to validate the command; nothing is loaded after it.
+    expect(h.flags.loadCalls).toBe(loads + 1)
+  })
+
+  it('7. an unknown outcome marks the copy stale; retrying the same command leaves the item once', async () => {
+    const { h, ws, inv } = await started('Inv')
+    // Not written at all: the source did not change, yet the copy is no longer trusted.
+    h.flags.applyError = new StorageError('unavailable')
+    await expect(ws.apply(createItem(inv))).rejects.toMatchObject({ code: 'unavailable' })
+    h.flags.applyError = null
+    let loads = h.flags.loadCalls
+    await ws.refresh()
+    expect(h.flags.loadCalls).toBe(loads + 1)
+    expect(itemIds(ws)).toEqual([])
+
+    // Written, but the answer was lost.
+    const command = createItem(inv)
+    h.flags.afterApply = async () => {
+      throw new StorageError('unavailable')
+    }
+    await expect(ws.apply(command)).rejects.toMatchObject({ code: 'unavailable' })
+    expect(ws.state.readOnly).toBe('offline')
+    expect(itemIds(ws)).toEqual([])
+    loads = h.flags.loadCalls
+    await ws.refresh()
+    expect(h.flags.loadCalls).toBe(loads + 1)
+    expect(itemIds(ws)).toEqual([(command as { id: Id }).id])
+    await ws.refresh()
+    expect(h.flags.loadCalls).toBe(loads + 1)
+
+    // The retry changes nothing in the source and replaces the item's rows in the copy.
+    await ws.apply(command)
+    expect(h.flags.loadCalls).toBe(loads + 1)
+    expect(itemIds(ws)).toEqual([(command as { id: Id }).id])
+    expect((await (await h.direct(CS('one'))).loadInventory(inv)).items).toHaveLength(1)
+  })
+
+  it('8. a rejected write refreshes at once', async () => {
+    const { h, ws, inv } = await started('Inv')
+    for (const error of [new StorageError('failed', 'constraint'), new DomainError('not_found')]) {
+      h.flags.applyError = error
+      const lists = h.flags.listCalls
+      const listing = h.gate()
+      h.flags.listGate = listing.promise
+      let settled = false
+      const write = ws.apply(folderCreate(inv, 'X')).then(
+        () => null,
+        (e: unknown) => {
+          settled = true
+          return e
+        },
+      )
+      // The refresh is listing: the write has not rejected yet.
+      await vi.waitFor(() => expect(h.flags.listGate).toBeNull())
+      expect(settled).toBe(false)
+      listing.open()
+      expect(await write).toMatchObject({ code: error.code })
+      expect(h.flags.listCalls).toBe(lists + 1)
+    }
+    h.flags.applyError = null
+  })
+
+  it("9. a load that finished during a write is not overwritten by the write's older rows", async () => {
+    const { h, ws, inv } = await started('Inv')
+    const itemId = newId()
+    await ws.apply(createItem(inv, itemId, 'Bolt'))
+    const other = await h.direct(CS('one'))
+    // After the write committed and before its answer arrives, another device renames the item and a refresh loads that.
+    h.flags.afterApply = async () => {
+      await other.apply({ type: 'item.update', id: itemId, name: 'Theirs' }, { device: 'other' })
+      await ws.refresh()
+    }
+    await ws.apply({ type: 'item.update', id: itemId, name: 'Mine' })
+    expect(ws.state.snapshot!.items.map((i) => i.name)).toEqual(['Theirs'])
+    // Not proven current: the next refresh loads it again, once.
+    const loads = h.flags.loadCalls
+    await ws.refresh()
+    expect(h.flags.loadCalls).toBe(loads + 1)
+    await ws.refresh()
+    expect(h.flags.loadCalls).toBe(loads + 1)
+  })
+
+  it('9b. a load that finished during a write, read right before it, gets the write rows and stays current', async () => {
+    const { h, ws, inv } = await started('Inv')
+    await h.bumpRev(CS('one'))
+    const gate = h.gate()
+    h.flags.applyGate = gate.promise
+    const write = ws.apply(folderCreate(inv, 'Shelf'))
+    await vi.waitFor(() => expect(h.flags.applyBlocked).toBe(true))
+    // The refresh loads the copy at the revision the write then starts from.
+    const loads = h.flags.loadCalls
+    await ws.refresh()
+    expect(h.flags.loadCalls).toBe(loads + 1)
+    gate.open()
+    await write
+    expect(folderNames(ws)).toEqual(['Shelf'])
+    await ws.refresh()
+    expect(h.flags.loadCalls).toBe(loads + 1)
+  })
+
+  it('9c. a load that read the source before another device wrote keeps the own rows shown after it and leaves the copy stale', async () => {
+    const { h, ws, inv } = await started('Inv')
+    const other = await h.direct(CS('one'))
+    await other.apply(folderCreate(inv, 'Theirs'), { device: 'other' })
+    const gate = h.gate()
+    h.flags.loadGate = gate.promise
+    const refresh = ws.refresh()
+    // The load has read 'Theirs' and waits; another device writes again, then this one.
+    await vi.waitFor(() => expect(h.flags.loadBlocked).toBe(true))
+    await h.bumpRev(CS('one'))
+    const mine = newId()
+    await ws.apply(createItem(inv, mine))
+    gate.open()
+    await refresh
+    expect(itemIds(ws)).toEqual([mine])
+    const loads = h.flags.loadCalls
+    await ws.refresh()
+    expect(h.flags.loadCalls).toBe(loads + 1)
+    expect(itemIds(ws)).toEqual([mine])
+    expect(folderNames(ws)).toEqual(['Theirs'])
+  })
+
+  it('10. the cached copy and its revision are saved together', async () => {
+    const { h, ws, inv } = await started('Inv')
+    const ref = ws.state.current!
+    await ws.apply(folderCreate(inv, 'Shelf'))
+    // Closed before the copy was saved: the device never holds a revision newer than its rows.
+    const early = (await h.db.getSnapshot(ref))!
+    expect(early.snapshot.folders.length === 1 || early.rev !== (await cachedRevOfSource(h))).toBe(true)
+    const reopened = h.workspace()
+    await reopened.start()
+    expect(folderNames(reopened)).toEqual(['Shelf'])
+
+    await ws.apply(folderCreate(inv, 'Bin'))
+    await ws.flushCache()
+    const saved = (await h.db.getSnapshot(ref))!
+    expect(saved.snapshot.folders.map((f) => f.name).sort()).toEqual(['Bin', 'Shelf'])
+    expect(saved.rev).toBe(await cachedRevOfSource(h))
+    const loads = h.flags.loadCalls
+    const again = h.workspace()
+    await again.start()
+    expect(h.flags.loadCalls).toBe(loads)
+    expect(folderNames(again)).toEqual(['Bin', 'Shelf'])
+  })
+
+  it('11. an in-sync write counts as a check, a stale one does not', async () => {
+    const { h, ws, inv } = await started('Inv')
+    h.flags.clock += 60_000
+    await ws.apply(folderCreate(inv, 'One'))
+    const checked = new Date(h.flags.clock).toISOString()
+    expect(ws.state.lastRefreshAt).toBe(checked)
+    await h.bumpRev(CS('one'))
+    h.flags.clock += 60_000
+    await ws.apply(folderCreate(inv, 'Two'))
+    expect(ws.state.lastRefreshAt).toBe(checked)
   })
 })
 
@@ -1487,12 +1812,14 @@ describe('workspace photos', () => {
       expect(again.state.snapshot?.folders.map((f) => f.name)).toEqual(['Later'])
     })
 
-    it('an own write reloads, and a later change by another device is not skipped', async () => {
+    it('an own write loads nothing, and a later change by another device is not skipped', async () => {
       const h = setup()
       const { id, ws } = await start(h)
+      const loads = h.flags.loadCalls
       await ws.apply(folderCreate(id, 'Mine'))
       expect(ws.state.snapshot?.folders.map((f) => f.name)).toEqual(['Mine'])
       await ws.refresh()
+      expect(h.flags.loadCalls).toBe(loads)
       expect(ws.state.snapshot?.folders.map((f) => f.name)).toEqual(['Mine'])
       await (await h.direct(CS('one'))).apply(folderCreate(id, 'Theirs'), { device: 'other' })
       await ws.refresh()

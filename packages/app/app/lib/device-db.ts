@@ -1,5 +1,5 @@
 import type { Inventory, InventorySnapshot } from '@graymatter/core'
-import { createStore, del, get, keys, set, update, type UseStore } from 'idb-keyval'
+import { createStore, del, get, getMany, keys, set, setMany, update, type UseStore } from 'idb-keyval'
 import type { InventoryRef, SourceConfig } from './types'
 
 export interface DeviceSettings {
@@ -14,6 +14,13 @@ export interface CachedSnapshot {
   rev?: string | null
 }
 
+/*
+ * A cached copy's revision lives under its own key next to the snapshot, so it can be moved or cleared without
+ * rewriting the snapshot. `putSnapshot` writes both in one transaction. The `rev` inside the record is what the copy
+ * was saved with, the only revision a copy saved by an older app has; it is read when the revision key is missing.
+ * Every revision kept for a copy is one its rows are at least as new as.
+ */
+
 export interface DeviceDb {
   readonly persistent: boolean
   getSources(): Promise<SourceConfig[]>
@@ -24,8 +31,14 @@ export interface DeviceDb {
   getSettings(): Promise<DeviceSettings>
   putSettings(patch: Partial<DeviceSettings>): Promise<void>
   getSnapshot(ref: InventoryRef): Promise<CachedSnapshot | null>
+  /** The snapshot and its revision, together. */
   putSnapshot(ref: InventoryRef, value: CachedSnapshot): Promise<void>
   deleteSnapshot(ref: InventoryRef): Promise<void>
+  /** Every cached copy of the source except `exceptInventoryId` that is at revision `from` is now at `to`: the source
+   *  moved from `from` to `to` by one write to `exceptInventoryId`. Copies at another or an unknown revision keep it. */
+  advanceSnapshotRevs(sourceId: string, from: string, to: string, exceptInventoryId: string): Promise<void>
+  /** The copy's revision becomes unknown; its rows stay. */
+  markSnapshotStale(ref: InventoryRef): Promise<void>
   /** A source's last known inventories, active and archived; replaces the stored list. */
   putListing(sourceId: string, inventories: Inventory[]): Promise<void>
   /** Stored lists by source id. */
@@ -38,6 +51,8 @@ const SETTINGS = 'settings'
 const LISTINGS = 'listings'
 const snapshotKey = (ref: InventoryRef): string => `snapshot:${ref.sourceId}:${ref.inventoryId}`
 const snapshotPrefix = (sourceId: string): string => `snapshot:${sourceId}:`
+const revKey = (ref: InventoryRef): string => `snapshotRev:${ref.sourceId}:${ref.inventoryId}`
+const revPrefix = (sourceId: string): string => `snapshotRev:${sourceId}:`
 const defaultSettings = (): DeviceSettings => ({ deviceName: null, current: null })
 
 function upsertSource(list: SourceConfig[] | undefined, s: SourceConfig): SourceConfig[] {
@@ -48,7 +63,11 @@ function upsertSource(list: SourceConfig[] | undefined, s: SourceConfig): Source
 /** Minimal async key-value backend shared by the IndexedDB and in-memory implementations. */
 interface Kv {
   get<T>(key: string): Promise<T | undefined>
+  /** One read transaction. */
+  getMany(keys: string[]): Promise<unknown[]>
   set(key: string, value: unknown): Promise<void>
+  /** One write transaction. */
+  setMany(entries: [string, unknown][]): Promise<void>
   update<T>(key: string, fn: (v: T | undefined) => T): Promise<void>
   del(key: string): Promise<void>
   keys(): Promise<string[]>
@@ -65,9 +84,9 @@ function buildDeviceDb(kv: Kv, persistent: boolean): DeviceDb {
     },
     async deleteSource(id) {
       await kv.update<SourceConfig[]>(SOURCES, (list) => (list ?? []).filter((x) => x.id !== id))
-      const prefix = snapshotPrefix(id)
+      const prefixes = [snapshotPrefix(id), revPrefix(id)]
       for (const key of await kv.keys()) {
-        if (key.startsWith(prefix)) await kv.del(key)
+        if (prefixes.some((p) => key.startsWith(p))) await kv.del(key)
       }
     },
     async getSettings() {
@@ -77,13 +96,44 @@ function buildDeviceDb(kv: Kv, persistent: boolean): DeviceDb {
       await kv.update<Partial<DeviceSettings>>(SETTINGS, (cur) => ({ ...defaultSettings(), ...cur, ...patch }))
     },
     async getSnapshot(ref) {
-      return (await kv.get<CachedSnapshot>(snapshotKey(ref))) ?? null
+      const [value, rev] = (await kv.getMany([snapshotKey(ref), revKey(ref)])) as [
+        CachedSnapshot | undefined,
+        string | null | undefined,
+      ]
+      if (!value) return null
+      return rev === undefined ? value : { ...value, rev }
     },
     async putSnapshot(ref, value) {
-      await kv.set(snapshotKey(ref), value)
+      await kv.setMany([
+        [snapshotKey(ref), value],
+        [revKey(ref), value.rev ?? null],
+      ])
     },
     async deleteSnapshot(ref) {
+      // The snapshot first: a revision key without its snapshot is never read.
       await kv.del(snapshotKey(ref))
+      await kv.del(revKey(ref))
+    },
+    async advanceSnapshotRevs(sourceId, from, to, exceptInventoryId) {
+      const prefix = snapshotPrefix(sourceId)
+      for (const key of await kv.keys()) {
+        if (!key.startsWith(prefix)) continue
+        const ref = { sourceId, inventoryId: key.slice(prefix.length) }
+        if (ref.inventoryId === exceptInventoryId) continue
+        const stored = await kv.get<string | null>(revKey(ref))
+        // Leaving a revision as it is is always safe: at worst the copy is loaded again.
+        if (stored !== undefined && stored !== from) continue
+        // A copy saved by an older app keeps its revision inside the record: read it once, it moves to its own key.
+        const legacy = stored === undefined ? ((await kv.get<CachedSnapshot>(key))?.rev ?? null) : null
+        // Atomic on the revision key; `putSnapshot` writes that key with the snapshot.
+        await kv.update<string | null>(revKey(ref), (rev) => {
+          const current = rev === undefined ? legacy : rev
+          return current === from ? to : current
+        })
+      }
+    },
+    async markSnapshotStale(ref) {
+      await kv.set(revKey(ref), null)
     },
     async putListing(sourceId, inventories) {
       await kv.update<Record<string, Inventory[]>>(LISTINGS, (all) => ({ ...all, [sourceId]: inventories }))
@@ -102,7 +152,9 @@ function buildDeviceDb(kv: Kv, persistent: boolean): DeviceDb {
 function idbKv(store: UseStore): Kv {
   return {
     get: (key) => get(key, store),
+    getMany: (keys) => getMany(keys, store),
     set: (key, value) => set(key, value, store),
+    setMany: (entries) => setMany(entries, store),
     update: (key, fn) => update(key, fn, store),
     del: (key) => del(key, store),
     keys: async () => (await keys(store)).map(String),
@@ -113,8 +165,12 @@ function memoryKv(): Kv {
   const map = new Map<string, unknown>()
   return {
     get: async <T>(key: string) => map.get(key) as T | undefined,
+    getMany: async (keys) => keys.map((key) => map.get(key)),
     set: async (key, value) => {
       map.set(key, value)
+    },
+    setMany: async (entries) => {
+      for (const [key, value] of entries) map.set(key, value)
     },
     update: async <T>(key: string, fn: (v: T | undefined) => T) => {
       map.set(key, fn(map.get(key) as T | undefined))

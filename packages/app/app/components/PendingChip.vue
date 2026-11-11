@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button'
 import { signedAmount, STEP_DELAY_MS, type BucketStepper } from '~/composables/useItemSteppers'
 
 // The pending delta of a stepper, shown as pending (spec 4.12; anti-goal 1): "+3 → 48" with a ring counting down to the
-// send and Undo; "Saving…" while it is on its way; red text with Retry and Discard when the send failed.
+// send and Undo; "Saving…" while it is on its way; red text with Retry and Discard when the send failed: "Not saved"
+// when the source refused it, "Not confirmed" (and that Retry is safe) when its outcome is unknown.
 const props = defineProps<{ stepper: BucketStepper; unit: UnitDef }>()
 
 const state = computed(() => props.stepper.state.value)
@@ -37,7 +38,7 @@ const action = 'h-11 rounded-field px-3 font-bold'
         <circle class="countdown" cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="2.5" :stroke-dasharray="RING" />
       </svg>
       <Loader2 v-else-if="state === 'sending'" class="size-4 shrink-0 animate-spin text-muted-foreground" aria-hidden="true" />
-      <span v-if="state === 'failed'">{{ $t('stock.notSaved') }}</span>
+      <span v-if="state === 'failed'">{{ $t(stepper.unconfirmed.value ? 'stock.notConfirmed' : 'stock.notSaved') }}</span>
       <span class="whitespace-nowrap">
         {{ $t('stock.pending', { delta: `${delta.number}${deltaUnit}`, total: total.number }) }}
         <span class="text-xs" :class="state !== 'failed' && 'text-muted-foreground'">{{ total.unit }}</span>
@@ -50,6 +51,9 @@ const action = 'h-11 rounded-field px-3 font-bold'
         <Button variant="ghost" :class="action" @click="stepper.retry()">{{ $t('stock.retry') }}</Button>
         <Button variant="ghost" :class="action" @click="stepper.discard()">{{ $t('stock.discard') }}</Button>
       </template>
+    </span>
+    <span v-if="state === 'failed' && stepper.unconfirmed.value" class="basis-full pb-1 text-xs text-muted-foreground">
+      {{ $t('stock.retrySafe') }}
     </span>
   </div>
 </template>

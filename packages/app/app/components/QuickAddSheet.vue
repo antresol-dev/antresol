@@ -60,6 +60,7 @@ function added({ id, name, photoFailed }: { id: Id; name: string; photoFailed: b
       :url="shown.url"
       @done="added"
       @receive="receiveInto"
+      @close="close"
     />
   </AppSheet>
 </template>

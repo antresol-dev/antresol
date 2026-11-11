@@ -137,6 +137,32 @@ describe('createStepper', () => {
     expect(s.sent[2]!.movementId).not.toBe(s.sent[0]!.movementId)
   })
 
+  it('an unknown outcome marks the failed delta unconfirmed until it lands or is discarded, whatever the retries say', async () => {
+    const s = sender()
+    const unknownOutcome = (e: unknown): boolean => e instanceof StorageError && e.code === 'unavailable'
+    const st = createStepper({ delayMs: 2000, send: s.send, unknownOutcome })
+    s.control.fail = new StorageError('failed')
+    st.press(1)
+    await st.flush()
+    expect([st.state.value, st.unconfirmed.value]).toEqual(['failed', false])
+    s.control.fail = new StorageError('unavailable')
+    await st.retry()
+    expect(st.unconfirmed.value).toBe(true)
+    // A refusal of the retry does not make the first attempt any less possibly landed.
+    s.control.fail = new StorageError('read_only')
+    await st.retry()
+    expect([st.state.value, st.unconfirmed.value]).toEqual(['failed', true])
+    st.discard()
+    expect(st.unconfirmed.value).toBe(false)
+    st.press(1)
+    s.control.fail = new StorageError('unavailable')
+    await st.flush()
+    expect(st.unconfirmed.value).toBe(true)
+    s.control.fail = null
+    await st.retry()
+    expect([st.state.value, st.unconfirmed.value]).toEqual(['idle', false])
+  })
+
   it('flush of a failed delta retries it with the same movementId', async () => {
     const s = sender()
     const st = createStepper({ delayMs: 2000, send: s.send })

@@ -118,6 +118,17 @@ function catchUp(
   return { snapshot, rev: label }
 }
 
+/** The copy of an inventory as it was shown when another one was selected. Writes queued while it was shown (`selection`)
+ *  that run after the switch are checked against it, and their rows go into it and onto the device (see carriedFor).
+ *  `rev`: the revision it is exactly at; null once a write could not be put on top. */
+interface Carried {
+  ref: InventoryRef
+  snapshot: InventorySnapshot
+  rev: string | null
+  selection: number
+  generation: number
+}
+
 type Outcome =
   /** `fresh`: opened by this attempt rather than the source's open connection. */
   | { ok: true; conn: SourceConnection; inventories: Inventory[]; rev: string; fresh: boolean }
@@ -207,6 +218,8 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   const noteAnswer = (sourceId: string): void => {
     answeredAt.set(sourceId, now().getTime())
   }
+  /** The warm-up's request while it runs; writes wait for it. */
+  let warming: Promise<void> | null = null
 
   /** Open connections; refreshes reuse them until one fails. */
   const conns = new Map<string, SourceConnection>()
@@ -238,6 +251,10 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   /** Full loads still running, and the own rows put into the shown copy meanwhile (see catchUp). */
   let loadsRunning = 0
   let ownRows: OwnRows[] = []
+  /** Writes applyTo queued while their target was shown, by the selection they were queued under, until they end. */
+  const shownWrites = new Map<number, number>()
+  /** The copy shown until the last switch, while writes queued under it still run (see carriedFor). */
+  let carried: Carried | null = null
   /** The shown copy has rows a write put into it that are not saved on the device yet. */
   let unsaved: { ref: InventoryRef; generation: number } | null = null
   let saveTimer: ReturnType<typeof setTimeout> | undefined
@@ -285,6 +302,17 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     if (!sameRef(state.current, ref)) {
       // Written rows of the copy shown so far go to the device first: opening it again then loads nothing.
       void saveShown()
+      const left = state.current
+      carried =
+        left && state.snapshot?.inventory.id === left.inventoryId && (shownWrites.get(selection) ?? 0) > 0
+          ? {
+              ref: { sourceId: left.sourceId, inventoryId: left.inventoryId },
+              snapshot: state.snapshot,
+              rev: shownRev,
+              selection,
+              generation: generationOf(left.sourceId),
+            }
+          : null
       selection++
       state.snapshot = null
       state.snapshotOrigin = null
@@ -326,6 +354,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   /** Deletes the device copy of an inventory that is gone; its unsaved rows are never saved after this. */
   async function dropCopy(ref: InventoryRef): Promise<void> {
     if (unsaved && sameRef(unsaved.ref, ref)) unsaved = null
+    if (carried && sameRef(carried.ref, ref)) carried = null
     await db.deleteSnapshot(ref)
   }
 
@@ -571,6 +600,9 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   }
 
   async function selectInventory(ref: InventoryRef): Promise<void> {
+    // A stepper's pending delta goes out now, while its inventory is still the shown one: it is checked against that
+    // copy and its rows go into it (carriedFor), so the switch loads nothing for it.
+    if (!sameRef(state.current, ref)) runBeforeWrite()
     setCurrent(ref)
     // A plain copy: refs taken from reactive state are proxies, which IndexedDB cannot clone.
     await db.putSettings({ current: { sourceId: ref.sourceId, inventoryId: ref.inventoryId } })
@@ -829,12 +861,15 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     target: InventoryRef,
     command: Command,
     snapshotFor: (conn: SourceConnection) => Promise<InventorySnapshot | null>,
+    queuedUnder: number | null = null,
   ): Promise<void> {
     const { sourceId } = target
     runBeforeWrite()
     return enqueue(async () => {
       // First refresh still connecting: wait for it rather than failing with a misleading "can't reach".
       if (!conns.has(sourceId) && refreshing) await refreshing.catch(() => {})
+      // A warm-up's listing answering between this write and its rows would move the source's revision under them.
+      if (warming) await warming
       // A check of the target's source that is due goes first: a copy it loads is the one the command is validated
       // against. No deadlock: a check never waits for the queue. A failing source is refused below without one.
       await checkIfDue(sourceId).catch(() => {})
@@ -843,7 +878,8 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       const conn = conns.get(sourceId)
       if (!conn) throw new StorageError('unavailable')
       const normalized = normalizeCommand(command)
-      const snapshot = await guarded(sourceId, conn, () => snapshotFor(conn))
+      // Mostly the shown copy: no answer of the source (snapshotFor notes one when it reads the source).
+      const snapshot = await guarded(sourceId, conn, () => snapshotFor(conn), false)
       const invalid = validateCommand(normalized, snapshot)
       if (invalid) throw invalid
       const generation = generationOf(sourceId)
@@ -861,8 +897,12 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       if (generationOf(sourceId) === generation) {
         const settled = settleWrite(target, result, seq)
         reload = settled.reload
+        // Queued while the target was shown and another inventory selected since: into its carried copy, if they fit.
+        // Not a change of the list of inventories (archive, delete…): those are read again below.
+        const kept = settled.markStale && !isRelistCommand(command) ? carriedFor(target, queuedUnder) : null
+        const carriedOn = kept ? await carryRows(kept, result) : false
         // The device copies' revisions; a failure leaves an older revision there, which only costs a load.
-        if (settled.markStale) await db.markSnapshotStale(target).catch(() => {})
+        if (settled.markStale && !carriedOn) await db.markSnapshotStale(target).catch(() => {})
         if (settled.advance) {
           const [from, to] = settled.advance
           await db.advanceSnapshotRevs(sourceId, from, to, target.inventoryId).catch(() => {})
@@ -958,14 +998,71 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   }
 
   async function applyTo(ref: InventoryRef, command: Command): Promise<void> {
-    // Read when the job runs: earlier queued writes have put their rows into the snapshot by then. Only this
-    // inventory's own snapshot counts; until selectInventory shows it, the target is read from the source.
-    await write(ref, command, async (conn) => {
-      const shown = state.snapshot
-      return sameRef(state.current, ref) && shown?.inventory.id === ref.inventoryId
-        ? shown
-        : conn.storage.loadInventory(ref.inventoryId)
-    })
+    const isShown = (): boolean => sameRef(state.current, ref) && state.snapshot?.inventory.id === ref.inventoryId
+    // Queued while the target is shown: should another inventory be selected before it runs, its copy is carried.
+    const queuedUnder = isShown() ? selection : null
+    if (queuedUnder !== null) shownWrites.set(queuedUnder, (shownWrites.get(queuedUnder) ?? 0) + 1)
+    try {
+      // Read when the job runs: earlier queued writes have put their rows into the snapshot by then. Only this
+      // inventory's own snapshot counts; until selectInventory shows it, the target is read from the source.
+      await write(
+        ref,
+        command,
+        async (conn) => {
+          if (isShown()) return state.snapshot
+          const kept = carriedFor(ref, queuedUnder)
+          if (kept) return kept.snapshot
+          const loaded = await conn.storage.loadInventory(ref.inventoryId)
+          noteAnswer(ref.sourceId)
+          return loaded
+        },
+        queuedUnder,
+      )
+    } finally {
+      if (queuedUnder !== null) {
+        const left = (shownWrites.get(queuedUnder) ?? 1) - 1
+        if (left > 0) shownWrites.set(queuedUnder, left)
+        else {
+          shownWrites.delete(queuedUnder)
+          // The last write that could use the carried copy is done: it is not kept in memory.
+          if (carried?.selection === queuedUnder) carried = null
+        }
+      }
+    }
+  }
+
+  /** The carried copy of `ref` for a write queued under selection `queuedUnder` (while `ref` was shown), when that is
+   *  the copy left at the latest switch and its source was not edited since; otherwise null. A stepper's pending delta
+   *  flushed by the switch is checked against it instead of a load of the inventory. */
+  function carriedFor(ref: InventoryRef, queuedUnder: number | null): Carried | null {
+    const kept = carried
+    return kept && queuedUnder !== null && kept.selection === queuedUnder && sameRef(kept.ref, ref) &&
+      kept.generation === generationOf(ref.sourceId)
+      ? kept
+      : null
+  }
+
+  /** A write's rows on top of the carried copy, saved on the device at the write's revision (after the save of the
+   *  switch): opening the inventory again then loads nothing. Only on the exact revision it started from (as rule 2 of
+   *  settleWrite); otherwise, or without rows, false, and the copy takes no more rows. */
+  async function carryRows(kept: Carried, { prevRev, rev, patch }: ApplyResult): Promise<boolean> {
+    if (kept.rev === null || kept.rev !== prevRev || !patch || patch.inventoryId !== kept.ref.inventoryId) {
+      kept.rev = null
+      return false
+    }
+    kept.snapshot = patchSnapshot(kept.snapshot, patch)
+    kept.rev = rev
+    const value = { snapshot: kept.snapshot, savedAt: nowIso(), rev: cacheRev(rev), format: FORMAT_MARK }
+    await lastSave
+    // Dropped (the inventory is gone) or left behind by another switch meanwhile: the device copy is not this one's.
+    if (carried !== kept) return false
+    try {
+      await db.putSnapshot(kept.ref, value)
+      return true
+    } catch {
+      kept.rev = null
+      return false
+    }
   }
 
   async function apply(command: Command): Promise<void> {
@@ -1159,12 +1256,14 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   }
 
   /** Runs a storage call on `conn`: an `unavailable` failure marks the source, any failure is redacted with the
-   *  connection string `conn` was opened with, even if the source was edited or removed since. */
-  async function guarded<T>(sourceId: string, conn: SourceConnection, call: () => Promise<T>): Promise<T> {
+   *  connection string `conn` was opened with, even if the source was edited or removed since. `network`: the call
+   *  always reads the source, so its success is an answer (for the warm-up); a call that may stay on the device notes
+   *  its own. */
+  async function guarded<T>(sourceId: string, conn: SourceConnection, call: () => Promise<T>, network = true): Promise<T> {
     const connectionString = connectionStringOf(conn)
     try {
       const result = await call()
-      noteAnswer(sourceId)
+      if (network) noteAnswer(sourceId)
       return result
     } catch (error) {
       if (error instanceof StorageError && error.code === 'unavailable') markFailure(sourceId, error, connectionString)
@@ -1177,10 +1276,11 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   /** Neon's compute sleeps after minutes of quiet: the first request after that is slow. Before a form that is about to
    *  write, one light request wakes it, only when the source has been silent for longer than this. */
   const WARM_AFTER_MS = 4 * 60_000
-  let warming: Promise<void> | null = null
   function warmUp(): Promise<void> {
     const sourceId = state.current?.sourceId
     if (!sourceId || !isConnected(statusOf(sourceId))) return Promise.resolve()
+    // A write on its way wakes the source by itself, and a listing answering amid it would move the revision under it.
+    if (pendingWrites > 0 || savingBuckets.size > 0) return Promise.resolve()
     const last = answeredAt.get(sourceId)
     if (last !== undefined && now().getTime() - last <= WARM_AFTER_MS) return Promise.resolve()
     return (warming ??= relist(sourceId).catch(() => {}).finally(() => {

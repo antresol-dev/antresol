@@ -265,7 +265,10 @@
     "discard": "Discard",
     "pending": "{delta} → {total}",
     "notSaved": "Not saved:",
-    "notSavedFor": "{delta} for {name} was not saved"
+    "notSavedFor": "{delta} for {name} was not saved",
+    "notConfirmed": "Not confirmed:",
+    "notConfirmedFor": "{delta} for {name} was not confirmed",
+    "retrySafe": "The source didn’t answer, so it may be saved already. Retry won’t add it twice."
   },
   "countFolder": {
     "menu": "Count this folder",
@@ -278,12 +281,19 @@
     "was": "was {amount}",
     "invalid": "Enter a number, like 37 or 1.5k.",
     "notSaved": "Not saved: {reason}",
+    "notConfirmed": "Not confirmed: {reason} Applying again is safe.",
     "apply": "Apply | Apply {count} change | Apply {count} changes",
     "saving": "Saving {done} of {total}…",
     "stopped": "Stopped: {count} change is not saved yet. | Stopped: {count} changes are not saved yet.",
     "fixFirst": "Fix {count} entry first. | Fix {count} entries first.",
     "saved": "Saved {count} count | Saved {count} counts",
     "leave": "Leave without saving your counts?"
+  },
+  "unconfirmed": {
+    "hint": "Not confirmed: the source didn’t answer, so this may be saved already. Retry is safe: it won’t be saved twice.",
+    "retry": "Retry",
+    "close": "Close",
+    "probablySaved": "The first attempt was probably saved — check the numbers."
   },
   "empty": {
     "noInventories": "Create your first inventory",

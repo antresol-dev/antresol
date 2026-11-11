@@ -10,7 +10,8 @@ import { computed, readonly, ref, shallowRef, type ComputedRef, type Ref } from 
  * - waiting: a delta is pending and the timer runs; presses add to it, undo drops it, flush sends it now;
  * - sending: the delta is on its way; presses and undo are ignored (the bucket is locked);
  * - failed: the send failed; the delta stays until retry (same movementId, so a send that did land is not written
- *   twice) or discard. Presses are ignored: a changed delta under the same id would be dropped by the source.
+ *   twice) or discard. Presses are ignored: a changed delta under the same id would be dropped by the source. When a
+ *   send's outcome was unknown, `unconfirmed` says it may have landed.
  */
 export type StepperState = 'idle' | 'waiting' | 'sending' | 'failed'
 
@@ -23,6 +24,8 @@ export interface StepperOptions {
   /** The bucket's confirmed quantity: "−" never takes it plus the pending delta below zero (insufficient stock is
    *  refused before it is sent). Without it "−" is not limited. */
   available?: () => Quantity
+  /** The failure leaves it unknown whether the send landed (a timeout, a dropped connection). */
+  unknownOutcome?: (error: unknown) => boolean
 }
 
 export interface Stepper {
@@ -39,6 +42,9 @@ export interface Stepper {
   state: Readonly<Ref<StepperState>>
   /** The last failure while `failed`, else null. */
   error: Readonly<Ref<unknown>>
+  /** A send of the pending delta had an unknown outcome (StepperOptions.unknownOutcome): it may have landed. Retry is
+   *  safe (same movementId). Until the delta lands or is discarded. */
+  unconfirmed: Readonly<Ref<boolean>>
   /** When the waiting delta goes out (ms by `now`); null unless waiting. */
   due: Readonly<Ref<number | null>>
   /** The quantity after the pending delta: from the live confirmed quantity while waiting, from the one the delta was
@@ -55,6 +61,7 @@ export function createStepper(opts: StepperOptions): Stepper {
   const pending = ref<Quantity>(ZERO)
   const state = ref<StepperState>('idle')
   const error = shallowRef<unknown>(null)
+  const unconfirmed = ref(false)
   const due = ref<number | null>(null)
   /** The confirmed quantity the delta was sent against; null while waiting. */
   const sentFrom = ref<Quantity | null>(null)
@@ -79,6 +86,7 @@ export function createStepper(opts: StepperOptions): Stepper {
     movementId = null
     sentFrom.value = null
     error.value = null
+    unconfirmed.value = false
     state.value = 'idle'
   }
 
@@ -93,6 +101,7 @@ export function createStepper(opts: StepperOptions): Stepper {
       () => reset(),
       (e: unknown) => {
         error.value = e
+        if (opts.unknownOutcome?.(e)) unconfirmed.value = true
         state.value = 'failed'
       },
     )
@@ -132,6 +141,7 @@ export function createStepper(opts: StepperOptions): Stepper {
     pending: readonly(pending),
     state: readonly(state),
     error: readonly(error),
+    unconfirmed: readonly(unconfirmed),
     due: readonly(due),
     projected,
     canDecrease,

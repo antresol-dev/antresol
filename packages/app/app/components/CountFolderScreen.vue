@@ -3,8 +3,9 @@ import type { Id, Quantity } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from 'vue-sonner'
-import { applyCounts, countChanges, countRows, type CountRow } from '~/lib/count-folder'
+import { applyCounts, countChanges, countRows, type CountIds, type CountRow } from '~/lib/count-folder'
 import { errorMessageKey } from '~/lib/errors'
+import { isUnknownOutcome } from '~/lib/unconfirmed'
 import { folderView } from '~/lib/views'
 
 // "Count this folder" (spec 4.14): every bucket of the folder's own items with its stock filled in; changed rows are
@@ -30,9 +31,11 @@ const crumbs = computed(() => {
 
 /** What was typed, by row key; a row without an entry follows the stock. */
 const entries = reactive(new Map<string, string>())
-/** The movementId of each row's count until it lands (a retry sends the same command). */
-const ids = new Map<string, Id>()
-const failed = ref<{ key: string; messageKey: string } | null>(null)
+/** The movementId of each row's count until it lands: a retry of the same number sends the same command, another
+ *  number a new one (applyCounts). */
+const ids: CountIds = new Map()
+/** `unknown`: the source did not answer, so the count may have landed ("Not confirmed"; Apply again is safe). */
+const failed = ref<{ key: string; messageKey: string; unknown: boolean } | null>(null)
 const progress = ref<{ done: number; total: number } | null>(null)
 const busy = computed(() => progress.value !== null)
 
@@ -83,8 +86,12 @@ async function apply(): Promise<void> {
   // What landed is the stock now: those rows follow it again.
   for (const c of batch.slice(0, result.done)) entries.delete(c.row.key)
   progress.value = null
-  if (result.failed) failed.value = { key: result.failed.key, messageKey: errorMessageKey(result.failed.error) }
-  else toast.success(t('countFolder.saved', result.done))
+  if (result.failed) {
+    const { key, error } = result.failed
+    failed.value = { key, messageKey: errorMessageKey(error), unknown: isUnknownOutcome(error) }
+  } else {
+    toast.success(t('countFolder.saved', result.done))
+  }
 }
 
 onBeforeRouteLeave(() => changes.value.length === 0 || window.confirm(t('countFolder.leave')))
@@ -118,7 +125,7 @@ const divider =
                 </span>
                 <span v-if="changeOf.get(row.key)?.target === null" class="text-[13px] text-destructive">{{ $t('countFolder.invalid') }}</span>
                 <span v-else-if="failed?.key === row.key" class="text-[13px] text-destructive">
-                  {{ $t('countFolder.notSaved', { reason: $t(failed.messageKey) }) }}
+                  {{ $t(failed.unknown ? 'countFolder.notConfirmed' : 'countFolder.notSaved', { reason: $t(failed.messageKey) }) }}
                 </span>
                 <span v-else-if="changeOf.has(row.key)" class="text-[13px] text-muted-foreground tabular-nums">
                   {{ $t('countFolder.was', { amount: `${row.number} ${row.unit}` }) }}

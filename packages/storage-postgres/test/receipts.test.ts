@@ -1,6 +1,8 @@
 import { newId, type Command, type Id, type InventoryStorage } from '@graymatter/core'
 import { describe, expect, it } from 'vitest'
-import { itemCreate, makeStorage, sizeAxis, TEST_ACTOR, variantsCreate } from './helpers'
+import { RECEIPTS_BY_SOURCE_SCAN } from '../src/queries'
+import { openPostgresStorage } from '../src/storage'
+import { itemCreate, makeExecutor, makeStorage, sizeAxis, TEST_ACTOR, variantsCreate } from './helpers'
 
 const LOT = '1005001234567890'
 
@@ -83,5 +85,27 @@ describe('findReceiptsBySource', () => {
     expect(await storage.findReceiptsBySource(inv, 'shop.example/a%')).toEqual([])
     expect(await storage.findReceiptsBySource(inv, '')).toEqual([])
     expect((await storage.findReceiptsBySource(other, LOT)).map((r) => r.quantity)).toEqual(['10'])
+  })
+
+  it('looks at the newest receipts holding the key text only, so a short key cannot pull every receipt', async () => {
+    const exec = await makeExecutor()
+    const { storage } = await openPostgresStorage(exec)
+    const inv = newId()
+    const a = newId()
+    await storage.apply({ type: 'inventory.create', id: inv, name: 'A', description: null, currency: 'USD' }, TEST_ACTOR)
+    // The oldest receipt holds lot 123 as a whole part; newer ones only inside longer lot ids.
+    await apply(storage, create(inv, a, 'https://shop.example/item/123.html'))
+    const newer = async (count: number): Promise<void> => {
+      await exec.query({
+        text: `insert into movements (id, inventory_id, item_id, kind, quantity, source_url, created_by)
+               select gen_random_uuid(), $1, $2, 'receipt', 1, 'https://shop.example/item/4' || n || '123.html', 'Test'
+               from generate_series(1, ${count}) as n`,
+        params: [inv, a],
+      })
+    }
+    await newer(RECEIPTS_BY_SOURCE_SCAN - 1)
+    expect((await storage.findReceiptsBySource(inv, '123')).map((r) => r.quantity)).toEqual(['10'])
+    await newer(1)
+    expect(await storage.findReceiptsBySource(inv, '123')).toEqual([])
   })
 })

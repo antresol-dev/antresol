@@ -71,24 +71,27 @@ export function countChanges(rows: CountRow[], entries: ReadonlyMap<string, stri
   return changes
 }
 
+/** The movementId of each row's count by row key, with the target it was minted for, until that count lands. */
+export type CountIds = Map<string, { target: Quantity; movementId: Id }>
+
 /**
  * One stock.set per change, one after another (no batch command yet). Each row's movementId lives in `ids` (by row key)
  * until its write lands, so a retry after a failure sends the same command and a write that did land is not repeated.
+ * The id follows the target: a row counted again with another number after a failure gets a new id, so its count is
+ * written even when the first one landed unseen (an unknown outcome); stock.set is absolute, so that is always safe.
  * Stops at the first failure: what landed stays. `onProgress(done)` after each landed write.
  */
 export async function applyCounts(
   changes: { row: CountRow; target: Quantity }[],
-  ids: Map<string, Id>,
+  ids: CountIds,
   apply: (command: Command) => Promise<void>,
   onProgress?: (done: number) => void,
 ): Promise<{ done: number; failed: { key: string; error: unknown } | null }> {
   let done = 0
   for (const { row, target } of changes) {
-    let movementId = ids.get(row.key)
-    if (!movementId) {
-      movementId = newId()
-      ids.set(row.key, movementId)
-    }
+    const kept = ids.get(row.key)
+    const movementId = kept && cmpQ(kept.target, target) === 0 ? kept.movementId : newId()
+    ids.set(row.key, { target, movementId })
     try {
       await apply({ type: 'stock.set', movementId, itemId: row.itemId, variantId: row.variantId, target, note: null })
     } catch (error) {

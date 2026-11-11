@@ -13,8 +13,8 @@ export const buttonVariants = cva(
   {
     variants: {
       variant: {
-        // The accent button: the only painted one (anti-goal 4).
-        default: "painted pressable",
+        // The accent button, the only one in colour (anti-goal 4): soft in the light theme, painted in the dark one.
+        default: "accent-button pressable",
         destructive: "painted painted-destructive pressable",
         // Actions are neutral: raised, tinted towards the accent only under the pointer. R(4,10) for text buttons,
         // R(3,7) for icon buttons (compound variants below).

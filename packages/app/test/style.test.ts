@@ -5,23 +5,59 @@ import { describe, expect, it } from 'vitest'
 import { parse } from 'vue/compiler-sfc'
 import css from '../app/assets/css/main.css?raw'
 import { ACCENTS, type AccentName } from '../app/lib/accent'
-import { contrast, cssVars, parseColor, resolveColor, type Vars } from './fixtures/color'
+import { contrast, cssVars, mixHex, over, parseColor, resolveColor, substitute, type Rgba, type Vars } from './fixtures/color'
 
 /*
- * The "Hybrid v2" tokens and utilities in main.css (spec 2026-11-11 §4.1, §4.2; Review Focus 4): every text/background
- * pair of both themes at 4.5:1 or better for every accent, the mock-up's shadow numbers, the pointer cursor rule.
+ * The "Hybrid v2" tokens and utilities in main.css (spec 2026-11-12 §A; Review Focus 5): the owner's mock-up board 7
+ * (light) and board 8 (dark) — every text/background pair of both themes at 4.5:1 or better for every accent, the
+ * mock-up's shadow numbers, the glass menus, the pointer cursor rule.
  */
 
 const accents = Object.keys(ACCENTS) as AccentName[]
 const root = cssVars(css, ':root')
 const dark = cssVars(css, '.dark')
 const painted = cssVars(css, '.painted')
+const paintedDark = cssVars(css, '.dark .painted')
 const paintedDestructive = cssVars(css, '.painted-destructive')
+const paintedDestructiveDark = cssVars(css, '.dark .painted-destructive')
+/** The painted utility's own properties in each theme: `.dark …` rules add to the plain ones. */
+const paintedBlocks = {
+  light: { accent: painted, destructive: { ...painted, ...paintedDestructive } },
+  dark: {
+    accent: { ...painted, ...paintedDark },
+    destructive: { ...painted, ...paintedDark, ...paintedDestructive, ...paintedDestructiveDark },
+  },
+}
+/** A value on one line. */
+const flat = (s: string | undefined): string => (s ?? '').replace(/\s+/g, ' ').trim()
+/** A shadow list's shadows (commas inside color-mix() and var() are not separators). */
+function shadows(list: string): string[] {
+  const parts: string[] = []
+  let depth = 0
+  let start = 0
+  for (let i = 0; i < list.length; i++) {
+    if (list[i] === '(') depth++
+    else if (list[i] === ')') depth--
+    else if (list[i] === ',' && depth === 0) {
+      parts.push(list.slice(start, i).trim())
+      start = i + 1
+    }
+  }
+  return [...parts, list.slice(start).trim()]
+}
+const glass = cssVars(css, '.glass')
+const selectedStep = cssVars(css, '.row-selected .pill-step')
 
+/** Both theme variants are on <html> (lib/accent.ts writes them); each theme picks what it needs. */
 function themeVars(theme: 'light' | 'dark', accent: AccentName): Vars {
-  return theme === 'light'
-    ? { ...root, 'accent-light': ACCENTS[accent].light }
-    : { ...root, ...dark, 'accent-dark': ACCENTS[accent].dark }
+  const written = { 'accent-light': ACCENTS[accent].light, 'accent-dark': ACCENTS[accent].dark }
+  return theme === 'light' ? { ...root, ...written } : { ...root, ...dark, ...written }
+}
+
+/** An element's custom properties: a rule's values are computed against what the element inherits (so a rule may
+ *  set --muted-foreground from a token that is itself the root's --muted-foreground). */
+function scoped(vars: Vars, block: Vars): Vars {
+  return { ...vars, ...Object.fromEntries(Object.entries(block).map(([k, v]) => [k, substitute(v, vars)])) }
 }
 
 /** Text token on background token. A translucent background is drawn over --background. */
@@ -37,6 +73,7 @@ const pairs: [string, string][] = [
   ['foreground', 'popover'],
   ['foreground', 'accent-soft'],
   ['foreground', 'ghost-pressed'],
+  ['foreground', 'selected-from'],
   ['muted-foreground', 'background'],
   ['muted-foreground', 'hover'],
   ['muted-foreground', 'pressed'],
@@ -53,17 +90,25 @@ const pairs: [string, string][] = [
   ['icon', 'background'],
   ['icon', 'hover'],
   ['icon', 'rail'],
-  // Accent-coloured text: the selected row (strongest end of its gradient), links, the soft accent chip.
+  // Accent-coloured text: hover and press of every control, the selected row (strongest end of its gradient), links,
+  // the soft accent chip, the stepper on a selected row.
   ['accent-ink', 'background'],
   ['accent-ink', 'hover'],
   ['accent-ink', 'pressed'],
+  ['accent-ink', 'ghost-hover'],
+  ['accent-ink', 'ghost-pressed'],
   ['accent-ink', 'selected-from'],
+  ['accent-ink', 'selected-pill'],
   ['accent-ink', 'accent-soft'],
   ['accent-soft-foreground', 'accent-soft'],
   ['selected-muted', 'selected-from'],
-  // The painted accent button and its fills.
+  // The accent button (Review Focus 5): soft in the light theme, painted in the dark one; rest, hover, pressed.
+  ['accent-button-foreground', 'accent-button'],
+  ['accent-button-foreground', 'accent-button-hover'],
+  ['accent-button-foreground', 'accent-button-pressed'],
+  // Painted fills: the accent's paint, checkboxes and progress (primary).
+  ['accent-foreground', 'accent-paint'],
   ['primary-foreground', 'primary'],
-  ['accent-foreground', 'accent'],
   ['destructive', 'background'],
   ['destructive', 'hover'],
   ['destructive-foreground', 'destructive'],
@@ -79,14 +124,30 @@ describe.each(['light', 'dark'] as const)('%s theme contrast', (theme) => {
     it.each(pairs)('%s on %s is at least 4.5:1', (fg, bg) => {
       expect(contrast(resolveColor(fg, vars), resolveColor(bg, vars), base)).toBeGreaterThanOrEqual(4.5)
     })
-    it.each([
-      ['accent', painted],
-      ['destructive', { ...painted, ...paintedDestructive }],
-    ] as const)('painted %s button: text on rest, hover and pressed is at least 4.5:1', (_, block) => {
-      const local = { ...vars, ...block }
+    it.each(['accent', 'destructive'] as const)('painted %s surface: text on rest, hover and pressed is at least 4.5:1', (kind) => {
+      const local = { ...vars, ...paintedBlocks[theme][kind] }
       const fg = resolveColor('paint-foreground', local)
       for (const bg of ['paint', 'paint-hover', 'paint-pressed']) {
         expect(contrast(fg, resolveColor(bg, local), base), bg).toBeGreaterThanOrEqual(4.5)
+      }
+    })
+    it('the stepper on a selected row: its text on hover and pressed is at least 4.5:1', () => {
+      const local = scoped(vars, selectedStep)
+      const pill = resolveColor('selected-pill', local)
+      const ink = resolveColor('accent-ink', local)
+      expect(contrast(resolveColor('hover-ink', local), resolveColor('hover-bg', local), pill), 'hover').toBeGreaterThanOrEqual(4.5)
+      expect(contrast(ink, resolveColor('active-bg', local), pill), 'pressed').toBeGreaterThanOrEqual(4.5)
+    })
+    it('glass menus: item text, muted and danger text on the glass and on a hovered item are at least 4.5:1', () => {
+      // The glass drawn over the page's own colour; a hovered item is the glass hover drawn over that.
+      const local = scoped(vars, glass)
+      const pane: Rgba = over(resolveColor('glass-bg', local), base)
+      const hovered: Rgba = over(resolveColor('glass-hover', local), pane)
+      for (const fg of ['foreground', 'muted-foreground', 'subtle-foreground', 'destructive', 'accent-ink']) {
+        expect(contrast(resolveColor(fg, local), pane), fg).toBeGreaterThanOrEqual(4.5)
+      }
+      for (const fg of ['glass-hover-foreground', 'muted-foreground', 'destructive']) {
+        expect(contrast(resolveColor(fg, local), hovered), `${fg} hovered`).toBeGreaterThanOrEqual(4.5)
       }
     })
   })
@@ -94,7 +155,13 @@ describe.each(['light', 'dark'] as const)('%s theme contrast', (theme) => {
 
 describe('spec values', () => {
   const hex = (name: string, vars: Vars) => resolveColor(name, vars)
-  it('light theme', () => {
+  /** color-mix() keeps fractions where the mock-up's mix() rounds to whole channels. */
+  const near = (actual: Rgba, expected: string) => {
+    const e = parseColor(expected)
+    for (const ch of ['r', 'g', 'b'] as const) expect(Math.abs(actual[ch] - e[ch]), `${ch} of ${expected}`).toBeLessThanOrEqual(0.5)
+    expect(actual.a).toBeCloseTo(e.a, 3)
+  }
+  it('light theme: board 7', () => {
     const v = themeVars('light', 'indigo')
     expect(hex('background', v)).toEqual(parseColor('#EDEFF3'))
     expect(hex('surface', v)).toEqual(parseColor('#EDEFF3'))
@@ -105,39 +172,117 @@ describe('spec values', () => {
     expect(hex('chip', v)).toEqual(parseColor('#DDE1E8'))
     expect(hex('thumb', v)).toEqual(parseColor('#E2E5EB'))
     expect(hex('accent', v)).toEqual(parseColor('#4F46E5'))
-    expect(hex('primary', v)).toEqual(parseColor('#4F46E5'))
-    expect(hex('shadow-dark', v)).toEqual(parseColor('rgba(150, 160, 180, 0.29)'))
-    expect(hex('shadow-light', v)).toEqual(parseColor('rgba(255, 255, 255, 0.96)'))
+    expect(hex('accent-paint', v)).toEqual(parseColor('#4F46E5'))
+    near(hex('accent-ink', v), mixHex('#4F46E5', '#000000', 0.18))
+    expect(hex('pill-seam', v)).toEqual(parseColor('rgba(150, 160, 180, 0.22)'))
   })
-  it('dark theme', () => {
+  it('dark theme: board 8, base #2A2E37', () => {
     const v = themeVars('dark', 'indigo')
-    expect(hex('background', v)).toEqual(parseColor('#24272E'))
-    expect(hex('foreground', v)).toEqual(parseColor('#E7E9EE'))
-    expect(hex('muted-foreground', v)).toEqual(parseColor('#A0A6B3'))
-    expect(hex('icon', v)).toEqual(parseColor('#D4D8E0'))
-    expect(hex('divider', v)).toEqual(parseColor('rgba(255, 255, 255, 0.06)'))
-    expect(hex('shadow-dark', v)).toEqual(parseColor('rgba(0, 0, 0, 0.55)'))
-    expect(hex('shadow-light', v)).toEqual(parseColor('rgba(255, 255, 255, 0.06)'))
-    expect(hex('accent', v)).toEqual(parseColor(ACCENTS.indigo.dark))
+    expect(hex('background', v)).toEqual(parseColor('#2A2E37'))
+    expect(hex('surface', v)).toEqual(parseColor('#2A2E37'))
+    expect(hex('foreground', v)).toEqual(parseColor('#E6E8EE'))
+    expect(hex('muted-foreground', v)).toEqual(parseColor('#A3A9B6'))
+    expect(hex('icon', v)).toEqual(parseColor('#D2D6DE'))
+    expect(hex('dimmed-foreground', v)).toEqual(parseColor('#BFC4CE'))
+    expect(hex('divider', v)).toEqual(parseColor('#363B46'))
+    expect(hex('chip', v)).toEqual(parseColor('#373C48'))
+    expect(hex('thumb', v)).toEqual(parseColor('#323743'))
+    expect(hex('pill-seam', v)).toEqual(parseColor('rgba(0, 0, 0, 0.28)'))
+    // The accent is lifted by 12 % white; accent-coloured text is the accent half-way to white.
+    expect(hex('accent', v)).toEqual(parseColor(mixHex('#4F46E5', '#FFFFFF', 0.12)))
+    near(hex('accent-ink', v), mixHex('#4F46E5', '#FFFFFF', 0.5))
   })
   it('the accent follows the root variables lib/accent.ts writes', () => {
     expect(resolveColor('accent', themeVars('light', 'teal'))).toEqual(parseColor('#0F766E'))
     expect(resolveColor('accent', themeVars('dark', 'teal'))).toEqual(parseColor(ACCENTS.teal.dark))
+    expect(resolveColor('accent-paint', themeVars('dark', 'teal'))).toEqual(parseColor('#0F766E'))
+  })
+  it('hover tints the control towards the accent (7 %), press 12 %; flat controls 8 / 16 % light, 16 / 24 % dark', () => {
+    const l = themeVars('light', 'indigo')
+    const d = themeVars('dark', 'indigo')
+    near(hex('hover', l), mixHex('#EDEFF3', '#4F46E5', 0.07))
+    near(hex('pressed', l), mixHex('#EDEFF3', '#4F46E5', 0.12))
+    near(hex('hover', d), mixHex('#2A2E37', ACCENTS.indigo.dark, 0.07))
+    near(hex('pressed', d), mixHex('#2A2E37', ACCENTS.indigo.dark, 0.12))
+    expect(hex('ghost-hover', l).a).toBeCloseTo(0.08)
+    expect(hex('ghost-pressed', l).a).toBeCloseTo(0.16)
+    expect(hex('ghost-hover', d).a).toBeCloseTo(0.16)
+    // The mock-up's 26 % takes accent-ink under 4.5:1 on rose.
+    expect(hex('ghost-pressed', d).a).toBeCloseTo(0.24)
+  })
+  it('the selected row: accent 17 % → 8 % light; 24 % → 12 % dark (the mock-up\'s 26 % fails rose)', () => {
+    expect(hex('selected-from', themeVars('light', 'indigo')).a).toBeCloseTo(0.17)
+    expect(hex('selected-to', themeVars('light', 'indigo')).a).toBeCloseTo(0.08)
+    expect(hex('selected-from', themeVars('dark', 'indigo')).a).toBeCloseTo(0.24)
+    expect(hex('selected-to', themeVars('dark', 'indigo')).a).toBeCloseTo(0.12)
   })
 })
 
-describe('shadows: the mock-up hybrid2 sh() at depth 0.9, light 1.2, shade 0.7', () => {
-  const depth = 0.9
-  const light = 1.2
-  const shade = 0.7
+describe('the accent button (Review Focus 5)', () => {
+  it('light theme: soft — the accent tint 14 % (hover 20 %), accent-ink text', () => {
+    for (const accent of accents) {
+      const v = themeVars('light', accent)
+      const A = ACCENTS[accent].light
+      const ink = resolveColor('accent-ink', v)
+      const near = (name: string, k: number) => {
+        const e = parseColor(mixHex('#EDEFF3', A, k))
+        const a = resolveColor(name, v)
+        for (const ch of ['r', 'g', 'b'] as const) expect(Math.abs(a[ch] - e[ch]), `${accent} ${name} ${ch}`).toBeLessThanOrEqual(0.5)
+      }
+      near('accent-button', 0.14)
+      near('accent-button-hover', 0.2)
+      // The mock-up's pressed tint (24 %) takes accent-ink under 4.5:1 on blue, green and orange: the press keeps the
+      // hover tint and shows by the sink.
+      near('accent-button-pressed', 0.2)
+      expect(resolveColor('accent-button-foreground', v)).toEqual(ink)
+    }
+  })
+  it('dark theme: painted in the accent itself (the mock-up\'s 12 % lift takes white text under 4.5:1), white text', () => {
+    for (const accent of accents) {
+      const v = themeVars('dark', accent)
+      expect(resolveColor('accent-button', v)).toEqual(parseColor(ACCENTS[accent].light))
+      expect(resolveColor('accent-button-foreground', v)).toEqual(parseColor('#FFFFFF'))
+    }
+  })
+  it('Button "default" and the dock\'s + are the accent button', () => {
+    const variants = readFileSync(fileURLToPath(new URL('../app/components/ui/button/index.ts', import.meta.url)), 'utf8')
+    expect(variants).toMatch(/default:\s*"accent-button pressable"/)
+    const dock = readFileSync(fileURLToPath(new URL('../app/components/MobileDock.vue', import.meta.url)), 'utf8')
+    expect(dock).toMatch(/\baccent-button pressable\b/)
+  })
+})
+
+/** The mock-up's hybrid2 sh(): "dark-x dark-x dark-blur" and "−light-x −light-x light-blur" of R/I(x, b). */
+function shadowMaths(depth: number, light: number, shade: number) {
   const n = (v: number) => Math.round(v * depth * 10) / 10
-  /** "dark-x dark-x dark-blur" and "−light-x −light-x light-blur" of sh(x, b). */
-  function sh(x: number, b: number): [string, string] {
-    const xd = n(x * (0.55 + 0.45 * shade))
-    const bd = n(b * (0.6 + 0.4 * shade))
-    const xl = n(x * light)
-    const bl = n(b * light)
-    return [`${xd}px ${xd}px ${bd}px`, `${-xl}px ${-xl}px ${bl}px`]
+  return {
+    n,
+    sh(x: number, b: number): [string, string] {
+      const xd = n(x * (0.55 + 0.45 * shade))
+      const bd = n(b * (0.6 + 0.4 * shade))
+      const xl = n(x * light)
+      const bl = n(b * light)
+      return [`${xd}px ${xd}px ${bd}px`, `${-xl}px ${-xl}px ${bl}px`]
+    },
+  }
+}
+
+const ZERO_INSETS = 'inset 0px 0px 0px transparent, inset 0px 0px 0px transparent'
+const ZERO_OUTERS = '0px 0px 0px transparent, 0px 0px 0px transparent'
+const shadowThemes = [
+  // Light (board 7): R() lists the unused inset pair at zero.
+  { theme: 'light', depth: 0.7, light: 1.1, shade: 0.7, vars: root, rest: ZERO_INSETS },
+  // Dark (board 8): the raised state's spare inset slot is a 1 px top-left rim, the edge catching the light.
+  { theme: 'dark', depth: 0.8, light: 0.7, shade: 0.9, vars: { ...root, ...dark }, rest: 'inset 0.8px 0.8px 0px var(--rim), inset 0px 0px 0px transparent' },
+] as const
+
+describe.each(shadowThemes)('$theme shadows: the mock-up hybrid2 sh() at depth $depth, light $light, shade $shade', (t) => {
+  const { sh } = shadowMaths(t.depth, t.light, t.shade)
+  /** A token's list; a token that is another token (`var(--x)`) is that one's list. */
+  const list = (name: string): string => {
+    const v = t.vars[name]!
+    const alias = /^var\(--([\w-]+)\)$/.exec(v)
+    return alias ? list(alias[1]!) : v
   }
   const raisedTokens: [string, number, number, string][] = [
     ['raised-shadow', 4, 10, 'shadow-dark'],
@@ -150,32 +295,131 @@ describe('shadows: the mock-up hybrid2 sh() at depth 0.9, light 1.2, shade 0.7',
   ]
   it.each(raisedTokens)('--%s is R(%d, %d)', (token, x, b, darkColour) => {
     const [d, l] = sh(x, b)
-    expect(root[token]).toMatch(new RegExp(`^${d} var\\(--${darkColour}\\), ${l} var\\(--shadow-light\\)`))
+    expect(t.vars[token]).toBe(`${d} var(--${darkColour}), ${l} var(--shadow-light), ${t.rest}`)
   })
-  const pressedTokens: [string, number, number][] = [
-    ['raised-shadow-pressed', 3, 7],
-    ['raised-sm-shadow-pressed', 2.5, 6],
-    ['step-shadow-pressed', 2, 5],
+  const pressedTokens: [string, number, number, string][] = [
+    ['raised-shadow-pressed', 3, 7, 'shadow-pressed'],
+    ['raised-sm-shadow-pressed', 2.5, 6, 'shadow-pressed'],
+    ['step-shadow-pressed', 2, 5, 'shadow-pressed'],
+    ['selected-step-shadow-pressed', 2, 5, 'shadow-selected-pressed'],
   ]
-  it.each(pressedTokens)('--%s is I(%d, %d) after a zero outer pair', (token, x, b) => {
+  it.each(pressedTokens)('--%s is I(%d, %d) after a zero outer pair', (token, x, b, darkColour) => {
     const [d, l] = sh(x, b)
-    expect(root[token]).toMatch(/^0px 0px 0px transparent, 0px 0px 0px transparent, inset /)
-    expect(root[token]).toContain(`inset ${d} var(--shadow-pressed), inset ${l} var(--shadow-light)`)
+    expect(t.vars[token]).toBe(`${ZERO_OUTERS}, inset ${d} var(--${darkColour}), inset ${l} var(--shadow-light)`)
   })
   it('raised and pressed lists have the same shape, so the change animates', () => {
-    const shape = (v: string) => v.split(/,(?![^(]*\))/).map((p) => p.trim().startsWith('inset'))
+    const shape = (v: string) => shadows(v).map((p) => p.startsWith('inset'))
     for (const [rest, pressed] of [
       ['raised-shadow', 'raised-shadow-pressed'],
       ['raised-shadow-hover', 'raised-shadow-pressed'],
       ['raised-sm-shadow', 'raised-sm-shadow-pressed'],
       ['flat-shadow', 'step-shadow-pressed'],
+      ['flat-shadow', 'selected-step-shadow-pressed'],
+      ['accent-button-shadow', 'accent-button-shadow-pressed'],
+      ['accent-button-shadow-hover', 'accent-button-shadow-pressed'],
     ]) {
-      expect(shape(root[rest]!), rest).toEqual(shape(root[pressed]!))
+      expect(shape(list(rest)), rest).toEqual(shape(list(pressed)))
+    }
+    const block = paintedBlocks[t.theme].accent
+    expect(shape(block['hover-shadow']!), 'painted').toEqual(shape(block['active-shadow']!))
+  })
+  /** The first `count` shadows' geometry (colours dropped). */
+  const geometry = (list: string | undefined, count: number) =>
+    shadows(flat(list)).slice(0, count).map((p) => p.split(' ').filter((w) => w === 'inset' || /^-?[\d.]+(px)?$/.test(w)).join(' '))
+  it('the accent button: R(4, 10) at rest and on hover, I(3, 7) pressed (the light theme\'s soft one, the dark one painted)', () => {
+    const [d, l] = sh(4, 10)
+    const [pd, pl] = sh(3, 7)
+    expect(geometry(list('accent-button-shadow'), 2)).toEqual([d, l])
+    expect(geometry(list('accent-button-shadow-hover'), 2)).toEqual([d, l])
+    expect(geometry(list('accent-button-shadow-pressed'), 4)).toEqual(['0px 0px 0px', '0px 0px 0px', `inset ${pd}`, `inset ${pl}`])
+  })
+  it('painted: R(4, 10) and a bevel, I(3, 7) pressed', () => {
+    const block = paintedBlocks[t.theme].accent
+    const [d, l] = sh(4, 10)
+    const [pd, pl] = sh(3, 7)
+    expect(geometry(block['hover-shadow'], 2)).toEqual([d, l])
+    expect(flat(block['hover-shadow'])).toMatch(/^\S+ \S+ \S+ var\(--paint-shadow\), /)
+    expect(geometry(block['active-shadow'], 4)).toEqual(['0px 0px 0px', '0px 0px 0px', `inset ${pd}`, `inset ${pl}`])
+  })
+})
+
+describe('shadow colours', () => {
+  /** The mock-up's DKa(k): light mix(accent, #1C2030, 0.45) at k·shade; dark mix(accent, black, 0.8) at k·1.5·shade. */
+  const tinted = (theme: 'light' | 'dark', accent: AccentName, k: number) => {
+    const A = ACCENTS[accent].light
+    return theme === 'light'
+      ? { rgb: mixHex(A, '#1C2030', 0.45), a: Math.round(k * 0.7 * 1000) / 1000 }
+      : { rgb: mixHex(A, '#000000', 0.8), a: Math.round(Math.min(1, k * 1.5 * 0.9) * 1000) / 1000 }
+  }
+  it('light: dark 0.42·shade, light 0.8·light', () => {
+    expect(root['shadow-dark']).toBe('rgba(150, 160, 180, 0.29)')
+    expect(root['shadow-light']).toBe('rgba(255, 255, 255, 0.88)')
+  })
+  it('dark: near-black 0.62·shade, a faint top-left light 0.07·light and a rim 0.06·light', () => {
+    expect(dark['shadow-dark']).toBe('rgba(6, 8, 12, 0.56)')
+    expect(dark['shadow-light']).toBe('rgba(255, 255, 255, 0.049)')
+    expect(dark['rim']).toBe('rgba(255, 255, 255, 0.042)')
+  })
+  it.each(['light', 'dark'] as const)('%s: hover, pressed and selected shadows take the accent\'s hue', (theme) => {
+    for (const accent of accents) {
+      const v = themeVars(theme, accent)
+      for (const [token, k] of [
+        ['shadow-hover', 0.3],
+        ['shadow-pressed', 0.42],
+        ['shadow-selected', 0.5],
+        ['shadow-selected-pressed', 0.55],
+      ] as const) {
+        const e = tinted(theme, accent, k)
+        const got = resolveColor(token, v)
+        const want = parseColor(e.rgb)
+        for (const ch of ['r', 'g', 'b'] as const) expect(got[ch], `${accent} ${token} ${ch}`).toBeCloseTo(want[ch], 0)
+        expect(got.a, `${accent} ${token} alpha`).toBeCloseTo(e.a, 3)
+      }
     }
   })
-  it('light-theme shadow colours: dark 0.42·shade, light 0.8·light', () => {
-    expect(root['shadow-dark']).toBe('rgba(150, 160, 180, 0.29)')
-    expect(root['shadow-light']).toBe('rgba(255, 255, 255, 0.96)')
+})
+
+describe('glass (menus, select lists, combobox lists)', () => {
+  const tokens = {
+    light: {
+      'glass-bg': 'rgba(255, 255, 255, 0.38)',
+      'glass-img':
+        'linear-gradient(165deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.12) 38%, rgba(255, 255, 255, 0) 62%, rgba(255, 255, 255, 0.18) 100%)',
+      'glass-blur': 'blur(14px) saturate(180%)',
+      'glass-border': 'rgba(255, 255, 255, 0.65)',
+      'glass-shadow':
+        '0 18px 40px -14px rgba(28, 32, 48, 0.35), 0 4px 12px -4px rgba(28, 32, 48, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 1px rgba(255, 255, 255, 0.3), inset 1px 0 0 rgba(255, 255, 255, 0.35)',
+      'glass-hover': 'rgba(255, 255, 255, 0.55)',
+      'glass-divider': 'rgba(28, 32, 48, 0.1)',
+      'glass-danger': '#B91C1C',
+    },
+    dark: {
+      'glass-bg': 'rgba(44, 48, 58, 0.48)',
+      'glass-img':
+        'linear-gradient(165deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.03) 38%, rgba(255, 255, 255, 0) 62%, rgba(255, 255, 255, 0.05) 100%)',
+      'glass-blur': 'blur(16px) saturate(160%)',
+      'glass-border': 'rgba(255, 255, 255, 0.12)',
+      'glass-shadow':
+        '0 20px 44px -12px rgba(0, 0, 0, 0.6), 0 4px 12px -4px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 -1px 1px rgba(255, 255, 255, 0.04)',
+      'glass-hover': 'rgba(255, 255, 255, 0.1)',
+      'glass-divider': 'rgba(255, 255, 255, 0.08)',
+      'glass-danger': '#FCA5A5',
+    },
+  }
+  const squash = (s: string | undefined) => s?.replace(/\s+/g, ' ').trim()
+  it.each(['light', 'dark'] as const)('%s: the mock-up\'s glass tokens', (theme) => {
+    const vars = theme === 'light' ? root : { ...root, ...dark }
+    for (const [name, value] of Object.entries(tokens[theme])) expect(squash(vars[name]), name).toBe(value)
+  })
+  it('the glass utility: translucent tinted pane, blur and saturation, a specular rim and a soft shadow', () => {
+    const block = /\.glass \{([^}]*)\}/.exec(css)?.[1] ?? ''
+    expect(block).toMatch(/border:\s*1px solid var\(--glass-border\)/)
+    expect(block).toMatch(/border-radius:\s*var\(--radius-card\)/)
+    expect(block).toMatch(/background-color:\s*var\(--glass-bg\)/)
+    expect(block).toMatch(/background-image:\s*var\(--glass-img\)/)
+    expect(block).toMatch(/(^|[^-])backdrop-filter:\s*var\(--glass-blur\)/)
+    expect(block).toMatch(/-webkit-backdrop-filter:\s*var\(--glass-blur\)/)
+    expect(block).toMatch(/box-shadow:\s*var\(--glass-shadow\)/)
   })
 })
 
@@ -214,7 +458,7 @@ describe('base styles and utilities', () => {
     expect(rule?.body).toMatch(/outline-offset:\s*2px/)
   })
 
-  const utilities = ['raised', 'raised-sm', 'raised-card', 'painted', 'pressable', 'pill', 'pill-step', 'row-selected']
+  const utilities = ['raised', 'raised-sm', 'raised-card', 'accent-button', 'painted', 'pressable', 'pill', 'pill-step', 'row-selected', 'glass']
   it.each(utilities)('.%s is defined and listed in the header comment', (name) => {
     expect(rules(layer('components')).some((r) => r.selectors.split(',').includes(`.${name}`))).toBe(true)
     const header = css.match(/^[\s\S]*?\/\*([\s\S]*?)\*\//)?.[1] ?? ''
@@ -352,7 +596,7 @@ describe('components and pages', () => {
     // shadow, outline-none removes the base focus outline, transitions replace their own, hover:bg-* is dead (the
     // states win). Flat pressable controls (ghost): no transitions or hover:bg-* either; an inset ring in a scroll box
     // is fine.
-    const raisedClass = /(^|[\s'"`])(raised|raised-sm|painted|pill-step)($|[\s'"`])/
+    const raisedClass = /(^|[\s'"`])(raised|raised-sm|accent-button|painted|pill-step)($|[\s'"`])/
     const pressableClass = /(^|[\s'"`])pressable($|[\s'"`])/
     const raisedClash = /(^|[\s'"`])(focus-visible:ring[\w-]*|transition(-[\w[\],-]+)?|outline-none|hover:bg-[\w-/]+)($|[\s'"`])/
     const flatClash = /(^|[\s'"`])(transition(-[\w[\],-]+)?|hover:bg-[\w-/]+)($|[\s'"`])/
@@ -398,21 +642,17 @@ describe('components and pages', () => {
   })
 })
 
-describe('owner fixes after Plan 8', () => {
-  const ui = fileURLToPath(new URL('../app/components/ui/', import.meta.url))
-  const floatingFiles = [
-    'dropdown-menu/DropdownMenuContent.vue',
-    'dropdown-menu/DropdownMenuSubContent.vue',
-    'select/SelectContent.vue',
-    'combobox/ComboboxList.vue',
-  ]
-  it.each(floatingFiles)('%s floats on a plain lifted shadow, not a neumorphic one', (file) => {
-    const source = readFileSync(join(ui, file), 'utf8')
-    expect(source).toMatch(/\bfloating\b/)
-    expect(source).not.toMatch(/\braised-card\b/)
-  })
-  it('dark theme: hover keeps the resting shadow (only the colour changes until pressed)', () => {
-    expect(dark['shadow-hover']).toBe('var(--shadow-dark)')
+describe('owner fixes after Plan 8, kept', () => {
+  it('dark theme: hover keeps a visible shadow — the mock-up\'s accent-tinted one, not a faded one', () => {
+    for (const accent of accents) {
+      const v = themeVars('dark', accent)
+      expect(resolveColor('shadow-hover', v).a, accent).toBeGreaterThanOrEqual(0.4)
+    }
+    // Only the colour of the shadow changes on hover: the same offsets and blur as at rest.
+    const geometry = (s: string) => s.replace(/var\(--[\w-]+\)/g, '')
+    const v = { ...root, ...dark }
+    expect(geometry(v['raised-shadow-hover']!)).toBe(geometry(v['raised-shadow']!))
+    expect(geometry(v['raised-sm-shadow-hover']!)).toBe(geometry(v['raised-sm-shadow']!))
   })
   it('the shadow and the sink of a press share one duration and curve', () => {
     const block = /\.pressable \{[^}]*transition:([^;]*);/.exec(css)?.[1] ?? ''
@@ -420,5 +660,84 @@ describe('owner fixes after Plan 8', () => {
     const sink = /transform\s+([^,]+)/.exec(block)?.[1]?.trim()
     expect(shadow).toBeDefined()
     expect(shadow).toBe(sink)
+  })
+  it('gaps between raised controls stay wider than the shadow reaches', () => {
+    // The header's raised actions are 10 px apart; R(3, 7)'s farther side reaches offset + blur.
+    for (const t of shadowThemes) {
+      const [d, l] = shadowMaths(t.depth, t.light, t.shade).sh(3, 7)
+      const reach = (s: string) => {
+        const [x, , blur] = s.split(' ').map((p) => Math.abs(parseFloat(p)))
+        return x! + blur!
+      }
+      expect(Math.max(reach(d), reach(l)), t.theme).toBeLessThan(10)
+    }
+  })
+})
+
+describe('Plan 9 owner fixes', () => {
+  const app = fileURLToPath(new URL('../app/', import.meta.url))
+  const read = (file: string) => readFileSync(join(app, file), 'utf8')
+  const glassFiles = [
+    'components/ui/dropdown-menu/DropdownMenuContent.vue',
+    'components/ui/dropdown-menu/DropdownMenuSubContent.vue',
+    'components/ui/select/SelectContent.vue',
+    'components/ui/combobox/ComboboxList.vue',
+  ]
+  it.each(glassFiles)('%s is glass', (file) => {
+    const source = read(file)
+    expect(source).toMatch(/\bglass\b/)
+    // bg-popover or a border utility would paint over the glass (utilities win over the components layer).
+    expect(source).not.toMatch(/\b(floating|raised-card|bg-popover)\b/)
+  })
+  it.each([
+    ['components/ui/dropdown-menu/DropdownMenuItem.vue', 'focus'],
+    ['components/ui/dropdown-menu/DropdownMenuSubTrigger.vue', 'focus'],
+    ['components/ui/dropdown-menu/DropdownMenuCheckboxItem.vue', 'focus'],
+    ['components/ui/dropdown-menu/DropdownMenuRadioItem.vue', 'focus'],
+    ['components/ui/select/SelectItem.vue', 'focus'],
+    ['components/ui/combobox/ComboboxItem.vue', 'data-[highlighted]'],
+  ])('%s: a hovered item is a glass highlight', (file, state) => {
+    const source = read(file)
+    expect(source).toContain(`${state}:bg-(--glass-hover)`)
+    expect(source).toContain(`${state}:text-(--glass-hover-foreground)`)
+    expect(source).not.toMatch(/\bbg-hover\b/)
+  })
+  it('separators inside glass use the glass divider', () => {
+    for (const file of ['components/ui/dropdown-menu/DropdownMenuSeparator.vue', 'components/ui/select/SelectSeparator.vue', 'components/ui/combobox/ComboboxSeparator.vue']) {
+      expect(read(file), file).toContain('bg-(--glass-divider)')
+    }
+  })
+  it('nothing is called floating any more', () => {
+    expect(css).not.toMatch(/\.floating\b|--popover-shadow/)
+  })
+  it('B3: the palette field on the phone has no accent frame', () => {
+    expect(read('components/SearchPalette.vue')).not.toMatch(/\bborder-(primary|accent|ring)\b/)
+  })
+  it('B6: animation classes come from main.css (tw-animate-css is not installed)', () => {
+    const dead = /(^|[\s'"`:])(animate-in|animate-out|fade-(in|out)-\d+|zoom-(in|out)-\d+|slide-(in|out)-from-[\w-]+)(?=$|[\s'"`])/m
+    const problems: string[] = []
+    function* walk(dir: string): Generator<string> {
+      for (const name of readdirSync(dir)) {
+        const path = join(dir, name)
+        if (statSync(path).isDirectory()) yield* walk(path)
+        else if (/\.(vue|ts)$/.test(name)) yield path
+      }
+    }
+    for (const path of walk(join(app, 'components'))) {
+      const m = dead.exec(readFileSync(path, 'utf8'))
+      if (m) problems.push(`${relative(app, path)} ${m[2]}`)
+    }
+    expect(problems).toEqual([])
+  })
+  it('B6: tooltips appear and leave with the app\'s own animation', () => {
+    const source = read('components/ui/tooltip/TooltipContent.vue')
+    expect(source).toMatch(/motion-safe:[\w[\]=-]*:?animate-pop-in/)
+    expect(source).toMatch(/data-\[state=closed\]:animate-pop-out/)
+    expect(source).toMatch(/motion-reduce:[\w[\]=-]*:?animate-fade-in/)
+  })
+  it('B6: a tooltip that repeats its trigger\'s name is not announced again as its description', () => {
+    // Reka points the trigger's aria-describedby at a copy of the tooltip text; the trigger already says it (aria-label).
+    const source = read('components/ui/tooltip/TooltipTrigger.vue')
+    expect(source).toMatch(/['"]aria-describedby['"]:\s*undefined/)
   })
 })

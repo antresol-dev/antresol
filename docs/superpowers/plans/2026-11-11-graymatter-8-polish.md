@@ -48,17 +48,25 @@
 
 ## Порядок
 
-| Волна | Задачи | Зависят от |
-|---|---|---|
-| 1 | 1 (дизайн-система), 2 (схема 4), 4 (мелкие изменения данных) | — |
-| 2 | 3 (восстановление), 5 (фото), 6 (сеть и стабильные id), 7 (запас), 8 (дерево и шторки), 9 (архив), 10 (списки, «уже есть», «Поделиться») | 1, 2, 4 |
+Порядок перестроен 2026-11-11 под полную загрузку машины.
 
-- **Одновременно** работают не больше четырёх задач второй волны. Порядок запуска: 6, 7, 8, 10, затем 3, 5, 9.
-- **Ревью по ходу** только у задач 2 и 3 (схема, миграция, восстановление). Остальное — итоговое ревью ветки.
+| Фаза | Задачи (параллельно) | Зависят от |
+|---|---|---|
+| A | 1 (токены, утилиты, примитивы, акцент), 2 (схема 4), 4 (мелкие изменения данных), 5 (фото), 6 (сеть и стабильные id) | — |
+| B | 3 (восстановление), 7 (запас), 8 (дерево и шторки), 9 (архив), 10 (списки, «уже есть», «Поделиться») | 1, 2, 4; задача 3 — от 2 |
+| C | 11 (проход стиля по всем компонентам) | всё |
+
+- Задачи 5 и 6 из фазы A не ждут основы стиля: свой интерфейс у них маленький, его выравнивает задача 11.
+- Ревью по ходу — только у задач 2 и 3. Итоговое ревью идёт параллельно с задачей 11.
+- **Ресурсы машины:**
+  - у каждой задачи свой порт dev-сервера: `3010 + N`, например 3011 для задачи 1;
+  - Vitest — `--maxWorkers=3`;
+  - пока работа идёт, гонять отдельные файлы, а полный прогон делать один раз в конце.
 
 | Приёмка спеки (§6) | Задачи |
 |---|---|
-| 1, 2, 3 | 1 |
+| 1, 2 | 1, 11 |
+| 3 | 11 |
 | 4 | 8 |
 | 5, 6, 7 | 8, 4 |
 | 8 | 5 |
@@ -72,10 +80,12 @@
 
 ---
 
-### Task 1: Дизайн-система «Hybrid v2», акцент, правки интерфейса (спека A, B: §4.1, §4.2)
+### Task 1: Дизайн-система «Hybrid v2» — токены, утилиты, примитивы, акцент (спека A: §4.1)
+
+Эта задача трогает только `main.css`, `components/ui/**`, файлы акцента и раздел Appearance. Проход по компонентам приложения (курсор, радиусы, выбранные строки, палитра, кнопка инвентаря) — задача 11.
 
 **Files:**
-- Modify: `packages/app/app/assets/css/main.css`, `packages/app/app/components/ui/**`, а также стилевые классы во всех компонентах `packages/app/app/components/*.vue` и страницах `pages/**` — радиусы, курсор, выбранные строки
+- Modify: `packages/app/app/assets/css/main.css`, `packages/app/app/components/ui/**`
 - Create: `packages/app/app/lib/accent.ts`, `packages/app/app/components/AccentPicker.vue`
 - Modify: `packages/app/app/lib/device-db.ts`, `workspace-types.ts` (`DeviceSettings.accent`), раздел Appearance в `pages/settings/index.vue`, ранний запуск акцента (плагин или `app.vue`)
 - Test: `packages/app/test/accent.test.ts`, `packages/app/test/style.test.ts` (новые)
@@ -104,16 +114,15 @@
     - у `dark` — светлый вариант на `#24272E` даёт ≥ 4.5:1;
     - `isAccentName('teal') === true`, `isAccentName('neon') === false`.
   - `style.test.ts`:
-    - все `.vue` в `components/` и `pages/`: элементы с `@click` на не-`button`/не-`a` нарушают правило — список нарушений пуст;
     - пары токенов «текст/фон» из `main.css` для обеих тем дают ≥ 4.5:1 (Review Focus 4);
     - в базовых стилях есть правило `cursor: pointer` для `button:not(:disabled), [role=button], a[href], summary`.
 - [ ] **Step 2: Run** — FAIL.
 - [ ] **Step 3: Implement** по спеке §4.1–4.2.
   - Числа теней — из функции `hybrid2` макета: `/private/tmp/claude-501/-Users-as-dev-graymatter/f590e304-ca87-4aa9-90ed-dd7ab6a89334/scratchpad/artifact-files/bb7b3878-c996-431a-bc51-84273d6d5954/project/ItemScreen.dc.html`, при `depth 0.9`, `light 1.2`, `shade 0.7`, `surface flat`, `primary painted`.
-  - Шкала радиусов 20/14/10/круг применяется ко всем компонентам.
+  - Шкала радиусов 20/14/10/круг — токенами и в примитивах.
   - Выбор акцента — в Settings → Appearance.
 - [ ] **Step 4: Run** `pnpm test`, `pnpm typecheck`, `pnpm lint`. Затем два снимка экрана предмета (демо-источник), светлая тема, 1280 и 360 px, и один снимок тёмной темы на 1280 px.
-- [ ] **Step 5: Commit** `feat(app): Hybrid v2 neumorphic design system, accent picker, pointer cursors and radius scale`.
+- [ ] **Step 5: Commit** `feat(app): Hybrid v2 design tokens, utilities and primitives; accent picker`.
 
 ---
 
@@ -393,3 +402,26 @@
 - [ ] **Step 3: Implement** по спеке §4.9–4.11. `share_target` — в манифесте PWA.
 - [ ] **Step 4: Run** `pnpm test`, `pnpm typecheck`, `pnpm lint`. Снимки списка папки и шторки `/share?text=…`.
 - [ ] **Step 5: Commit** `feat(app): lists show buckets, monograms and pinned values; "you already have it"; share target and pasted links`.
+
+---
+
+### Task 11: Проход стиля по всем компонентам (спека A, B: §4.1, §4.2)
+
+**Files:**
+- Modify: стилевые классы во всех `packages/app/app/components/*.vue` и `pages/**`
+- Test: `packages/app/test/style.test.ts`
+
+**Interfaces:**
+- Consumes: утилиты и токены задачи 1; все компоненты после фаз A и B.
+
+- [ ] **Step 1: Write failing tests** в `style.test.ts`. Все `.vue` в `components/` и `pages/`: элемент с `@click`, который не `button` и не `a`, без `role="button"` и `tabindex` — нарушение; список нарушений пуст.
+- [ ] **Step 2: Run** — FAIL (если есть нарушения).
+- [ ] **Step 3: Implement** по спеке §4.1–4.2:
+  - выпуклые кнопки и карточки, плоские списки;
+  - выбранные строки (дерево, палитра, текущий вариант) — `row-selected`;
+  - шкала радиусов и правило «вложенный не круглее родителя»;
+  - палитра в тёмной теме;
+  - наведение на кнопку инвентаря;
+  - новые компоненты фаз A и B приводятся к тем же утилитам.
+- [ ] **Step 4: Run** `pnpm test`, `pnpm typecheck`, `pnpm lint`. Снимки: экран предмета (1280 и 360 px), тёмная тема на 1280 px, палитра.
+- [ ] **Step 5: Commit** `style(app): Hybrid v2 across all screens; pointer cursors; radius scale; selected rows`.

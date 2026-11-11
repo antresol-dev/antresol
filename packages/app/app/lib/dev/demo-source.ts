@@ -123,7 +123,15 @@ export async function seedDemo(storage: InventoryStorage, actor: Actor, options:
   await run({ type: 'stock.use', movementId: newId(), itemId: ne555, variantId: null, quantity: '5', note: null })
 
   const resistor = await item('Резистор 0,25 Вт', resistors, null)
-  const variants = ['1k', '10k', '100k'].map((name) => ({ id: newId(), name }))
+  const number = async (name: string, unit: string): Promise<string> => {
+    const id = newId()
+    await run({ type: 'attribute.create', id, inventoryId: inv, name, kind: 'number', options: [], unit, siPrefixes: true })
+    return id
+  }
+  const resistance = await number('Resistance', 'Ω')
+  await run({ type: 'item.addAxis', itemId: resistor, attributeId: resistance, firstVariantId: newId() })
+  // Number values are canonical decimal strings in the base unit: 1 kΩ is '1000'.
+  const variants = ['1000', '10000', '100000'].map((value) => ({ id: newId(), values: [{ attributeId: resistance, value }] }))
   await run({ type: 'variant.createMany', itemId: resistor, variants })
   await run({
     type: 'stock.receive',
@@ -136,6 +144,27 @@ export async function seedDemo(storage: InventoryStorage, actor: Actor, options:
     note: null,
   })
 
+  const capacitor = await item('Конденсатор керамический', passive, null)
+  const capacitance = await number('Capacitance', 'F')
+  const voltage = await number('Voltage', 'V')
+  await run({ type: 'item.addAxis', itemId: capacitor, attributeId: capacitance, firstVariantId: newId() })
+  await run({ type: 'item.addAxis', itemId: capacitor, attributeId: voltage, firstVariantId: newId() })
+  await run({
+    type: 'variant.createMany',
+    itemId: capacitor,
+    variants: [
+      ['0.0000001', '50'],
+      ['0.0000001', '16'],
+      ['0.00000001', '50'],
+    ].map(([c, v]) => ({
+      id: newId(),
+      values: [
+        { attributeId: capacitance, value: c! },
+        { attributeId: voltage, value: v! },
+      ],
+    })),
+  })
+
   await run({ type: 'inventory.create', id: newId(), name: 'Workshop', description: null, currency: 'EUR' })
 
   if (options.extras ?? true) {
@@ -146,13 +175,8 @@ export async function seedDemo(storage: InventoryStorage, actor: Actor, options:
     await run({ type: 'tag.create', id: newId(), inventoryId: inv, name: 'smd' })
     await run({ type: 'item.update', id: tl072, tagIds: [audio] })
     const pkg = newId()
-    await run({ type: 'attribute.create', id: pkg, inventoryId: inv, name: 'Package', kind: 'enum', options: ['DIP-8', 'SOIC-8'] })
+    await run({ type: 'attribute.create', id: pkg, inventoryId: inv, name: 'Package', kind: 'enum', options: ['DIP-8', 'SOIC-8'], unit: '', siPrefixes: false })
     await run({ type: 'item.setAttribute', itemId: tl072, attributeId: pkg, value: 'DIP-8' })
-    const resistance = newId()
-    await run({ type: 'attribute.create', id: resistance, inventoryId: inv, name: 'Resistance', kind: 'text', options: [] })
-    await run({ type: 'item.setAttribute', itemId: resistor, attributeId: resistance, value: null })
-    await run({ type: 'variant.setAttribute', variantId: variants[0]!.id, attributeId: resistance, value: '1 kΩ' })
-    await run({ type: 'variant.setAttribute', variantId: variants[1]!.id, attributeId: resistance, value: '10 kΩ' })
     const old = await folder('Old projects')
     await item('LM741', old, { quantity: '2', totalPrice: null })
     await archive('folder', old)

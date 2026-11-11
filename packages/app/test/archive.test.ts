@@ -58,7 +58,7 @@ describe('archiveEntries', () => {
   it('lists a folder archive once and counts what went with it', async () => {
     await archive('folder', folderId('Passive components'))
     const entries = archiveEntries(snap)
-    expect(entries.map((e) => [e.target, e.name, e.folderCount, e.itemCount])).toEqual([['folder', 'Passive components', 1, 1]])
+    expect(entries.map((e) => [e.target, e.name, e.folderCount, e.itemCount])).toEqual([['folder', 'Passive components', 1, 2]])
     expect(entries[0]!.path).toBe('')
   })
 
@@ -74,7 +74,7 @@ describe('archiveEntries', () => {
 
   it('lists an archived variant with its item name', async () => {
     const resistor = snap.items.find((i) => i.name === 'Резистор 0,25 Вт')!
-    await archive('variant', snap.variants.find((v) => byValue(snap, resistor.id, '100k').id)
+    await archive('variant', byValue(snap, resistor.id, '100k').id)
     expect(archiveEntries(snap)[0]).toMatchObject({ target: 'variant', name: variantLabel(snap, byValue(snap, resistor.id, '100k')), itemName: 'Резистор 0,25 Вт', path: 'Passive components / Resistors' })
   })
 

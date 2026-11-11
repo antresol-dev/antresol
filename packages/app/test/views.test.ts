@@ -62,7 +62,7 @@ describe('folderView', () => {
     expect(v.folder).toBeNull()
     expect(v.crumbs).toEqual([])
     expect(names(v.folders)).toEqual(['ICs', 'Passive components', expect.stringContaining('Очень длинное')])
-    expect(v.folders.map((f) => f.itemCount)).toEqual([3, 1, 0])
+    expect(v.folders.map((f) => f.itemCount)).toEqual([3, 2, 0])
   })
 
   it('builds crumbs and item rows', () => {
@@ -134,7 +134,7 @@ describe('folderTree', () => {
 
   it('counts active items in each subtree, like the folder list', () => {
     const tree = folderTree(snap)
-    expect(tree.map((n) => n.itemCount)).toEqual([3, 1, 0])
+    expect(tree.map((n) => n.itemCount)).toEqual([3, 2, 0])
     expect(tree[0]!.children.map((n) => n.itemCount)).toEqual([1])
     expect(tree[1]!.children.map((n) => [n.name, n.itemCount])).toEqual([['Resistors', 1]])
     expect(tree.map((n) => n.itemCount)).toEqual(folderView(snap, null)!.folders.map((f) => f.itemCount))
@@ -143,10 +143,10 @@ describe('folderTree', () => {
 
 describe('inventoryItemCount', () => {
   it('counts active items in the whole inventory', () => {
-    expect(inventoryItemCount(snap)).toBe(4)
+    expect(inventoryItemCount(snap)).toBe(5)
     const s = structuredClone(snap)
     s.items.find((i) => i.name === 'TL072')!.archivedAt = '2026-11-10T00:00:00Z'
-    expect(inventoryItemCount(s)).toBe(3)
+    expect(inventoryItemCount(s)).toBe(4)
   })
 })
 
@@ -201,7 +201,7 @@ describe('index and edge cases', () => {
       }
     }
     expect(seen).toContain('Резистор 0,25 Вт 100')
-    expect(seen).toHaveLength(4)
+    expect(seen).toHaveLength(5)
   })
 
   it('uses the lowest-position item photo and ignores variant photos', () => {

@@ -58,7 +58,7 @@ afterEach(() => {
 describe('treeRows', () => {
   it('starts collapsed with subtree counts', () => {
     expect(treeRows(snap, {}, 'root').map((r) => [r.name, r.itemCount, r.hasChildren, r.open, r.children.length]))
-      .toEqual([['ICs', 3, true, false, 0], ['Passive components', 1, true, false, 0], [expect.stringContaining('Очень длинное'), 0, false, false, 0]])
+      .toEqual([['ICs', 3, true, false, 0], ['Passive components', 2, true, false, 0], [expect.stringContaining('Очень длинное'), 0, false, false, 0]])
     expect(treeRows(snap, {}, 'root').some((r) => r.current)).toBe(false)
   })
 

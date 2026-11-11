@@ -76,13 +76,11 @@ async function newItem(
     const axis = newId()
     await run({ type: 'attribute.create', id: axis, inventoryId, name: `Value ${made}`, kind: 'text', options: [], unit: '', siPrefixes: false })
     await run({ type: 'item.addAxis', itemId: id, attributeId: axis, firstVariantId: variants[0]!.id })
-    await run({ type: 'variant.setAttribute', variantId: variants[0]!.id, attributeId: axis, value: variants[0]!.name })
-    if (variants.length > 1)
-      await run({
-        type: 'variant.createMany',
-        itemId: id,
-        variants: variants.slice(1).map((x) => ({ id: x.id, values: [{ attributeId: axis, value: x.name }] })),
-      })
+    await run({
+      type: 'variant.createMany',
+      itemId: id,
+      variants: variants.map((x) => ({ id: x.id, values: [{ attributeId: axis, value: x.name }] })),
+    })
   }
   return { id, v: Object.fromEntries(variants.map((x) => [x.name, x.id])) }
 }

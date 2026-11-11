@@ -73,9 +73,10 @@ export function itemAxes(s: InventorySnapshot, itemId: Id): Attribute[] {
   return [...axesOf(s, itemId)]
 }
 
-/** A number is shown by the attribute's unit and prefix rules (`4700` -> `4.7 kΩ`); text and list values as they are. */
+/** A number is shown by the attribute's unit and prefix rules (`4700` -> `4.7 kΩ`); text and list values as they are.
+ *  A stored number that is not canonical (none should be) shows as it is rather than breaking the screen. */
 export function formatAttributeValue(a: Attribute, value: string): string {
-  return a.kind === 'number' ? formatNumberValue(value, a) : value
+  return a.kind === 'number' && isCanonicalNumber(value) ? formatNumberValue(value, a) : value
 }
 
 /** The variant's axis values in axis order, joined by ` · `; an empty value shows as `—`. */

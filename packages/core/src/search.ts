@@ -1,7 +1,7 @@
 import MiniSearch from 'minisearch'
 import type { Id } from './ids'
 import type { Attribute, InventorySnapshot, Item, Variant } from './model'
-import { compareNumberValues, parseNumberValue } from './numbers'
+import { compareNumberValues, isCanonicalNumber, parseNumberValue } from './numbers'
 import { variantLabel } from './variants'
 
 export interface SearchHit {
@@ -82,7 +82,8 @@ export function createSearch(s: InventorySnapshot): { search(query: string, limi
   const numbers = new Map<string, { attr: Attribute; value: string }[]>()
   const addNumber = (docId: string, attributeId: Id, value: string | null) => {
     const attr = numberAttrs.get(attributeId)
-    if (attr && value) numbers.set(docId, [...(numbers.get(docId) ?? []), { attr, value }])
+    // Only canonical values: one malformed stored value must not break every search.
+    if (attr && value && isCanonicalNumber(value)) numbers.set(docId, [...(numbers.get(docId) ?? []), { attr, value }])
   }
   for (const a of s.itemAttributes) if (a.axisPosition === null) addNumber(`i:${a.itemId}`, a.attributeId, a.value)
   for (const a of s.variantAttributeValues) addNumber(`v:${a.variantId}`, a.attributeId, a.value)

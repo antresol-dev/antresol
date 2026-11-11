@@ -193,6 +193,16 @@ describe('number search', () => {
     // Resistance would read it as 5 mΩ = 0.005; no such value, so the resistor is not a hit.
     expect(search('5m').map((h) => h.itemId)).not.toContain('r')
   })
+  it('a malformed stored number does not break the search', () => {
+    const bad = makeSnapshot({
+      items: [item('r', 'Resistor')],
+      variants: [variant('vb', 'r')],
+      attributes: [attribute('a-res', 'Resistance', 'number', rules)],
+      itemAttributes: [axis('r', 'a-res', 0)],
+      variantAttributeValues: [value('vb', 'a-res', '4.7k')],
+    })
+    expect(() => createSearch(bad).search('4k7')).not.toThrow()
+  })
   it('without prefixes 4k7 finds nothing in that attribute', () => {
     expect(search('4k7').map((h) => h.itemId)).not.toContain('n')
     expect(search('4k7').map((h) => h.itemId)).not.toContain('l')

@@ -48,6 +48,9 @@ describe('formatAttributeValue', () => {
     expect(formatAttributeValue(attribute('t', 'T', 'text'), '4700')).toBe('4700')
     expect(formatAttributeValue(attribute('e', 'E', 'enum', { options: ['DIP'] }), 'DIP')).toBe('DIP')
   })
+  it('shows a malformed stored number as it is instead of throwing', () => {
+    expect(formatAttributeValue(attribute('r', 'R', 'number', { unit: 'Ω', siPrefixes: true }), '4.7k')).toBe('4.7k')
+  })
 })
 
 describe('variantLabel', () => {
@@ -102,7 +105,7 @@ describe('compareVariants', () => {
     const r = electronics()
     const badNumber = { ...r, variantAttributeValues: r.variantAttributeValues.map((x) => (x.variantId === 'r1k' ? { ...x, value: '1k' } : x)) }
     expect(sorted(badNumber, 'R')).toEqual(['r4k7', 'r10k', 'r1k'])
-    expect(variantLabel(badNumber, v(badNumber, 'r1k'))).toBe('1k Ω')
+    expect(variantLabel(badNumber, v(badNumber, 'r1k'))).toBe('1k')
     const dropped = { ...r, variantAttributeValues: r.variantAttributeValues.map((x) => (x.variantId === 'lred' ? { ...x, value: 'amber' } : x)) }
     expect(sorted(dropped, 'L')).toEqual(['lgreen', 'lblue', 'lred'])
   })

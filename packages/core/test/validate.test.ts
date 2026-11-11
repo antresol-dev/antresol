@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Command } from '../src/commands'
 import type { InventorySnapshot } from '../src/model'
 import { DomainError, normalizeCommand, validateCommand, type DomainErrorCode } from '../src/validate'
-import { attribute, axis, electronics, folder, item, makeSnapshot, stockLine, value, variant } from './fixtures'
+import { attribute, axis, electronics, folder, item, makeSnapshot, shared, stockLine, value, variant } from './fixtures'
 
 const ARCH = { archivedAt: '2026-02-01T00:00:00Z', archiveId: 'arch' }
 const U = (n: string) => `00000000-0000-7000-8000-${n.padStart(12, '0')}`
@@ -293,7 +293,7 @@ describe('variants by axes', () => {
     expect(ec(createMany('R', res('2200'), res('22000')))).toBeNull()
   })
   it('createMany refuses duplicates inside the batch', () => {
-    expect(ec(createMany('R', res('4700'), res('4700')))).toBe('duplicate_variant')
+    expect(ec(createMany('R', res('2200'), res('2200')))).toBe('duplicate_variant')
     expect(ec(createMany('C', capVolt('0.000001', '16'), capVolt('0.000001', '16')))).toBe('duplicate_variant')
     expect(ec(createMany('C', capVolt('0.000001', '16'), capVolt('0.000001', '25')))).toBeNull()
   })
@@ -304,12 +304,21 @@ describe('variants by axes', () => {
     expect(ec(createMany('M', mark('Red'), mark(' red ')), s)).toBe('duplicate_variant')
     expect(ec(createMany('M', mark('Red'), mark('Blue')), s)).toBeNull()
   })
-  it('a retried createMany does not collide with the variants it already created', () => {
-    const c = createMany('R', res('2200'))
-    const v = (c as Extract<Command, { type: 'variant.createMany' }>).variants[0]!
+  it('createMany refuses duplicate ids in the batch and ids of existing variants', () => {
+    const dup: Command = {
+      type: 'variant.createMany', itemId: 'R',
+      variants: [{ id: U('100'), values: res('2200') }, { id: U('100'), values: res('3300') }],
+    }
+    expect(ec(dup)).toBe('invalid_option')
     const s = electronics()
-    const after = { ...s, variants: [...s.variants, variant(v.id, 'R')], variantAttributeValues: [...s.variantAttributeValues, value(v.id, 'res', '2200')] }
-    expect(ec(c, after)).toBeNull()
+    const own = { type: 'variant.createMany', itemId: 'R', variants: [{ id: 'r1k', values: res('2200') }] } as Command
+    expect(ec(own, s)).toBe('invalid_option')
+    const other = { type: 'variant.createMany', itemId: 'R', variants: [{ id: 'c50', values: res('2200') }] } as Command
+    expect(ec(other, s)).toBe('invalid_option')
+  })
+  it('createMany with a null axis value is axis_value_required, not a crash', () => {
+    const nul = [{ attributeId: 'res', value: null as unknown as string }]
+    expect(ec(createMany('R', nul))).toBe('axis_value_required')
   })
   it('createMany needs a value on every axis', () => {
     expect(ec(createMany('C', [{ attributeId: 'cap', value: '0.000001' }]))).toBe('axis_value_required')
@@ -389,6 +398,16 @@ describe('variants by axes', () => {
     expect(ec(add('R', 'nope'))).toBe('not_found')
     expect(ec(add('zz', 'res'))).toBe('not_found')
   })
+  it('item.addAxis is never rejected for the first-variant cases (storage applies the rule)', () => {
+    const add = (itemId: string, attributeId: string): Command => ({ type: 'item.addAxis', itemId, attributeId, firstVariantId: U('200') })
+    const e = electronics()
+    // No other axis, no variants, shared value: the first variant is expected (storage).
+    const none = { ...e, itemAttributes: [...e.itemAttributes, shared('M', 'pkg', '0805')] }
+    expect(ec(add('M', 'pkg'), none)).toBeNull()
+    // Another axis already present, no variants: only the role changes, no variant.
+    const other = { ...none, itemAttributes: [...none.itemAttributes, axis('M', 'mark', 0)] }
+    expect(ec(add('M', 'pkg'), other)).toBeNull()
+  })
   it('item.removeAxis needs an axis and the remaining axes must tell variants apart', () => {
     const remove = (itemId: string, attributeId: string): Command => ({ type: 'item.removeAxis', itemId, attributeId })
     expect(ec(remove('R', 'pkg'))).toBe('not_an_axis')
@@ -436,6 +455,17 @@ describe('attribute dictionary', () => {
   it('attribute.update checks the unit length', () => {
     expect(ec({ type: 'attribute.update', id: 'res', unit: 'Ohm', siPrefixes: false })).toBeNull()
     expect(ec({ type: 'attribute.update', id: 'res', unit: 'x'.repeat(17) })).toBe('name_too_long')
+  })
+  it('units are for numbers only', () => {
+    const n = (c: Command) => normalizeCommand(c) as Extract<Command, { type: 'attribute.create' }>
+    for (const kind of ['text', 'enum'] as const) {
+      expect(n(create({ kind, unit: 'W', siPrefixes: true }))).toMatchObject({ unit: '', siPrefixes: false })
+    }
+    expect(n(create())).toMatchObject({ unit: 'W', siPrefixes: true })
+    expect(ec({ type: 'attribute.update', id: 'mark', unit: 'W' })).toBe('invalid_option')
+    expect(ec({ type: 'attribute.update', id: 'pkg', siPrefixes: true })).toBe('invalid_option')
+    expect(ec({ type: 'attribute.update', id: 'mark', unit: ' ', siPrefixes: false })).toBeNull()
+    expect(ec({ type: 'attribute.update', id: 'res', unit: 'Ohm', siPrefixes: true })).toBeNull()
   })
   it('attribute.update refuses to drop a list option that is in use', () => {
     const options = (id: string, o: string[]): Command => ({ type: 'attribute.update', id, options: o })

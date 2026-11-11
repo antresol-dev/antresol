@@ -25,7 +25,9 @@ export type Command =
   /** Shared attribute or axis; an axis goes as item.removeAxis does, then the link is removed. */
   | { type: 'item.removeAttribute'; itemId: Id; attributeId: Id }
   /** Attaches the attribute as the last axis, or turns a shared one into an axis. A shared value moves to every
-   *  variant; with no variants it becomes the first variant, `firstVariantId`. Already an axis: nothing happens. */
+   *  variant. With no variants it becomes the first variant, `firstVariantId`, only if the attribute was shared with a
+   *  non-empty value AND the item has no other axis; if another axis exists, only the role changes and the shared
+   *  value is dropped. Already an axis: nothing happens. */
   | { type: 'item.addAxis'; itemId: Id; attributeId: Id; firstVariantId: Id }
   /** Axis -> shared. A value every variant shares becomes the item's value; the variants' values go. */
   | { type: 'item.removeAxis'; itemId: Id; attributeId: Id }

@@ -11,7 +11,7 @@ export interface SchemaStatus {
   dbVersion: number
   appVersion: number
 }
-export const STORAGE_ERROR_CODES = ['read_only', 'unavailable', 'not_found', 'incompatible', 'failed'] as const
+export const STORAGE_ERROR_CODES = ['read_only', 'unavailable', 'not_found', 'incompatible', 'outdated', 'failed'] as const
 export type StorageErrorCode = (typeof STORAGE_ERROR_CODES)[number]
 
 export type SchemaInspection =

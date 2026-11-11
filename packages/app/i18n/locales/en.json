@@ -438,6 +438,7 @@
       "unavailable": "Can’t reach the source. Check your connection.",
       "not_found": "That item no longer exists.",
       "incompatible": "This database isn’t a GrayMatter source.",
+      "outdated": "This database was made by a pre-release version of GrayMatter. Reset it to use it here.",
       "failed": "The source reported an error. Try again."
     },
     "file": {
@@ -453,7 +454,8 @@
       "auth": "The source rejected the login. Check the connection string.",
       "no_database": "The source wasn’t found. Check the connection string.",
       "failed": "Couldn’t check the source. Try again.",
-      "incompatible": "This source isn’t a GrayMatter source."
+      "incompatible": "This source isn’t a GrayMatter source.",
+      "outdated": "This database was made by a pre-release version of GrayMatter. Reset it to use it here."
     }
   }
 }

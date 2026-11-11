@@ -8,6 +8,6 @@ describe('error codes', () => {
     expect(DOMAIN_ERROR_CODES).toContain('unit_in_use')
   })
   it('lists the storage codes', () => {
-    expect([...STORAGE_ERROR_CODES]).toEqual(['read_only', 'unavailable', 'not_found', 'incompatible', 'failed'])
+    expect([...STORAGE_ERROR_CODES]).toEqual(['read_only', 'unavailable', 'not_found', 'incompatible', 'outdated', 'failed'])
   })
 })

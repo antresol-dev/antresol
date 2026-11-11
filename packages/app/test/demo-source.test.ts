@@ -1,7 +1,7 @@
 import { createSearch } from '@graymatter/core'
 import type { Transaction } from '@electric-sql/pglite'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createDemoDriver, type DemoDriver } from '../app/lib/dev/demo-source'
+import { createDemoDriver, demoStorageName, type DemoDriver } from '../app/lib/dev/demo-source'
 import type { SourceConfig } from '../app/lib/types'
 
 /** The next `failNext` PGlite databases fail to open; the transaction number `failTransactionAt` (1-based, counted
@@ -48,6 +48,10 @@ afterEach(async () => {
 })
 
 describe('demo source', () => {
+  it('keeps its browser storage under a name carrying the schema version', () => {
+    expect(demoStorageName('demo')).toBe('idb://graymatter-dev-s3-demo')
+  })
+
   it('seeds two inventories with stock', async () => {
     const conn = await demo({ memory: true, extras: false }).connect(cfg)
     const invs = (await conn.storage.listInventories()).inventories

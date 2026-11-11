@@ -741,6 +741,29 @@ describe('workspace', () => {
     expect(ws.state.current).toEqual(refA)
   })
 
+  it('3a. a cached copy of a foreign format is not shown, even offline', async () => {
+    const h = setup()
+    await h.seed(CS('one'), 'Inv')
+    await h.db.putSource(config('s1', CS('one')))
+    const first = h.workspace()
+    await first.start()
+    const ref = first.state.current!
+    const cached = (await h.db.getSnapshot(ref))!
+    expect(cached).not.toBeNull()
+    for (const format of ['0:0', undefined]) {
+      await h.db.putSnapshot(ref, { ...cached, format, rev: null })
+      h.flags.offline = true
+      const ws = h.workspace()
+      await ws.startFromCache()
+      expect(ws.state.snapshot).toBeNull()
+      expect(ws.state.snapshotOrigin).toBeNull()
+    }
+    await h.db.putSnapshot(ref, { ...cached, rev: null })
+    const ok = h.workspace()
+    await ok.startFromCache()
+    expect(ok.state.snapshotOrigin).toBe('cache')
+  })
+
   it('29. permanently deletes an archived inventory and its cached copy', async () => {
     const { h, ws } = await archivedSetup()
     const b = ws.state.archivedInventories[0]!

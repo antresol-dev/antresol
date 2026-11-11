@@ -21,6 +21,7 @@ import { markRaw, reactive } from 'vue'
 import { buildBackup, type BackupFile } from './backup'
 import { createDeviceFileStore, releaseDeviceUrls } from './device-files'
 import { prepareImage as defaultPrepareImage } from './images'
+import type { CachedSnapshot } from './device-db'
 import { defaultDeviceName } from './device-name'
 import { classifyFailure, redactSecret, type FailureReason, type SourceConnection } from './sources'
 import type { InventoryRef, SourceConfig } from './types'
@@ -48,8 +49,12 @@ export type {
 /** Bumped when the shape of a cached snapshot changes. With the schema version it prefixes the revision stored in the
  *  cache: a snapshot cached by an older app (other shape, or before a data migration) never matches the source's
  *  revision, so it is reloaded once instead of being kept. */
-export const SNAPSHOT_FORMAT = 1
-const REV_PREFIX = `${SNAPSHOT_FORMAT}:${APP_SCHEMA_VERSION}:`
+export const SNAPSHOT_FORMAT = 2
+const FORMAT_MARK = `${SNAPSHOT_FORMAT}:${APP_SCHEMA_VERSION}`
+const REV_PREFIX = `${FORMAT_MARK}:`
+/** A copy saved by another app format or schema version is never shown, not even offline: its shape may differ. */
+const shownCopy = (cached: CachedSnapshot | null | undefined): CachedSnapshot | null =>
+  cached?.format === FORMAT_MARK ? cached : null
 const cachedRev = (rev: string): string => REV_PREFIX + rev
 const cacheRev = (rev: string | null): string | null => (rev === null ? null : cachedRev(rev))
 const uncacheRev = (stored: string | null | undefined): string | null =>
@@ -264,7 +269,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       snapshot?.inventory.id === pending.ref.inventoryId &&
       generationOf(pending.ref.sourceId) === pending.generation
     ) {
-      const value = { snapshot, savedAt: state.snapshotSavedAt ?? nowIso(), rev: cacheRev(shownRev) }
+      const value = { snapshot, savedAt: state.snapshotSavedAt ?? nowIso(), rev: cacheRev(shownRev), format: FORMAT_MARK }
       // A copy that could not be saved keeps its older rows and revision on the device: it is loaded again.
       lastSave = db.putSnapshot(pending.ref, value).catch(() => {})
     }
@@ -467,7 +472,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     state.snapshotOrigin = 'live'
     state.snapshotSavedAt = savedAt
     shownRev = rev
-    await db.putSnapshot(ref, { snapshot, savedAt, rev: cacheRev(rev) })
+    await db.putSnapshot(ref, { snapshot, savedAt, rev: cacheRev(rev), format: FORMAT_MARK })
   }
 
   /** The current inventory vanished from its (reachable) source: forget it and move to the first remaining one. */
@@ -518,7 +523,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     setCurrent(ref)
     // A plain copy: refs taken from reactive state are proxies, which IndexedDB cannot clone.
     await db.putSettings({ current: { sourceId: ref.sourceId, inventoryId: ref.inventoryId } })
-    const cached = await db.getSnapshot(ref)
+    const cached = shownCopy(await db.getSnapshot(ref))
     if (!sameRef(state.current, ref)) return
     // A live snapshot of this inventory that landed meanwhile is newer than the cached copy.
     if (state.snapshot?.inventory.id !== ref.inventoryId) {
@@ -545,7 +550,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     rebuildInventories()
     state.current = settings.current
     recompute()
-    const cached = settings.current ? await db.getSnapshot(settings.current) : null
+    const cached = settings.current ? shownCopy(await db.getSnapshot(settings.current)) : null
     if (cached && sameRef(state.current, settings.current)) {
       state.snapshot = markRaw(cached.snapshot)
       state.snapshotOrigin = 'cache'

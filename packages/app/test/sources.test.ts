@@ -2,7 +2,7 @@ import { PGlite } from '@electric-sql/pglite'
 import { StorageError } from '@graymatter/core'
 import { createPgliteExecutor, inspectSchema, type PgExecutor } from '@graymatter/storage-postgres'
 import { describe, expect, it } from 'vitest'
-import { checkConnectionString, createNeonDriver, redactSecret } from '../app/lib/sources'
+import { checkConnectionString, classifyFailure, createNeonDriver, redactSecret } from '../app/lib/sources'
 import type { SourceConfig } from '../app/lib/types'
 
 const cfg = (connectionString = 'postgresql://u:secret@h/db'): SourceConfig => ({
@@ -46,6 +46,15 @@ describe('createNeonDriver', () => {
     await db.exec('create table accounts (id int)')
     const driver = createNeonDriver(() => createPgliteExecutor(db))
     await expect(driver.connect(cfg())).rejects.toMatchObject({ code: 'incompatible' })
+  })
+
+  it('rejects a pre-release database as outdated, classified as outdated', async () => {
+    const db = new PGlite()
+    await db.exec("create table gm_meta (key text primary key, value text not null); insert into gm_meta values ('schema_version', '2')")
+    const driver = createNeonDriver(() => createPgliteExecutor(db))
+    const err = await driver.connect(cfg()).catch((e) => e)
+    expect(err).toMatchObject({ code: 'outdated' })
+    expect(classifyFailure(err)).toBe('outdated')
   })
 
   it('maps unavailable to unreachable', async () => {

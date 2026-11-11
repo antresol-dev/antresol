@@ -3,6 +3,7 @@ import type { Id, Item } from '@graymatter/core'
 import { toast } from 'vue-sonner'
 import type { ItemDialog } from '~/composables/useDialogs'
 import { errorMessageKey } from '~/lib/errors'
+import { archiveNow } from '~/lib/undo'
 import { folderChoices } from '~/lib/views'
 
 // The item sheets for the whole app: the card's header buttons and the rows' menus open them through useItemDialog().
@@ -12,8 +13,6 @@ const { state } = workspace
 const route = useRoute()
 const router = useRouter()
 const { dialog, close } = useItemDialog()
-// One archive id per opening: a retried Confirm after a timeout sends the same command.
-const { ids, renew } = useCommandIds(['archiveId'])
 
 // The last dialog and its item as they were when it opened: they stay while the sheet animates out and after an archive.
 const shown = shallowRef<ItemDialog | null>(null)
@@ -23,10 +22,11 @@ watch(
   (d) => {
     if (!d) return
     shown.value = d
-    renew()
     item.value = state.snapshot?.items.find((i) => i.id === d.itemId) ?? null
     // Gone meanwhile (archived on another device): nothing to act on.
     if (!item.value) close()
+    // Archiving needs no question: it runs at once and the toast offers Undo.
+    else if (d.kind === 'archive') void archive()
   },
   { immediate: true },
 )
@@ -40,7 +40,6 @@ const openWhen = (kind: ItemDialog['kind']) =>
   })
 const editOpen = openWhen('edit')
 const moveOpen = openWhen('move')
-const archiveOpen = openWhen('archive')
 
 const busy = ref(false)
 const editBusy = ref(false)
@@ -64,15 +63,15 @@ async function move(folderId: Id | null): Promise<void> {
 
 async function archive(): Promise<void> {
   const target = item.value
+  close()
   if (!target || busy.value) return
   // Decided before the archive, while the item is still in the snapshot: the open card of this very item has to go.
   const leave = route.name === 'item-id' && route.params.id === target.id
   busy.value = true
   let archived = false
   try {
-    await workspace.apply({ type: 'archive', target: 'item', id: target.id, archiveId: ids.archiveId })
+    await archiveNow('item', target.id, target.name)
     archived = true
-    close()
   } catch (e) {
     toast.error(t(errorMessageKey(e)))
   } finally {
@@ -89,13 +88,4 @@ async function archive(): Promise<void> {
   <AppSheet v-model:open="moveOpen" :title="$t('itemMenu.moveTitle')" :description="$t('itemMenu.moveHint')" :locked="busy">
     <FolderPickerList v-if="item" :choices="choices" disable-current :aria-label="$t('itemMenu.moveTitle')" @select="move" />
   </AppSheet>
-  <ConfirmSheet
-    v-model:open="archiveOpen"
-    :title="$t('itemMenu.archiveTitle')"
-    :description="$t('itemMenu.archiveConfirm', { name: item?.name ?? '' })"
-    :confirm-label="$t(busy ? 'status.saving' : 'itemMenu.archive')"
-    :busy="busy"
-    destructive
-    @confirm="archive"
-  />
 </template>

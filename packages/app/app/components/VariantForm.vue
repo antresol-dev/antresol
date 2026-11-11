@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label'
 import { captureBaseline, changedFields } from '~/lib/changed-fields'
 import { variantClash } from '~/lib/axes'
 import { errorMessageKey } from '~/lib/errors'
+import { setValuesCommand } from '~/lib/variant-commands'
 
 // A variant is its values on the item's axes, plus a description.
 const props = defineProps<{ variant: Variant }>()
@@ -59,9 +60,10 @@ async function submit(): Promise<void> {
   busy.value = true
   errorKey.value = null
   try {
-    for (const [attributeId, value] of Object.entries(changedValues.value)) {
-      await workspace.apply({ type: 'variant.setAttribute', variantId: props.variant.id, attributeId, value: value ?? null })
-    }
+    const command = setValuesCommand(props.variant.itemId, [
+      { variantId: props.variant.id, values: Object.fromEntries(Object.entries(changedValues.value).map(([k, v]) => [k, v ?? null])) },
+    ])
+    if (command) await workspace.apply(command)
     if (Object.keys(changedDescription.value).length > 0) {
       await workspace.apply({ type: 'variant.update', id: props.variant.id, ...changedDescription.value })
     }

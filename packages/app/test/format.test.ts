@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatDate, formatDateTime, formatMoney, formatUnitPrice } from '../app/lib/format'
+import { checkedAgo, formatDate, formatDateTime, formatMoney, formatUnitPrice } from '../app/lib/format'
 
 describe('format', () => {
   it('formats money in the currency decimals', () => {
@@ -23,5 +23,17 @@ describe('format', () => {
   it('formats dates', () => {
     expect(formatDate('2026-11-10T12:00:00Z')).toBe('Nov 10, 2026')
     expect(formatDateTime('2026-11-10T12:00:00Z')).toMatch(/^Nov 10, 2026, \d{1,2}:\d{2}\s(AM|PM)$/)
+  })
+
+  it('says how long ago the last check was, rounding down', () => {
+    const now = new Date('2026-11-11T12:00:00Z')
+    const ago = (seconds: number): string => new Date(now.getTime() - seconds * 1000).toISOString()
+    expect(checkedAgo(null, now)).toEqual({ key: 'sync.notChecked' })
+    expect(checkedAgo(ago(59), now)).toEqual({ key: 'sync.checkedJustNow' })
+    expect(checkedAgo(ago(60), now)).toEqual({ key: 'sync.checkedMinutes', n: 1 })
+    expect(checkedAgo(ago(59 * 60), now)).toEqual({ key: 'sync.checkedMinutes', n: 59 })
+    expect(checkedAgo(ago(60 * 60), now)).toEqual({ key: 'sync.checkedHours', n: 1 })
+    expect(checkedAgo(ago(24 * 3600), now)).toEqual({ key: 'sync.checkedDays', n: 1 })
+    expect(checkedAgo(ago(-30), now)).toEqual({ key: 'sync.checkedJustNow' })
   })
 })

@@ -3,10 +3,12 @@ import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { defaultDeviceName } from '~/lib/device-name'
 import { downloadBackup } from '~/lib/backup'
 import { errorMessageKey } from '~/lib/errors'
 import type { SourceConfig } from '~/lib/types'
+import type { CheckInterval } from '~/lib/workspace-types'
 
 const { t } = useI18n()
 const workspace = useWorkspace()
@@ -51,6 +53,31 @@ async function exportBackup(config: SourceConfig): Promise<void> {
   }
 }
 
+const reloading = ref<string | null>(null)
+
+async function reload(config: SourceConfig): Promise<void> {
+  if (reloading.value) return
+  reloading.value = config.id
+  try {
+    await workspace.reloadSource(config.id)
+    toast(t('sync.reloaded'))
+  } catch (e) {
+    toast.error(t(errorMessageKey(e)))
+  } finally {
+    reloading.value = null
+  }
+}
+
+const intervals: CheckInterval[] = ['5m', '15m', '1h', '6h', '1d', 'never']
+
+async function changeInterval(value: CheckInterval): Promise<void> {
+  try {
+    await workspace.setCheckInterval(value)
+  } catch (e) {
+    toast.error(t(errorMessageKey(e)))
+  }
+}
+
 async function confirmRemove(): Promise<void> {
   const target = removing.value
   removing.value = null
@@ -89,11 +116,20 @@ async function confirmRemove(): Promise<void> {
               >
                 {{ exporting === s.config.id ? $t('settings.sources.exporting') : $t('settings.sources.exportBackup') }}
               </Button>
+              <Button
+                variant="ghost"
+                :class="[sourceAction, 'text-primary']"
+                :disabled="reloading !== null || (s.status !== 'ready' && s.status !== 'read_only')"
+                @click="reload(s.config)"
+              >
+                {{ reloading === s.config.id ? $t('sync.reloading') : $t('sync.reload') }}
+              </Button>
               <Button variant="ghost" :class="[sourceAction, 'text-destructive']" @click="removing = s.config">
                 {{ $t('settings.sources.remove') }}
               </Button>
             </div>
             <p v-if="s.config.kind === 'neon'" class="text-sm text-subtle-foreground">{{ $t('settings.sources.exportHint') }}</p>
+            <p class="text-sm text-subtle-foreground">{{ $t('sync.reloadHint') }}</p>
           </li>
         </ul>
         <p v-else class="text-subtle-foreground">{{ $t('settings.sources.empty') }}</p>
@@ -115,6 +151,16 @@ async function confirmRemove(): Promise<void> {
             @blur="saveDeviceName"
           />
           <p class="text-sm text-subtle-foreground">{{ $t('settings.device.hint') }}</p>
+          <Label for="check-interval" class="mt-2">{{ $t('sync.interval') }}</Label>
+          <Select :model-value="state.checkInterval" @update:model-value="changeInterval($event as CheckInterval)">
+            <SelectTrigger id="check-interval" class="h-11 w-full rounded-field bg-surface">
+              <SelectValue v-slot="{ modelValue }">{{ $t(`sync.${modelValue === 'never' ? 'never' : `every${modelValue}`}`) }}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="i in intervals" :key="i" :value="i">{{ $t(i === 'never' ? 'sync.never' : `sync.every${i}`) }}</SelectItem>
+            </SelectContent>
+          </Select>
+          <p class="text-sm text-subtle-foreground">{{ $t('sync.intervalHint') }}</p>
         </div>
       </section>
 

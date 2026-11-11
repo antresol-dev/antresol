@@ -208,6 +208,28 @@
     "addSource": "Add a source",
     "useDemo": "Use demo data"
   },
+  "sync": {
+    "action": "Sync",
+    "notChecked": "Not checked yet",
+    "checkedJustNow": "Checked just now",
+    "checkedMinutes": "Checked {n} min ago",
+    "checkedHours": "Checked {n} h ago",
+    "checkedDays": "Checked {n} d ago",
+    "upToDate": "Up to date",
+    "updated": "Updated",
+    "reload": "Reload everything",
+    "reloadHint": "Downloads this source's data again. Use it if something looks wrong.",
+    "reloading": "Reloading…",
+    "reloaded": "Reloaded",
+    "interval": "Check for changes",
+    "intervalHint": "How often to look for changes made on other devices",
+    "every5m": "Every 5 min",
+    "every15m": "Every 15 min",
+    "every1h": "Every hour",
+    "every6h": "Every 6 hours",
+    "every1d": "Once a day",
+    "never": "Never"
+  },
   "settings": {
     "title": "Settings",
     "sources": {

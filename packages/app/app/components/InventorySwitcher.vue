@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { newId } from '@graymatter/core'
 import { createReusableTemplate, useMediaQuery } from '@vueuse/core'
-import { Archive, Check, ChevronsUpDown, Pencil, Plus } from '@lucide/vue'
+import { Archive, Check, ChevronsUpDown, Pencil, Plus, RefreshCw } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import {
   DropdownMenu,
@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { errorMessageKey } from '~/lib/errors'
+import { checkedAgo } from '~/lib/format'
 import { currentInventoryName } from '~/lib/shell'
 import type { InventoryEntry } from '~/lib/workspace'
 
@@ -28,6 +29,26 @@ const menuOpen = ref(false)
 const dialog = ref<'create' | 'rename' | 'archive' | null>(null)
 const archiving = ref(false)
 const formBusy = ref(false)
+const syncing = ref(false)
+
+// "Checked … ago" ticks with the clock while the menu is open, so it is not stale when it is read.
+const now = ref(new Date())
+watch(menuOpen, (open) => {
+  if (open) now.value = new Date()
+})
+const checked = computed(() => checkedAgo(state.lastRefreshAt, now.value))
+
+async function sync(): Promise<void> {
+  if (syncing.value) return
+  syncing.value = true
+  try {
+    toast(t((await workspace.sync()) === 'updated' ? 'sync.updated' : 'sync.upToDate'))
+  } catch (e) {
+    toast.error(t(errorMessageKey(e)))
+  } finally {
+    syncing.value = false
+  }
+}
 
 // The Android back gesture closes the dropdown; below 768 px the menu is an AppSheet, which watches by itself.
 const dropdownOpen = computed({
@@ -148,6 +169,21 @@ const itemClass = computed(() => [
         </component>
       </template>
       <component :is="desktop ? DropdownMenuSeparator : 'hr'" class="my-1 border-divider" />
+      <component
+        :is="desktop ? DropdownMenuItem : 'button'"
+        v-if="state.sources.length"
+        :type="desktop ? undefined : 'button'"
+        :disabled="syncing"
+        :aria-busy="syncing"
+        :class="itemClass"
+        @click="sync"
+      >
+        <RefreshCw :class="['size-4 shrink-0', syncing ? 'motion-safe:animate-spin' : '']" aria-hidden="true" />
+        <span class="flex min-w-0 flex-col">
+          <span>{{ $t('sync.action') }}</span>
+          <span class="text-xs text-subtle-foreground">{{ $t(checked.key, { n: checked.n }) }}</span>
+        </span>
+      </component>
       <component
         :is="desktop ? DropdownMenuItem : 'button'"
         :type="desktop ? undefined : 'button'"

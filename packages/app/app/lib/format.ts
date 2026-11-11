@@ -29,3 +29,20 @@ export function formatDate(iso: string): string {
 export function formatDateTime(iso: string): string {
   return new Intl.DateTimeFormat(LOCALE, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso))
 }
+
+export type CheckedAgo = {
+  key: 'sync.notChecked' | 'sync.checkedJustNow' | 'sync.checkedMinutes' | 'sync.checkedHours' | 'sync.checkedDays'
+  n?: number
+}
+
+/** How long ago the last successful check was, rounded down: just now under a minute, then minutes, hours, days. */
+export function checkedAgo(iso: string | null, now: Date): CheckedAgo {
+  if (iso === null) return { key: 'sync.notChecked' }
+  const seconds = Math.max(0, Math.floor((now.getTime() - new Date(iso).getTime()) / 1000))
+  if (seconds < 60) return { key: 'sync.checkedJustNow' }
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return { key: 'sync.checkedMinutes', n: minutes }
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return { key: 'sync.checkedHours', n: hours }
+  return { key: 'sync.checkedDays', n: Math.floor(hours / 24) }
+}

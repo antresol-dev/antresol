@@ -44,7 +44,7 @@ async function upload(files: File[]): Promise<void> {
   } catch (e) {
     const done = progress.value?.done ?? 0
     // A photo the app can't use fails again however often it is tried: retry what comes after it.
-    const hopeless = e instanceof FileError && (e.code === 'unsupported' || e.code === 'too_large')
+    const hopeless = e instanceof FileError && (e.code === 'unsupported' || e.code === 'too_large' || e.code === 'too_large_to_decode')
     const rest = files.slice(done + (hopeless ? 1 : 0))
     // A refused photo or a missing store is fixed in this source's settings, not by retrying.
     const needsSettings = e instanceof FileError && (e.code === 'rejected' || e.code === 'no_store')
@@ -135,7 +135,7 @@ const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thu
         :aria-label="alt(0)"
         @click="show(0)"
       >
-        <PhotoImg :url="cover.url" size="card" :alt="alt(0)" class="size-full object-cover" />
+        <PhotoImg :url="cover.url" size="full" :alt="alt(0)" class="size-full object-cover" />
       </button>
       <div v-if="photos.length > 1 || progress || canAdd" class="flex flex-wrap gap-1.5">
         <button v-for="(p, i) in photos" :key="p.id" type="button" :class="[tile, 'bg-thumb']" :aria-label="alt(i)" @click="show(i)">

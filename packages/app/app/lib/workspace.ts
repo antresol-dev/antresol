@@ -27,6 +27,7 @@ import { buildBackup, type BackupFile } from './backup'
 import { logError, secretsOf, setSecretSource } from './diagnostics'
 import { createDeviceFileStore, releaseDeviceUrls } from './device-files'
 import { prepareImage as defaultPrepareImage } from './images'
+import { countUpload } from './uploads'
 import type { CachedSnapshot } from './device-db'
 import { defaultDeviceName } from './device-name'
 import { classifyFailure, redactSecret, type FailureReason, type SourceConnection } from './sources'
@@ -1123,9 +1124,11 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   }
 
   /** Upload errors are FileErrors and never touch the source's status. */
-  async function uploadOne(store: FileStore, file: File): Promise<{ provider: string; fileId: string; url: string }> {
+  async function uploadOne(sourceId: string, store: FileStore, file: File): Promise<{ provider: string; fileId: string; url: string }> {
     const blob = await prepare(file)
-    return store.upload(blob, file.name)
+    const stored = await store.upload(blob, file.name)
+    countUpload(sourceId)
+    return stored
   }
 
   async function addPhotos(itemId: Id, files: File[], onProgress?: (done: number) => void): Promise<void> {
@@ -1133,7 +1136,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     const { cur, store } = photoTarget()
     let done = 0
     for (const file of files) {
-      const stored = await uploadOne(store, file)
+      const stored = await uploadOne(cur.sourceId, store, file)
       await applyTo(cur, { type: 'photo.add', id: newId(), itemId, variantId: null, ...stored })
       onProgress?.(++done)
     }
@@ -1144,7 +1147,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   async function setVariantPhoto(itemId: Id, variantId: Id, file: File): Promise<void> {
     const { cur, store } = photoTarget()
     // Upload first: a failed upload leaves the old photo in place.
-    const stored = await uploadOne(store, file)
+    const stored = await uploadOne(cur.sourceId, store, file)
     // Looked up only now, after the upload and the writes queued before this one, in the freshest snapshot of the target.
     await queueIdle()
     const snapshot = await snapshotOf(cur)

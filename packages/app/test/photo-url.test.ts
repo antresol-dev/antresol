@@ -57,3 +57,12 @@ describe('url kinds', () => {
     expect(isDeviceUrl('https://ucarecdn.com/abc/')).toBe(false)
   })
 })
+
+describe('gallery cover', () => {
+  it('is shown at the full size (card stays for places without a cover)', async () => {
+    const { readFileSync } = await import('node:fs')
+    const src = readFileSync(new URL('../app/components/ItemGallery.vue', import.meta.url), 'utf8')
+    expect(src).toMatch(/<PhotoImg :url="cover\.url" size="full"/)
+    expect(src).not.toMatch(/size="card"/)
+  })
+})

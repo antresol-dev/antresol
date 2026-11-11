@@ -107,6 +107,7 @@ async function confirmRemove(): Promise<void> {
             </div>
             <p class="text-sm text-subtle-foreground">{{ $t('sync.reloadHint') }}</p>
             <SourceTraffic v-if="s.config.kind === 'neon'" :source-id="s.config.id" />
+            <SourceUploads :source-id="s.config.id" />
             <SourceBackup :source="s" />
           </li>
         </ul>
@@ -150,6 +151,8 @@ async function confirmRemove(): Promise<void> {
           <AccentPicker class="pt-2" />
         </div>
       </section>
+
+      <PhotoCacheSection />
 
       <DiagnosticsSection />
 

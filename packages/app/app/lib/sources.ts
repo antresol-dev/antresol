@@ -35,6 +35,12 @@ export type SourceProbe =
   | { ok: true; inspection: SchemaInspection }
   | { ok: false; reason: ProbeFailure; message: string }
 
+/** Whether a source with this schema can be saved: not a database with other tables, nor one a pre-release build made
+ *  (opening it would fail with `outdated`). */
+export function canSaveSource(inspection: SchemaInspection): boolean {
+  return inspection.state !== 'foreign' && inspection.state !== 'outdated'
+}
+
 export interface SourceConnection {
   storage: InventoryStorage
   /** The schema as the connection found it when it opened. */

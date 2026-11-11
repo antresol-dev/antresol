@@ -1,5 +1,5 @@
 import { PGlite } from '@electric-sql/pglite'
-import { DomainError, FileError, newId, StorageError, type Command, type FileStore, type Id } from '@graymatter/core'
+import { DomainError, FileError, newId, StorageError, variantLabel, type Command, type FileStore, type Id } from '@graymatter/core'
 import { APP_SCHEMA_VERSION, createPgliteExecutor, type PgExecutor } from '@graymatter/storage-postgres'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { isReactive } from 'vue'
@@ -739,6 +739,29 @@ describe('workspace', () => {
     expect(ws.state.inventories.map((e) => e.inventory.name)).toEqual(['A', 'B'])
     expect(ws.state.archivedInventories).toEqual([])
     expect(ws.state.current).toEqual(refA)
+  })
+
+  it('3a. a cached copy of a foreign format is not shown, even offline', async () => {
+    const h = setup()
+    await h.seed(CS('one'), 'Inv')
+    await h.db.putSource(config('s1', CS('one')))
+    const first = h.workspace()
+    await first.start()
+    const ref = first.state.current!
+    const cached = (await h.db.getSnapshot(ref))!
+    expect(cached).not.toBeNull()
+    for (const format of ['0:0', undefined]) {
+      await h.db.putSnapshot(ref, { ...cached, format, rev: null })
+      h.flags.offline = true
+      const ws = h.workspace()
+      await ws.startFromCache()
+      expect(ws.state.snapshot).toBeNull()
+      expect(ws.state.snapshotOrigin).toBeNull()
+    }
+    await h.db.putSnapshot(ref, { ...cached, rev: null })
+    const ok = h.workspace()
+    await ok.startFromCache()
+    expect(ok.state.snapshotOrigin).toBe('cache')
   })
 
   it('29. permanently deletes an archived inventory and its cached copy', async () => {
@@ -2055,7 +2078,8 @@ describe('workspace photos', () => {
   it('setVariantPhoto removes the old photo, then adds the new one', async () => {
     const { ws, uploads, commands } = await photoHarness()
     const snap = ws.state.snapshot!
-    const variant = snap.variants.find((v) => v.name === '10k')!
+    const resistorId = snap.items.find((i) => i.name === 'Резистор 0,25 Вт')!.id
+    const variant = snap.variants.find((v) => v.itemId === resistorId && variantLabel(snap, v) === '10 kΩ')!
     await ws.setVariantPhoto(variant.itemId, variant.id, file('one'))
     const first = ws.state.snapshot!.photos.find((p) => p.variantId === variant.id)!
     await ws.setVariantPhoto(variant.itemId, variant.id, file('two'))

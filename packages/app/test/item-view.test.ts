@@ -1,7 +1,7 @@
-import { createSearch, itemStock, newId, type Command, type InventorySnapshot, type InventoryStorage, type Movement } from '@graymatter/core'
+import { itemStock, newId, type Command, type InventorySnapshot, type InventoryStorage, type Movement } from '@graymatter/core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
-import { attributeChoices, attributeWrites, itemView, journalRows, looseTransferOffer } from '../app/lib/item-view'
+import { attributeChoices, itemView, journalRows, looseTransferOffer } from '../app/lib/item-view'
 import type { SourceConfig } from '../app/lib/types'
 
 const cfg: SourceConfig = {
@@ -53,7 +53,7 @@ async function newFolder(parentId: string | null = null): Promise<string> {
   await run({ type: 'folder.create', id, inventoryId, parentId, name: `Folder ${++made}`, description: null })
   return id
 }
-/** A fresh item with its own variants (name → id); no folder means the inventory root. */
+/** A fresh item with its own variants (label → id); no folder means the inventory root. */
 async function newItem(
   options: { folderId?: string | null; unitKey?: string; variants?: string[]; receipt?: string } = {},
 ): Promise<{ id: string; v: Record<string, string> }> {
@@ -69,8 +69,19 @@ async function newItem(
     tagIds: [],
     initialReceipt: options.receipt ? { movementId: newId(), quantity: options.receipt, totalPrice: null, sourceUrl: null } : null,
   })
-  const variants = (options.variants ?? []).map((name) => ({ id: newId(), name }))
-  if (variants.length > 0) await run({ type: 'variant.createMany', itemId: id, variants })
+  const names = options.variants ?? []
+  const variants = names.map((name) => ({ id: newId(), name }))
+  if (variants.length > 0) {
+    // The variants differ by one text attribute, so a variant's label is its name.
+    const axis = newId()
+    await run({ type: 'attribute.create', id: axis, inventoryId, name: `Value ${made}`, kind: 'text', options: [], unit: '', siPrefixes: false })
+    await run({ type: 'item.addAxis', itemId: id, attributeId: axis, firstVariantId: variants[0]!.id })
+    await run({
+      type: 'variant.createMany',
+      itemId: id,
+      variants: variants.map((x) => ({ id: x.id, values: [{ attributeId: axis, value: x.name }] })),
+    })
+  }
   return { id, v: Object.fromEntries(variants.map((x) => [x.name, x.id])) }
 }
 
@@ -132,7 +143,7 @@ describe('itemView', () => {
   it('shows the no-variant stock only without variants or when it is not zero', async () => {
     expect(itemView(s, tl072)!.buckets.map((b) => b.name)).toEqual([null])
     expect(itemView(s, ne555)!.buckets).toMatchObject([{ variantId: null, name: null, quantity: '0', outOfStock: true, values: [] }])
-    expect(itemView(s, resistor)!.buckets.map((b) => b.name)).toEqual(['1k', '10k', '100k'])
+    expect(itemView(s, resistor)!.buckets).toHaveLength(3)
 
     const r = await newItem({ variants: ['1k', '10k', '100k'] })
     await receive(r.id, r.v['10k']!, '100')
@@ -147,44 +158,22 @@ describe('itemView', () => {
     expect(buckets[2]).toMatchObject({ variantId: r.v['10k'], avgUnitPrice: null, lastUnitPrice: null })
   })
 
-  it('orders variants by position', async () => {
-    const r = await newItem({ variants: ['1k', '10k', '100k'] })
-    await run({ type: 'variant.createMany', itemId: r.id, variants: [{ id: newId(), name: '0R' }] })
-    expect(itemView(s, r.id)!.buckets.map((b) => b.name)).toEqual(['1k', '10k', '100k', '0R'])
+  it('orders variants by their axis values, not by creation', async () => {
+    const r = await newItem({ variants: ['10k', '1k', '100k'] })
+    expect(itemView(s, r.id)!.buckets.map((b) => b.name)).toEqual(['1k', '10k', '100k'])
   })
 
-  it('marks an attribute per-variant when the item value is empty and the item has variants', async () => {
-    const r = await newItem({ variants: ['1k', '10k'] })
-    const resistance = newId()
-    await run({ type: 'attribute.create', id: resistance, inventoryId, name: 'Resistance', kind: 'text', options: [] })
-    await run({ type: 'item.setAttribute', itemId: r.id, attributeId: resistance, value: null })
-    await run({ type: 'variant.setAttribute', variantId: r.v['10k']!, attributeId: resistance, value: '10 kΩ' })
-    expect(itemView(s, r.id)!.attributes).toMatchObject([{ name: 'Resistance', perVariant: true, value: null }])
-    const buckets = itemView(s, r.id)!.buckets
-    expect(buckets.find((b) => b.name === '10k')!.values).toEqual([{ attributeId: expect.any(String), name: 'Resistance', value: '10 kΩ' }])
-    expect(buckets.find((b) => b.name === '1k')!.values).toEqual([{ attributeId: resistance, name: 'Resistance', value: null }])
-
-    // Without variants an empty value is just empty, and a shared value is never per-variant.
-    const plain = await newItem()
-    await run({ type: 'item.setAttribute', itemId: plain.id, attributeId: resistance, value: null })
-    expect(itemView(s, plain.id)!.attributes).toMatchObject([{ name: 'Resistance', perVariant: false, value: null }])
-    await run({ type: 'item.setAttribute', itemId: r.id, attributeId: resistance, value: 'mixed' })
-    const shared = itemView(s, r.id)!
-    expect(shared.attributes).toMatchObject([{ perVariant: false, value: 'mixed' }])
-    expect(shared.buckets.every((b) => b.values.length === 0)).toBe(true)
-  })
-
-  it('sorts attributes by name and keeps the options of a list attribute', async () => {
+  it('sorts shared attributes by name and keeps the options of a list attribute', async () => {
     const item = await newItem()
     const pkg = newId()
     const notes = newId()
-    await run({ type: 'attribute.create', id: pkg, inventoryId, name: 'Package', kind: 'enum', options: ['DIP-8', 'SOIC-8'] })
-    await run({ type: 'attribute.create', id: notes, inventoryId, name: 'Notes', kind: 'text', options: [] })
+    await run({ type: 'attribute.create', id: pkg, inventoryId, name: 'Package', kind: 'enum', options: ['DIP-8', 'SOIC-8'], unit: '', siPrefixes: false })
+    await run({ type: 'attribute.create', id: notes, inventoryId, name: 'Notes', kind: 'text', options: [], unit: '', siPrefixes: false })
     await run({ type: 'item.setAttribute', itemId: item.id, attributeId: pkg, value: 'DIP-8' })
     await run({ type: 'item.setAttribute', itemId: item.id, attributeId: notes, value: 'dual' })
     expect(itemView(s, item.id)!.attributes).toEqual([
-      { attributeId: notes, name: 'Notes', kind: 'text', options: [], value: 'dual', perVariant: false },
-      { attributeId: pkg, name: 'Package', kind: 'enum', options: ['DIP-8', 'SOIC-8'], value: 'DIP-8', perVariant: false },
+      { attributeId: notes, name: 'Notes', kind: 'text', options: [], unit: '', siPrefixes: false, value: 'dual', display: 'dual' },
+      { attributeId: pkg, name: 'Package', kind: 'enum', options: ['DIP-8', 'SOIC-8'], unit: '', siPrefixes: false, value: 'DIP-8', display: 'DIP-8' },
     ])
   })
 
@@ -338,51 +327,6 @@ describe('attributeChoices', () => {
     expect(attributeChoices(s, item.id).some((a) => a.id === ids.size)).toBe(false)
     // Another item still sees it.
     expect(attributeChoices(s, ne555).some((a) => a.id === ids.size)).toBe(true)
-  })
-})
-
-describe('attributeWrites', () => {
-  const setup = async () => {
-    const item = await newItem({ variants: ['ra', 'rb', 'rc'] })
-    const attr = newId()
-    await run({ type: 'attribute.create', id: attr, inventoryId, name: 'Resistance', kind: 'text', options: [] })
-    await run({ type: 'item.setAttribute', itemId: item.id, attributeId: attr, value: null })
-    await run({ type: 'variant.setAttribute', variantId: item.v['ra']!, attributeId: attr, value: '1 kΩ' })
-    await run({ type: 'variant.setAttribute', variantId: item.v['rb']!, attributeId: attr, value: '10 kΩ' })
-    return { item, attr }
-  }
-
-  it('per variant: empties the item value and writes only the changed variants, blank as null', async () => {
-    const { item, attr } = await setup()
-    const writes = attributeWrites(s, item.id, attr, {
-      variants: { [item.v['ra']!]: '1 kΩ', [item.v['rb']!]: '', [item.v['rc']!]: ' 100 kΩ ' },
-    })
-    expect(writes).toEqual([
-      { type: 'item.setAttribute', itemId: item.id, attributeId: attr, value: null },
-      { type: 'variant.setAttribute', variantId: item.v['rb'], attributeId: attr, value: null },
-      { type: 'variant.setAttribute', variantId: item.v['rc'], attributeId: attr, value: '100 kΩ' },
-    ])
-  })
-
-  it('shared: sets the item value, then clears every variant that has a value', async () => {
-    const { item, attr } = await setup()
-    expect(attributeWrites(s, item.id, attr, { shared: ' 5 kΩ ' })).toEqual([
-      { type: 'item.setAttribute', itemId: item.id, attributeId: attr, value: '5 kΩ' },
-      { type: 'variant.setAttribute', variantId: item.v['ra'], attributeId: attr, value: null },
-      { type: 'variant.setAttribute', variantId: item.v['rb'], attributeId: attr, value: null },
-    ])
-    expect(attributeWrites(s, item.id, attr, { shared: '  ' })[0]).toMatchObject({ value: null })
-  })
-
-  it('after switching to a shared value search no longer finds the old variant values', async () => {
-    const { item, attr } = await setup()
-    const found = () => createSearch(s).search('10 kΩ').filter((h) => h.itemId === item.id && h.variantId !== null).map((h) => h.variantId)
-    expect(found()).toContain(item.v['rb'])
-    for (const c of attributeWrites(s, item.id, attr, { shared: '5 kΩ' })) await run(c)
-    expect(found()).toEqual([])
-    expect(createSearch(s).search('5 kΩ').some((h) => h.itemId === item.id)).toBe(true)
-    // Switching back starts from empty values.
-    expect(attributeWrites(s, item.id, attr, { variants: { [item.v['rb']!]: '' } })).toHaveLength(1)
   })
 })
 

@@ -1,19 +1,27 @@
 <script setup lang="ts">
 import type { Id } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
+import { variantClash, type VariantClash } from '~/lib/axes'
 import { errorMessageKey } from '~/lib/errors'
-import { attributeWrites, type ItemView } from '~/lib/item-view'
+import type { AxisRow, ItemView } from '~/lib/item-view'
 
-// The per-variant attribute values of one variant.
+// Variants by axes in one table, to fill in the empty values quickly. `variantId` opens the sheet (and marks its row).
 const props = defineProps<{ view: ItemView; variantId: Id | null }>()
 const emit = defineEmits<{ close: [] }>()
 
 const workspace = useWorkspace()
 const { state } = workspace
 
-// What the sheet shows while it animates out.
-const shown = shallowRef<{ id: Id; name: string; attributes: { id: Id; name: string; kind: 'text' | 'enum'; options: string[] }[] } | null>(null)
-const values = ref<Record<string, string>>({})
+type Cells = Record<string, string | null>
+const key = (variantId: Id, attributeId: Id): string => `${variantId}:${attributeId}`
+const rowsOf = (view: ItemView) => view.buckets.filter((b) => b.variantId !== null)
+
+// What the sheet shows while it animates out, and the values as they were when it opened (nothing else is sent).
+const axes = shallowRef<AxisRow[]>([])
+const rows = shallowRef<{ id: Id; label: string }[]>([])
+const values = ref<Cells>({})
+const baseline = shallowRef<Cells>({})
+const fieldErrors = ref<Record<string, string | null>>({})
 const saving = ref(false)
 const errorKey = ref<string | null>(null)
 
@@ -21,15 +29,14 @@ watch(
   () => props.variantId,
   (id) => {
     if (!id) return
-    const bucket = props.view.buckets.find((b) => b.variantId === id)
-    shown.value = {
-      id,
-      name: bucket?.name ?? '',
-      attributes: props.view.attributes.filter((a) => a.perVariant).map((a) => ({ id: a.attributeId, name: a.name, kind: a.kind, options: a.options })),
-    }
-    const found: Record<string, string> = {}
-    for (const v of bucket?.values ?? []) found[v.attributeId] = v.value ?? ''
+    axes.value = props.view.axes
+    const buckets = rowsOf(props.view)
+    rows.value = buckets.map((b) => ({ id: b.variantId!, label: b.name ?? '' }))
+    const found: Cells = {}
+    for (const b of buckets) for (const v of b.values) found[key(b.variantId!, v.attributeId)] = v.value
     values.value = found
+    baseline.value = { ...found }
+    fieldErrors.value = {}
     saving.value = false
     errorKey.value = null
   },
@@ -43,18 +50,47 @@ const open = computed({
   },
 })
 
-async function save(): Promise<void> {
-  const current = shown.value
-  if (!current || saving.value || state.readOnly) return
+const changed = computed(() => Object.keys(values.value).filter((k) => (values.value[k] ?? null) !== (baseline.value[k] ?? null)))
+const hasFieldError = computed(() => Object.values(fieldErrors.value).some((e) => e))
+// Rows whose edited values would equal another variant's (an archived one can be restored instead, §4.7).
+const clashes = computed(() => {
+  const s = state.snapshot
+  const found: { row: { id: Id; label: string }; clash: VariantClash }[] = []
+  if (!s || hasFieldError.value) return found
+  const edited = new Set(changed.value.map((k) => k.split(':')[0]))
+  for (const row of rows.value) {
+    if (!edited.has(row.id)) continue
+    const final = Object.fromEntries(axes.value.map((a) => [a.attributeId, values.value[key(row.id, a.attributeId)] ?? null]))
+    const clash = variantClash(s, props.view.item.id, final, row.id)
+    if (clash) found.push({ row, clash })
+  }
+  return found
+})
+const canSave = computed(() => !saving.value && !state.readOnly && changed.value.length > 0 && !hasFieldError.value && clashes.value.length === 0)
+
+async function restore(archiveId: Id): Promise<void> {
+  if (saving.value || state.readOnly) return
   saving.value = true
   errorKey.value = null
   try {
-    const snapshot = state.snapshot
-    if (!snapshot) return
-    for (const a of current.attributes) {
-      // Only this variant's value is edited; the item's own value is already empty for a per-variant attribute.
-      const writes = attributeWrites(snapshot, props.view.item.id, a.id, { variants: { [current.id]: values.value[a.id] ?? '' } })
-      for (const command of writes) if (command.type === 'variant.setAttribute') await workspace.apply(command)
+    await workspace.apply({ type: 'restore', archiveId })
+  } catch (e) {
+    errorKey.value = errorMessageKey(e)
+  } finally {
+    saving.value = false
+  }
+}
+
+async function save(): Promise<void> {
+  if (!canSave.value) return
+  saving.value = true
+  errorKey.value = null
+  try {
+    for (const k of changed.value) {
+      const [variantId, attributeId] = k.split(':') as [Id, Id]
+      await workspace.apply({ type: 'variant.setAttribute', variantId, attributeId, value: values.value[k] ?? null })
+      // Written: this cell is no longer pending, so a failure further on does not resend it.
+      baseline.value = { ...baseline.value, [k]: values.value[k] ?? null }
     }
     emit('close')
   } catch (e) {
@@ -66,25 +102,61 @@ async function save(): Promise<void> {
 </script>
 
 <template>
-  <AppSheet v-model:open="open" :title="$t('attributeSheet.variantTitle', { name: shown?.name ?? '' })" :locked="saving">
+  <AppSheet v-model:open="open" :title="$t('variantValues.title')" :locked="saving">
     <div class="mt-3.5 grid gap-3.5">
-      <AttributeValueField
-        v-for="a in shown?.attributes ?? []"
-        :id="`variant-value-${a.id}`"
-        :key="a.id"
-        v-model="values[a.id]!"
-        :label="a.name"
-        :kind="a.kind"
-        :options="a.options"
-        :disabled="saving"
-      />
+      <p v-if="axes.length === 0" class="text-sm text-muted-foreground">{{ $t('variantValues.empty') }}</p>
+      <div v-else class="overflow-x-auto">
+        <table class="w-full border-separate border-spacing-x-2 border-spacing-y-1.5 text-sm">
+          <thead>
+            <tr class="text-left text-[13px] text-subtle-foreground">
+              <th v-for="a in axes" :key="a.attributeId" scope="col" class="min-w-32 font-semibold">{{ a.name }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="r in rows" :key="r.id" :aria-current="r.id === variantId ? 'true' : undefined">
+              <td v-for="a in axes" :key="a.attributeId" class="align-top">
+                <div class="flex items-center gap-1.5">
+                  <AttributeValueField
+                    :id="`variant-value-${r.id}-${a.attributeId}`"
+                    v-model="values[key(r.id, a.attributeId)]!"
+                    class="min-w-0 flex-1"
+                    :attribute="a"
+                    :disabled="saving"
+                    @update:error="(e) => (fieldErrors[key(r.id, a.attributeId)] = e)"
+                  />
+                  <span v-if="(values[key(r.id, a.attributeId)] ?? null) === null" class="text-muted-foreground" aria-hidden="true">—</span>
+                </div>
+                <p v-if="fieldErrors[key(r.id, a.attributeId)]" role="alert" class="mt-1 text-xs text-destructive">
+                  {{ $t(fieldErrors[key(r.id, a.attributeId)]!) }}
+                </p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <ul v-if="clashes.length > 0" role="alert" class="grid gap-1.5 text-sm text-destructive">
+        <li v-for="c in clashes" :key="c.row.id" class="flex flex-wrap items-center justify-between gap-2">
+          {{ $t(c.clash.archived ? 'variantValues.inArchive' : 'variantValues.exists', { label: c.row.label }) }}
+          <Button
+            v-if="c.clash.archived && c.clash.archiveId"
+            type="button"
+            variant="outline"
+            size="sm"
+            class="h-9 rounded-field"
+            :disabled="saving || !!state.readOnly"
+            @click="restore(c.clash.archiveId)"
+          >
+            {{ $t('variantValues.restore') }}
+          </Button>
+        </li>
+      </ul>
       <p role="alert" class="text-sm text-destructive">
         <template v-if="errorKey">{{ $t(errorKey) }}</template>
       </p>
     </div>
     <template #footer>
-      <Button type="button" class="h-11 rounded-field" :disabled="saving || !!state.readOnly" @click="save">
-        {{ $t(saving ? 'status.saving' : 'attributeSheet.save') }}
+      <Button type="button" class="h-11 rounded-field" :disabled="!canSave" @click="save">
+        {{ $t(saving ? 'status.saving' : 'variantValues.save') }}
       </Button>
     </template>
   </AppSheet>

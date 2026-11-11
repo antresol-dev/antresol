@@ -11,13 +11,15 @@ export interface SchemaStatus {
   dbVersion: number
   appVersion: number
 }
-export const STORAGE_ERROR_CODES = ['read_only', 'unavailable', 'not_found', 'incompatible', 'failed'] as const
+export const STORAGE_ERROR_CODES = ['read_only', 'unavailable', 'not_found', 'incompatible', 'outdated', 'failed'] as const
 export type StorageErrorCode = (typeof STORAGE_ERROR_CODES)[number]
 
+/** What a database holds, read without writing. `older` is upgraded on open; `outdated` (made by a pre-release build)
+ *  cannot be: opening it fails with StorageError('outdated') until it is reset. */
 export type SchemaInspection =
   | { state: 'empty' }
   | { state: 'foreign' }
-  | { state: 'current' | 'older' | 'newer'; dbVersion: number; appVersion: number }
+  | { state: 'current' | 'older' | 'outdated' | 'newer'; dbVersion: number; appVersion: number }
 
 export interface ApplyResult {
   /** Revision before this write, read under a lock on the revision row: no other write committed in between.

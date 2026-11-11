@@ -1,11 +1,13 @@
 import type { Command } from './commands'
 import type { Id } from './ids'
 import { CURRENCIES } from './money'
-import type { Folder, InventorySnapshot, Item, Variant } from './model'
+import type { Attribute, AttributeKind, Folder, InventorySnapshot, Item, ItemAttribute, Variant } from './model'
+import { isCanonicalNumber } from './numbers'
 import { bucketStock } from './stock'
 import { cmpQ, parseQuantity, type Quantity } from './quantity'
 import { customUnitKey, resolveUnit, SI_PREFIXES } from './units'
 import { isInSubtree } from './tree'
+import { axisRemovalPreview, duplicateOf, itemAxes, sameAxisValue } from './variants'
 
 export const DOMAIN_ERROR_CODES = [
   'name_required',
@@ -22,6 +24,13 @@ export const DOMAIN_ERROR_CODES = [
   'archived',
   'not_archived',
   'unit_in_use',
+  'duplicate_variant',
+  'axis_required',
+  'axis_value_required',
+  'attribute_is_axis',
+  'not_an_axis',
+  'option_in_use',
+  'invalid_number',
 ] as const
 export type DomainErrorCode = (typeof DOMAIN_ERROR_CODES)[number]
 
@@ -35,6 +44,8 @@ export class DomainError extends Error {
 }
 
 const MAX_NAME = 200
+const MAX_UNIT = 16
+const ATTRIBUTE_KINDS: readonly AttributeKind[] = ['text', 'enum', 'number']
 
 // ---- normalization ----
 
@@ -45,7 +56,8 @@ const desc = (v: string | null | undefined) => {
   return t ? t : null
 }
 
-/** Trims names, symbols and options; turns an empty description into null. Unset optional fields stay unset. */
+/** Trims names, symbols, units, options and attribute values; turns an empty description and an empty shared or
+ *  variant attribute value into null. Unset optional fields stay unset. */
 export function normalizeCommand(c: Command): Command {
   const out: Record<string, unknown> = { ...c }
   const set = (k: string, v: unknown) => {
@@ -56,7 +68,14 @@ export function normalizeCommand(c: Command): Command {
   set('description', desc((c as { description?: string | null }).description))
   if (c.type === 'attribute.create' || c.type === 'attribute.update') {
     set('options', c.options?.map((o) => o.trim()))
+    set('unit', trimmed(c.unit))
   }
+  // Units are for numbers only: a text or enum attribute never carries one.
+  if (c.type === 'attribute.create' && c.kind !== 'number') {
+    out.unit = ''
+    out.siPrefixes = false
+  }
+  if (c.type === 'item.setAttribute' || c.type === 'variant.setAttribute') out.value = desc(c.value)
   const canon = (q: Quantity) => parseQuantity(q) ?? q
   if ('quantity' in c && typeof c.quantity === 'string') out.quantity = canon(c.quantity)
   if (c.type === 'stock.set') out.target = canon(c.target)
@@ -67,24 +86,9 @@ export function normalizeCommand(c: Command): Command {
     set('tagIds', c.tagIds && [...new Set(c.tagIds)])
   }
   if (c.type === 'variant.createMany') {
-    out.variants = c.variants.map((v) => ({ ...v, name: v.name.trim() }))
+    out.variants = c.variants.map((v) => ({ ...v, values: v.values.map((x) => ({ ...x, value: typeof x.value === 'string' ? x.value.trim() : x.value })) }))
   }
   return out as Command
-}
-
-/** Splits on commas, semicolons and newlines; trims; drops empties and case-insensitive duplicates. */
-export function splitVariantNames(input: string): string[] {
-  const seen = new Set<string>()
-  const out: string[] = []
-  for (const part of input.split(/[,;\n]/)) {
-    const name = part.trim()
-    const key = name.toLowerCase()
-    if (name && !seen.has(key)) {
-      seen.add(key)
-      out.push(name)
-    }
-  }
-  return out
 }
 
 // ---- validation ----
@@ -175,17 +179,75 @@ function activeBucket(s: Snap, itemId: Id, variantId: Id | null) {
   if (v.itemId !== itemId) fail('not_found')
   if (variantArchived(s, v)) fail('archived')
 }
-function checkAttributeValue(s: Snap, attributeId: Id, value: string | null) {
-  const a = s.attributes.find((x) => x.id === attributeId) ?? fail('not_found')
-  if (a.kind === 'enum' && value !== null && !a.options.includes(value)) fail('invalid_option')
+
+// ---- attributes and variant axes (spec 2026-11-11 variants §4.5–4.7) ----
+
+function needAttribute(s: Snap, id: Id): Attribute {
+  return s.attributes.find((a) => a.id === id) ?? fail('not_found')
 }
-function checkVariantNames(s: Snap, itemId: Id, names: { id: string; name: string }[]) {
-  const taken = s.variants.filter((v) => v.itemId === itemId).map((v) => ({ id: v.id, name: v.name }))
-  for (const n of names) {
-    checkName(n.name)
-    if (taken.some((t) => t.id !== n.id && same(t.name, n.name))) fail('duplicate_name')
-    taken.push(n)
+function linkOf(s: Snap, itemId: Id, attributeId: Id): ItemAttribute | undefined {
+  return s.itemAttributes.find((r) => r.itemId === itemId && r.attributeId === attributeId)
+}
+const isAxis = (s: Snap, itemId: Id, attributeId: Id) => (linkOf(s, itemId, attributeId)?.axisPosition ?? null) !== null
+
+/** A non-empty value must fit the kind: a list option, a canonical number (§4.1), or text that is not blank. */
+function checkValue(a: Attribute, value: string | null) {
+  if (value === null) return
+  if (a.kind === 'enum' && !a.options.includes(value)) fail('invalid_option')
+  if (a.kind === 'number' && !isCanonicalNumber(value)) fail('invalid_number')
+  if (a.kind === 'text' && value.trim() === '') fail('invalid_option')
+}
+function checkUnit(unit: string | undefined) {
+  if (unit !== undefined && unit.trim().length > MAX_UNIT) fail('name_too_long')
+}
+/** A list option that is dropped must not be a value of any item or variant, archived ones included. */
+function checkDroppedOptions(s: Snap, a: Attribute, options: string[] | undefined) {
+  if (options === undefined || a.kind !== 'enum') return
+  const dropped = new Set(a.options.filter((o) => !options.includes(o)))
+  if (dropped.size === 0) return
+  const used = (r: { attributeId: Id; value: string | null }) => r.attributeId === a.id && r.value !== null && dropped.has(r.value)
+  if (s.itemAttributes.some(used) || s.variantAttributeValues.some(used)) fail('option_in_use')
+}
+/** Taking an axis off: refused when it is the last axis of an item with variants or leaves two variants equal. */
+function checkAxisRemoval(s: Snap, itemId: Id, attributeId: Id) {
+  const { blocked } = axisRemovalPreview(s, itemId, attributeId)
+  if (blocked) fail(blocked)
+}
+function checkNewVariants(s: Snap, itemId: Id, variants: { id: Id; values: { attributeId: Id; value: string }[] }[]) {
+  const axes = itemAxes(s, itemId)
+  if (axes.length === 0) fail('axis_required')
+  const batch: Map<Id, string | null>[] = []
+  const ids = new Set<Id>()
+  for (const v of variants) {
+    if (ids.has(v.id) || s.variants.some((x) => x.id === v.id)) fail('invalid_option')
+    ids.add(v.id)
+    const values = new Map<Id, string | null>()
+    for (const { attributeId, value } of v.values) {
+      needAttribute(s, attributeId)
+      if (!axes.some((a) => a.id === attributeId)) fail('not_an_axis')
+      if (values.has(attributeId)) fail('invalid_option')
+      values.set(attributeId, value)
+    }
+    for (const a of axes) {
+      const value = values.get(a.id) ?? null
+      if (value === null || value.trim() === '') fail('axis_value_required')
+      checkValue(a, value)
+    }
+    if (duplicateOf(s, itemId, values, v.id)) fail('duplicate_variant')
+    if (batch.some((other) => axes.every((a) => sameAxisValue(a, other.get(a.id) ?? null, values.get(a.id) ?? null)))) {
+      fail('duplicate_variant')
+    }
+    batch.push(values)
   }
+}
+function checkVariantValue(s: Snap, v: Variant, attributeId: Id, value: string | null) {
+  const a = needAttribute(s, attributeId)
+  if (!isAxis(s, v.itemId, attributeId)) fail('not_an_axis')
+  checkValue(a, value)
+  const values = new Map<Id, string | null>()
+  for (const r of s.variantAttributeValues) if (r.variantId === v.id) values.set(r.attributeId, r.value)
+  values.set(attributeId, value)
+  if (duplicateOf(s, v.itemId, values, v.id)) fail('duplicate_variant')
 }
 
 function check(c: Command, s: Snap | null): void {
@@ -243,28 +305,54 @@ function check(c: Command, s: Snap | null): void {
       if (c.unitKey !== undefined && !resolveUnit(c.unitKey, s.units)) fail('not_found')
       for (const t of c.tagIds ?? []) if (!s.tags.some((x) => x.id === t)) fail('not_found')
       return
-    case 'item.setAttribute':
+    case 'item.setAttribute': {
       activeItem(s, c.itemId)
-      checkAttributeValue(s, c.attributeId, c.value)
+      const a = needAttribute(s, c.attributeId)
+      if (isAxis(s, c.itemId, c.attributeId)) fail('attribute_is_axis')
+      checkValue(a, c.value)
       return
+    }
     case 'item.removeAttribute':
       activeItem(s, c.itemId)
-      if (!s.attributes.some((a) => a.id === c.attributeId)) fail('not_found')
+      needAttribute(s, c.attributeId)
+      checkAxisRemoval(s, c.itemId, c.attributeId)
       return
+    case 'item.addAxis':
+      // Already an axis: the command changes nothing. A new axis never makes variants equal (§4.7).
+      // First-variant rule (applied by storage, never rejected here): `firstVariantId` becomes a variant only when the
+      // item has no variants, the attribute was shared with a non-empty value, AND the item has no other axis. With
+      // another axis already present, only the role changes and the shared value is dropped.
+      activeItem(s, c.itemId)
+      needAttribute(s, c.attributeId)
+      return
+    case 'item.removeAxis':
+      activeItem(s, c.itemId)
+      needAttribute(s, c.attributeId)
+      if (!isAxis(s, c.itemId, c.attributeId)) fail('not_an_axis')
+      checkAxisRemoval(s, c.itemId, c.attributeId)
+      return
+    case 'item.reorderAxes': {
+      activeItem(s, c.itemId)
+      const axes = new Set(itemAxes(s, c.itemId).map((a) => a.id))
+      const listed = new Set(c.attributeIds)
+      if (listed.size !== c.attributeIds.length || listed.size !== axes.size || c.attributeIds.some((id) => !axes.has(id))) {
+        fail('invalid_option')
+      }
+      return
+    }
     case 'variant.createMany':
       activeItem(s, c.itemId)
-      checkVariantNames(s, c.itemId, c.variants)
+      checkNewVariants(s, c.itemId, c.variants)
       return
     case 'variant.update': {
       const v = needVariant(s, c.id)
       if (variantArchived(s, v)) fail('archived')
-      if (c.name !== undefined) checkVariantNames(s, v.itemId, [{ id: v.id, name: c.name }])
       return
     }
     case 'variant.setAttribute': {
       const v = needVariant(s, c.variantId)
       if (variantArchived(s, v)) fail('archived')
-      checkAttributeValue(s, c.attributeId, c.value)
+      checkVariantValue(s, v, c.attributeId, c.value)
       return
     }
     case 'tag.create':
@@ -283,14 +371,25 @@ function check(c: Command, s: Snap | null): void {
     case 'attribute.create':
       needInventory(s, c.inventoryId)
       checkName(c.name)
+      if (!ATTRIBUTE_KINDS.includes(c.kind)) fail('invalid_option')
+      checkUnit(c.unit)
       return
-    case 'attribute.update':
-      if (!s.attributes.some((a) => a.id === c.id)) fail('not_found')
+    case 'attribute.update': {
+      const a = needAttribute(s, c.id)
       checkName(c.name)
+      checkUnit(c.unit)
+      if (a.kind !== 'number' && ((c.unit !== undefined && c.unit.trim() !== '') || c.siPrefixes === true)) fail('invalid_option')
+      checkDroppedOptions(s, a, c.options)
       return
-    case 'attribute.delete':
-      if (!s.attributes.some((a) => a.id === c.id)) fail('not_found')
+    }
+    case 'attribute.delete': {
+      needAttribute(s, c.id)
+      const withVariants = new Set(s.variants.map((v) => v.itemId))
+      if (s.itemAttributes.some((r) => r.attributeId === c.id && r.axisPosition !== null && withVariants.has(r.itemId))) {
+        fail('attribute_is_axis')
+      }
       return
+    }
     case 'unit.create':
       needInventory(s, c.inventoryId)
       checkName(c.name)

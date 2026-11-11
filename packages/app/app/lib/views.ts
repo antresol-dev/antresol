@@ -4,6 +4,7 @@ import {
   cmpQ,
   formatAmountParts,
   resolveUnit,
+  variantLabel,
   type Folder,
   type Id,
   type InventorySnapshot,
@@ -115,7 +116,7 @@ function buildIndex(s: InventorySnapshot): Index {
   const variants = new Map<Id, { name: string; archived: boolean }>()
   const activeVariantCount = new Map<Id, number>()
   for (const v of s.variants) {
-    variants.set(v.id, { name: v.name, archived: v.archivedAt !== null })
+    variants.set(v.id, { name: variantLabel(s, v), archived: v.archivedAt !== null })
     if (v.archivedAt === null) activeVariantCount.set(v.itemId, (activeVariantCount.get(v.itemId) ?? 0) + 1)
   }
 

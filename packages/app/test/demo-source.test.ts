@@ -1,7 +1,7 @@
-import { createSearch } from '@graymatter/core'
+import { createSearch, itemAxes, variantLabel } from '@graymatter/core'
 import type { Transaction } from '@electric-sql/pglite'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createDemoDriver, type DemoDriver } from '../app/lib/dev/demo-source'
+import { createDemoDriver, demoStorageName, type DemoDriver } from '../app/lib/dev/demo-source'
 import type { SourceConfig } from '../app/lib/types'
 
 /** The next `failNext` PGlite databases fail to open; the transaction number `failTransactionAt` (1-based, counted
@@ -48,6 +48,10 @@ afterEach(async () => {
 })
 
 describe('demo source', () => {
+  it('keeps its browser storage under a name carrying the schema version', () => {
+    expect(demoStorageName('demo')).toBe('idb://graymatter-dev-s3-demo')
+  })
+
   it('seeds two inventories with stock', async () => {
     const conn = await demo({ memory: true, extras: false }).connect(cfg)
     const invs = (await conn.storage.listInventories()).inventories
@@ -69,7 +73,9 @@ describe('demo source', () => {
     const snap = await conn.storage.loadInventory(all.find((i) => i.name === 'Electronics')!.id)
     expect(snap.folders.find((f) => f.name === 'Old projects')!.archivedAt).not.toBeNull()
     expect(snap.items.find((i) => i.name === 'CD4017')!.archivedAt).not.toBeNull()
-    expect(snap.variants.find((v) => v.name === '100k')!.archivedAt).not.toBeNull()
+    const resistorId = snap.items.find((i) => i.name === 'Резистор 0,25 Вт')!.id
+    const resistorVariants = snap.variants.filter((v) => v.itemId === resistorId)
+    expect(resistorVariants.find((v) => variantLabel(snap, v) === '100 kΩ')!.archivedAt).not.toBeNull()
   })
 
   it('seeds tags and attributes with extras, found by search', async () => {
@@ -78,7 +84,7 @@ describe('demo source', () => {
     const snap = await conn.storage.loadInventory(all.find((i) => i.name === 'Electronics')!.id)
     expect(snap.tags.map((x) => x.name).sort()).toEqual(['audio', 'smd'])
     expect(snap.attributes.map((a) => [a.name, a.kind, a.options])).toEqual(
-      expect.arrayContaining([['Package', 'enum', ['DIP-8', 'SOIC-8']], ['Resistance', 'text', []]]),
+      expect.arrayContaining([['Package', 'enum', ['DIP-8', 'SOIC-8']], ['Resistance', 'number', []]]),
     )
     const tl072 = snap.items.find((i) => i.name === 'TL072')!
     const resistor = snap.items.find((i) => i.name === 'Резистор 0,25 Вт')!
@@ -86,6 +92,29 @@ describe('demo source', () => {
     expect(search('DIP-8').map((h) => h.itemId)).toContain(tl072.id)
     expect(search('10 kΩ').map((h) => h.itemId)).toContain(resistor.id)
     expect(search('audio').map((h) => h.itemId)).toContain(tl072.id)
+  })
+
+  it('seeds variants by axes with number attributes and no text duplicate of the value', async () => {
+    const conn = await demo({ memory: true }).connect(cfg)
+    const all = (await conn.storage.listInventories()).inventories
+    const snap = await conn.storage.loadInventory(all.find((i) => i.name === 'Electronics')!.id)
+    const attr = (name: string) => snap.attributes.find((a) => a.name === name)!
+    for (const [name, unit] of [['Resistance', 'Ω'], ['Capacitance', 'F'], ['Voltage', 'V']] as const) {
+      expect([attr(name).kind, attr(name).unit, attr(name).siPrefixes]).toEqual(['number', unit, true])
+    }
+    const item = (name: string) => snap.items.find((i) => i.name === name)!
+    const labels = (id: string) => snap.variants.filter((v) => v.itemId === id).map((v) => variantLabel(snap, v))
+    expect(itemAxes(snap, item('Резистор 0,25 Вт').id).map((a) => a.name)).toEqual(['Resistance'])
+    expect(labels(item('Резистор 0,25 Вт').id).sort()).toEqual(['1 kΩ', '10 kΩ', '100 kΩ'])
+    const cap = item('Конденсатор керамический')
+    expect(itemAxes(snap, cap.id).map((a) => a.name)).toEqual(['Capacitance', 'Voltage'])
+    expect(labels(cap.id).length).toBeGreaterThanOrEqual(2)
+    const pkg = snap.itemAttributes.find((l) => l.itemId === item('TL072').id && l.attributeId === attr('Package').id)!
+    expect(pkg.value).toBe('DIP-8')
+    // No variant carries a text value of a nominal: variants hold values of axes only.
+    const axisLinks = new Set(snap.itemAttributes.filter((l) => l.axisPosition !== null).map((l) => `${l.itemId}/${l.attributeId}`))
+    const itemOf = new Map(snap.variants.map((v) => [v.id, v.itemId]))
+    for (const x of snap.variantAttributeValues) expect(axisLinks.has(`${itemOf.get(x.variantId)}/${x.attributeId}`)).toBe(true)
   })
 
   it('probe reports empty and never writes', async () => {
@@ -141,6 +170,6 @@ describe('demo source', () => {
     const all = (await conn.storage.listInventories()).inventories
     const snap = await conn.storage.loadInventory(all.find((i) => i.name === 'Electronics')!.id)
     expect(snap.items.map((i) => i.name)).toContain('TL072')
-    expect(snap.items).toHaveLength(4)
+    expect(snap.items).toHaveLength(5)
   })
 })

@@ -1,6 +1,6 @@
 import type { SchemaInspection } from '@graymatter/core'
 import type { PgExecutor } from './executor'
-import { APP_SCHEMA_VERSION } from './migrator'
+import { APP_SCHEMA_VERSION, SCHEMA_BASE } from './migrator'
 import { sql } from './sql'
 
 /** Schemas that belong to Postgres or the hosting platform, not to a user's data. */
@@ -38,6 +38,14 @@ export async function inspectSchema(exec: PgExecutor): Promise<SchemaInspection>
   if (counts.meta === 0) return { state: 'foreign' }
   const rows = await exec.query<{ value: string }>(sql`select value from gm_meta where key = 'schema_version'`)
   const dbVersion = rows[0] ? Number(rows[0].value) : 0
-  const state = dbVersion < APP_SCHEMA_VERSION ? 'older' : dbVersion === APP_SCHEMA_VERSION ? 'current' : 'newer'
+  // 1..SCHEMA_BASE: a pre-release build's schema, which ensureSchema refuses (`outdated`) rather than upgrades.
+  const state =
+    dbVersion >= 1 && dbVersion <= SCHEMA_BASE
+      ? 'outdated'
+      : dbVersion < APP_SCHEMA_VERSION
+        ? 'older'
+        : dbVersion === APP_SCHEMA_VERSION
+          ? 'current'
+          : 'newer'
   return { state, dbVersion, appVersion: APP_SCHEMA_VERSION }
 }

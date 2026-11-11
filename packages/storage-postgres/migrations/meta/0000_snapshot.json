@@ -1,5 +1,5 @@
 {
-  "id": "a19b3d5b-ac8a-42c4-bb64-ee472f40a675",
+  "id": "6fe5b407-565f-4529-94c0-8bcf0cd459ce",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -38,6 +38,20 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'{}'"
+        },
+        "unit": {
+          "name": "unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "si_prefixes": {
+          "name": "si_prefixes",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         },
         "created_at": {
           "name": "created_at",
@@ -104,7 +118,7 @@
       "checkConstraints": {
         "attributes_kind_check": {
           "name": "attributes_kind_check",
-          "value": "\"attributes\".\"kind\" in ('text', 'enum')"
+          "value": "\"attributes\".\"kind\" in ('text', 'enum', 'number')"
         }
       },
       "isRLSEnabled": false
@@ -475,9 +489,38 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "axis_position": {
+          "name": "axis_position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "item_attributes_axis_position_idx": {
+          "name": "item_attributes_axis_position_idx",
+          "columns": [
+            {
+              "expression": "item_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "axis_position",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"item_attributes\".\"axis_position\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "item_attributes_item_id_items_id_fk": {
           "name": "item_attributes_item_id_items_id_fk",
@@ -1218,12 +1261,6 @@
         "item_id": {
           "name": "item_id",
           "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "text",
           "primaryKey": false,
           "notNull": true
         },

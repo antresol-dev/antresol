@@ -119,10 +119,9 @@ describe('revision', () => {
 
   it('is changed by a migration batch', async () => {
     const exec = await makeExecutor()
-    await ensureSchema(exec)
     await exec.batch([
-      sql`update gm_meta set value = 'fixed' where key = 'rev'`,
-      sql`update gm_meta set value = '1' where key = 'schema_version'`,
+      sql`create table gm_meta (key text primary key, value text not null)`,
+      sql`insert into gm_meta (key, value) values ('rev', 'fixed')`,
     ])
     await ensureSchema(exec)
     const rows = await exec.query<{ value: string }>(sql`select value from gm_meta where key = 'rev'`)

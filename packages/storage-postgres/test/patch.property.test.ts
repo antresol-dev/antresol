@@ -2,6 +2,8 @@ import { PGlite } from '@electric-sql/pglite'
 import {
   cmpQ,
   customUnitKey,
+  duplicateOf,
+  itemAxes,
   newId,
   normalizeCommand,
   patchSnapshot,
@@ -9,6 +11,7 @@ import {
   validateCommand,
   type Actor,
   type ApplyResult,
+  type Attribute,
   type Command,
   type Id,
   type InventorySnapshot,
@@ -20,7 +23,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { PgExecutor } from '../src/executor'
 import { createPgliteExecutor } from '../src/executors/pglite'
 import { openPostgresStorage } from '../src/storage'
-import { TEST_ACTOR } from './helpers'
+import { attributeCreate, normSnapshot as norm, sliceOf, sorted, TEST_ACTOR, variantsCreate } from './helpers'
 
 // One database for the file: every run of the property seeds an inventory of its own (inventories are independent).
 let exec: PgExecutor
@@ -35,72 +38,34 @@ afterAll(async () => {
 
 type Snap = InventorySnapshot
 
-// ---- comparison without row order ----
-
-/** Patched rows are appended, a fresh load returns SQL order: compare with every array sorted by its key. Arrays inside
- *  rows (tagIds, options, prefixPowers) keep their order: both sides read them with the same query. */
-const sorted = <T>(rows: T[], key: (row: T) => string): T[] =>
-  [...rows].sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0))
 const byId = (row: { id: Id }) => row.id
-
-type ItemRows = Pick<Snap, 'items' | 'variants' | 'itemAttributes' | 'variantAttributeValues' | 'photos' | 'stock'>
-
-function normItemRows(s: ItemRows): ItemRows {
-  return {
-    items: sorted(s.items, byId),
-    variants: sorted(s.variants, byId),
-    itemAttributes: sorted(s.itemAttributes, (r) => `${r.itemId}|${r.attributeId}`),
-    variantAttributeValues: sorted(s.variantAttributeValues, (r) => `${r.variantId}|${r.attributeId}`),
-    photos: sorted(s.photos, byId),
-    stock: sorted(s.stock, (l) => `${l.itemId}|${l.variantId ?? ''}`),
-  }
-}
-
-function norm(s: Snap): Snap {
-  return {
-    ...s,
-    ...normItemRows(s),
-    folders: sorted(s.folders, byId),
-    tags: sorted(s.tags, byId),
-    attributes: sorted(s.attributes, byId),
-    units: sorted(s.units, byId),
-  }
-}
-
-/** One item's slice, as a patch carries it. */
-function sliceOf(s: Snap, itemId: Id): ItemRows {
-  const variantIds = new Set(s.variants.filter((v) => v.itemId === itemId).map((v) => v.id))
-  return normItemRows({
-    items: s.items.filter((i) => i.id === itemId),
-    variants: s.variants.filter((v) => v.itemId === itemId),
-    itemAttributes: s.itemAttributes.filter((r) => r.itemId === itemId),
-    variantAttributeValues: s.variantAttributeValues.filter((r) => variantIds.has(r.variantId)),
-    photos: s.photos.filter((p) => p.itemId === itemId),
-    stock: s.stock.filter((l) => l.itemId === itemId),
-  })
-}
 
 // ---- the seeded inventory ----
 
-/** 2 folders, 3 items with variants (one with stock), a tag, an enum attribute, a custom unit nobody uses yet. */
-async function seed(): Promise<{ inv: Id; items: Id[] }> {
+/** 2 folders, a tag, a custom unit nobody uses yet, four attributes (list, two numbers, text) and 4 items: one with a
+ *  number axis and two variants (and stock), one with two axes and two variants only the list axis tells apart, one
+ *  with shared values only, one with neither. `early`: the inventory as loaded before the variants were made and the
+ *  last item's axis was taken off again. */
+async function seed(): Promise<{ inv: Id; items: Id[]; early: { snapshot: Snap; rev: string } }> {
   const inv = newId()
-  const [shelf, box, tag, attr, unit] = [newId(), newId(), newId(), newId(), newId()]
-  const items = [newId(), newId(), newId()]
+  const [shelf, box, tag, unit] = [newId(), newId(), newId(), newId()]
+  const [color, ohm, volt, size] = [newId(), newId(), newId(), newId()]
+  const items = [newId(), newId(), newId(), newId()]
   const item = (id: Id, name: string, folderId: Id | null, extra: Partial<Extract<Command, { type: 'item.create' }>>) =>
     ({
       type: 'item.create', id, inventoryId: inv, folderId, name, description: null, unitKey: 'pcs', tagIds: [],
       initialReceipt: null, ...extra,
     }) satisfies Command
-  const variants = (itemId: Id, names: string[]): Command => ({
-    type: 'variant.createMany', itemId, variants: names.map((name) => ({ id: newId(), name })),
-  })
+  const axis = (itemId: Id, attributeId: Id): Command => ({ type: 'item.addAxis', itemId, attributeId, firstVariantId: newId() })
   const commands: Command[] = [
     { type: 'inventory.create', id: inv, name: 'Workshop', description: null, currency: 'USD' },
     { type: 'folder.create', id: shelf, inventoryId: inv, parentId: null, name: 'Shelf', description: null },
     { type: 'folder.create', id: box, inventoryId: inv, parentId: shelf, name: 'Box', description: 'Blue box' },
     { type: 'tag.create', id: tag, inventoryId: inv, name: 'fragile' },
-    { type: 'attribute.create', id: attr, inventoryId: inv, name: 'Color', kind: 'enum', options: ['red', 'blue'] },
+    attributeCreate(inv, color, 'Color', 'enum', { options: ['red', 'blue'] }),
+    attributeCreate(inv, ohm, 'Resistance', 'number', { unit: 'Ω', siPrefixes: true }),
+    attributeCreate(inv, volt, 'Voltage', 'number', { unit: 'V' }),
+    attributeCreate(inv, size, 'Size'),
     { type: 'unit.create', id: unit, inventoryId: inv, name: 'Roll', symbol: 'roll', prefixPowers: [] },
     item(items[0]!, 'Resistor', shelf, {
       tagIds: [tag],
@@ -108,12 +73,23 @@ async function seed(): Promise<{ inv: Id; items: Id[] }> {
     }),
     item(items[1]!, 'Cable', box, { unitKey: 'm' }),
     item(items[2]!, 'Glue', null, { description: 'Two-part' }),
-    variants(items[0]!, ['1k', '10k']),
-    variants(items[1]!, ['Red']),
-    variants(items[2]!, ['Small', 'Large']),
+    item(items[3]!, 'Fuse', shelf, {}),
+    axis(items[0]!, ohm),
+    axis(items[3]!, volt),
+    axis(items[1]!, size),
+    axis(items[1]!, color),
+    { type: 'item.setAttribute', itemId: items[2]!, attributeId: volt, value: '12' },
+    { type: 'item.setAttribute', itemId: items[2]!, attributeId: color, value: 'blue' },
+  ]
+  const later: Command[] = [
+    variantsCreate(items[0]!, [[newId(), { [ohm]: '1000' }], [newId(), { [ohm]: '10000' }]]),
+    variantsCreate(items[1]!, [[newId(), { [size]: 'S', [color]: 'red' }], [newId(), { [size]: 'S', [color]: 'blue' }]]),
+    { type: 'item.removeAxis', itemId: items[3]!, attributeId: volt },
   ]
   for (const c of commands) await storage.apply(c, TEST_ACTOR)
-  return { inv, items }
+  const early = await storage.loadInventoryWithRev(inv)
+  for (const c of later) await storage.apply(c, TEST_ACTOR)
+  return { inv, items, early }
 }
 
 // ---- the command generator ----
@@ -149,14 +125,16 @@ class Picks {
 // Value pools. Some values are invalid on purpose (an empty name, a duplicate, a foreign enum option): validateCommand
 // rejects them and the step is skipped, as the app would.
 const NAMES = ['Shelf', 'Box', 'box', ' Drawer ', 'Bin', '']
-const VARIANT_NAMES = ['S', 'M', 'L', 'Red', 'm']
 const DESCRIPTIONS = [null, 'Top shelf', '  ']
 const CURRENCIES = ['USD', 'EUR', 'JPY']
 const QUANTITIES: Quantity[] = ['1', '2', '0.5', '3.25', '0.000001', '12']
 const PRICES = [null, 0, 150, 1999]
 const URLS = [null, 'https://shop.example/p/1']
 const NOTES = [null, 'restock']
-const TEXT_VALUES = [null, 'blue', '42']
+const TEXT_VALUES = ['blue', '42', 'S', ' Red ', 'red']
+/** Canonical numbers, and one ('4.7k') that only a client parses: validateCommand rejects it. */
+const NUMBER_VALUES = ['1000', '4700', '10000', '0.0000001', '50', '-40', '4.7k']
+const UNITS = ['', 'Ω', 'V', 'mm']
 const PREFIXES = [[], [3], [-3, 3], [-6, -3]]
 const BUILTIN_UNIT_KEYS = ['pcs', 'm', 'g', 'l']
 
@@ -170,6 +148,11 @@ const archiveIds = (s: Snap): Id[] => {
   return [...new Set(rows.map((r) => r.archiveId).filter((id): id is Id => id !== null))]
 }
 const archived = <T extends { archivedAt: string | null }>(rows: T[]) => rows.filter((r) => r.archivedAt !== null)
+/** Values that fit the attribute's kind, and one that does not (a foreign option, a number only a client parses). */
+const valuesFor = (a: Attribute): string[] =>
+  a.kind === 'enum' ? [...a.options, 'purple'] : a.kind === 'number' ? NUMBER_VALUES : TEXT_VALUES
+const axisRows = (s: Snap) => s.itemAttributes.filter((r) => r.axisPosition !== null)
+const itemsWithAxes = (s: Snap) => [...new Set(axisRows(s).map((r) => r.itemId))]
 
 /** A stock bucket of a random item: the item itself or one of its variants. */
 function bucket(s: Snap, p: Picks): { itemId: Id; variantId: Id | null } {
@@ -274,15 +257,17 @@ const GENERATORS: Record<Command['type'], Generator> = {
     ready: (s) => s.items.length > 0 && s.attributes.length > 0,
     build: (s, p) => {
       const attribute = p.one(s.attributes)
-      const values = attribute.kind === 'enum' ? [null, ...attribute.options, 'purple'] : TEXT_VALUES
-      return { type: 'item.setAttribute', itemId: p.one(ids(s.items)), attributeId: attribute.id, value: p.one(values) }
+      return {
+        type: 'item.setAttribute', itemId: p.one(ids(s.items)), attributeId: attribute.id,
+        value: p.oneOrNull(valuesFor(attribute)),
+      }
     },
   },
   'item.removeAttribute': {
     weight: 2,
     ready: (s) => s.items.length > 0 && s.attributes.length > 0,
     build: (s, p) => {
-      // Mostly a value the item has, so the delete removes something.
+      // Mostly an attribute the item has, shared or an axis, so the delete removes something.
       const row = s.itemAttributes.length > 0 && p.bool() ? p.one(s.itemAttributes) : null
       return {
         type: 'item.removeAttribute',
@@ -291,31 +276,73 @@ const GENERATORS: Record<Command['type'], Generator> = {
       }
     },
   },
-  'variant.createMany': {
+  'item.addAxis': {
+    weight: 3,
+    ready: (s) => s.items.length > 0 && s.attributes.length > 0,
+    build: (s, p) => {
+      // Mostly a shared attribute the item has, so its value moves to the variants or becomes the first variant.
+      const shared = s.itemAttributes.filter((r) => r.axisPosition === null)
+      const row = shared.length > 0 && p.bool() ? p.one(shared) : null
+      return {
+        type: 'item.addAxis',
+        itemId: row?.itemId ?? p.one(ids(s.items)),
+        attributeId: row?.attributeId ?? p.one(ids(s.attributes)),
+        firstVariantId: newId(),
+      }
+    },
+  },
+  'item.removeAxis': {
+    weight: 3,
+    ready: (s) => axisRows(s).length > 0,
+    build: (s, p) => {
+      const row = p.one(axisRows(s))
+      return { type: 'item.removeAxis', itemId: row.itemId, attributeId: row.attributeId }
+    },
+  },
+  'item.reorderAxes': {
     weight: 2,
+    ready: (s) => itemsWithAxes(s).length > 0,
+    build: (s, p) => {
+      const itemId = p.one(itemsWithAxes(s))
+      const axes = ids(itemAxes(s, itemId))
+      const at = p.nat(axes.length)
+      const rotated = [...axes.slice(at), ...axes.slice(0, at)]
+      return { type: 'item.reorderAxes', itemId, attributeIds: p.bool() ? rotated.reverse() : rotated }
+    },
+  },
+  'variant.createMany': {
+    weight: 3,
     ready: has('items'),
-    build: (s, p) => ({
-      type: 'variant.createMany',
-      itemId: p.one(ids(s.items)),
-      variants: Array.from({ length: 1 + p.nat(2) }, () => ({ id: newId(), name: p.one(VARIANT_NAMES) })),
-    }),
+    build: (s, p) => {
+      // Mostly an item with axes; one without is refused (axis_required).
+      const withAxes = itemsWithAxes(s)
+      const itemId = withAxes.length > 0 && p.nat(4) > 0 ? p.one(withAxes) : p.one(ids(s.items))
+      const axes = itemAxes(s, itemId)
+      return variantsCreate(
+        itemId,
+        Array.from({ length: 1 + p.nat(2) }, () => [
+          newId(),
+          Object.fromEntries(axes.map((a) => [a.id, p.one(valuesFor(a))])),
+        ]),
+      )
+    },
   },
   'variant.update': {
     weight: 2,
     ready: has('variants'),
-    build: (s, p) => ({
-      type: 'variant.update', id: p.one(ids(s.variants)), name: p.maybe(() => p.one(VARIANT_NAMES)),
-      description: p.maybe(() => p.one(DESCRIPTIONS)),
-    }),
+    build: (s, p) => ({ type: 'variant.update', id: p.one(ids(s.variants)), description: p.one(DESCRIPTIONS) }),
   },
   'variant.setAttribute': {
-    weight: 2,
+    weight: 3,
     ready: (s) => s.variants.length > 0 && s.attributes.length > 0,
     build: (s, p) => {
-      const attribute = p.one(s.attributes)
-      const values = attribute.kind === 'enum' ? [null, ...attribute.options] : TEXT_VALUES
+      const variant = p.one(s.variants)
+      // Mostly an axis of the variant's item; any other attribute is refused (not_an_axis). Null erases the value.
+      const axes = itemAxes(s, variant.itemId)
+      const attribute = axes.length > 0 && p.nat(4) > 0 ? p.one(axes) : p.one(s.attributes)
       return {
-        type: 'variant.setAttribute', variantId: p.one(ids(s.variants)), attributeId: attribute.id, value: p.one(values),
+        type: 'variant.setAttribute', variantId: variant.id, attributeId: attribute.id,
+        value: p.oneOrNull(valuesFor(attribute)),
       }
     },
   },
@@ -332,20 +359,26 @@ const GENERATORS: Record<Command['type'], Generator> = {
   'attribute.create': {
     weight: 2,
     build: (s, p) => {
-      const kind = p.bool() ? 'enum' : 'text'
-      return {
-        type: 'attribute.create', id: newId(), inventoryId: s.inventory.id, name: p.one(NAMES), kind,
+      const kind = p.one(['text', 'enum', 'number'] as const)
+      return attributeCreate(s.inventory.id, newId(), p.one(NAMES), kind, {
         options: kind === 'enum' ? p.one([['red', 'blue'], ['S', 'M', 'L']]) : [],
-      }
+        unit: kind === 'number' ? p.one(UNITS) : '',
+        siPrefixes: kind === 'number' && p.bool(),
+      })
     },
   },
   'attribute.update': {
     weight: 2,
     ready: has('attributes'),
-    build: (s, p) => ({
-      type: 'attribute.update', id: p.one(ids(s.attributes)), name: p.maybe(() => p.one(NAMES)),
-      options: p.maybe(() => p.one([['red', 'blue', 'green'], ['blue']])),
-    }),
+    build: (s, p) => {
+      const attribute = p.one(s.attributes)
+      return {
+        type: 'attribute.update', id: attribute.id, name: p.maybe(() => p.one(NAMES)),
+        options: attribute.kind === 'enum' ? p.maybe(() => p.one([['red', 'blue', 'green'], ['blue']])) : undefined,
+        unit: attribute.kind === 'number' ? p.maybe(() => p.one(UNITS)) : undefined,
+        siPrefixes: attribute.kind === 'number' ? p.maybe(() => p.bool()) : undefined,
+      }
+    },
   },
   'attribute.delete': {
     weight: 1,
@@ -481,53 +514,135 @@ function chooseType(s: Snap, n: number): Command['type'] {
   throw new Error('unreachable')
 }
 
-const stepArb = fc.record({ kind: fc.nat(), numbers: fc.array(fc.nat(), { minLength: 16, maxLength: 16 }) })
+/** `device`: who writes the step and whether the other device syncs after it (see the property). */
+const stepArb = fc.record({
+  kind: fc.nat(),
+  device: fc.nat(),
+  numbers: fc.array(fc.nat(), { minLength: 16, maxLength: 16 }),
+})
+
+const OTHER: Actor = { device: 'Other · Vitest' }
+
+/** Commands that passed validateCommand against an up-to-date copy and still failed in the database, with the reason:
+ *  each one is a bug (a constraint the SQL breaks, e.g. the unique axis position), never an expected skip. */
+const refusedByDatabase: string[] = []
+/** The same for commands validated on an older copy, where a refusal can be expected: a row the command names was
+ *  deleted since (a foreign key). The app answers it with a Sync (sync spec §4.2). */
+const refusedStale: string[] = []
 
 /** Applies a command the way the app does: normalized, validated against the copy, sent. Null when skipped: rejected by
- *  validateCommand or by the database. */
-async function send(c: Command, copy: Snap, actor: Actor = TEST_ACTOR): Promise<ApplyResult | null> {
+ *  validateCommand, or by the database (recorded in `refusedByDatabase`, or in `refusedStale` for an older copy). */
+async function send(c: Command, copy: Snap, actor: Actor = TEST_ACTOR, stale = false): Promise<ApplyResult | null> {
   if (validateCommand(c, copy)) return null
   try {
     return await storage.apply(c, actor)
   } catch (e) {
-    if (e instanceof StorageError && e.code === 'failed') return null
+    if (e instanceof StorageError && e.code === 'failed') {
+      ;(stale ? refusedStale : refusedByDatabase).push(`${c.type}: ${e.message}`)
+      return null
+    }
     throw e
   }
 }
 
+// ---- rules the database keeps whatever copy a command was validated on (spec 2026-11-11 variants §4.5-4.7) ----
+
+/** Variants of the item that have another variant with the same values on every axis. */
+function duplicates(s: Snap, itemId: Id): number {
+  const values = (variantId: Id) =>
+    new Map(s.variantAttributeValues.filter((r) => r.variantId === variantId).map((r) => [r.attributeId, r.value]))
+  return s.variants.filter((v) => v.itemId === itemId && duplicateOf(s, itemId, values(v.id), v.id) !== null).length
+}
+
+/** An item with variants keeps an axis; a variant holds values on its item's axes only. */
+function checkAxes(s: Snap, label: string): void {
+  const axes = new Set(axisRows(s).map((r) => `${r.itemId}|${r.attributeId}`))
+  const withAxes = new Set(itemsWithAxes(s))
+  const itemOf = new Map(s.variants.map((v) => [v.id, v.itemId]))
+  expect(s.variants.filter((v) => !withAxes.has(v.itemId)).map(byId), `${label}: variants of an item without axes`).toEqual([])
+  expect(
+    s.variantAttributeValues.filter((r) => !axes.has(`${itemOf.get(r.variantId)}|${r.attributeId}`)),
+    `${label}: variant values off the axes`,
+  ).toEqual([])
+}
+
+/** The item and attribute of a command that takes an axis off an item. */
+const removal = (c: Command): { itemId: Id; attributeId: Id } | null =>
+  c.type === 'item.removeAxis' || c.type === 'item.removeAttribute' ? c : null
+
 describe('patch property', () => {
-  it('patch equals a fresh load after every command', { timeout: 180_000 }, async () => {
+  it('patch equals a fresh load after every command, from either device', { timeout: 180_000 }, async () => {
     const applied = new Map<Command['type'], number>()
+    let staleWrites = 0
     await fc.assert(
       fc.asyncProperty(fc.array(stepArb, { maxLength: 15, size: 'max' }), fc.context(), async (steps, ctx) => {
-        const { inv } = await seed()
-        // The local copy: patched after each write, replaced by a fresh load when a write returns no patch.
-        let copy = (await storage.loadInventoryWithRev(inv)).snapshot
+        const { inv, early } = await seed()
+        // This device's copy: patched after each write, its own or the other device's (it always holds what the database
+        // held before the write), replaced by a fresh load when a write returns no patch.
+        const loaded = await storage.loadInventoryWithRev(inv)
+        let copy = loaded.snapshot
+        let rev = loaded.rev
+        // The other device's copy and its known revision (null: marked stale), loaded before the seed's variants were
+        // made. It validates its commands on this copy, which falls behind whenever this device writes, and is patched
+        // with its own writes as the app does.
+        let theirs: { copy: Snap; rev: string | null } = { copy: early.snapshot, rev: early.rev }
         for (const [i, step] of steps.entries()) {
-          const c = normalizeCommand(GENERATORS[chooseType(copy, step.kind)].build(copy, new Picks(step.numbers)))
-          const r = await send(c, copy)
-          if (!r) continue
-          ctx.log(`#${i} ${JSON.stringify(c)} -> ${r.patch ? `patch for ${r.patch.inventoryId}` : 'reload'}`)
+          const other = step.device % 2 === 0
+          const base = other ? theirs.copy : copy
+          const behind = other && theirs.rev !== rev
+          const c = normalizeCommand(GENERATORS[chooseType(base, step.kind)].build(base, new Picks(step.numbers)))
+          const refusals = refusedStale.length
+          const r = await send(c, base, other ? OTHER : TEST_ACTOR, behind)
+          if (!r) {
+            // A write the database refused: the other device syncs at once (sync spec §4.2).
+            if (refusedStale.length > refusals) theirs = { copy, rev }
+            continue
+          }
+          const label = `#${i} ${other ? 'other ' : ''}${c.type}`
+          ctx.log(`${label} ${JSON.stringify(c)} -> ${r.patch ? `patch for ${r.patch.inventoryId}` : 'reload'}`)
           applied.set(c.type, (applied.get(c.type) ?? 0) + 1)
+          if (behind) staleWrites++
 
           if (c.type === 'deletePermanently' && c.target === 'inventory') {
-            // Nothing left to load: the inventory is gone, and so is the run.
             const list = await storage.listInventories()
             expect(r.patch).toBeNull()
             expect(r.rev).toBe(list.rev)
-            expect(list.inventories.map(byId)).not.toContain(inv)
-            return
+            // Nothing left to load: the inventory is gone, and so is the run. Only a copy that is behind (the inventory
+            // was restored since) names an inventory the database keeps.
+            if (!list.inventories.some((x) => x.id === inv)) return
+            expect(behind, `${label}: an archived inventory the database kept`).toBe(true)
           }
 
           const after = await storage.loadInventoryWithRev(inv)
           expect(r.rev).toBe(after.rev)
+          expect(r.prevRev, `${label}: the revision before the write`).toBe(rev)
+          const before = copy
           if (r.patch) {
             // A patch for another inventory (inventory.create) leaves this copy as it is, and it must still match.
             if (r.patch.inventoryId === inv) copy = patchSnapshot(copy, r.patch)
-            expect(norm(copy), `after #${i} ${c.type}`).toEqual(norm(after.snapshot))
+            expect(norm(copy), `after ${label}`).toEqual(norm(after.snapshot))
           } else {
             copy = after.snapshot
           }
+          rev = after.rev
+
+          checkAxes(copy, `after ${label}`)
+          const removed = removal(c)
+          if (removed) {
+            // Never makes variants equal; and a removal validated on an up-to-date copy is carried out, not skipped.
+            expect(duplicates(copy, removed.itemId), `${label}: equal variants`).toBeLessThanOrEqual(
+              duplicates(before, removed.itemId),
+            )
+            if (!behind) expect(itemAxes(copy, removed.itemId).map(byId)).not.toContain(removed.attributeId)
+          }
+
+          if (other) {
+            // Its rows are applied either way; a revision before the write other than the known one marks the copy stale.
+            const patched = r.patch?.inventoryId === inv ? patchSnapshot(theirs.copy, r.patch) : theirs.copy
+            theirs = r.patch ? { copy: patched, rev: r.prevRev === theirs.rev ? r.rev : null } : { copy, rev }
+          }
+          // Now and then the other device syncs: one full load when its known revision is not the source's.
+          if (step.device % 6 === 1 && theirs.rev !== rev) theirs = { copy, rev }
         }
       }),
       // A failure shrinks for at most the time limit, then reports the smallest case found so far. failOnInterrupt: a
@@ -535,6 +650,9 @@ describe('patch property', () => {
       { numRuns: 200, plugins: [fc.interruptAfterTimeLimit(120_000, { failOnInterrupt: true })] },
     )
     expect(COMMAND_TYPES.filter((t) => !applied.has(t)), 'command types no run applied').toEqual([])
+    expect(refusedByDatabase, 'valid commands the database refused').toEqual([])
+    expect(refusedStale.filter((m) => !/foreign key/.test(m)), 'stale commands refused for another reason').toEqual([])
+    expect(staleWrites, 'writes validated on an older copy').toBeGreaterThan(100)
   })
 
   it('a foreign write between own writes shows as a different prevRev', async () => {

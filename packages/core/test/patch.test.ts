@@ -29,10 +29,10 @@ function deepFreeze<T>(o: T): T {
 function base() {
   return makeSnapshot({
     items: [item('a', 'A'), item('b', 'B')],
-    variants: [variant('a1', 'a', 'A1'), variant('b1', 'b', 'B1')],
+    variants: [variant('a1', 'a'), variant('b1', 'b')],
     itemAttributes: [
-      { itemId: 'a', attributeId: 'x', value: '1' },
-      { itemId: 'b', attributeId: 'x', value: '2' },
+      { itemId: 'a', attributeId: 'x', value: '1', axisPosition: null },
+      { itemId: 'b', attributeId: 'x', value: '2', axisPosition: null },
     ],
     variantAttributeValues: [
       { variantId: 'a1', attributeId: 'y', value: 'old' },
@@ -52,8 +52,8 @@ describe('patchSnapshot', () => {
       emptyPatch({
         itemIds: ['a'],
         items: [a2],
-        variants: [variant('a2', 'a', 'A2')],
-        itemAttributes: [{ itemId: 'a', attributeId: 'x', value: '9' }],
+        variants: [variant('a2', 'a')],
+        itemAttributes: [{ itemId: 'a', attributeId: 'x', value: '9', axisPosition: null }],
         variantAttributeValues: [{ variantId: 'a2', attributeId: 'y', value: 'new' }],
         photos: [photo('pa2', 'a')],
         stock: [stockLine('a', 'a2', '5')],
@@ -85,7 +85,7 @@ describe('patchSnapshot', () => {
 
   it('drops attribute values of a variant the item no longer has', () => {
     const s = base()
-    const out = patchSnapshot(s, emptyPatch({ itemIds: ['a'], items: [item('a', 'A')], variants: [variant('a2', 'a', 'A2')] }))
+    const out = patchSnapshot(s, emptyPatch({ itemIds: ['a'], items: [item('a', 'A')], variants: [variant('a2', 'a')] }))
     expect(out.variantAttributeValues.map((r) => r.variantId)).toEqual(['b1'])
   })
 

@@ -4,11 +4,13 @@ CREATE TABLE "attributes" (
 	"name" text NOT NULL,
 	"kind" text NOT NULL,
 	"options" text[] DEFAULT '{}' NOT NULL,
+	"unit" text DEFAULT '' NOT NULL,
+	"si_prefixes" boolean DEFAULT false NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"created_by" text NOT NULL,
 	"updated_by" text NOT NULL,
-	CONSTRAINT "attributes_kind_check" CHECK ("attributes"."kind" in ('text', 'enum'))
+	CONSTRAINT "attributes_kind_check" CHECK ("attributes"."kind" in ('text', 'enum', 'number'))
 );
 --> statement-breakpoint
 CREATE TABLE "custom_units" (
@@ -54,6 +56,7 @@ CREATE TABLE "item_attributes" (
 	"item_id" uuid NOT NULL,
 	"attribute_id" uuid NOT NULL,
 	"value" text,
+	"axis_position" integer,
 	CONSTRAINT "item_attributes_item_id_attribute_id_pk" PRIMARY KEY("item_id","attribute_id")
 );
 --> statement-breakpoint
@@ -127,7 +130,6 @@ CREATE TABLE "variant_attribute_values" (
 CREATE TABLE "variants" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"item_id" uuid NOT NULL,
-	"name" text NOT NULL,
 	"description" text,
 	"position" integer NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -163,6 +165,7 @@ CREATE INDEX "folders_inventory_id_idx" ON "folders" USING btree ("inventory_id"
 CREATE INDEX "folders_parent_id_idx" ON "folders" USING btree ("parent_id");--> statement-breakpoint
 CREATE INDEX "folders_archive_id_idx" ON "folders" USING btree ("archive_id");--> statement-breakpoint
 CREATE INDEX "inventories_archive_id_idx" ON "inventories" USING btree ("archive_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "item_attributes_axis_position_idx" ON "item_attributes" USING btree ("item_id","axis_position") WHERE "item_attributes"."axis_position" is not null;--> statement-breakpoint
 CREATE INDEX "items_inventory_id_idx" ON "items" USING btree ("inventory_id");--> statement-breakpoint
 CREATE INDEX "items_folder_id_idx" ON "items" USING btree ("folder_id");--> statement-breakpoint
 CREATE INDEX "items_archive_id_idx" ON "items" USING btree ("archive_id");--> statement-breakpoint
@@ -172,4 +175,5 @@ CREATE INDEX "movements_variant_id_idx" ON "movements" USING btree ("variant_id"
 CREATE INDEX "photos_item_id_idx" ON "photos" USING btree ("item_id");--> statement-breakpoint
 CREATE INDEX "tags_inventory_id_idx" ON "tags" USING btree ("inventory_id");--> statement-breakpoint
 CREATE INDEX "variants_archive_id_idx" ON "variants" USING btree ("archive_id");--> statement-breakpoint
-CREATE INDEX "variants_item_id_idx" ON "variants" USING btree ("item_id");
+CREATE INDEX "variants_item_id_idx" ON "variants" USING btree ("item_id");--> statement-breakpoint
+INSERT INTO "gm_meta" ("key", "value") VALUES ('rev', gen_random_uuid()::text) ON CONFLICT ("key") DO NOTHING;

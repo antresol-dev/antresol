@@ -5,6 +5,7 @@ import {
   itemStock,
   newId,
   resolveUnit,
+  variantLabel,
   type InventorySnapshot,
   type InventoryStorage,
   type Photo,
@@ -51,13 +52,17 @@ beforeAll(async () => {
   snap = await storage.loadInventory(inventoryId)
 })
 
+/** A demo resistor's variant by its value (`10k` finds `10 kΩ`): variants have no names, only labels. */
+const byValue = (s: InventorySnapshot, itemId: string, value: string) =>
+  s.variants.find((v) => v.itemId === itemId && variantLabel(s, v).replace(/\s/g, '').toLowerCase().startsWith(value))!
+
 describe('folderView', () => {
   it('lists root folders by name with subtree item counts', () => {
     const v = folderView(snap, null)!
     expect(v.folder).toBeNull()
     expect(v.crumbs).toEqual([])
     expect(names(v.folders)).toEqual(['ICs', 'Passive components', expect.stringContaining('Очень длинное')])
-    expect(v.folders.map((f) => f.itemCount)).toEqual([3, 1, 0])
+    expect(v.folders.map((f) => f.itemCount)).toEqual([3, 2, 0])
   })
 
   it('builds crumbs and item rows', () => {
@@ -114,7 +119,7 @@ describe('searchRows', () => {
   it('describes a variant hit with its path', () => {
     const hits = createSearch(snap).search('10k')
     const rows = searchRows(snap, hits)
-    const row = rows.find((r) => r.variantName === '10k')!
+    const row = rows.find((r) => r.variantName === variantLabel(snap, byValue(snap, snap.items.find((i) => i.name === 'Резистор 0,25 Вт')!.id, '10k')))!
     expect(row.number).toBe('100')
     expect(row.path).toBe('Passive components / Resistors')
   })
@@ -129,7 +134,7 @@ describe('folderTree', () => {
 
   it('counts active items in each subtree, like the folder list', () => {
     const tree = folderTree(snap)
-    expect(tree.map((n) => n.itemCount)).toEqual([3, 1, 0])
+    expect(tree.map((n) => n.itemCount)).toEqual([3, 2, 0])
     expect(tree[0]!.children.map((n) => n.itemCount)).toEqual([1])
     expect(tree[1]!.children.map((n) => [n.name, n.itemCount])).toEqual([['Resistors', 1]])
     expect(tree.map((n) => n.itemCount)).toEqual(folderView(snap, null)!.folders.map((f) => f.itemCount))
@@ -138,10 +143,10 @@ describe('folderTree', () => {
 
 describe('inventoryItemCount', () => {
   it('counts active items in the whole inventory', () => {
-    expect(inventoryItemCount(snap)).toBe(4)
+    expect(inventoryItemCount(snap)).toBe(5)
     const s = structuredClone(snap)
     s.items.find((i) => i.name === 'TL072')!.archivedAt = '2026-11-10T00:00:00Z'
-    expect(inventoryItemCount(s)).toBe(3)
+    expect(inventoryItemCount(s)).toBe(4)
   })
 })
 
@@ -177,7 +182,7 @@ describe('index and edge cases', () => {
     const inv = (await own.listInventories()).inventories.find((i) => i.name === 'Electronics')!.id
     let s = await own.loadInventory(inv)
     const resistor = s.items.find((i) => i.name === 'Резистор 0,25 Вт')!.id
-    const v100k = s.variants.find((v) => v.itemId === resistor && v.name === '100k')!.id
+    const v100k = byValue(s, resistor, '100k').id
     await own.apply(
       { type: 'stock.receive', movementId: newId(), itemId: resistor, variantId: v100k, quantity: '7', totalPrice: null, sourceUrl: null, note: null },
       { device: 'Test' },
@@ -196,7 +201,7 @@ describe('index and edge cases', () => {
       }
     }
     expect(seen).toContain('Резистор 0,25 Вт 100')
-    expect(seen).toHaveLength(4)
+    expect(seen).toHaveLength(5)
   })
 
   it('uses the lowest-position item photo and ignores variant photos', () => {
@@ -217,7 +222,7 @@ describe('index and edge cases', () => {
   it('gives search rows the cover, and the variant photo when a variant matched', () => {
     const s = clone()
     const item = s.items.find((i) => i.name === 'Резистор 0,25 Вт')!
-    const variant = s.variants.find((v) => v.itemId === item.id && v.name === '10k')!
+    const variant = byValue(s, item.id, '10k')
     s.photos = [
       photo(item.id, null, 0, 'cover.jpg'),
       photo(item.id, variant.id, 3, 'v-late.jpg'),

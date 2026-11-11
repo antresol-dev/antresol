@@ -161,6 +161,9 @@ export function affectedReads(c: Command): AffectedReads | null {
       return itemSlice(id(c.id))
     case 'item.setAttribute':
     case 'item.removeAttribute':
+    case 'item.addAxis':
+    case 'item.removeAxis':
+    case 'item.reorderAxes':
     case 'variant.createMany':
     case 'stock.receive':
     case 'stock.use':

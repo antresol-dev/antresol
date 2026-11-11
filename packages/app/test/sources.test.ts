@@ -2,7 +2,7 @@ import { PGlite } from '@electric-sql/pglite'
 import { StorageError } from '@graymatter/core'
 import { createPgliteExecutor, inspectSchema, type PgExecutor } from '@graymatter/storage-postgres'
 import { describe, expect, it } from 'vitest'
-import { checkConnectionString, createNeonDriver, redactSecret } from '../app/lib/sources'
+import { canSaveSource, checkConnectionString, classifyFailure, createNeonDriver, redactSecret } from '../app/lib/sources'
 import type { SourceConfig } from '../app/lib/types'
 
 const cfg = (connectionString = 'postgresql://u:secret@h/db'): SourceConfig => ({
@@ -48,6 +48,24 @@ describe('createNeonDriver', () => {
     await expect(driver.connect(cfg())).rejects.toMatchObject({ code: 'incompatible' })
   })
 
+  it('rejects a pre-release database as outdated, classified as outdated', async () => {
+    const db = new PGlite()
+    await db.exec("create table gm_meta (key text primary key, value text not null); insert into gm_meta values ('schema_version', '2')")
+    const driver = createNeonDriver(() => createPgliteExecutor(db))
+    const err = await driver.connect(cfg()).catch((e) => e)
+    expect(err).toMatchObject({ code: 'outdated' })
+    expect(classifyFailure(err)).toBe('outdated')
+  })
+
+  it('probes a pre-release database as outdated, which cannot be saved', async () => {
+    const db = new PGlite()
+    await db.exec("create table gm_meta (key text primary key, value text not null); insert into gm_meta values ('schema_version', '2')")
+    const driver = createNeonDriver(() => createPgliteExecutor(db))
+    const res = await driver.probe(cfg())
+    expect(res).toMatchObject({ ok: true, inspection: { state: 'outdated', dbVersion: 2 } })
+    expect(res.ok && canSaveSource(res.inspection)).toBe(false)
+  })
+
   it('maps unavailable to unreachable', async () => {
     const failing = failingExecutor(new StorageError('unavailable'))
     const res = await createNeonDriver(() => failing).probe(cfg())
@@ -65,6 +83,18 @@ describe('createNeonDriver', () => {
     const nodb = Object.assign(new Error('x'), { code: '3D000' })
     expect(await createNeonDriver(() => failingExecutor(nodb)).probe(cfg())).toMatchObject({ reason: 'no_database' })
     expect(await createNeonDriver(() => failingExecutor(new Error('boom'))).probe(cfg())).toMatchObject({ reason: 'failed' })
+  })
+})
+
+describe('canSaveSource', () => {
+  it('saves an empty, older, current or newer source, not a foreign or pre-release one', () => {
+    const v = { dbVersion: 3, appVersion: 3 }
+    expect(canSaveSource({ state: 'empty' })).toBe(true)
+    expect(canSaveSource({ state: 'older', ...v })).toBe(true)
+    expect(canSaveSource({ state: 'current', ...v })).toBe(true)
+    expect(canSaveSource({ state: 'newer', ...v })).toBe(true)
+    expect(canSaveSource({ state: 'foreign' })).toBe(false)
+    expect(canSaveSource({ state: 'outdated', ...v })).toBe(false)
   })
 })
 

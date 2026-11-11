@@ -64,14 +64,16 @@
     "variantsTitle": "Variants",
     "noVariant": "No variant",
     "attributes": "Attributes",
-    "differsByVariant": "Differs by variant",
     "noValue": "—",
     "noValueLabel": "No value",
+    "numberHint": "= {value}",
     "addAttribute": "Add attribute",
     "editValue": "Edit value",
+    "makeAxis": "Make it a variant axis",
+    "editVariant": "Edit variant",
     "removeAttribute": "Remove",
     "removeAttributeTitle": "Remove attribute?",
-    "removeAttributeConfirm": "“{name}” and its values on this item and its variants will be removed."
+    "removeAttributeConfirm": "“{name}” and its value on this item will be removed."
   },
   "attributeSheet": {
     "addTitle": "Add attribute",
@@ -86,11 +88,44 @@
     "type": "Type",
     "text": "Text",
     "list": "List",
+    "number": "Number",
+    "typeNumber": "Number",
+    "typeNumberUnit": "Number, {unit}",
+    "unit": "Unit",
+    "unitHint": "Optional, up to 16 characters: Ω, V, mm.",
+    "unitTooLong": "The unit can’t be longer than 16 characters.",
+    "siPrefixes": "SI prefixes",
+    "siExample": "Example: {example}",
     "options": "Options",
     "hint": "One per line or separated by commas: DIP-8, SOIC-8",
     "optionsRequired": "Add at least one option.",
     "create": "Create",
     "save": "Save"
+  },
+  "axes": {
+    "by": "by {axes}",
+    "menu": "Variant attributes",
+    "add": "Add attribute variants differ by",
+    "addTitle": "Add attribute variants differ by",
+    "addHint": "Each variant gets its own value of it. If this item already has a value for it, the variants it has keep that value.",
+    "dropTitle": "Make “{name}” a variant attribute?",
+    "dropBody": "This item’s value for “{name}” is {value}. A variant attribute has a value per variant, and this item has no variants yet, so that value will be removed.",
+    "dropConfirm": "Make variant attribute",
+    "addConfirm": "Add",
+    "reorder": "Reorder",
+    "reorderTitle": "Reorder attributes",
+    "moveUp": "Move {name} up",
+    "moveDown": "Move {name} down",
+    "makeShared": "Make shared: {name}",
+    "remove": "Remove: {name}",
+    "shareTitle": "Make “{name}” shared?",
+    "shareSame": "Every variant has the same value, so it becomes the item’s own. These variants’ values on “{name}” are removed:",
+    "shareLoses": "The values these variants have for “{name}” will be removed:",
+    "shareConfirm": "Make shared",
+    "removeTitle": "Remove “{name}”?",
+    "removeLoses": "The attribute and the values these variants have for it will be removed:",
+    "removeConfirm": "Remove",
+    "collisions": "These variants would become the same:"
   },
   "journal": {
     "title": "History",
@@ -126,10 +161,39 @@
     "open": "Add variants",
     "title": "Add variants",
     "names": "Variants",
-    "hint": "One per line or separated by commas: 1k, 10k, 100k",
+    "hintOne": "One per line or separated by commas, by {axis}",
+    "hintMany": "One variant per line, values separated by “;” in this order: {axes}",
+    "preview": "How the values were read",
+    "exists": "already exists",
+    "inArchive": "in the archive",
+    "restore": "Restore",
+    "repeat": "repeated, skipped",
+    "rule": "Variants differ only by values like resistance. If they look different, make separate items.",
+    "axis": "Differs by",
+    "axisPlaceholder": "Choose an attribute",
+    "createAttribute": "Create a new attribute",
+    "pickAttribute": "Choose an existing attribute",
+    "number": "Number",
+    "unit": "Unit",
+    "siPrefixes": "SI prefixes",
+    "continue": "Continue",
     "add": "Add"
   },
-  "variantForm": { "save": "Save" },
+  "variantForm": {
+    "save": "Save",
+    "description": "Description",
+    "exists": "These values match a variant that already exists.",
+    "inArchive": "These values match a variant in the archive.",
+    "restore": "Restore"
+  },
+  "variantValues": {
+    "title": "Values",
+    "save": "Save",
+    "empty": "No attributes to fill in.",
+    "exists": "{label} would match a variant that already exists.",
+    "inArchive": "{label} would match a variant in the archive.",
+    "restore": "Restore"
+  },
   "photos": {
     "add": "Add photos",
     "addTitle": "Add photos",
@@ -292,6 +356,7 @@
     "result": {
       "empty": "This source is empty. GrayMatter will set it up.",
       "older": "An older GrayMatter source. It will be upgraded.",
+      "outdated": "This database was made by a pre-release version of GrayMatter. Reset it to use it here.",
       "current": "Ready to use.",
       "newer": "This source was updated by a newer GrayMatter",
       "foreign": "This database already has other tables. Use an empty Neon database for GrayMatter."
@@ -431,13 +496,21 @@
       "not_found": "That item no longer exists.",
       "archived": "That item is archived.",
       "not_archived": "That item isn’t archived.",
-      "unit_in_use": "That unit is still in use."
+      "unit_in_use": "That unit is still in use.",
+      "duplicate_variant": "A variant with these values already exists.",
+      "axis_required": "Variants need at least one attribute they differ by.",
+      "axis_value_required": "Every variant needs a value for each attribute it differs by.",
+      "attribute_is_axis": "Variants differ by this attribute. Change that on the item first.",
+      "not_an_axis": "Variants don’t differ by this attribute.",
+      "option_in_use": "This value is still in use. Change it where it’s used first.",
+      "invalid_number": "Not a number this attribute understands."
     },
     "storage": {
       "read_only": "This source is read-only right now.",
       "unavailable": "Can’t reach the source. Check your connection.",
       "not_found": "That item no longer exists.",
       "incompatible": "This database isn’t a GrayMatter source.",
+      "outdated": "This database was made by a pre-release version of GrayMatter. Reset it to use it here.",
       "failed": "The source reported an error. Try again."
     },
     "file": {
@@ -453,7 +526,8 @@
       "auth": "The source rejected the login. Check the connection string.",
       "no_database": "The source wasn’t found. Check the connection string.",
       "failed": "Couldn’t check the source. Try again.",
-      "incompatible": "This source isn’t a GrayMatter source."
+      "incompatible": "This source isn’t a GrayMatter source.",
+      "outdated": "This database was made by a pre-release version of GrayMatter. Reset it to use it here."
     }
   }
 }

@@ -35,6 +35,12 @@ export type SourceProbe =
   | { ok: true; inspection: SchemaInspection }
   | { ok: false; reason: ProbeFailure; message: string }
 
+/** Whether a source with this schema can be saved: not a database with other tables, nor one a pre-release build made
+ *  (opening it would fail with `outdated`). */
+export function canSaveSource(inspection: SchemaInspection): boolean {
+  return inspection.state !== 'foreign' && inspection.state !== 'outdated'
+}
+
 export interface SourceConnection {
   storage: InventoryStorage
   /** The schema as the connection found it when it opened. */
@@ -87,7 +93,7 @@ function errorCodes(error: unknown): string[] {
   return codes
 }
 
-export type FailureReason = ProbeFailure | 'incompatible'
+export type FailureReason = ProbeFailure | 'incompatible' | 'outdated'
 
 /** Classifies a source failure for the UI; the same mapping the probe uses. */
 export function classifyFailure(error: unknown): FailureReason {
@@ -96,12 +102,13 @@ export function classifyFailure(error: unknown): FailureReason {
   if (codes.includes('28P01')) return 'auth'
   if (codes.includes('3D000')) return 'no_database'
   if (codes.includes('incompatible')) return 'incompatible'
+  if (codes.includes('outdated')) return 'outdated'
   return 'failed'
 }
 
 function failureReason(error: unknown): ProbeFailure {
   const reason = classifyFailure(error)
-  return reason === 'incompatible' ? 'failed' : reason
+  return reason === 'incompatible' || reason === 'outdated' ? 'failed' : reason
 }
 
 /** Probe against a freshly made executor: read-only, executor closed afterwards. */

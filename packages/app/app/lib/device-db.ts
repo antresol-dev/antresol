@@ -15,6 +15,8 @@ export interface CachedSnapshot {
   savedAt: string
   /** Source revision the snapshot is known to be at least as new as; absent or null when unknown. */
   rev?: string | null
+  /** The app's snapshot format and schema version when saved (see workspace.ts); a copy with another mark is not shown. */
+  format?: string
 }
 
 /*

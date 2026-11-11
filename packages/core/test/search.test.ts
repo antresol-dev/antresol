@@ -1,10 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import { createSearch } from '../src/search'
-import { folder, item, makeSnapshot, variant } from './fixtures'
-import type { Tag } from '../src/model'
+import { attribute, axis, folder, item, makeSnapshot, shared, value, variant } from './fixtures'
+import type { InventorySnapshot, Tag, Variant } from '../src/model'
 
 const audit = { createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z', createdBy: 'test', updatedBy: 'test' }
 const tag = (id: string, name: string): Tag => ({ id, inventoryId: 'inv', name, ...audit })
+
+/** Variants told apart by one text axis "Value", so the label is the value as written: [id, itemId, value, over?]. */
+function labelled(rows: [string, string, string, Partial<Variant>?][]): Partial<InventorySnapshot> {
+  return {
+    attributes: [attribute('a-value', 'Value', 'text')],
+    itemAttributes: [...new Set(rows.map((r) => r[1]))].map((itemId) => axis(itemId, 'a-value', 0)),
+    variants: rows.map(([id, itemId, , over]) => variant(id, itemId, over)),
+    variantAttributeValues: rows.map(([id, , v]) => value(id, 'a-value', v)),
+  }
+}
+/** A resistor axis: 1000 is labelled "1 kΩ". */
+const resistance = attribute('a-res', 'Resistance', 'number', { unit: 'Ω', siPrefixes: true })
 
 const snap = makeSnapshot({
   items: [
@@ -14,12 +26,11 @@ const snap = makeSnapshot({
     item('ne555', 'NE555'),
     item('as3340', 'AS3340', null, { archivedAt: '2026-02-01T00:00:00Z', archiveId: 'a1' }),
   ],
-  variants: [variant('v1k', 'res', '1k'), variant('v10k', 'res', '10k')],
+  variants: [variant('v1k', 'res'), variant('v10k', 'res')],
   tags: [tag('t-opamp', 'opamp')],
-  attributes: [
-    { id: 'a-case', inventoryId: 'inv', name: 'Корпус', kind: 'text', options: [], ...audit },
-  ],
-  itemAttributes: [{ itemId: 'ne555', attributeId: 'a-case', value: 'DIP-8' }],
+  attributes: [attribute('a-case', 'Корпус', 'text'), resistance],
+  itemAttributes: [shared('ne555', 'a-case', 'DIP-8'), axis('res', 'a-res', 0)],
+  variantAttributeValues: [value('v1k', 'a-res', '1000'), value('v10k', 'a-res', '10000')],
 })
 const { search } = createSearch(snap)
 
@@ -30,8 +41,10 @@ describe('search', () => {
   it('tolerates typos', () => {
     expect(search('lm13600').map((h) => h.itemId)).toContain('lm13700')
   })
-  it('returns best variant', () => {
+  it('returns best variant, found by its label', () => {
     expect(search('10k')[0]).toEqual({ itemId: 'res', variantId: 'v10k' })
+    expect(search('10 kΩ')[0]).toEqual({ itemId: 'res', variantId: 'v10k' })
+    expect(search('1k')[0]).toEqual({ itemId: 'res', variantId: 'v1k' })
   })
   it('searches tags and attributes', () => {
     expect(search('opamp').map((h) => h.itemId)).toContain('lm13700')
@@ -49,7 +62,7 @@ describe('search', () => {
     const s = makeSnapshot({
       folders: [folder('f1', 'F', null, { archivedAt: 'x', archiveId: 'a' }), folder('f2', 'G', 'f1')],
       items: [item('i1', 'Widget', 'f2'), item('i2', 'Gadget')],
-      variants: [variant('v1', 'i2', 'Blue', { archivedAt: 'x', archiveId: 'a' })],
+      ...labelled([['v1', 'i2', 'Blue', { archivedAt: 'x', archiveId: 'a' }]]),
     })
     const r = createSearch(s)
     expect(r.search('widget')).toEqual([])
@@ -65,7 +78,8 @@ describe('search', () => {
 describe('ranking', () => {
   const s = makeSnapshot({
     items: ['TL072', 'TL074', 'TL071', 'TL082', 'TL072CP', 'TLC272', 'LM13700', 'LM386', 'Резистор'].map((n) => item(n, n)),
-    variants: [variant('v1k', 'Резистор', '1k'), variant('v10k', 'Резистор', '10k')],
+    // A text axis: matching "10k" against the number 10000 is numeric search, not ranking.
+    ...labelled([['v1k', 'Резистор', '1k'], ['v10k', 'Резистор', '10k']]),
   })
   const r = createSearch(s)
   it.each(['tl072', 'TL-072'])('exact then prefix then fuzzy for %s', (q) => {
@@ -84,9 +98,14 @@ describe('ranking', () => {
     // A fresh load holds rows in SQL order; a patched snapshot holds the rows a write returned at the end.
     const twins = makeSnapshot({
       items: [item('b', 'Resistor'), item('a', 'resistor'), item('c', 'Resistor')],
-      variants: [variant('v2', 'b', '1k'), variant('v1', 'b', '1k'), variant('v3', 'c', '1k', { position: 1 })],
+      ...labelled([['v2', 'b', '1k'], ['v1', 'b', '1k'], ['v3', 'c', '1k', { position: 1 }]]),
     })
-    const reversed = { ...twins, items: [...twins.items].reverse(), variants: [...twins.variants].reverse() }
+    const reversed = {
+      ...twins,
+      items: [...twins.items].reverse(),
+      variants: [...twins.variants].reverse(),
+      variantAttributeValues: [...twins.variantAttributeValues].reverse(),
+    }
     for (const q of ['resistor', '1k']) expect(createSearch(reversed).search(q)).toEqual(createSearch(twins).search(q))
   })
 })
@@ -95,7 +114,7 @@ describe('decimal values', () => {
   const { search: s } = createSearch(
     makeSnapshot({
       items: [item('r47', 'Resistor'), item('r4.7', 'Resistor'), item('r4k7', 'Resistor'), item('cap', 'Cap')],
-      variants: [variant('v47k', 'r47', '47k'), variant('v4.7k', 'r4.7', '4.7k'), variant('v4k7', 'r4k7', '4k7'), variant('v4n7', 'cap', '4n7')],
+      ...labelled([['v47k', 'r47', '47k'], ['v4.7k', 'r4.7', '4.7k'], ['v4k7', 'r4k7', '4k7'], ['v4n7', 'cap', '4n7']]),
     }),
   )
   const hits = (q: string) => s(q).map((h) => h.itemId)
@@ -120,7 +139,7 @@ describe('decimal values', () => {
   })
   it('"Res 4. 7" is not a 4.7 value', () => {
     const { search: q } = createSearch(
-      makeSnapshot({ items: [item('bad', 'Res 4. 7'), item('good', 'Res'), item('g2', 'Other')], variants: [variant('vg', 'good', '4.7')] }),
+      makeSnapshot({ items: [item('bad', 'Res 4. 7'), item('good', 'Res'), item('g2', 'Other')], ...labelled([['vg', 'good', '4.7']]) }),
     )
     expect(q('4.7').map((h) => h.itemId)).toEqual(['good'])
   })

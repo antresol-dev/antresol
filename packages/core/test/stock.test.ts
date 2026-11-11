@@ -10,7 +10,7 @@ const priced = stockLine('i', 'v1', '30', {
 const base = () =>
   makeSnapshot({
     items: [item('i', 'Wire')],
-    variants: [variant('v1', 'i', 'a')],
+    variants: [variant('v1', 'i')],
     stock: [stockLine('i', null, '7'), priced],
   })
 
@@ -20,7 +20,7 @@ describe('stock', () => {
   })
   it('itemStock ignores archived variants', () => {
     const s = base()
-    s.variants.push(variant('v2', 'i', 'b', { archivedAt: '2026-02-01T00:00:00Z', archiveId: 'x' }))
+    s.variants.push(variant('v2', 'i', { archivedAt: '2026-02-01T00:00:00Z', archiveId: 'x' }))
     s.stock.push(stockLine('i', 'v2', '5'))
     expect(itemStock(s, 'i').quantity).toBe('37')
   })

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { Command } from '../src/commands'
 import type { InventorySnapshot } from '../src/model'
-import { DomainError, normalizeCommand, splitVariantNames, validateCommand, type DomainErrorCode } from '../src/validate'
-import { folder, item, makeSnapshot, stockLine, variant } from './fixtures'
+import { DomainError, normalizeCommand, validateCommand, type DomainErrorCode } from '../src/validate'
+import { attribute, axis, electronics, folder, item, makeSnapshot, stockLine, value, variant } from './fixtures'
 
 const ARCH = { archivedAt: '2026-02-01T00:00:00Z', archiveId: 'arch' }
 const U = (n: string) => `00000000-0000-7000-8000-${n.padStart(12, '0')}`
@@ -16,11 +16,14 @@ function snap(): InventorySnapshot {
       item('i3', 'In archived folder', 'AF'),
       item('i4', 'Wire', null, { unitKey: 'custom:u1' }),
     ],
-    variants: [variant('v1', 'i1', '10k'), variant('v2', 'i1', 'gone', ARCH)],
+    variants: [variant('v1', 'i1'), variant('v2', 'i1', ARCH)],
     tags: [{ id: 't1', inventoryId: 'inv', name: 'Analog', createdAt: '', updatedAt: '', createdBy: '', updatedBy: '' }],
     attributes: [
-      { id: 'a1', inventoryId: 'inv', name: 'Package', kind: 'enum', options: ['DIP', 'SOIC'], createdAt: '', updatedAt: '', createdBy: '', updatedBy: '' },
+      attribute('a1', 'Package', 'enum', { options: ['DIP', 'SOIC'] }),
+      attribute('a2', 'Color', 'text'),
     ],
+    itemAttributes: [axis('i1', 'a2', 0)],
+    variantAttributeValues: [value('v1', 'a2', 'red'), value('v2', 'a2', 'gone')],
     units: [{ id: 'u1', inventoryId: 'inv', name: 'Roll', symbol: 'roll', prefixPowers: [], createdAt: '', updatedAt: '', createdBy: '', updatedBy: '' }],
     stock: [stockLine('i1', null, '7'), stockLine('i1', 'v1', '2')],
   })
@@ -53,14 +56,18 @@ describe('validateCommand', () => {
     expect(code({ type: 'folder.update', id: 'F', name: ' ' })).toBe('name_required')
   })
 
-  it('normalizeCommand trims names, symbols, options; empty description is null', () => {
+  it('normalizeCommand trims names, symbols, options, units; empty description is null', () => {
     const n = normalizeCommand(newItem({ name: '  TL072 ', description: '  ' })) as Extract<Command, { type: 'item.create' }>
     expect(n.name).toBe('TL072')
     expect(n.description).toBeNull()
     const u = normalizeCommand({ type: 'unit.create', id: 'u', inventoryId: 'inv', name: ' A ', symbol: ' x ', prefixPowers: [] })
     expect(u).toMatchObject({ name: 'A', symbol: 'x' })
-    const a = normalizeCommand({ type: 'attribute.create', id: 'a', inventoryId: 'inv', name: 'n', kind: 'enum', options: [' a ', 'b '] })
-    expect(a).toMatchObject({ options: ['a', 'b'] })
+    const a = normalizeCommand({
+      type: 'attribute.create', id: 'a', inventoryId: 'inv', name: 'n', kind: 'enum', options: [' a ', 'b '], unit: ' ', siPrefixes: false,
+    })
+    expect(a).toMatchObject({ options: ['a', 'b'], unit: '' })
+    expect(normalizeCommand({ type: 'attribute.update', id: 'a', unit: ' Ω ' })).toMatchObject({ unit: 'Ω' })
+    expect(normalizeCommand({ type: 'attribute.update', id: 'a', name: 'x' })).not.toHaveProperty('unit')
   })
 
   it('inventory.create works without snapshot and checks currency', () => {
@@ -125,7 +132,7 @@ describe('validateCommand', () => {
     expect(code({ type: 'item.update', id: 'i1', folderId: 'AF' })).toBe('archived')
     expect(code({ type: 'folder.update', id: 'AC', name: 'x' })).toBe('archived')
     expect(code(receive({ itemId: 'i2' }))).toBe('archived')
-    expect(code({ type: 'variant.update', id: 'v2', name: 'x' })).toBe('archived')
+    expect(code({ type: 'variant.update', id: 'v2', description: 'x' })).toBe('archived')
     expect(code({ type: 'restore', archiveId: 'arch' })).toBeNull()
   })
 
@@ -140,16 +147,13 @@ describe('validateCommand', () => {
   it('enum attribute values', () => {
     expect(code({ type: 'item.setAttribute', itemId: 'i1', attributeId: 'a1', value: 'QFN' })).toBe('invalid_option')
     expect(code({ type: 'item.setAttribute', itemId: 'i1', attributeId: 'a1', value: 'DIP' })).toBeNull()
-    expect(code({ type: 'variant.setAttribute', variantId: 'v1', attributeId: 'a1', value: 'QFN' })).toBe('invalid_option')
+    expect(code({ type: 'variant.setAttribute', variantId: 'v1', attributeId: 'a1', value: 'DIP' })).toBe('not_an_axis')
     expect(code({ type: 'item.setAttribute', itemId: 'i1', attributeId: 'zz', value: 'x' })).toBe('not_found')
   })
 
   it('duplicate names', () => {
     expect(code({ type: 'tag.create', id: 'n', inventoryId: 'inv', name: ' ANALOG ' })).toBe('duplicate_name')
     expect(code({ type: 'tag.rename', id: 't1', name: 'analog' })).toBeNull()
-    expect(code({ type: 'variant.createMany', itemId: 'i1', variants: [{ id: 'n', name: '10K' }] })).toBe('duplicate_name')
-    expect(code({ type: 'variant.createMany', itemId: 'i1', variants: [{ id: 'n', name: 'a' }, { id: 'o', name: 'A' }] })).toBe('duplicate_name')
-    expect(code({ type: 'variant.createMany', itemId: 'i1', variants: [{ id: 'n', name: '1k' }] })).toBeNull()
   })
 
   it('unit.delete refuses used units, including archived items', () => {
@@ -268,8 +272,193 @@ describe('quantity canonicalization', () => {
   })
 })
 
-describe('splitVariantNames', () => {
-  it('splits, trims and dedupes case-insensitively', () => {
-    expect(splitVariantNames('1k, 10k,\n100k, 10K')).toEqual(['1k', '10k', '100k'])
+
+describe('variants by axes', () => {
+  const ec = (c: Command, s: InventorySnapshot = electronics()) => code(c, s)
+  type Values = { attributeId: string; value: string }[]
+  const createMany = (itemId: string, ...rows: Values[]): Command => ({
+    type: 'variant.createMany',
+    itemId,
+    variants: rows.map((values, n) => ({ id: U(String(100 + n)), values })),
+  })
+  const res = (v: string): Values => [{ attributeId: 'res', value: v }]
+  const capVolt = (cap: string, volt: string): Values => [
+    { attributeId: 'cap', value: cap },
+    { attributeId: 'volt', value: volt },
+  ]
+
+  it('createMany refuses a duplicate of an archived variant', () => {
+    expect(ec(createMany('R', res('4700')))).toBe('duplicate_variant')
+    expect(ec(createMany('R', res('10000')))).toBe('duplicate_variant')
+    expect(ec(createMany('R', res('2200'), res('22000')))).toBeNull()
+  })
+  it('createMany refuses duplicates inside the batch', () => {
+    expect(ec(createMany('R', res('4700'), res('4700')))).toBe('duplicate_variant')
+    expect(ec(createMany('C', capVolt('0.000001', '16'), capVolt('0.000001', '16')))).toBe('duplicate_variant')
+    expect(ec(createMany('C', capVolt('0.000001', '16'), capVolt('0.000001', '25')))).toBeNull()
+  })
+  it('createMany compares text values without case and outer spaces', () => {
+    const e = electronics()
+    const s = { ...e, itemAttributes: [...e.itemAttributes, axis('M', 'mark', 0)] }
+    const mark = (v: string): Values => [{ attributeId: 'mark', value: v }]
+    expect(ec(createMany('M', mark('Red'), mark(' red ')), s)).toBe('duplicate_variant')
+    expect(ec(createMany('M', mark('Red'), mark('Blue')), s)).toBeNull()
+  })
+  it('a retried createMany does not collide with the variants it already created', () => {
+    const c = createMany('R', res('2200'))
+    const v = (c as Extract<Command, { type: 'variant.createMany' }>).variants[0]!
+    const s = electronics()
+    const after = { ...s, variants: [...s.variants, variant(v.id, 'R')], variantAttributeValues: [...s.variantAttributeValues, value(v.id, 'res', '2200')] }
+    expect(ec(c, after)).toBeNull()
+  })
+  it('createMany needs a value on every axis', () => {
+    expect(ec(createMany('C', [{ attributeId: 'cap', value: '0.000001' }]))).toBe('axis_value_required')
+    expect(ec(createMany('C', capVolt('0.000001', '  ')))).toBe('axis_value_required')
+  })
+  it('createMany needs an item with axes', () => {
+    expect(ec(createMany('M', []))).toBe('axis_required')
+    expect(ec({ type: 'variant.createMany', itemId: 'M', variants: [] })).toBe('axis_required')
+  })
+  it('createMany takes values only for axes, checked by kind', () => {
+    expect(ec(createMany('R', [...res('2200'), { attributeId: 'pkg', value: '0805' }]))).toBe('not_an_axis')
+    expect(ec(createMany('R', [...res('2200'), { attributeId: 'nope', value: 'x' }]))).toBe('not_found')
+    expect(ec(createMany('R', [...res('2200'), { attributeId: 'res', value: '3300' }]))).toBe('invalid_option')
+    expect(ec(createMany('R', res('4.7k')))).toBe('invalid_number')
+    expect(ec(createMany('L', [{ attributeId: 'color', value: 'pink' }]))).toBe('invalid_option')
+    expect(ec(createMany('L', [{ attributeId: 'color', value: 'red' }]))).toBe('duplicate_variant')
+  })
+  it('createMany on an archived item is refused', () => {
+    const s = electronics()
+    const archived = { ...s, items: s.items.map((i) => (i.id === 'R' ? { ...i, ...ARCH } : i)) }
+    expect(ec(createMany('R', res('2200')), archived)).toBe('archived')
+  })
+
+  it('item.setAttribute checks the value by kind', () => {
+    const set = (attributeId: string, v: string | null): Command => ({ type: 'item.setAttribute', itemId: 'M', attributeId, value: v })
+    expect(ec(set('res', '4.7k'))).toBe('invalid_number')
+    expect(ec(set('res', '4700'))).toBeNull()
+    expect(ec(set('res', null))).toBeNull()
+    expect(ec(set('pkg', 'QFN'))).toBe('invalid_option')
+    expect(ec(set('pkg', 'THT'))).toBeNull()
+    expect(ec(set('mark', ' 103 '))).toBeNull()
+    expect(ec(set('nope', 'x'))).toBe('not_found')
+  })
+  it('item.setAttribute works only for shared attributes', () => {
+    expect(ec({ type: 'item.setAttribute', itemId: 'R', attributeId: 'res', value: '4700' })).toBe('attribute_is_axis')
+    expect(ec({ type: 'item.setAttribute', itemId: 'R', attributeId: 'pkg', value: '0603' })).toBeNull()
+  })
+  it('normalizeCommand trims values; an empty shared or variant value is null', () => {
+    expect(normalizeCommand({ type: 'item.setAttribute', itemId: 'M', attributeId: 'mark', value: ' Red ' })).toMatchObject({ value: 'Red' })
+    expect(normalizeCommand({ type: 'item.setAttribute', itemId: 'M', attributeId: 'mark', value: '   ' })).toMatchObject({ value: null })
+    expect(normalizeCommand({ type: 'variant.setAttribute', variantId: 'r1k', attributeId: 'res', value: ' ' })).toMatchObject({ value: null })
+    expect(normalizeCommand(createMany('C', capVolt(' 0.000001 ', ' 16')))).toMatchObject({
+      variants: [{ values: [{ attributeId: 'cap', value: '0.000001' }, { attributeId: 'volt', value: '16' }] }],
+    })
+  })
+
+  it('variant.setAttribute works only for axes and allows an empty value', () => {
+    const set = (variantId: string, attributeId: string, v: string | null): Command => ({ type: 'variant.setAttribute', variantId, attributeId, value: v })
+    expect(ec(set('r1k', 'pkg', '0805'))).toBe('not_an_axis')
+    expect(ec(set('r1k', 'res', '2200'))).toBeNull()
+    expect(ec(set('c50', 'volt', null))).toBeNull()
+    expect(ec(set('r1k', 'res', '2k2'))).toBe('invalid_number')
+    expect(ec(set('lred', 'color', 'pink'))).toBe('invalid_option')
+    expect(ec(set('r4k7', 'res', '2200'))).toBe('archived')
+  })
+  it('variant.setAttribute refuses a change that makes two variants the same', () => {
+    const set = (variantId: string, attributeId: string, v: string | null): Command => ({ type: 'variant.setAttribute', variantId, attributeId, value: v })
+    expect(ec(set('r1k', 'res', '10000'))).toBe('duplicate_variant')
+    expect(ec(set('r1k', 'res', '4700'))).toBe('duplicate_variant')
+    expect(ec(set('c16', 'volt', '50'))).toBe('duplicate_variant')
+    expect(ec(set('r1k', 'res', '1000'))).toBeNull()
+    const s = electronics()
+    const oneEmpty = { ...s, variantAttributeValues: s.variantAttributeValues.map((r) => (r.variantId === 'c50' && r.attributeId === 'volt' ? { ...r, value: null } : r)) }
+    expect(ec(set('c16', 'volt', null), oneEmpty)).toBe('duplicate_variant')
+  })
+  it('variant.update changes only the description', () => {
+    expect(ec({ type: 'variant.update', id: 'r1k', description: 'metal film' })).toBeNull()
+    expect(ec({ type: 'variant.update', id: 'zz', description: 'x' })).toBe('not_found')
+  })
+
+  it('item.addAxis is allowed and does nothing for an attribute that is already an axis', () => {
+    const add = (itemId: string, attributeId: string): Command => ({ type: 'item.addAxis', itemId, attributeId, firstVariantId: U('200') })
+    expect(ec(add('R', 'res'))).toBeNull()
+    expect(ec(add('R', 'pkg'))).toBeNull()
+    expect(ec(add('R', 'volt'))).toBeNull()
+    expect(ec(add('M', 'res'))).toBeNull()
+    expect(ec(add('R', 'nope'))).toBe('not_found')
+    expect(ec(add('zz', 'res'))).toBe('not_found')
+  })
+  it('item.removeAxis needs an axis and the remaining axes must tell variants apart', () => {
+    const remove = (itemId: string, attributeId: string): Command => ({ type: 'item.removeAxis', itemId, attributeId })
+    expect(ec(remove('R', 'pkg'))).toBe('not_an_axis')
+    expect(ec(remove('M', 'res'))).toBe('not_an_axis')
+    expect(ec(remove('C', 'volt'))).toBe('duplicate_variant')
+    expect(ec(remove('C', 'cap'))).toBeNull()
+    expect(ec(remove('R', 'res'))).toBe('axis_required')
+    expect(ec(remove('zz', 'res'))).toBe('not_found')
+  })
+  it('item.removeAttribute of an axis follows the axis removal rules', () => {
+    const remove = (itemId: string, attributeId: string): Command => ({ type: 'item.removeAttribute', itemId, attributeId })
+    expect(ec(remove('C', 'volt'))).toBe('duplicate_variant')
+    expect(ec(remove('C', 'cap'))).toBeNull()
+    expect(ec(remove('R', 'res'))).toBe('axis_required')
+    expect(ec(remove('R', 'pkg'))).toBeNull()
+    expect(ec(remove('M', 'pkg'))).toBeNull()
+    expect(ec(remove('R', 'nope'))).toBe('not_found')
+  })
+  it('item.reorderAxes must list exactly the axes of the item', () => {
+    const reorder = (itemId: string, attributeIds: string[]): Command => ({ type: 'item.reorderAxes', itemId, attributeIds })
+    expect(ec(reorder('C', ['volt', 'cap']))).toBeNull()
+    expect(ec(reorder('C', ['cap', 'volt']))).toBeNull()
+    expect(ec(reorder('C', ['volt']))).toBe('invalid_option')
+    expect(ec(reorder('C', ['volt', 'cap', 'cap']))).toBe('invalid_option')
+    expect(ec(reorder('C', ['volt', 'res']))).toBe('invalid_option')
+    expect(ec(reorder('C', ['volt', 'cap', 'res']))).toBe('invalid_option')
+    expect(ec(reorder('R', ['res', 'pkg']))).toBe('invalid_option')
+    expect(ec(reorder('M', []))).toBeNull()
+  })
+})
+
+describe('attribute dictionary', () => {
+  const ec = (c: Command, s: InventorySnapshot = electronics()) => code(c, s)
+  const create = (over: Partial<Extract<Command, { type: 'attribute.create' }>> = {}): Command => ({
+    type: 'attribute.create', id: U('300'), inventoryId: 'inv', name: 'Power', kind: 'number', options: [], unit: 'W', siPrefixes: true, ...over,
+  })
+
+  it('attribute.create takes a number kind with a unit of up to 16 characters', () => {
+    expect(ec(create())).toBeNull()
+    expect(ec(create({ unit: '' }))).toBeNull()
+    expect(ec(create({ unit: 'x'.repeat(16) }))).toBeNull()
+    expect(ec(create({ unit: 'x'.repeat(17) }))).toBe('name_too_long')
+    expect(ec(create({ kind: 'decimal' as 'number' }))).toBe('invalid_option')
+  })
+  it('attribute.update checks the unit length', () => {
+    expect(ec({ type: 'attribute.update', id: 'res', unit: 'Ohm', siPrefixes: false })).toBeNull()
+    expect(ec({ type: 'attribute.update', id: 'res', unit: 'x'.repeat(17) })).toBe('name_too_long')
+  })
+  it('attribute.update refuses to drop a list option that is in use', () => {
+    const options = (id: string, o: string[]): Command => ({ type: 'attribute.update', id, options: o })
+    expect(ec(options('pkg', ['0603', 'THT']))).toBe('option_in_use') // shared value of R
+    expect(ec(options('color', ['red', 'green']))).toBe('option_in_use') // value of variant lblue
+    expect(ec(options('pkg', ['0805', '0603']))).toBeNull()
+    expect(ec(options('pkg', ['THT', '0805', '0603', 'SOT-23']))).toBeNull()
+    expect(ec(options('color', ['blue', 'green', 'red', 'white']))).toBeNull()
+  })
+  it('a value of an archived variant is in use too', () => {
+    const s = electronics()
+    const archived = { ...s, variants: s.variants.map((x) => (x.id === 'lblue' ? { ...x, ...ARCH } : x)) }
+    expect(ec({ type: 'attribute.update', id: 'color', options: ['red', 'green'] }, archived)).toBe('option_in_use')
+  })
+  it('attribute.delete refuses an axis of an item with variants, archived ones included', () => {
+    expect(ec({ type: 'attribute.delete', id: 'res' })).toBe('attribute_is_axis')
+    expect(ec({ type: 'attribute.delete', id: 'volt' })).toBe('attribute_is_axis')
+    expect(ec({ type: 'attribute.delete', id: 'pkg' })).toBeNull()
+    expect(ec({ type: 'attribute.delete', id: 'mark' })).toBeNull()
+    const s = electronics()
+    const onlyArchived = { ...s, variants: s.variants.filter((x) => x.itemId !== 'R' || x.archivedAt !== null) }
+    expect(ec({ type: 'attribute.delete', id: 'res' }, onlyArchived)).toBe('attribute_is_axis')
+    const noVariants = { ...s, variants: s.variants.filter((x) => x.itemId !== 'R') }
+    expect(ec({ type: 'attribute.delete', id: 'res' }, noVariants)).toBeNull()
   })
 })

@@ -17,8 +17,20 @@ export interface SchemaStatus {
    *  migrations), the database's own version. */
   minAppSchema: number
 }
-/** `not_empty`: a restore with the same ids into a source that already holds inventories (InventoryStorage.restore). */
-export const STORAGE_ERROR_CODES = ['read_only', 'unavailable', 'not_found', 'incompatible', 'outdated', 'failed', 'not_empty'] as const
+/** `not_empty`: a restore with the same ids into a source that already holds inventories (InventoryStorage.restore).
+ *  `conflict`: the database refused a write that a copy behind it allowed (another device changed what the command
+ *  relies on); nothing was written. Like `failed`, the copy disagrees with the source and is synced; unlike it, an
+ *  expected outcome the user is told about as such. */
+export const STORAGE_ERROR_CODES = [
+  'read_only',
+  'unavailable',
+  'not_found',
+  'incompatible',
+  'outdated',
+  'failed',
+  'not_empty',
+  'conflict',
+] as const
 export type StorageErrorCode = (typeof STORAGE_ERROR_CODES)[number]
 
 /** What a database holds, read without writing. `older` is upgraded on open; `outdated` (made by a pre-release build)

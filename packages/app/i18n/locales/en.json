@@ -42,7 +42,10 @@
     "clear": "Clear",
     "results": "Search results",
     "nothing": "Nothing found for “{q}”",
-    "group": { "items": "Items", "folders": "Folders", "actions": "Actions" },
+    "group": { "nearest": "Nearest values", "items": "Items", "folders": "Folders", "actions": "Actions" },
+    "noValue": "No {wanted} — nearest:",
+    "nearestHit": "{value} ({stock})",
+    "openNearest": "Open {value}",
     "switchTo": "Switch to {name}",
     "addItem": "Add item “{name}”",
     "key": { "move": "↑↓", "open": "↵", "close": "esc" },
@@ -97,7 +100,7 @@
     "unitHint": "Optional, up to 16 characters: Ω, V, mm.",
     "unitTooLong": "The unit can’t be longer than 16 characters.",
     "siPrefixes": "SI prefixes",
-    "siExample": "Example: {example}",
+    "siExample": "With SI prefixes: {example}",
     "options": "Options",
     "hint": "One per line or separated by commas: DIP-8, SOIC-8",
     "optionsRequired": "Add at least one option.",
@@ -170,8 +173,8 @@
     "open": "Add variants",
     "title": "Add variants",
     "names": "Variants",
-    "hintOne": "One per line or separated by commas, by {axis}",
-    "hintMany": "One variant per line, values separated by “;” in this order: {axes}",
+    "hintOne": "One per line or separated by commas, by {axis}. Add “; quantity” to a line to put stock in: 1k; 100",
+    "hintMany": "One variant per line, values separated by “;” in this order: {axes}, then an optional quantity",
     "preview": "How the values were read",
     "exists": "already exists",
     "inArchive": "in the archive",
@@ -442,7 +445,16 @@
     "clear": "Clear",
     "copied": "Copied",
     "copyFailed": "Could not copy",
-    "traffic": "~{used} of {limit} this month (this device)"
+    "traffic": "~{used} of {limit} this month (this device)",
+    "uploads": "{count} photo uploaded this month (this device) | {count} photos uploaded this month (this device)"
+  },
+  "photoCache": {
+    "title": "Photo cache",
+    "hint": "Photos you have viewed are kept on this device so they open faster and without a connection.",
+    "size": "Using {size} on this device",
+    "clear": "Clear photo cache",
+    "cleared": "Photo cache cleared",
+    "failed": "Could not clear the photo cache"
   },
   "sourceForm": {
     "newTitle": "Add source",
@@ -563,6 +575,7 @@
     "invalidAmount": "Enter a valid amount, like 10 or 50 cm.",
     "invalidPrice": "Enter a valid price.",
     "needsAmount": "Enter the amount to add a price or a link.",
+    "linkNeedsAmount": "Add the amount to keep the link",
     "chooseFolder": "Choose a folder",
     "existing": "Already in this inventory",
     "receiveHere": "Receive here",
@@ -571,7 +584,18 @@
     "received": "Received into “{name}”"
   },
   "list": { "out": "Out", "more": "+{count}", "pinned": "Shown in lists" },
+  "expression": {
+    "result": "= {value}",
+    "syntax": "Can’t read that expression.",
+    "unit": "A unit or prefix doesn’t fit.",
+    "divide_by_zero": "Division by zero.",
+    "negative": "The result is negative."
+  },
   "share": {
+    "nearest": "Nearest values",
+    "noValue": "No {wanted} — nearest:",
+    "nearestHit": "{value} ({stock})",
+    "openNearest": "Open {value}",
     "title": "Already have it?",
     "loading": "Opening the inventory…",
     "noInventory": "Open an inventory to compare with.",
@@ -652,6 +676,7 @@
       "duplicate_variant": "A variant with these values already exists.",
       "axis_required": "Variants need at least one attribute they differ by.",
       "axis_value_required": "Every variant needs a value for each attribute it differs by.",
+      "variant_line_too_long": "A line is the values, then at most one quantity. Use commas for a list: 2k2, 4k7, 6k8.",
       "attribute_is_axis": "Variants differ by this attribute. Change that on the item first.",
       "not_an_axis": "Variants don’t differ by this attribute.",
       "option_in_use": "This value is still in use. Change it where it’s used first.",
@@ -665,11 +690,13 @@
       "incompatible": "This database isn’t a GrayMatter source.",
       "outdated": "This database was made by a pre-release version of GrayMatter. Reset it to use it here.",
       "failed": "The source reported an error. Try again.",
-      "not_empty": "This source already holds inventories. Restore the backup as new inventories instead."
+      "not_empty": "This source already holds inventories. Restore the backup as new inventories instead.",
+      "conflict": "Changed on another device — values reloaded. Check them and save again."
     },
     "file": {
       "no_store": "Photos aren’t set up for this source. Check the Uploadcare key and photo address in Settings.",
-      "unsupported": "This photo can’t be opened — the format isn’t supported or the image is too large.",
+      "unsupported": "This photo can’t be opened — the format isn’t supported.",
+      "too_large_to_decode": "This photo is too big for this device’s memory to open. Try a smaller one.",
       "too_large": "This photo is too large.",
       "rejected": "The photo service rejected this photo. Check the Uploadcare key, and that signed uploads are turned off.",
       "unavailable": "Can’t reach the photo service. Check your connection.",

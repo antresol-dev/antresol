@@ -165,12 +165,14 @@ export function affectedReads(c: Command): AffectedReads | null {
     case 'item.removeAxis':
     case 'item.reorderAxes':
     case 'variant.createMany':
+    case 'variant.setValues':
     case 'stock.receive':
     case 'stock.use':
     case 'stock.return':
     case 'stock.set':
     case 'stock.transfer':
     case 'photo.add':
+    case 'photo.replace':
     case 'photo.reorder':
       return itemSlice(id(c.itemId))
     case 'variant.update':

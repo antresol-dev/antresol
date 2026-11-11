@@ -27,6 +27,7 @@ import { buildBackup, type BackupFile } from './backup'
 import { logError, secretsOf, setSecretSource } from './diagnostics'
 import { createDeviceFileStore, releaseDeviceUrls } from './device-files'
 import { prepareImage as defaultPrepareImage } from './images'
+import { countUpload } from './uploads'
 import type { CachedSnapshot } from './device-db'
 import { defaultDeviceName } from './device-name'
 import { classifyFailure, redactSecret, type FailureReason, type SourceConnection } from './sources'
@@ -85,13 +86,19 @@ const isCheckInterval = (value: unknown): value is CheckInterval =>
 export const CACHE_PUT_DELAY_MS = 2_000
 
 /** The rows of an own write put into the shown copy while a full load of it was running. `after`: the last load
- *  token issued then; loads up to it started before the rows were applied and may have read the source before the write. */
+ *  token issued then; loads up to it started before the rows were applied and may have read the source before the write.
+ *  `patch` null: a write whose rows the copy cannot take (a wide one, kept because a load read its result); a load that
+ *  read before it cannot be brought past it. */
 interface OwnRows {
   after: number
   prevRev: string | null
   rev: string
-  patch: SnapshotPatch
+  patch: SnapshotPatch | null
 }
+
+/** How many revisions an own write moved a source past are remembered (see takeListing): a listing still on its way
+ *  across more own writes than this is unheard of; one that is costs a load, never a wrong copy. */
+const PASSED_REVS_KEPT = 32
 
 /**
  * A load (`snapshot` at `rev`) plus the own rows it may miss, oldest first. They go on top from the write that starts
@@ -113,6 +120,7 @@ function catchUp(
   }
   let label: string | null = rev
   for (const w of missed.slice(from)) {
+    if (!w.patch) return null
     snapshot = patchSnapshot(snapshot, w.patch)
     label = label !== null && label === w.prevRev ? w.rev : null
   }
@@ -131,8 +139,9 @@ interface Carried {
 }
 
 type Outcome =
-  /** `fresh`: opened by this attempt rather than the source's open connection. */
-  | { ok: true; conn: SourceConnection; inventories: Inventory[]; rev: string; fresh: boolean }
+  /** `fresh`: opened by this attempt rather than the source's open connection. `started`: the tick its listing started
+   *  at (see takeListing). */
+  | { ok: true; conn: SourceConnection; inventories: Inventory[]; rev: string; fresh: boolean; started: number }
   | { ok: false; error: unknown }
 
 const sameRef = (a: InventoryRef | null, b: InventoryRef | null): boolean =>
@@ -234,6 +243,21 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   /** Revision of each source as last read by listInventories, or moved on by an own write that started from it (see
    *  loadCurrent for how it is used). */
   const sourceRevs = new Map<string, string>()
+  /** Orders listings against own writes (see takeListing): bumped when a listing starts and when an own write settles. */
+  let tick = 0
+  /** Per source: revisions an own write moved the source past (its revision before), with the tick it settled at; the
+   *  latest PASSED_REVS_KEPT. Revisions never repeat, so a listing at one of them read the source before that write. */
+  const passedRevs = new Map<string, Map<string, number>>()
+  /** Per source: the tick the listing of its stored list (`listings`) started at; the latest such tick, never lowered. */
+  const listedAt = new Map<string, number>()
+  /** Per source: the tick at which a write refused for a newer schema (GM003) turned it read-only. A check that
+   *  started before looked at the schema before that: it does not make the source writable again (applyOutcome). */
+  const schemaNewerAt = new Map<string, number>()
+  /** Per source: removals under way (overlapping calls count each); an edit is refused meanwhile. */
+  const removing = new Map<string, number>()
+  /** Per source: the saves of its config on their way (updateSource). A removal waits for them, so it deletes what
+   *  they wrote rather than the other way round. */
+  const sourceSaves = new Map<string, Promise<unknown>>()
   /** The revision the shown `state.snapshot` is known to be at least as new as; null when unknown (stale). */
   let shownRev: string | null = null
   let queue: Promise<void> = Promise.resolve()
@@ -271,6 +295,9 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     refreshEpoch++
     // The source may now be another database: revisions read from, or cached under, the old one prove nothing.
     sourceRevs.delete(id)
+    passedRevs.delete(id)
+    listedAt.delete(id)
+    schemaNewerAt.delete(id)
     if (state.current?.sourceId === id) {
       shownRev = null
       ownRows = []
@@ -297,6 +324,17 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     if (index >= 0) state.sources[index] = entry
     else state.sources.push(entry)
     recompute()
+  }
+
+  /** Saves a source's config on the device; a removal of the source waits for it (sourceSaves). */
+  function saveSource(config: SourceConfig): Promise<void> {
+    const saving = db.putSource(config)
+    const all = Promise.allSettled([sourceSaves.get(config.id), saving])
+    sourceSaves.set(config.id, all)
+    void all.then(() => {
+      if (sourceSaves.get(config.id) === all) sourceSaves.delete(config.id)
+    })
+    return saving
   }
 
   function setCurrent(ref: InventoryRef | null): void {
@@ -376,11 +414,17 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     state.archivedInventories = archived.sort(byName)
   }
 
-  async function dropConnection(sourceId: string): Promise<void> {
+  /** Closes a connection no longer the source's, once the writes queued so far are done: one of them may have taken it
+   *  before it was let go, and must not meet it closed. Writes queued later take the source's connection then. */
+  function retire(conn: SourceConnection): void {
+    void queue.then(() => conn.close()).catch(() => {})
+  }
+
+  function dropConnection(sourceId: string): void {
     const old = conns.get(sourceId)
     conns.delete(sourceId)
     sourceRevs.delete(sourceId)
-    await old?.close().catch(() => {})
+    if (old) retire(old)
   }
 
   /** Sets a source's inventories and keeps them on the device; only while the source's generation is still current. */
@@ -389,16 +433,42 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     return db.putListing(sourceId, inventories)
   }
 
+  /**
+   * A listing of the source (`rev`, `inventories`), started at tick `started`, becomes its known revision and stored
+   * list, unless an own write made what is known newer. A listing at a revision an own write moved past read the source
+   * before that write committed: the revision known since is newer, or unknown, and is not rolled back to it; the list
+   * stays too when a listing started after that write settled stored it (a write that changes the list relists so).
+   * Only while the source's generation is the one the listing was made under. Resolves when the list is on the device.
+   */
+  function takeListing(sourceId: string, started: number, rev: string, inventories: Inventory[]): Promise<void> {
+    const passedAt = passedRevs.get(sourceId)?.get(rev)
+    const listed = listedAt.get(sourceId) ?? -1
+    if (passedAt === undefined) sourceRevs.set(sourceId, rev)
+    else if (listed > passedAt) return Promise.resolve()
+    // Listings answer out of order: one that started earlier must not make a later stale one look newer than a write.
+    listedAt.set(sourceId, Math.max(listed, started))
+    return storeListing(sourceId, inventories)
+  }
+
+  /** An own write took the source from `rev` on (see takeListing). */
+  function notePassed(sourceId: string, rev: string): void {
+    let passed = passedRevs.get(sourceId)
+    if (!passed) passedRevs.set(sourceId, (passed = new Map()))
+    passed.set(rev, ++tick)
+    if (passed.size > PASSED_REVS_KEPT) passed.delete(passed.keys().next().value!)
+  }
+
   async function attempt(config: SourceConfig): Promise<Outcome> {
     const driver = deps.drivers[config.kind]
     if (!driver) return { ok: false, error: new StorageError('failed', 'unsupported_source') }
     let conn: SourceConnection | undefined
     try {
+      const started = ++tick
       conn = await driver.connect(config)
       openedWith.set(conn, config.connectionString)
       const { inventories, rev } = await conn.storage.listInventories()
       noteAnswer(config.id)
-      return { ok: true, conn, inventories, rev, fresh: true }
+      return { ok: true, conn, inventories, rev, fresh: true, started }
     } catch (error) {
       logError('connect', error)
       await conn?.close().catch(() => {})
@@ -412,14 +482,15 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     const open = conns.get(config.id)
     if (open && connectionStringOf(open) === config.connectionString) {
       try {
+        const started = ++tick
         const [inspection, listing] = await Promise.all([open.inspect(), open.storage.listInventories()])
         const opened = open.status.state === 'newer' ? 'newer' : 'current'
-        if (inspection.state === opened) return { ok: true, conn: open, ...listing, fresh: false }
+        if (inspection.state === opened) return { ok: true, conn: open, ...listing, fresh: false, started }
       } catch {
         // Opened again below.
       }
       if (conns.get(config.id) === open) conns.delete(config.id)
-      await open.close().catch(() => {})
+      retire(open)
     }
     return attempt(config)
   }
@@ -439,50 +510,72 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     if (outcome.ok) {
       const old = conns.get(config.id)
       conns.set(config.id, outcome.conn)
-      sourceRevs.set(config.id, outcome.rev)
       // Read-only only when the schema needs a newer app to write (min_app_schema above this app's version): a newer
-      // schema that keeps older apps writing is `ready` (soft migrations). Turning read-only, a new version of the app
-      // may be out already: look for it now rather than at the next periodic check ("Update to keep editing").
-      const status: SourceStatus = outcome.conn.status.state === 'newer' ? 'read_only' : 'ready'
-      const wasReadOnly = statusOf(config.id) === 'read_only'
-      setSource(config, status, null, null)
-      if (status === 'read_only' && !wasReadOnly) deps.checkForUpdate?.()
-      const saving = storeListing(config.id, outcome.inventories)
-      if (old && old !== outcome.conn) await old.close().catch(() => {})
+      // schema that keeps older apps writing is `ready` (soft migrations). A check that started before a write was
+      // refused for a newer schema looked at the schema before that refusal: it keeps the source read-only.
+      const refusedSince = (schemaNewerAt.get(config.id) ?? -1) > outcome.started
+      if (outcome.conn.status.state === 'newer' || refusedSince) turnReadOnly(config)
+      else setSource(config, 'ready', null, null)
+      const saving = takeListing(config.id, outcome.started, outcome.rev, outcome.inventories)
+      if (old && old !== outcome.conn) retire(old)
       await saving
     } else {
       const { status, error, reason } = failureStatus(outcome.error, config.connectionString)
       setSource(config, status, error, reason)
-      await dropConnection(config.id)
+      dropConnection(config.id)
     }
   }
 
-  /** `connectionString`: the one the failing call's connection was opened with. */
-  function markFailure(sourceId: string, error: unknown, connectionString: string): void {
+  /** The source's schema needs a newer app to write: read-only, with "Update to keep editing". Turning so, a new
+   *  version of the app may be out already: looked for now, once, rather than at the next periodic check. */
+  function turnReadOnly(config: SourceConfig): void {
+    const wasReadOnly = statusOf(config.id) === 'read_only'
+    setSource(config, 'read_only', null, null)
+    if (!wasReadOnly) deps.checkForUpdate?.()
+  }
+
+  /** The source's open connection is still `conn`: what a call on it found out is about the source now. A connection
+   *  an edit or a reconnect let go says nothing about the one that replaced it. */
+  const isOpen = (sourceId: string, conn: SourceConnection): boolean => conns.get(sourceId) === conn
+
+  /** A call on `conn` failed: the source is marked failing, its error redacted with the connection string `conn` was
+   *  opened with. Only while `conn` is the source's open connection. */
+  function markFailure(sourceId: string, error: unknown, conn: SourceConnection): void {
     const config = state.sources.find((s) => s.config.id === sourceId)?.config
     if (!config) return
-    const { status, error: text, reason } = failureStatus(error, connectionString)
     logError('source', error)
+    if (!isOpen(sourceId, conn)) return
+    const { status, error: text, reason } = failureStatus(error, connectionStringOf(conn))
     setSource(config, status, text, reason)
+  }
+
+  /** A write on `conn` was refused because the source's schema now needs a newer app (GM003): as if the connection had
+   *  opened on it. Only while `conn` is the source's open connection; the next check that starts after this reconnects
+   *  and finds the same, and one already on its way does not undo it (schemaNewerAt). */
+  function markSchemaNewer(sourceId: string, conn: SourceConnection): void {
+    const config = state.sources.find((s) => s.config.id === sourceId)?.config
+    if (!config || !isOpen(sourceId, conn)) return
+    schemaNewerAt.set(sourceId, ++tick)
+    turnReadOnly(config)
   }
 
   async function relist(sourceId: string): Promise<void> {
     const conn = conns.get(sourceId)
     if (!conn) return
     const generation = generationOf(sourceId)
+    const started = ++tick
     let inventories: Inventory[]
     let rev: string
     try {
       ;({ inventories, rev } = await conn.storage.listInventories())
     } catch (error) {
-      if (generationOf(sourceId) === generation) markFailure(sourceId, error, connectionStringOf(conn))
+      if (generationOf(sourceId) === generation) markFailure(sourceId, error, conn)
       return
     }
     // Edited or removed meanwhile: the list is no longer this connection's to set.
     if (generationOf(sourceId) !== generation) return
-    sourceRevs.set(sourceId, rev)
     noteAnswer(sourceId)
-    const saving = storeListing(sourceId, inventories)
+    const saving = takeListing(sourceId, started, rev, inventories)
     rebuildInventories()
     await saving
   }
@@ -534,7 +627,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
         await dropMissing(ref)
         return
       }
-      markFailure(ref.sourceId, loaded.error, connectionStringOf(conn))
+      markFailure(ref.sourceId, loaded.error, conn)
       return
     }
     // A load newer than the shown one replaces it, even while a later-started load still runs or has failed.
@@ -652,7 +745,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     try {
       const configs = await db.getSources()
       const previous = new Map(state.sources.map((s) => [s.config.id, s]))
-      for (const id of [...conns.keys()]) if (!configs.some((c) => c.id === id)) await dropConnection(id)
+      for (const id of [...conns.keys()]) if (!configs.some((c) => c.id === id)) dropConnection(id)
       for (const id of [...listings.keys()]) {
         if (configs.some((c) => c.id === id)) continue
         listings.delete(id)
@@ -951,13 +1044,18 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   ): { reload: boolean; markStale: boolean; advance: [string, string] | null } {
     const { sourceId } = target
     const inSync = prevRev !== null && prevRev === sourceRevs.get(sourceId)
+    // A listing still on its way at the revision before is older than this write (takeListing).
+    if (prevRev !== null) notePassed(sourceId, prevRev)
     const snapshot = state.snapshot
     const shown = sameRef(state.current, target) && snapshot?.inventory.id === target.inventoryId ? snapshot : null
     let reload = false
     if (shown) {
       const loaded = appliedSeq !== seq
       if (loaded && shownRev === rev) {
-        // 3. The load read exactly this write's result.
+        // 3. The load read exactly this write's result: kept. A load still running may have read before the write:
+        // it gets these rows on top, as with rule 2 (or, when the copy cannot take them, is not shown).
+        const rows = patch && patch.inventoryId === target.inventoryId ? patch : null
+        if (loadsRunning > 0) ownRows.push({ after: loadSeq, prevRev, rev, patch: rows })
       } else if (!patch || patch.inventoryId !== target.inventoryId) {
         // 4.
         shownRev = null
@@ -992,13 +1090,17 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   }
 
   /** 8. Unknown outcome (`unavailable`): the write may have landed, so no revision known for the source holds. 9. The
-   *  source refused the write the shown copy allowed: the copy disagrees with it, so it is refreshed before the error
-   *  is thrown. */
+   *  source refused the write the shown copy allowed (`failed`; `conflict`: refused as made on a copy that is behind,
+   *  nothing written): the copy disagrees with it, so it is refreshed before the error is thrown. 10. Refused because
+   *  the schema needs a newer app (`read_only`): nothing was written; guarded has made the source read-only. */
   async function writeFailed(sourceId: string, error: unknown): Promise<void> {
     if (error instanceof StorageError && error.code === 'unavailable') {
       sourceRevs.delete(sourceId)
       if (state.current?.sourceId === sourceId) shownRev = null
-    } else if ((error instanceof StorageError && error.code === 'failed') || error instanceof DomainError) {
+    } else if (
+      (error instanceof StorageError && (error.code === 'failed' || error.code === 'conflict')) ||
+      error instanceof DomainError
+    ) {
       // Only the source that refused, and a listing that starts now: a run going may have listed before the refusal.
       await checkSource(sourceId).catch(() => {})
     }
@@ -1123,9 +1225,11 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   }
 
   /** Upload errors are FileErrors and never touch the source's status. */
-  async function uploadOne(store: FileStore, file: File): Promise<{ provider: string; fileId: string; url: string }> {
+  async function uploadOne(sourceId: string, store: FileStore, file: File): Promise<{ provider: string; fileId: string; url: string }> {
     const blob = await prepare(file)
-    return store.upload(blob, file.name)
+    const stored = await store.upload(blob, file.name)
+    countUpload(sourceId)
+    return stored
   }
 
   async function addPhotos(itemId: Id, files: File[], onProgress?: (done: number) => void): Promise<void> {
@@ -1133,36 +1237,21 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     const { cur, store } = photoTarget()
     let done = 0
     for (const file of files) {
-      const stored = await uploadOne(store, file)
+      const stored = await uploadOne(cur.sourceId, store, file)
       await applyTo(cur, { type: 'photo.add', id: newId(), itemId, variantId: null, ...stored })
       onProgress?.(++done)
     }
   }
 
-  /** Two writes, because core allows one photo per variant and a storage apply takes one command: a failure between
-   *  them leaves the variant without a photo. A failed add rejects with its own error and is not retried. */
+  /** One `photo.replace`: the new photo takes the old one's place in one transaction (the variant has at most one). It
+   *  names the photo the variant has now, as the user saw it: only that one is replaced, so the same command arriving
+   *  late (a retry) never takes away a photo set since. */
   async function setVariantPhoto(itemId: Id, variantId: Id, file: File): Promise<void> {
     const { cur, store } = photoTarget()
+    const replaces = state.snapshot?.photos.find((p) => p.variantId === variantId)?.id ?? null
     // Upload first: a failed upload leaves the old photo in place.
-    const stored = await uploadOne(store, file)
-    // Looked up only now, after the upload and the writes queued before this one, in the freshest snapshot of the target.
-    await queueIdle()
-    const snapshot = await snapshotOf(cur)
-    const old = snapshot?.photos.find((p) => p.variantId === variantId)
-    if (old) await applyTo(cur, { type: 'photo.remove', id: old.id })
-    await applyTo(cur, { type: 'photo.add', id: newId(), itemId, variantId, ...stored })
-  }
-
-  /** Resolves when the writes queued so far are done (their rows in the snapshot included). */
-  const queueIdle = (): Promise<void> => queue
-
-  /** The shown snapshot when it is the target's, otherwise the target read from its source. */
-  async function snapshotOf(ref: InventoryRef): Promise<InventorySnapshot | null> {
-    const shown = state.snapshot
-    if (sameRef(state.current, ref) && shown?.inventory.id === ref.inventoryId) return shown
-    const conn = conns.get(ref.sourceId)
-    if (!conn) return null
-    return guarded(ref.sourceId, conn, () => conn.storage.loadInventory(ref.inventoryId))
+    const stored = await uploadOne(cur.sourceId, store, file)
+    await applyTo(cur, { type: 'photo.replace', id: newId(), itemId, variantId, replaces, ...stored })
   }
 
   async function removePhoto(photoId: Id): Promise<void> {
@@ -1277,10 +1366,11 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     return result
   }
 
-  /** Runs a storage call on `conn`: an `unavailable` failure marks the source, any failure is redacted with the
-   *  connection string `conn` was opened with, even if the source was edited or removed since. `network`: the call
-   *  always reads the source, so its success is an answer (for the warm-up); a call that may stay on the device notes
-   *  its own. */
+  /** Runs a storage call on `conn`: an `unavailable` failure marks the source failing, a write refused for a schema that
+   *  needs a newer app (`read_only`, GM003) marks it read-only, both only while `conn` is still its connection. Any
+   *  failure is redacted with the connection string `conn` was opened with, even if the source was edited or removed
+   *  since. `network`: the call always reads the source, so its success is an answer (for the warm-up); a call that may
+   *  stay on the device notes its own. */
   async function guarded<T>(sourceId: string, conn: SourceConnection, call: () => Promise<T>, network = true): Promise<T> {
     const connectionString = connectionStringOf(conn)
     try {
@@ -1288,7 +1378,8 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       if (network) noteAnswer(sourceId)
       return result
     } catch (error) {
-      if (error instanceof StorageError && error.code === 'unavailable') markFailure(sourceId, error, connectionString)
+      if (error instanceof StorageError && error.code === 'unavailable') markFailure(sourceId, error, conn)
+      else if (error instanceof StorageError && error.code === 'read_only') markSchemaNewer(sourceId, conn)
       else logError('storage', error)
       if (error instanceof DomainError) throw new DomainError(error.code, redactSecret(error.message, connectionString))
       throw sanitize(error, connectionString)
@@ -1365,12 +1456,16 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     },
     async updateSource(id, patch) {
       const old = state.sources.find((s) => s.config.id === id)?.config
-      if (!old) throw new StorageError('not_found')
+      // Being removed: nothing to edit (saved now, it could land after the removal and bring the source back).
+      if (!old || (removing.get(id) ?? 0) > 0) throw new StorageError('not_found')
       const config: SourceConfig = { ...old, ...patch }
       bumpGeneration(id)
+      const saved = generationOf(id)
       // Shown at once, so an overlapping update builds on this one.
       setSource(config, 'connecting', null, null)
-      await db.putSource(config)
+      await saveSource(config)
+      // Removed or edited again meanwhile: the later call decides.
+      if (generationOf(id) !== saved) return
       // A refresh that read the device before this save must not apply the old config.
       bumpGeneration(id)
       const generation = generationOf(id)
@@ -1386,11 +1481,23 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       if (!outcome.ok) throw sanitize(outcome.error, config.connectionString)
     },
     async removeSource(id) {
-      bumpGeneration(id)
-      await dropConnection(id)
-      listings.delete(id)
-      await db.deleteSource(id)
-      await db.deleteListing(id)
+      // Counted: of two overlapping removals, the one that ends first (or fails) leaves the other's guard in place.
+      removing.set(id, (removing.get(id) ?? 0) + 1)
+      try {
+        bumpGeneration(id)
+        dropConnection(id)
+        listings.delete(id)
+        // An edit's save on its way lands first, and is deleted below.
+        await sourceSaves.get(id)
+        // The list first, the source (with its copies) last: a removal that fails midway leaves a source with less on
+        // the device, which the next refresh lists again or a second removal takes away, never a list without it.
+        await db.deleteListing(id)
+        await db.deleteSource(id)
+      } finally {
+        const left = (removing.get(id) ?? 1) - 1
+        if (left > 0) removing.set(id, left)
+        else removing.delete(id)
+      }
       // Object URLs of device photos (the demo source) are no longer needed.
       releaseDeviceUrls()
       // A refresh that read the device before this removal was saved must not bring the source back.

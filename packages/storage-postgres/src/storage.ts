@@ -1,9 +1,10 @@
 import { normalizeCommand, StorageError, type InventoryStorage, type SchemaStatus } from '@graymatter/core'
 import { toStatements } from './commands'
+import { isStaleWrite } from './commands/variants'
 import { affectedReads } from './commands/reads'
 import type { PgExecutor } from './executor'
 import { inspectSchema } from './inspect'
-import { ensureSchema, LOCK_REV, REV_BUMP } from './migrator'
+import { APP_SCHEMA_VERSION, ensureSchema, isNewerSchema, LOCK_REV, REV_BUMP, schemaGuard } from './migrator'
 import * as queries from './queries'
 import { restoreBackup } from './restore'
 
@@ -14,13 +15,19 @@ const bumpRev = REV_BUMP
 
 const valueOf = (result: Record<string, unknown>[] | undefined): unknown => result?.[0]?.value
 
-/** Lets StorageError through; wraps anything else as StorageError('failed') keeping the cause. */
+/** Lets StorageError through; a write the schema guard refused (GM003) becomes StorageError('read_only'), one the
+ *  database refused as stale (GM004) StorageError('conflict'); anything else becomes StorageError('failed'), keeping
+ *  the cause. */
 async function wrapFailure<T>(run: () => Promise<T>): Promise<T> {
   try {
     return await run()
   } catch (cause) {
     if (cause instanceof StorageError) throw cause
-    const error = new StorageError('failed', cause instanceof Error ? cause.message : undefined)
+    const error = isNewerSchema(cause)
+      ? new StorageError('read_only', 'the database needs a newer GrayMatter to write')
+      : isStaleWrite(cause)
+        ? new StorageError('conflict', 'changed on another device')
+        : new StorageError('failed', cause instanceof Error ? cause.message : undefined)
     error.cause = cause
     throw error
   }
@@ -36,6 +43,8 @@ export async function openPostgresStorage(
   }
   const status = await ensureSchema(exec, options.appVersion)
   const readOnly = status.state === 'newer'
+  // Every write checks the version again under the revision lock: another device may migrate after this open.
+  const guard = schemaGuard(options.appVersion ?? APP_SCHEMA_VERSION)
   const storage: InventoryStorage = {
     readOnly,
     listInventories: () => wrapFailure(() => queries.listInventories(exec)),
@@ -46,7 +55,7 @@ export async function openPostgresStorage(
     exportInventory: (id) => wrapFailure(() => queries.exportInventory(exec, id)),
     async restore(backup, mode, runId, options) {
       if (readOnly) throw new StorageError('read_only')
-      return wrapFailure(() => restoreBackup(exec, backup, mode, runId, options))
+      return wrapFailure(() => restoreBackup(exec, backup, mode, runId, { ...options, guard }))
     },
     findReceiptsBySource: (inventoryId, key) => wrapFailure(() => queries.findReceiptsBySource(exec, inventoryId, key)),
     async apply(command, actor) {
@@ -57,11 +66,12 @@ export async function openPostgresStorage(
         const reads = affectedReads(normalized)
         const before = reads?.before ?? []
         const write = toStatements(normalized, actor)
-        // One atomic batch, one Neon HTTP transaction: lock and read the revision, remember ids the command is about to
-        // delete, the command, the bump, then the reads of what it touched. Replaying a command whose inserts are
-        // `on conflict do nothing` still bumps and reads: a needless reload elsewhere, never a missed one.
-        const result = await exec.batch([LOCK_REV, ...before, ...write, bumpRev, ...(reads?.statements ?? [])])
-        const bumpAt = 1 + before.length + write.length
+        // One atomic batch, one Neon HTTP transaction: lock and read the revision, check that this app may still write
+        // (GM003), remember ids the command is about to delete, the command, the bump, then the reads of what it
+        // touched. Replaying a command whose inserts are `on conflict do nothing` still bumps and reads: a needless
+        // reload elsewhere, never a missed one.
+        const result = await exec.batch([LOCK_REV, guard, ...before, ...write, bumpRev, ...(reads?.statements ?? [])])
+        const bumpAt = 2 + before.length + write.length
         const prevRev = valueOf(result[0])
         const rev = valueOf(result[bumpAt])
         if (typeof rev !== 'string') throw new Error('the revision bump returned no value')

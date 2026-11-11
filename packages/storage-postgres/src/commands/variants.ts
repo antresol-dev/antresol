@@ -1,11 +1,98 @@
 import type { Actor, Command } from '@graymatter/core'
 import { sql, updateSet, type Statement } from '../sql'
 
-type VariantCommand = Extract<Command, { type: 'variant.createMany' | 'variant.update' | 'variant.setAttribute' }>
+type VariantCommand = Extract<
+  Command,
+  { type: 'variant.createMany' | 'variant.update' | 'variant.setAttribute' | 'variant.setValues' }
+>
 
 // A variant holds values only on the axes its item has in the database when the write runs (core checks the rules
 // against the device's copy, which may be stale): a value for any other attribute is not stored. Likewise an item with
 // no axis in the database gets no variants (axis_required): the write is skipped, and the revision rules reload the copy.
+
+/** Message and SQLSTATE of the error a write batch raises when the database refuses what a copy that is behind allowed
+ *  (storage.ts turns it into StorageError('conflict')). */
+export const STALE_WRITE_MESSAGE = 'gm_stale_write'
+export const STALE_WRITE_SQLSTATE = 'GM004'
+
+export function isStaleWrite(e: unknown): boolean {
+  if (!(e instanceof Error)) return false
+  return (e as { code?: unknown }).code === STALE_WRITE_SQLSTATE && e.message.includes(STALE_WRITE_MESSAGE)
+}
+
+/** Fails the batch with GM004 when the check before it set `gm.stale_write` (transaction-local) to true. A `do` block
+ *  takes no parameters, hence the setting in between; plain statements, so they fit one Neon HTTP transaction. */
+const REFUSE_IF_STALE: Statement = {
+  text: `do $$ begin
+  if current_setting('gm.stale_write', true) = 'true' then
+    raise exception '${STALE_WRITE_MESSAGE}' using errcode = '${STALE_WRITE_SQLSTATE}';
+  end if;
+end $$`,
+  params: [],
+}
+
+/**
+ * variant.setValues in three statements, under the revision lock (no other write commits in between):
+ * - the check: `x` holds the command's values, one per (variant, attribute); `final` keys every variant of the item,
+ *   archived ones included, by its values on the item's axes in the database once `x` is applied (a value `x` names
+ *   wins, null erasing; any other stays), compared as core's `sameAxisValue` does: text without case and outer spaces,
+ *   other kinds exactly, an empty value equal only to empty. Stale when a variant the command names ends equal to
+ *   another variant;
+ * - stale: the batch fails with GM004, so nothing is written (not even the revision). Core checks the same rule on the
+ *   device's copy, so this only happens for a copy that is behind: the app is told (`conflict`) and syncs the source;
+ * - otherwise the erased values go and the others are written, on axes of the item and variants of the item only.
+ * Postgres `lower` follows the database's locale (see axisMayGo in items.ts): for non-ASCII text the guard is
+ * approximate, and core's check on the device stays the one that decides.
+ */
+function setValues(c: Extract<Command, { type: 'variant.setValues' }>): Statement[] {
+  const values = c.rows.flatMap((r) => r.values.map((x) => ({ variantId: r.variantId, ...x })))
+  if (values.length === 0) return []
+  const item = c.itemId
+  const x = sql`x as (
+          select distinct on (x.variant_id, x.attribute_id) x.variant_id, x.attribute_id, nullif(btrim(x.value), '') as value
+          from unnest(${values.map((v) => v.variantId)}::uuid[], ${values.map((v) => v.attributeId)}::uuid[],
+                      ${values.map((v) => v.value)}::text[]) with ordinality as x(variant_id, attribute_id, value, ord)
+          order by x.variant_id, x.attribute_id, x.ord desc
+        )`
+  return [
+    sql`with ${x},
+        final as (
+          select v.id, array(
+            select case when a.kind = 'text' then lower(f.value) else f.value end
+            from item_attributes r
+            join attributes a on a.id = r.attribute_id
+            left join x on x.variant_id = v.id and x.attribute_id = r.attribute_id
+            left join variant_attribute_values va on va.variant_id = v.id and va.attribute_id = r.attribute_id
+            cross join lateral (
+              select nullif(btrim(case when x.attribute_id is not null then x.value else va.value end), '') as value
+            ) f
+            where r.item_id = ${item}::uuid and r.axis_position is not null
+            order by r.attribute_id
+          ) as key
+          from variants v where v.item_id = ${item}::uuid
+        )
+        select set_config('gm.stale_write', (exists (
+          select 1 from final f join final g on g.key = f.key and g.id <> f.id
+          where f.id in (select variant_id from x)
+        ))::text, true)`,
+    REFUSE_IF_STALE,
+    sql`with ${x},
+        erased as (
+          delete from variant_attribute_values va
+          using x, variants v
+          where x.value is null
+            and va.variant_id = x.variant_id and va.attribute_id = x.attribute_id
+            and v.id = x.variant_id and v.item_id = ${item}::uuid
+        )
+        insert into variant_attribute_values (variant_id, attribute_id, value)
+        select x.variant_id, x.attribute_id, x.value
+        from x
+        join variants v on v.id = x.variant_id and v.item_id = ${item}::uuid
+        join item_attributes ia on ia.item_id = v.item_id and ia.attribute_id = x.attribute_id and ia.axis_position is not null
+        where x.value is not null
+        on conflict (variant_id, attribute_id) do update set value = excluded.value`,
+  ]
+}
 
 export function variantStatements(c: VariantCommand, actor: Actor): Statement[] {
   const by = actor.device
@@ -14,8 +101,21 @@ export function variantStatements(c: VariantCommand, actor: Actor): Statement[] 
       if (c.variants.length === 0) return []
       const ids = c.variants.map((v) => v.id)
       const values = c.variants.flatMap((v) => v.values.map((x) => ({ variantId: v.id, ...x })))
-      // One statement: the values hang off the rows this insert actually created, so a replay (a retry after a
-      // timeout) neither adds a variant nor overwrites a value changed since.
+      const receipts = c.variants.flatMap((v) => (v.initialReceipt ? [{ variantId: v.id, ...v.initialReceipt }] : []))
+      // One statement: the values and the receipts hang off the rows this insert actually created, so a replay (a retry
+      // after a timeout) neither adds a variant, nor a second receipt, nor overwrites a value changed since.
+      const receipt = receipts.length
+        ? sql`, mov as (
+              insert into movements (id, inventory_id, item_id, variant_id, kind, quantity, created_by)
+              select r.movement_id, i.inventory_id, i.id, ins.id, 'receipt', r.quantity, ${by}
+              from unnest(${receipts.map((r) => r.movementId)}::uuid[], ${receipts.map((r) => r.variantId)}::uuid[],
+                          ${receipts.map((r) => r.quantity)}::numeric[]) with ordinality as r(movement_id, variant_id, quantity, ord)
+              join ins on ins.id = r.variant_id
+              join items i on i.id = ${c.itemId}::uuid
+              order by r.ord
+              on conflict (id) do nothing
+            )`
+        : sql``
       return [
         sql`with ins as (
               insert into variants (id, item_id, position, created_by, updated_by)
@@ -27,7 +127,7 @@ export function variantStatements(c: VariantCommand, actor: Actor): Statement[] 
                             where item_id = ${c.itemId}::uuid and axis_position is not null)
               on conflict (id) do nothing
               returning id
-            )
+            )${receipt}
             insert into variant_attribute_values (variant_id, attribute_id, value)
             select x.variant_id, x.attribute_id, x.value
             from unnest(${values.map((x) => x.variantId)}::uuid[], ${values.map((x) => x.attributeId)}::uuid[],
@@ -59,5 +159,7 @@ export function variantStatements(c: VariantCommand, actor: Actor): Statement[] 
             where v.id = ${c.variantId}::uuid
             on conflict (variant_id, attribute_id) do update set value = excluded.value`,
       ]
+    case 'variant.setValues':
+      return setValues(c)
   }
 }

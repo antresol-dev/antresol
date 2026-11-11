@@ -121,6 +121,64 @@ describe('replaying a command with client ids is a no-op', () => {
     expect(await storage.loadInventory(inv)).toEqual(before)
   })
 
+  it('variant.createMany with receipts, retried after an unknown outcome, adds no second receipt (Review Focus 4)', async () => {
+    const { storage, inv } = await setup()
+    const item = await plainItem(storage, inv)
+    const size = newId()
+    for (const c of sizeAxis(inv, item, size)) await storage.apply(c, TEST_ACTOR)
+    const [a, b, m] = [newId(), newId(), newId()]
+    const create: Command = {
+      type: 'variant.createMany',
+      itemId: item,
+      variants: [
+        { id: a, values: [{ attributeId: size, value: 'S' }], initialReceipt: { movementId: m, quantity: q('10') } },
+        { id: b, values: [{ attributeId: size, value: 'M' }] },
+      ],
+    }
+    await twice(storage, create)
+    const before = await storage.loadInventory(inv)
+    expect((await storage.loadMovements(item)).map((x) => [x.id, x.variantId, x.quantity])).toEqual([[m, a, '10']])
+    expect(before.stock).toMatchObject([{ variantId: a, quantity: '10' }])
+    // Even after the stock moved on, a late retry changes nothing.
+    await storage.apply({ type: 'stock.use', movementId: newId(), itemId: item, variantId: a, quantity: q('4'), note: null }, TEST_ACTOR)
+    await storage.apply(create, TEST_ACTOR)
+    expect((await storage.loadInventory(inv)).stock).toMatchObject([{ variantId: a, quantity: '6' }])
+    expect(await storage.loadMovements(item)).toHaveLength(2)
+  })
+
+  it('variant.setValues', async () => {
+    const { storage, inv } = await setup()
+    const item = await plainItem(storage, inv)
+    const size = newId()
+    for (const c of sizeAxis(inv, item, size)) await storage.apply(c, TEST_ACTOR)
+    const [a, b] = [newId(), newId()]
+    await storage.apply(variantsCreate(item, [[a, { [size]: 'S' }], [b, { [size]: 'M' }]]), TEST_ACTOR)
+    const swap: Command = {
+      type: 'variant.setValues',
+      itemId: item,
+      rows: [
+        { variantId: a, values: [{ attributeId: size, value: 'M' }] },
+        { variantId: b, values: [{ attributeId: size, value: 'S' }] },
+      ],
+    }
+    await storage.apply(swap, TEST_ACTOR)
+    const once = await storage.loadInventory(inv)
+    await storage.apply(swap, TEST_ACTOR)
+    expect(await storage.loadInventory(inv)).toEqual(once)
+    expect(once.variantAttributeValues.find((r) => r.variantId === a)?.value).toBe('M')
+  })
+
+  it('photo.replace', async () => {
+    const { storage, inv } = await setup()
+    const item = await plainItem(storage, inv)
+    const [size, v, old, next] = [newId(), newId(), newId(), newId()]
+    for (const c of sizeAxis(inv, item, size)) await storage.apply(c, TEST_ACTOR)
+    await storage.apply(variantsCreate(item, [[v, { [size]: 'S' }]]), TEST_ACTOR)
+    await storage.apply({ type: 'photo.add', id: old, itemId: item, variantId: v, provider: 'imgbb', fileId: old, url: `https://x/${old}` }, TEST_ACTOR)
+    await twice(storage, { type: 'photo.replace', variantId: v, id: next, itemId: item, replaces: old, provider: 'imgbb', fileId: next, url: `https://x/${next}` })
+    expect((await storage.loadInventory(inv)).photos.map((p) => [p.id, p.variantId, p.position])).toEqual([[next, v, 0]])
+  })
+
   it('item.addAxis creates the first variant once', async () => {
     const { storage, inv } = await setup()
     const item = await plainItem(storage, inv)

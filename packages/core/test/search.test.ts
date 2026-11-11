@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createSearch } from '../src/search'
-import { attribute, axis, folder, item, makeSnapshot, shared, value, variant } from './fixtures'
+import { createSearch, nearestValues } from '../src/search'
+import { attribute, axis, folder, item, makeSnapshot, shared, stockLine, value, variant } from './fixtures'
 import type { InventorySnapshot, Tag, Variant } from '../src/model'
 
 const audit = { createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z', createdBy: 'test', updatedBy: 'test' }
@@ -221,5 +221,68 @@ describe('number search', () => {
   })
   it('text matching still works', () => {
     expect(search('resistor')[0]?.itemId).toBe('r')
+  })
+})
+
+describe('nearestValues', () => {
+  const res = attribute('a-res', 'Resistance', 'number', { unit: 'Ω', siPrefixes: true })
+  const snap = makeSnapshot({
+    folders: [folder('old', 'Old', null, { archivedAt: '2026-02-01T00:00:00Z', archiveId: 'f' })],
+    items: [
+      item('r', 'Resistor'),
+      item('s', 'Fixed 4.9k'),
+      item('gone', 'Archived', null, { archivedAt: '2026-02-01T00:00:00Z', archiveId: 'a' }),
+      item('hid', 'In archived folder', 'old'),
+    ],
+    attributes: [res],
+    variants: [
+      variant('r43', 'r'),
+      variant('r47', 'r'),
+      variant('r51', 'r'),
+      variant('r10', 'r'),
+      variant('rx', 'r', { archivedAt: '2026-02-01T00:00:00Z', archiveId: 'v' }),
+      variant('g1', 'gone'),
+      variant('h1', 'hid'),
+    ],
+    itemAttributes: [axis('r', 'a-res', 0), shared('s', 'a-res', '4900'), axis('gone', 'a-res', 0), axis('hid', 'a-res', 0)],
+    variantAttributeValues: [
+      value('r43', 'a-res', '4300'),
+      value('r47', 'a-res', '4700'),
+      value('r51', 'a-res', '5100'),
+      value('r10', 'a-res', '100'),
+      value('rx', 'a-res', '4650'),
+      value('g1', 'a-res', '4690'),
+      value('h1', 'a-res', '4710'),
+    ],
+    stock: [stockLine('r', 'r43', '12'), stockLine('r', 'r51', '40'), stockLine('s', null, '7')],
+  })
+
+  it('finds the nearest smaller and larger values, skipping equal, archived and hidden ones', () => {
+    expect(nearestValues(snap, res, '4700')).toEqual({
+      below: { itemId: 'r', variantId: 'r43', value: '4300', quantity: '12' },
+      above: { itemId: 's', variantId: null, value: '4900', quantity: '7' },
+    })
+  })
+
+  it('has null on a side with no value', () => {
+    expect(nearestValues(snap, res, '50').below).toBeNull()
+    expect(nearestValues(snap, res, '50').above?.value).toBe('100')
+    expect(nearestValues(snap, res, '9000').above).toBeNull()
+    expect(nearestValues(snap, res, '5100').above).toBeNull()
+  })
+
+  it('compares decimals and ignores other attributes', () => {
+    expect(nearestValues(snap, attribute('other', 'Other', 'number'), '1')).toEqual({ below: null, above: null })
+    expect(nearestValues(snap, res, '4300.5').below?.value).toBe('4300')
+  })
+
+  it('prefers the holder with more stock when values tie', () => {
+    const tie = makeSnapshot({
+      items: [item('a', 'A'), item('b', 'B')],
+      attributes: [res],
+      itemAttributes: [shared('a', 'a-res', '100'), shared('b', 'a-res', '100')],
+      stock: [stockLine('a', null, '1'), stockLine('b', null, '5')],
+    })
+    expect(nearestValues(tie, res, '200').below?.itemId).toBe('b')
   })
 })

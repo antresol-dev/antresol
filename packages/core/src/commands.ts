@@ -32,11 +32,19 @@ export type Command =
   /** Axis -> shared. A value every variant shares becomes the item's value; the variants' values go. */
   | { type: 'item.removeAxis'; itemId: Id; attributeId: Id }
   | { type: 'item.reorderAxes'; itemId: Id; attributeIds: Id[] }
-  /** Each variant needs a value on every axis of the item. */
-  | { type: 'variant.createMany'; itemId: Id; variants: { id: Id; values: { attributeId: Id; value: string }[] }[] }
+  /** Each variant needs a value on every axis of the item. `initialReceipt`: the variant's first stock, written in the
+   *  same transaction, as item.create's (a retry of the batch adds no second receipt). */
+  | {
+      type: 'variant.createMany'
+      itemId: Id
+      variants: { id: Id; values: { attributeId: Id; value: string }[]; initialReceipt?: { movementId: Id; quantity: Quantity } }[]
+    }
   | { type: 'variant.update'; id: Id; description?: string | null }
   /** Axes only; null erases the value. */
   | { type: 'variant.setAttribute'; variantId: Id; attributeId: Id; value: string | null }
+  /** Axis values of one or more variants of the item, applied at once: uniqueness is checked on the final state of all
+   *  of them, so two variants may trade values. Axes only; null erases the value; a value not named stays. */
+  | { type: 'variant.setValues'; itemId: Id; rows: { variantId: Id; values: { attributeId: Id; value: string | null }[] }[] }
   | { type: 'tag.create'; id: Id; inventoryId: Id; name: string }
   | { type: 'tag.rename'; id: Id; name: string }
   | { type: 'tag.delete'; id: Id }
@@ -88,6 +96,10 @@ export type Command =
       quantity: Quantity
     }
   | { type: 'photo.add'; id: Id; itemId: Id; variantId: Id | null; provider: string; fileId: string; url: string }
+  /** The variant's photo is removed and this one added in its place (its position), in one transaction; a variant with
+   *  no photo just gets this one. `replaces`: the photo the client saw on the variant (null: none). Only while the
+   *  variant still has that one (or still none) is it replaced: a late replay never takes away a newer photo. */
+  | { type: 'photo.replace'; variantId: Id; id: Id; itemId: Id; replaces: Id | null; provider: string; fileId: string; url: string }
   | { type: 'photo.remove'; id: Id }
   | { type: 'photo.reorder'; itemId: Id; orderedIds: Id[] }
   | { type: 'archive'; target: 'inventory' | 'folder' | 'item' | 'variant'; id: Id; archiveId: Id }

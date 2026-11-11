@@ -14,7 +14,7 @@ const current = (key: Section, to: string): 'page' | 'true' | undefined =>
   section.value !== key ? undefined : route.path === to ? 'page' : 'true'
 const icons: Record<Exclude<Section, 'settings'>, Component> = { items: Boxes, dictionaries: Tags, archive: Archive }
 
-// The rail grows and its column scrolls; in the drawer the tree card takes the free height and scrolls itself.
+// The rail grows and its column scrolls; in the drawer the tree's well (concave) takes the free height and scrolls itself.
 // Rows are flat (pressable: the accent tint under the pointer); the current section is a selected row.
 const link = 'pressable flex min-h-11 items-center gap-2.5 px-2.5 text-sm font-semibold'
 const linkState = (key: Section): string => (section.value === key ? 'row-selected' : '')
@@ -45,7 +45,7 @@ const linkState = (key: Section): string => (section.value === key ? 'row-select
       </ul>
     </nav>
 
-    <div v-if="props.variant === 'drawer' && state.snapshot" class="raised-card min-h-0 flex-1 overflow-y-auto p-1.5">
+    <div v-if="props.variant === 'drawer' && state.snapshot" class="concave min-h-0 flex-1 overflow-y-auto p-1.5">
       <FolderTree variant="drawer" />
     </div>
 

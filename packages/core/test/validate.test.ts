@@ -540,3 +540,135 @@ describe('attribute dictionary', () => {
     expect(ec(pin('nope'))).toBe('not_found')
   })
 })
+
+describe('Plan 9 commands', () => {
+  const ec = (c: Command, s: InventorySnapshot = electronics()) => code(c, s)
+  type Values = Record<string, string | null>
+  const setValues = (itemId: string, rows: [string, Values][]): Command => ({
+    type: 'variant.setValues',
+    itemId,
+    rows: rows.map(([variantId, values]) => ({
+      variantId,
+      values: Object.entries(values).map(([attributeId, value]) => ({ attributeId, value })),
+    })),
+  })
+
+  describe('variant.setValues', () => {
+    it('passes two variants trading their values (Review Focus 1)', () => {
+      expect(ec(setValues('R', [['r1k', { res: '10000' }], ['r10k', { res: '1000' }]]))).toBeNull()
+      // The same trade as single-value changes, one at a time, is refused at the first step.
+      expect(ec({ type: 'variant.setAttribute', variantId: 'r1k', attributeId: 'res', value: '10000' })).toBe('duplicate_variant')
+      expect(ec(setValues('L', [['lblue', { color: 'red' }], ['lred', { color: 'green' }], ['lgreen', { color: 'blue' }]]))).toBeNull()
+    })
+    it('checks the final state, not each step (C2): 100n·50V -> 220n·25V next to 220n·50V', () => {
+      const e = electronics()
+      const s = {
+        ...e,
+        variantAttributeValues: e.variantAttributeValues.map((r) =>
+          r.variantId === 'c16' ? { ...r, value: r.attributeId === 'cap' ? '0.00000022' : '50' } : r,
+        ),
+      }
+      expect(ec(setValues('C', [['c50', { cap: '0.00000022', volt: '25' }]]), s)).toBeNull()
+      expect(ec(setValues('C', [['c50', { cap: '0.00000022' }]]), s)).toBe('duplicate_variant')
+      expect(ec(setValues('C', [['c50', { cap: '0.00000022', volt: '50' }]]), s)).toBe('duplicate_variant')
+    })
+    it('refuses a final state with two equal variants, an archived one counting', () => {
+      expect(ec(setValues('R', [['r1k', { res: '4700' }]]))).toBe('duplicate_variant')
+      expect(ec(setValues('L', [['lblue', { color: 'green' }], ['lred', { color: 'green' }]]))).toBe('duplicate_variant')
+      expect(ec(setValues('C', [['c16', { volt: null }], ['c50', { volt: null }]]))).toBe('duplicate_variant')
+      expect(ec(setValues('C', [['c16', { volt: null }]]))).toBeNull()
+    })
+    it('a repeat with the values already stored passes', () => {
+      expect(ec(setValues('C', [['c50', { cap: '0.0000001', volt: '50' }], ['c16', { volt: '16' }]]))).toBeNull()
+      expect(ec(setValues('R', []))).toBeNull()
+    })
+    it('takes axes of the item only, values checked by kind', () => {
+      expect(ec(setValues('R', [['r1k', { pkg: '0603' }]]))).toBe('not_an_axis')
+      expect(ec(setValues('R', [['r1k', { nope: 'x' }]]))).toBe('not_found')
+      expect(ec(setValues('R', [['r1k', { res: '2k2' }]]))).toBe('invalid_number')
+      expect(ec(setValues('L', [['lblue', { color: 'pink' }]]))).toBe('invalid_option')
+      expect(ec(setValues('C', [['c50', { volt: '25' }], ['c50', { volt: '35' }]]))).toBe('invalid_option')
+      const twice: Command = {
+        type: 'variant.setValues', itemId: 'C',
+        rows: [{ variantId: 'c50', values: [{ attributeId: 'volt', value: '25' }, { attributeId: 'volt', value: '35' }] }],
+      }
+      expect(ec(twice)).toBe('invalid_option')
+    })
+    it('needs active variants of the item', () => {
+      expect(ec(setValues('R', [['c50', { res: '2200' }]]))).toBe('not_found')
+      expect(ec(setValues('R', [['zz', { res: '2200' }]]))).toBe('not_found')
+      expect(ec(setValues('R', [['r4k7', { res: '2200' }]]))).toBe('archived')
+      expect(ec(setValues('zz', [['r1k', { res: '2200' }]]))).toBe('not_found')
+      const s = electronics()
+      const archived = { ...s, items: s.items.map((i) => (i.id === 'R' ? { ...i, ...ARCH } : i)) }
+      expect(ec(setValues('R', [['r1k', { res: '2200' }]]), archived)).toBe('archived')
+    })
+    it('normalizeCommand trims the values; an empty one is null', () => {
+      expect(normalizeCommand(setValues('C', [['c50', { cap: ' 0.0000001 ', volt: '  ' }]]))).toMatchObject({
+        rows: [{ variantId: 'c50', values: [{ attributeId: 'cap', value: '0.0000001' }, { attributeId: 'volt', value: null }] }],
+      })
+    })
+  })
+
+  describe('variant.createMany with initial receipts', () => {
+    const create = (variants: { id: string; res: string; initialReceipt?: { movementId: string; quantity: string } }[]): Command => ({
+      type: 'variant.createMany',
+      itemId: 'R',
+      variants: variants.map(({ id, res, initialReceipt }) => ({
+        id,
+        values: [{ attributeId: 'res', value: res }],
+        ...(initialReceipt ? { initialReceipt } : {}),
+      })),
+    })
+    it('takes a positive quantity per variant; a variant without one is fine', () => {
+      expect(ec(create([{ id: U('100'), res: '2200', initialReceipt: { movementId: U('200'), quantity: '10' } }, { id: U('101'), res: '3300' }]))).toBeNull()
+      expect(ec(create([{ id: U('100'), res: '2200', initialReceipt: { movementId: U('200'), quantity: '0' } }]))).toBe('invalid_quantity')
+      expect(ec(create([{ id: U('100'), res: '2200', initialReceipt: { movementId: U('200'), quantity: '-1' } }]))).toBe('invalid_quantity')
+      expect(ec(create([{ id: U('100'), res: '2200', initialReceipt: { movementId: U('200'), quantity: 'ten' } }]))).toBe('invalid_quantity')
+    })
+    it('refuses one movement id for two receipts', () => {
+      const receipt = { movementId: U('200'), quantity: '1' }
+      expect(ec(create([{ id: U('100'), res: '2200', initialReceipt: receipt }, { id: U('101'), res: '3300', initialReceipt: receipt }]))).toBe('invalid_option')
+    })
+    it('a retry (the variant is stored with these values) passes with its receipt', () => {
+      expect(ec(create([{ id: 'r1k', res: '1000', initialReceipt: { movementId: U('200'), quantity: '5' } }]))).toBeNull()
+    })
+    it('normalizeCommand canonicalizes the receipt quantity and leaves a variant without one alone', () => {
+      const c = normalizeCommand(create([{ id: U('100'), res: '2200', initialReceipt: { movementId: U('200'), quantity: '1.50' } }, { id: U('101'), res: '3300' }]))
+      expect(c).toMatchObject({ variants: [{ initialReceipt: { movementId: U('200'), quantity: '1.5' } }, {}] })
+      expect((c as Extract<Command, { type: 'variant.createMany' }>).variants[1]).not.toHaveProperty('initialReceipt')
+    })
+  })
+
+  describe('photo.replace', () => {
+    const photo = (id: string, itemId: string, variantId: string | null, position: number) => ({
+      id, itemId, variantId, provider: 'imgbb', fileId: id, url: `https://x/${id}`, position, createdAt: '', createdBy: '',
+    })
+    const withPhotos = () => ({ ...electronics(), photos: [photo('p1', 'R', null, 0), photo('p2', 'R', 'r1k', 1), photo('p3', 'C', 'c50', 0)] })
+    const replace = (variantId: string, id: string, replaces: string | null, itemId = 'R'): Command => ({
+      type: 'photo.replace', variantId, id, itemId, replaces, provider: 'imgbb', fileId: id, url: `https://x/${id}`,
+    })
+    it('replaces the photo of an active variant of the item, or adds one when it has none', () => {
+      expect(ec(replace('r1k', U('300'), 'p2'), withPhotos())).toBeNull()
+      expect(ec(replace('r10k', U('300'), null), withPhotos())).toBeNull()
+    })
+    it('a retry (the new photo is already the variant’s) passes; an id of another photo does not', () => {
+      expect(ec(replace('r1k', 'p2', 'p0'), withPhotos())).toBeNull()
+      expect(ec(replace('r1k', 'p1', 'p2'), withPhotos())).toBe('invalid_option')
+      expect(ec(replace('r1k', 'p3', 'p2'), withPhotos())).toBe('invalid_option')
+    })
+    it('names the photo the variant has on the copy: none when it has none', () => {
+      // The photo it meant to replace is gone (replaced or removed on another device).
+      expect(ec(replace('r1k', U('300'), U('301')), withPhotos())).toBe('not_found')
+      expect(ec(replace('r1k', U('300'), 'p1'), withPhotos())).toBe('not_found')
+      expect(ec(replace('r10k', U('300'), 'p2'), withPhotos())).toBe('not_found')
+      // The variant got a photo meanwhile: it is not this command's to replace.
+      expect(ec(replace('r1k', U('300'), null), withPhotos())).toBe('invalid_option')
+    })
+    it('needs an active variant of the item', () => {
+      expect(ec(replace('c50', U('300'), 'p3'), withPhotos())).toBe('not_found')
+      expect(ec(replace('zz', U('300'), null), withPhotos())).toBe('not_found')
+      expect(ec(replace('r4k7', U('300'), null), withPhotos())).toBe('archived')
+    })
+  })
+})

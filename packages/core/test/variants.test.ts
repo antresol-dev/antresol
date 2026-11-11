@@ -5,6 +5,7 @@ import {
   axisRemovalPreview,
   compareVariants,
   duplicateOf,
+  duplicatesAfter,
   formatAttributeValue,
   itemAxes,
   sameAxisValue,
@@ -272,5 +273,66 @@ describe('addAxisPreview', () => {
   it('does nothing for an attribute that is already an axis', () => {
     const s = base({ itemAttributes: [axis('I', 'a', 0)] })
     expect(addAxisPreview(s, 'I', 'a')).toEqual({ createsVariant: false, dropsValue: null })
+  })
+})
+
+describe('duplicatesAfter', () => {
+  type Row = { variantId: string; values: { attributeId: string; value: string | null }[] }
+  const row = (variantId: string, values: Record<string, string | null>): Row => ({
+    variantId,
+    values: Object.entries(values).map(([attributeId, value]) => ({ attributeId, value })),
+  })
+  const found = (s: InventorySnapshot, itemId: string, rows: Row[]) =>
+    duplicatesAfter(s, itemId, rows).map((d) => [d.variantId, d.duplicate.id])
+
+  it('compares the final values of all rows: two variants trading values is no duplicate (Review Focus 1)', () => {
+    const s = electronics()
+    expect(found(s, 'R', [row('r1k', { res: '10000' }), row('r10k', { res: '1000' })])).toEqual([])
+    // Three variants in a ring.
+    expect(found(s, 'L', [row('lblue', { color: 'red' }), row('lred', { color: 'green' }), row('lgreen', { color: 'blue' })])).toEqual([])
+    // One row of the trade alone collides with the other variant as it still is.
+    expect(found(s, 'R', [row('r1k', { res: '10000' })])).toEqual([['r1k', 'r10k']])
+  })
+  it('passes a change through a state another variant holds (C2): 100n·50V -> 220n·25V next to 220n·50V', () => {
+    const s = capacitors([
+      ['a', '0.0000001', '50'],
+      ['b', '0.00000022', '50'],
+    ])
+    expect(found(s, 'C', [row('a', { cap: '0.00000022', volt: '25' })])).toEqual([])
+    expect(found(s, 'C', [row('a', { cap: '0.00000022' })])).toEqual([['a', 'b']])
+  })
+  it('lists every row that ends equal to another variant, archived ones included, an active one preferred', () => {
+    const s = electronics()
+    expect(found(s, 'R', [row('r1k', { res: '4700' })])).toEqual([['r1k', 'r4k7']])
+    // Three variants end green: each row gets the lowest other id.
+    expect(found(s, 'L', [row('lblue', { color: 'green' }), row('lred', { color: 'green' })])).toEqual([
+      ['lblue', 'lgreen'],
+      ['lred', 'lblue'],
+    ])
+    expect(found(s, 'L', [row('lblue', { color: 'red' }), row('lred', { color: 'blue' }), row('lgreen', { color: 'blue' })])).toEqual([
+      ['lred', 'lgreen'],
+      ['lgreen', 'lred'],
+    ])
+  })
+  it('keeps the values a row does not name; an erased value equals only an empty one; text without case', () => {
+    const s = electronics()
+    expect(found(s, 'C', [row('c16', { volt: '50' })])).toEqual([['c16', 'c50']])
+    expect(found(s, 'C', [row('c16', { volt: null })])).toEqual([])
+    expect(found(s, 'C', [row('c16', { volt: null }), row('c50', { volt: null })])).toEqual([
+      ['c16', 'c50'],
+      ['c50', 'c16'],
+    ])
+    const m = makeSnapshot({
+      items: [item('M', 'Module')],
+      attributes: [attribute('mark', 'Marking', 'text')],
+      itemAttributes: [axis('M', 'mark', 0)],
+      variants: [variant('m1', 'M'), variant('m2', 'M')],
+      variantAttributeValues: [value('m1', 'mark', 'Red'), value('m2', 'mark', 'Blue')],
+    })
+    expect(found(m, 'M', [row('m2', { mark: ' red ' })])).toEqual([['m2', 'm1']])
+  })
+  it('repeating the values a variant already has is no duplicate', () => {
+    const s = electronics()
+    expect(found(s, 'C', [row('c50', { cap: '0.0000001', volt: '50' }), row('c16', { volt: '16' })])).toEqual([])
   })
 })

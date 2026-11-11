@@ -1,6 +1,6 @@
 import { BUILTIN_UNITS, newId, type InventorySnapshot } from '@graymatter/core'
 import { describe, expect, it } from 'vitest'
-import { parseAmountText, parseMoneyText, unitChoices } from '../app/lib/amounts'
+import { amountPreview, parseAmountText, parseMoneyText, pricePreview, unitChoices } from '../app/lib/amounts'
 import { dictionaryView } from '../app/lib/dictionaries'
 
 const pcs = BUILTIN_UNITS.pcs
@@ -56,5 +56,48 @@ describe('unitChoices', () => {
     const custom = unitChoices(s).slice(Object.keys(BUILTIN_UNITS).length)
     expect(custom.map((u) => u.name)).toEqual(['bag', 'Box', 'roll 9', 'Roll 10'])
     expect(custom.map((u) => u.key)).toEqual(dictionaryView(s).units.filter((u) => u.custom).map((u) => u.unit.key))
+  })
+})
+
+describe('expressions in fields', () => {
+  it('amounts: sums with units, products, brackets', () => {
+    expect(parseAmountText('2.5m + 120cm', m)).toBe('3.7')
+    expect(parseAmountText('3 * 1.5k', pcs)).toBe('4500')
+    expect(parseAmountText('5x100', pcs)).toBe('500')
+    expect(parseAmountText('(1+2)×3', pcs)).toBe('9')
+    expect(parseAmountText('10/4', pcs)).toBe('2.5')
+  })
+
+  it('amounts: broken or negative expressions are no amount', () => {
+    for (const bad of ['1+', '2-5', '1/0', '2*(3', '5x']) expect(parseAmountText(bad, pcs)).toBeNull()
+  })
+
+  it('prices: expressions, rounded to the currency decimals', () => {
+    expect(parseMoneyText('2.30 + 1.1', 'USD')).toBe(340)
+    expect(parseMoneyText('10/3', 'USD')).toBe(333)
+    expect(parseMoneyText('1500/3', 'JPY')).toBe(500)
+    expect(parseMoneyText('1-5', 'USD')).toBeNull()
+  })
+
+  it('prices: rounded once, at the currency decimals', () => {
+    expect(parseMoneyText('1/200.02', 'USD')).toBe(0)
+    expect(parseMoneyText('1/199.98', 'USD')).toBe(1)
+    expect(parseMoneyText('100/3x3', 'USD')).toBe(10000)
+    expect(pricePreview('1/200.02', 'USD')).toEqual({ text: '0.00' })
+  })
+
+  it('amounts: x right after a unit, exact thirds', () => {
+    expect(parseAmountText('2mx3', m)).toBe('6')
+    expect(parseAmountText('1/3*3', pcs)).toBe('1')
+  })
+
+  it('previews an expression only', () => {
+    expect(amountPreview('2.5m + 120cm', m)).toEqual({ text: '3.7 m' })
+    expect(amountPreview('2.5m', m)).toBeNull()
+    expect(amountPreview('', m)).toBeNull()
+    expect(amountPreview('1/0', pcs)).toEqual({ errorKey: 'expression.divide_by_zero' })
+    expect(amountPreview('1-3', pcs)).toEqual({ errorKey: 'expression.negative' })
+    expect(pricePreview('10/3', 'USD')).toEqual({ text: '3.33' })
+    expect(pricePreview('19.99', 'USD')).toBeNull()
   })
 })

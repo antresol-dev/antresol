@@ -87,6 +87,30 @@ export default defineNuxtConfig({
       navigateFallback: baseURL,
       // Files with an extension (assets, manifest, sw) are never navigations to the app shell.
       navigateFallbackDenylist: [/\/[^/?]+\.[^/]+$/],
+      // Photos of the three stores (all send Access-Control-Allow-Origin: *, and <img crossorigin> asks with CORS): cache first,
+      // only real 200 responses (statuses 0 would be opaque ones, which also balloon the storage quota). Thumbnails and
+      // bigger sizes live in separate caches, each trimmed to its newest entries. Cache names: PHOTO_CACHE in lib/photo-cache.ts.
+      runtimeCaching: [
+        {
+          // photoUrl 'thumb': Uploadcare preview 160x160, Cloudinary w_400, Imgur size letter m.
+          urlPattern: /^https:\/\/(?:(?:ucarecdn\.com|[a-z0-9.-]+\.ucarecd\.net)\/.+\/-\/preview\/160x160\/|res\.cloudinary\.com\/[^/]+\/image\/upload\/w_400,|i\.imgur\.com\/[A-Za-z0-9]+m\.[a-z0-9]+(?:$|\?))/,
+          handler: 'CacheFirst',
+          options: {
+            cacheName: 'gm-photos-thumb',
+            expiration: { maxEntries: 600, purgeOnQuotaError: true },
+            cacheableResponse: { statuses: [200] },
+          },
+        },
+        {
+          urlPattern: /^https:\/\/(?:ucarecdn\.com|[a-z0-9.-]+\.ucarecd\.net|res\.cloudinary\.com|i\.imgur\.com)\//,
+          handler: 'CacheFirst',
+          options: {
+            cacheName: 'gm-photos-full',
+            expiration: { maxEntries: 150, purgeOnQuotaError: true },
+            cacheableResponse: { statuses: [200] },
+          },
+        },
+      ],
     },
     devOptions: { enabled: false },
   },

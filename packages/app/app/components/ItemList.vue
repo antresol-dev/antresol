@@ -48,7 +48,7 @@ const rows = computed(() =>
 </script>
 
 <template>
-  <section class="grid gap-2">
+  <section class="grid min-w-0 grid-cols-1 gap-2">
     <h2 class="px-1 text-[13px] font-semibold text-subtle-foreground">{{ $t('folder.items', { count: items.length }) }}</h2>
     <!-- A flat list on the page: rows divided by lines, a row tile tinted under the pointer. -->
     <ul>

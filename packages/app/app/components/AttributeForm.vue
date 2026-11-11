@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Attribute, AttributeKind, Id } from '@graymatter/core'
-import { formatNumberValue, MAX_PINNED_ATTRIBUTES, parseNumberValue } from '@graymatter/core'
+import { MAX_PINNED_ATTRIBUTES } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'vue-sonner'
 import { captureBaseline, changedFields } from '~/lib/changed-fields'
-import { attributeCreateCommand, attributeFormError, MAX_UNIT_LENGTH } from '~/lib/axes'
+import { attributeCreateCommand, attributeFormError, MAX_UNIT_LENGTH, prefixExample } from '~/lib/axes'
 import { errorMessageKey } from '~/lib/errors'
 import { parseNameList } from '~/lib/lists'
 
@@ -56,13 +56,8 @@ const changes = computed(() =>
   }),
 )
 
-// The example under the switch: what the unit and prefixes make of "4k7" (or of a plain "4700" without prefixes).
-const example = computed(() => {
-  const rules = { unit: unit.value.trim(), siPrefixes: siPrefixes.value }
-  const input = rules.siPrefixes ? '4k7' : '4700'
-  const stored = parseNumberValue(input, rules)
-  return stored === null ? null : `${input} → ${formatNumberValue(stored, rules)}`
-})
+// The line under the switch, on or off: what prefixes make of "4k7" with this unit.
+const example = computed(() => prefixExample(unit.value))
 const canSubmit = computed(
   () => !busy.value && !state.readOnly && !!state.snapshot && (!props.attribute || Object.keys(changes.value).length > 0),
 )

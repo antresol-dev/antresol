@@ -158,7 +158,8 @@ export interface Workspace {
   /** Prepares, uploads and records each file in order (photo.add with newId, provider, fileId, url). Stops at the first failure
    *  and rejects with it; photos already added stay. onProgress(doneCount) after each file. */
   addPhotos(itemId: Id, files: File[], onProgress?: (done: number) => void): Promise<void>
-  /** One photo per variant: removes the old one first. */
+  /** One photo per variant: uploads, then one photo.replace that names the variant's photo as shown now (null: none);
+   *  only that one is replaced. */
   setVariantPhoto(itemId: Id, variantId: Id, file: File): Promise<void>
   removePhoto(photoId: Id): Promise<void>
   /** photo.reorder with the chosen photo first. */
@@ -167,7 +168,8 @@ export interface Workspace {
   createInventory(input: { sourceId: string; name: string; currency: string; id?: Id }): Promise<InventoryRef>
   addSource(input: Omit<SourceConfig, 'id' | 'createdAt'>): Promise<SourceConfig>
   /** Of overlapping calls for one source the last one called wins; an earlier one, or one whose source was removed
-   *  meanwhile, resolves without applying its outcome. */
+   *  meanwhile, resolves without applying its outcome. Rejects with `not_found` for an unknown source, and for one a
+   *  removal is under way for (saved then, the edit could bring it back). */
   updateSource(
     id: string,
     patch: Partial<Pick<
@@ -182,6 +184,8 @@ export interface Workspace {
         | 'imgurClientId'
       >>,
   ): Promise<void>
+  /** Its saved list goes before the source itself: a removal that fails midway leaves no list without its source, and
+   *  can be run again. A write on its way keeps the connection until it is done. */
   removeSource(id: string): Promise<void>
   setDeviceName(name: string): Promise<void>
 }

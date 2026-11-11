@@ -1,6 +1,6 @@
 import { axisRemovalPreview } from '@graymatter/core'
 import { describe, expect, it } from 'vitest'
-import { attributeCreateCommand, attributeFormError, axesSummary, axisAddLoss, axisRemovalNotice, movedAxes, variantClash } from '../app/lib/axes'
+import { attributeCreateCommand, attributeFormError, axesSummary, axisAddLoss, axisRemovalNotice, movedAxes, prefixExample, variantClash } from '../app/lib/axes'
 import { axisSnapshot } from './fixtures/axis-snapshot'
 
 const ids = { id: 'a1', inventoryId: 'inv' }
@@ -20,6 +20,17 @@ describe('attributeCreateCommand', () => {
     expect(attributeFormError({ ...form, kind: 'enum' })).toBe('attributeForm.optionsRequired')
     expect(attributeFormError({ ...form, unit: 'x'.repeat(17) })).toBe('attributeForm.unitTooLong')
     expect(attributeFormError(form)).toBeNull()
+  })
+})
+
+describe('prefixExample', () => {
+  // The owner, 2026-11-12: "4700 → 4700" said nothing. The line under the switch always shows what prefixes give.
+  it('shows what SI prefixes make of 4k7, with the attribute\'s unit', () => {
+    expect(prefixExample('Ω')).toBe('4k7 → 4.7 kΩ')
+    expect(prefixExample(' V ')).toBe('4k7 → 4.7 kV')
+  })
+  it('without a unit: the bare prefix', () => {
+    expect(prefixExample('')).toBe('4k7 → 4.7k')
   })
 })
 

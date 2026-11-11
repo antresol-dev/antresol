@@ -13,6 +13,6 @@ describe('FileError', () => {
     expect(new FileError('failed', 'boom').message).toBe('boom')
   })
   it('lists every code', () => {
-    expect(FILE_ERROR_CODES).toEqual(['no_store', 'unsupported', 'too_large', 'rejected', 'unavailable', 'failed'])
+    expect(FILE_ERROR_CODES).toEqual(['no_store', 'unsupported', 'too_large', 'too_large_to_decode', 'rejected', 'unavailable', 'failed'])
   })
 })

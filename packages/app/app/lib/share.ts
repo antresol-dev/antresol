@@ -1,20 +1,18 @@
 import {
-  BUILTIN_UNITS,
   addQ,
   cmpQ,
   compareNumberValues,
   formatAmount,
   isCanonicalNumber,
   parseNumberValue,
-  resolveUnit,
   type Attribute,
   type Id,
   type InventorySnapshot,
   type Quantity,
   type SourceReceipt,
-  type UnitDef,
 } from '@graymatter/core'
 import { existingMatches, kiloK, type MatchRow } from './quick-add'
+import { nearestSuggestion, suffixed, unitOf, VALUE_WORD, type NearestSuggestion } from './nearest'
 import { pathOf, snapshotIndex, stockQuantity } from './views'
 
 /** What the system share sheet (PWA share target, GET) or a paste hands over. On Android the link comes inside `text`. */
@@ -131,11 +129,9 @@ export interface ValueChip {
    *  null when nothing has the value. */
   number: string | null
   inStock: boolean
+  /** Nothing has the value: the nearest smaller and larger ones ("No 4.7 kΩ — nearest: 4.3 kΩ (12) · 5.1 kΩ (40)"). */
+  nearest?: NearestSuggestion
 }
-
-/** A word that starts like a number and has something after it ("10K", "4k7", "1%", "0.25W"); a bare number ("600") is
- *  too vague to be a value. */
-const VALUE_WORD = /^\p{N}[\p{N}.,]*\s*[^\p{N}\s.,]/u
 
 interface Holder {
   itemId: Id
@@ -187,20 +183,10 @@ export function valueChips(query: string, s: InventorySnapshot): ValueChip[] {
       .join('|')
     if (seen.has(key)) continue
     seen.add(key)
-    chips.push({ text: word, ...stockOf(s, found) })
+    const near = found.length === 0 ? nearestSuggestion(s, word) : null
+    chips.push({ text: word, ...stockOf(s, found), ...(near ? { nearest: near } : {}) })
   }
   return chips
-}
-
-function unitOf(s: InventorySnapshot, itemId: Id): UnitDef {
-  const item = snapshotIndex(s).items.get(itemId)
-  return (item && resolveUnit(item.unitKey, s.units)) ?? BUILTIN_UNITS.pcs
-}
-
-/** An amount with the unit as a suffix, as list rows write it: "100", "1.5k", "3 m". */
-function suffixed(q: Quantity, unit: UnitDef): string {
-  const text = formatAmount(q, unit)
-  return unit.key === 'pcs' ? text.replace(/ pcs$/, '') : text
 }
 
 function stockOf(s: InventorySnapshot, holders: Holder[]): { number: string | null; inStock: boolean } {

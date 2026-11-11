@@ -420,15 +420,15 @@ function plan(
 
 /**
  * InventoryStorage.restore (see there). Each batch is one transaction: the revision lock first (writes and migrations
- * queue on it, as with apply), in the first batch of a same-ids restore the empty-source check, the inserts, the
- * revision bump. `batchRows`: tests use small batches.
+ * queue on it, as with apply), then `options.guard` (the storage's schema check, GM003), in the first batch of a same-ids
+ * restore the empty-source check, the inserts, the revision bump. `batchRows`: tests use small batches.
  */
 export async function restoreBackup(
   exec: PgExecutor,
   backup: { inventories: InventoryExport[] },
   mode: RestoreMode,
   runId: Id,
-  options: RestoreOptions = {},
+  options: RestoreOptions & { guard?: Statement } = {},
   batchRows: number = RESTORE_BATCH_ROWS,
 ): Promise<RestoreResult> {
   if (!Number.isInteger(batchRows) || batchRows < 1) throw new Error(`invalid batch size ${batchRows}`)
@@ -454,12 +454,13 @@ export async function restoreBackup(
   let done = 0
   onProgress?.(done, total)
   for (const [index, batch] of batches.entries()) {
-    const guard = guarded && index === 0 ? [EMPTY_SOURCE_GUARD] : []
+    const empty = guarded && index === 0 ? [EMPTY_SOURCE_GUARD] : []
+    const guard = [...(options.guard ? [options.guard] : []), ...empty]
     let results: Record<string, unknown>[][]
     try {
       results = await exec.batch([LOCK_REV, ...guard, ...batch.inserts.map((i) => i.statement), REV_BUMP])
     } catch (e) {
-      if (guard.length && isNotEmptyRefusal(e)) {
+      if (empty.length && isNotEmptyRefusal(e)) {
         throw new StorageError('not_empty', 'a restore with the same ids goes only into a source without inventories')
       }
       throw e

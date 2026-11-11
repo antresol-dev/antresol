@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Image as ImageIcon } from '@lucide/vue'
 import { resolveDeviceUrl } from '~/lib/device-files'
+import { photoCrossorigin } from '~/lib/photo-cache'
 import { displayablePhotoUrl, isDeviceUrl, type PhotoSize } from '~/lib/photo-url'
 
 const props = defineProps<{ url: string; size: PhotoSize; alt: string }>()
@@ -36,7 +37,16 @@ watch(
 </script>
 
 <template>
-  <img v-if="src && !failed" :src="src" :alt="alt" loading="lazy" decoding="async" draggable="false" @error="failed = true" >
+  <img
+    v-if="src && !failed"
+    :crossorigin="photoCrossorigin(src)"
+    loading="lazy"
+    decoding="async"
+    :src="src"
+    :alt="alt"
+    draggable="false"
+    @error="failed = true"
+  >
   <div
     v-else
     class="grid place-items-center bg-thumb text-thumb-foreground"

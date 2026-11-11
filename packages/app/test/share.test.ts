@@ -143,8 +143,8 @@ describe('with the demo inventory', () => {
     const chips = valueChips('1/4W Metal Film Resistor 1% 10K 4.7K 47K 1K 100k 600', snap)
     expect(chips).toEqual([
       { text: '10K', number: '100', inStock: true },
-      { text: '4.7K', number: null, inStock: false },
-      { text: '47K', number: null, inStock: false },
+      { text: '4.7K', number: null, inStock: false, nearest: expect.objectContaining({ wanted: '4.7 kΩ' }) },
+      { text: '47K', number: null, inStock: false, nearest: expect.objectContaining({ wanted: '47 kΩ' }) },
       { text: '1K', number: '0', inStock: false },
       { text: '100k', number: '0', inStock: false },
     ])

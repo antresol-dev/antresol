@@ -5,13 +5,14 @@ import { ChevronDown, X } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { unitChoices } from '~/lib/amounts'
+import { pricePreview, unitChoices } from '~/lib/amounts'
 import { errorMessageKey } from '~/lib/errors'
+import { clearDraft, linkNeedsAmount, saveDraft, type QuickAddDraft } from '~/lib/quick-add-draft'
 import { buildQuickAdd, existingMatches, type MatchRow } from '~/lib/quick-add'
 import { isUnknownOutcome } from '~/lib/unconfirmed'
 import { folderChoices, pathOf, snapshotIndex } from '~/lib/views'
 
-const props = defineProps<{ name: string; folderId: Id | null; url?: string }>()
+const props = defineProps<{ name: string; folderId: Id | null; url?: string; draft?: QuickAddDraft | null }>()
 const emit = defineEmits<{
   done: [added: { id: Id; name: string; photoFailed: boolean }]
   /** "Receive here" on a match: receive into it instead, with what was typed. */
@@ -35,12 +36,14 @@ let sent: ItemCreate | null = null
 
 const name = ref(props.name)
 const folderId = ref<Id | null>(props.folderId)
-const unitKey = ref('pcs')
-const amount = ref('')
-const price = ref('')
-const url = ref(props.url ?? '')
+const unitKey = ref(props.draft?.unitKey ?? 'pcs')
+const amount = ref(props.draft?.amount ?? '')
+const price = ref(props.draft?.price ?? '')
+const url = ref(props.draft?.url ?? props.url ?? '')
+// The link the form opened with from the share sheet; a restored draft remembers its own.
+const prefilledUrl = props.draft ? props.draft.prefilledUrl : props.url
 const picking = ref(false)
-const photo = ref<File | null>(null)
+const photo = ref<File | null>(props.draft?.photo ?? null)
 const preview = computed(() => (photo.value ? URL.createObjectURL(photo.value) : null))
 watch(preview, (_, old) => {
   if (old) URL.revokeObjectURL(old)
@@ -64,10 +67,14 @@ const folderPath = computed(() => {
   const folders = folderId.value === null ? [] : pathOf(snapshotIndex(s), folderId.value)
   return [s.inventory.name, ...folders.map((f) => f.name)].join(' / ')
 })
+const pricePreviewOf = computed(() => pricePreview(price.value, snapshot.value?.inventory.currency ?? ''))
 const currencySymbol = computed(() => {
   const code = snapshot.value?.inventory.currency
   return (code && getCurrency(code)?.symbol) || code || ''
 })
+
+// A shared link is kept only with an amount (see buildQuickAdd): say so while it would be left out.
+const linkHint = computed(() => linkNeedsAmount(url.value, prefilledUrl, amount.value))
 
 const canSubmit = computed(() => !busy.value && !state.readOnly && !!snapshot.value)
 
@@ -81,9 +88,24 @@ function receiveHere(m: MatchRow): void {
   if (busy.value || unconfirmed.value) return
   // The item itself has variants: which one is the person's call, on its card.
   if (m.variantId === null && m.hasVariants) {
+    // Going to the card must not lose what was typed: the next opening of the sheet brings it back.
+    if (snapshot.value)
+      saveDraft({
+        inventoryId: snapshot.value.inventory.id,
+        folderId: folderId.value,
+        name: name.value,
+        unitKey: unitKey.value,
+        amount: amount.value,
+        price: price.value,
+        url: url.value,
+        prefilledUrl,
+        photo: photo.value,
+      })
     emit('open', m.itemId)
     return
   }
+  // The typed values go into the receipt.
+  clearDraft()
   emit('receive', { itemId: m.itemId, variantId: m.variantId, amount: amount.value, price: price.value, url: url.value, photoDropped: photo.value !== null })
 }
 
@@ -106,7 +128,7 @@ async function submit(): Promise<void> {
   const s = snapshot.value
   if (!canSubmit.value || !s) return
   const built = buildQuickAdd(
-    { folderId: folderId.value, name: name.value, unitKey: unitKey.value, amount: amount.value, price: price.value, url: url.value, prefilledUrl: props.url },
+    { folderId: folderId.value, name: name.value, unitKey: unitKey.value, amount: amount.value, price: price.value, url: url.value, prefilledUrl },
     s,
     { itemId: ids.itemId, movementId: ids.movementId },
   )
@@ -136,6 +158,7 @@ async function send(command: ItemCreate): Promise<void> {
         photoFailed = true
       }
     }
+    clearDraft()
     renew()
     emit('done', { id: command.id, name: command.name, photoFailed })
   } finally {
@@ -204,12 +227,16 @@ async function send(command: ItemCreate): Promise<void> {
           <Input
             id="quick-add-price"
             v-model="price"
-            inputmode="decimal"
+            inputmode="text"
             autocomplete="off"
+            autocapitalize="off"
+            autocorrect="off"
+            spellcheck="false"
             aria-describedby="quick-add-price-hint"
             class="h-11 pl-10"
           />
         </div>
+        <ExpressionHint :preview="pricePreviewOf" />
         <p id="quick-add-price-hint" class="text-xs text-subtle-foreground">{{ $t('quickAdd.priceHint') }}</p>
       </div>
 
@@ -218,7 +245,8 @@ async function send(command: ItemCreate): Promise<void> {
           {{ $t('quickAdd.url') }}
           <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
         </Label>
-        <Input id="quick-add-url" v-model="url" type="url" autocomplete="off" class="h-11" />
+        <Input id="quick-add-url" v-model="url" type="url" autocomplete="off" class="h-11" :aria-describedby="linkHint ? 'quick-add-url-hint' : undefined" />
+        <p v-if="linkHint" id="quick-add-url-hint" class="text-xs text-subtle-foreground">{{ $t('quickAdd.linkNeedsAmount') }}</p>
       </div>
 
       <div v-if="canPhoto" class="grid gap-1.5">

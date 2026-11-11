@@ -5,6 +5,9 @@ import { reactiveOmit } from "@vueuse/core"
 import { cn } from "cn"
 import { TooltipArrow, TooltipContent, TooltipPortal, useForwardPropsEmits } from "reka-ui"
 
+// The tooltips repeat their trigger's name for sighted users (TooltipTrigger drops the description), so the pane is
+// hidden from screen readers too: they hear the name once, from the trigger. Pop-in/out are main.css's animations.
+
 defineOptions({
   inheritAttrs: false,
 })
@@ -23,8 +26,9 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
   <TooltipPortal>
     <TooltipContent
       data-slot="tooltip-content"
+      aria-hidden="true"
       v-bind="{ ...forwarded, ...$attrs }"
-      :class="cn('bg-foreground text-background animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 w-fit rounded-chip px-3 py-1.5 text-xs text-balance', props.class)"
+      :class="cn('bg-foreground text-background motion-safe:animate-pop-in motion-safe:data-[state=closed]:animate-pop-out motion-reduce:animate-fade-in motion-reduce:data-[state=closed]:animate-fade-out z-50 w-fit origin-(--reka-tooltip-content-transform-origin) rounded-chip px-3 py-1.5 text-xs text-balance', props.class)"
     >
       <slot />
 

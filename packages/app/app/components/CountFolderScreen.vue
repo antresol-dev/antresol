@@ -3,6 +3,7 @@ import type { Id, Quantity } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from 'vue-sonner'
+import { amountPreview } from '~/lib/amounts'
 import { applyCounts, countChanges, countRows, renewCountId, type CountIds, type CountRow } from '~/lib/count-folder'
 import { errorMessageKey } from '~/lib/errors'
 import { isUnknownOutcome } from '~/lib/unconfirmed'
@@ -55,6 +56,12 @@ const groups = computed(() => {
   return list
 })
 const labelOf = (row: CountRow): string => (row.variantName === null ? row.itemName : `${row.itemName} · ${row.variantName}`)
+
+// "= 37 pcs" before the "was" of a row typed as an expression.
+function exprOf(row: CountRow): string | null {
+  const p = amountPreview(entries.get(row.key) ?? '', row.unitDef)
+  return p && 'text' in p ? p.text : null
+}
 
 function edit(row: CountRow, text: string | number): void {
   entries.set(row.key, String(text))
@@ -129,7 +136,7 @@ const divider =
                   {{ $t(failed.unknown ? 'countFolder.notConfirmed' : 'countFolder.notSaved', { reason: $t(failed.messageKey) }) }}
                 </span>
                 <span v-else-if="changeOf.has(row.key)" class="text-[13px] text-muted-foreground tabular-nums">
-                  {{ $t('countFolder.was', { amount: `${row.number} ${row.unit}` }) }}
+                  <template v-if="exprOf(row)">{{ $t('expression.result', { value: exprOf(row) }) }} · </template>{{ $t('countFolder.was', { amount: `${row.number} ${row.unit}` }) }}
                 </span>
               </label>
               <div class="relative w-32 shrink-0">
@@ -137,9 +144,12 @@ const divider =
                   :id="`count-${row.key}`"
                   data-count
                   :model-value="entries.get(row.key) ?? row.quantity"
-                  inputmode="decimal"
+                  inputmode="text"
                   enterkeyhint="next"
                   autocomplete="off"
+                  autocapitalize="off"
+                  autocorrect="off"
+                  spellcheck="false"
                   :aria-label="$t('countFolder.field', { name: labelOf(row) })"
                   :aria-invalid="changeOf.get(row.key)?.target === null ? true : undefined"
                   :readonly="busy"

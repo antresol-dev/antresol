@@ -46,8 +46,10 @@ export function toStatements(c: Command, actor: Actor): Statement[] {
     case 'variant.createMany':
     case 'variant.update':
     case 'variant.setAttribute':
+    case 'variant.setValues':
       return variantStatements(c, actor)
     case 'photo.add':
+    case 'photo.replace':
     case 'photo.remove':
     case 'photo.reorder':
       return photoStatements(c, actor)

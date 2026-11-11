@@ -83,6 +83,20 @@ export function formatAmount(q: Quantity, unit: UnitDef): string {
   return unit.key === 'pcs' && symbol !== unit.symbol ? `${number}${symbol}` : `${number} ${symbol}`
 }
 
+/** The power of ten a suffix stands for: '' or the unit symbol is 0, 'k' / 'km' is 3; undefined if it is none of the
+ *  unit's prefixes. */
+export function unitSuffixPower(suffix: string, unit: UnitDef): number | undefined {
+  if (suffix === '' || suffix === unit.symbol) return 0
+  let power: number | undefined
+  for (const p of unit.prefixPowers) {
+    const symbols = p === -6 ? ['µ', 'u'] : [SI_PREFIXES[p]?.symbol]
+    for (const s of symbols) {
+      if (s && (suffix === s || suffix === s + unit.symbol)) power = p
+    }
+  }
+  return power
+}
+
 export function parseAmount(input: string, unit: UnitDef): Quantity | null {
   const m = /^\s*(-?[\d.,]+)\s*(\S*)\s*$/.exec(input)
   if (!m) return null
@@ -90,17 +104,7 @@ export function parseAmount(input: string, unit: UnitDef): Quantity | null {
   if (number === null) return null
   const suffix = m[2]!
 
-  let power: number | undefined
-  if (suffix === '' || suffix === unit.symbol) {
-    power = 0
-  } else {
-    for (const p of unit.prefixPowers) {
-      const symbols = p === -6 ? ['µ', 'u'] : [SI_PREFIXES[p]?.symbol]
-      for (const s of symbols) {
-        if (s && (suffix === s || suffix === s + unit.symbol)) power = p
-      }
-    }
-  }
+  const power = unitSuffixPower(suffix, unit)
   if (power === undefined) return null
 
   const micro = toMicro(number)

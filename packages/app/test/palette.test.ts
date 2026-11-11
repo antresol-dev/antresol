@@ -296,4 +296,17 @@ describe('palette', () => {
     expect(snapshotSearch(snap)).toBe(snapshotSearch(snap))
     expect(snapshotSearch(structuredClone(snap))).not.toBe(snapshotSearch(snap))
   })
+
+  it('suggests the nearest values first when nobody holds the typed one', () => {
+    const ctx: PaletteContext = { query: '4k7', folder: null, inventories, current: electronics, sections: [], canWrite: true }
+    const groups = paletteResults(snap, snapshotSearch(snap), ctx, () => '')
+    expect(groups[0]!.key).toBe('nearest')
+    const row = groups[0]!.rows[0]!
+    expect(row).toMatchObject({ kind: 'nearest', suggestion: { wanted: '4.7 kΩ', above: { value: '10 kΩ' } } })
+    // Something holds 10 kΩ: no suggestion, and a bare number or a case code is no value at all.
+    for (const query of ['10k', '104', '600']) {
+      const g = paletteResults(snap, snapshotSearch(snap), { ...ctx, query }, () => '')
+      expect(g.some((x) => x.key === 'nearest')).toBe(false)
+    }
+  })
 })

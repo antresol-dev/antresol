@@ -213,25 +213,131 @@ describe.skipIf(!url)('Neon conformance', () => {
         )
       })
 
-      it('concurrent applies are serialized on the revision row', async () => {
-        const other = make()
+      it('runs the Plan 9 scenario: values set at once, variants with stock, a photo replaced; a newer schema refuses writes', async () => {
+        const { storage } = await openPostgresStorage(exec)
+        const [inv, item, cap, volt] = [newId(), newId(), newId(), newId()]
+        const [a, b, c, m, p1, p2] = [newId(), newId(), newId(), newId(), newId(), newId()]
+        await storage.apply({ type: 'inventory.create', id: inv, name: `plan9-${name}`, description: null, currency: 'USD' }, TEST_ACTOR)
+        let copy: InventorySnapshot = await storage.loadInventory(inv)
+        const step = async (cmd: Command) => {
+          const r = await storage.apply(cmd, TEST_ACTOR)
+          expect(r.patch, cmd.type).not.toBeNull()
+          copy = patchSnapshot(copy, r.patch!)
+        }
+        const values = (variantId: string) =>
+          Object.fromEntries(copy.variantAttributeValues.filter((r) => r.variantId === variantId).map((r) => [r.attributeId, r.value]))
+        await step(itemCreate(inv, item, 'Capacitor'))
+        await step(attributeCreate(inv, cap, 'Capacitance', 'number', { unit: 'F', siPrefixes: true }))
+        await step(attributeCreate(inv, volt, 'Voltage', 'number', { unit: 'V' }))
+        await step({ type: 'item.addAxis', itemId: item, attributeId: cap, firstVariantId: newId() })
+        await step({ type: 'item.addAxis', itemId: item, attributeId: volt, firstVariantId: newId() })
+        const pair = (x: string, y: string) => [{ attributeId: cap, value: x }, { attributeId: volt, value: y }]
+        await step({
+          type: 'variant.createMany',
+          itemId: item,
+          variants: [
+            { id: a, values: pair('0.0000001', '50'), initialReceipt: { movementId: m, quantity: '10' as Quantity } },
+            { id: b, values: pair('0.00000022', '50') },
+            { id: c, values: pair('0.00000047', '16') },
+          ],
+        })
+        expect((await storage.loadMovements(item)).map((x) => [x.id, x.variantId, x.quantity])).toEqual([[m, a, '10']])
+        const set = (rows: [string, Record<string, string | null>][]): Command => ({
+          type: 'variant.setValues',
+          itemId: item,
+          rows: rows.map(([variantId, v]) => ({ variantId, values: Object.entries(v).map(([attributeId, value]) => ({ attributeId, value })) })),
+        })
+        // C2: 100n·50V -> 220n·25V next to 220n·50V; then b and c trade their values.
+        await step(set([[a, { [cap]: '0.00000022', [volt]: '25' }]]))
+        await step(set([[b, { [cap]: '0.00000047', [volt]: '16' }], [c, { [cap]: '0.00000022', [volt]: '50' }]]))
+        // Sent unvalidated, as from a copy that is behind: c would equal b. Refused whole (GM004), nothing written.
+        const revBefore = (await storage.listInventories()).rev
+        await expect(
+          storage.apply(set([[a, { [volt]: '35' }], [c, { [cap]: '0.00000047', [volt]: '16' }]]), TEST_ACTOR),
+        ).rejects.toMatchObject({ code: 'conflict' })
+        expect((await storage.listInventories()).rev).toBe(revBefore)
+        expect(normSnapshot(copy)).toEqual(normSnapshot(await storage.loadInventory(inv)))
+        expect([values(a), values(b), values(c)]).toEqual([
+          { [cap]: '0.00000022', [volt]: '25' },
+          { [cap]: '0.00000047', [volt]: '16' },
+          { [cap]: '0.00000022', [volt]: '50' },
+        ])
+        await step({ type: 'photo.add', id: p1, itemId: item, variantId: b, provider: 'imgbb', fileId: 'f1', url: 'https://i.example/f1' })
+        const replace = (id: string, replaces: string | null): Command => ({
+          type: 'photo.replace', variantId: b, id, itemId: item, replaces, provider: 'imgbb', fileId: id, url: `https://i.example/${id}`,
+        })
+        await step(replace(p2, p1))
+        expect(copy.photos.map((p) => [p.id, p.variantId, p.position])).toEqual([[p2, b, 0]])
+        // A newer photo, then the first replace again (a late replay): the newer one stays.
+        const p3 = newId()
+        await step(replace(p3, p2))
+        await step(replace(p2, p1))
+        expect(copy.photos.map((p) => [p.id, p.variantId, p.position])).toEqual([[p3, b, 0]])
+        expect(normSnapshot(copy)).toEqual(normSnapshot(await storage.loadInventory(inv)))
+
+        // G3: another device moved the database past this app after it opened: the write is refused, nothing written.
+        const [{ value: min }] = (await exec.query(sql`select value from gm_meta where key = 'min_app_schema'`)) as [{ value: string }]
+        await exec.batch([sql`update gm_meta set value = '99' where key = 'min_app_schema'`])
         try {
-          const { storage: a } = await openPostgresStorage(exec)
-          const { storage: b } = await openPostgresStorage(other)
-          const inv = newId()
-          await a.apply({ type: 'inventory.create', id: inv, name: `race-${name}`, description: null, currency: 'USD' }, TEST_ACTOR)
-          const folder = (id: string) =>
-            ({ type: 'folder.create', id, inventoryId: inv, parentId: null, name: id, description: null }) as const
-          for (let round = 0; round < 3; round++) {
-            const [ra, rb] = await Promise.all([a.apply(folder(newId()), TEST_ACTOR), b.apply(folder(newId()), TEST_ACTOR)])
-            // Whichever committed second read, under the lock, exactly the revision the first one wrote.
-            const revs = JSON.stringify([ra.prevRev, ra.rev, rb.prevRev, rb.rev])
-            expect(ra.prevRev === rb.rev || rb.prevRev === ra.rev, revs).toBe(true)
-          }
+          const rev = (await storage.listInventories()).rev
+          await expect(storage.apply(itemCreate(inv, newId(), 'Late'), TEST_ACTOR)).rejects.toMatchObject({ code: 'read_only' })
+          expect((await storage.listInventories()).rev).toBe(rev)
+          expect((await storage.loadInventory(inv)).items.map((i) => i.id)).toEqual([item])
         } finally {
-          await other.close()
+          await exec.batch([sql`update gm_meta set value = ${min} where key = 'min_app_schema'`])
         }
       })
+
+      it('concurrent applies are serialized on the revision row', async () => {
+        // Deterministic: one transaction holds the revision row (pg_sleep under LOCK_REV); an apply is sent only once
+        // that hold is seen running, and the hold ends only after the apply is seen waiting for the row's lock.
+        const holder = make()
+        const writer = make()
+        const watcher = make()
+        const tag = `gm_race_${newId().replace(/-/g, '')}`
+        /** Sessions other than the watcher's own whose current statement matches `pattern` (and `where`). */
+        const sessions = async (pattern: string, where = 'true'): Promise<number> => {
+          const [row] = await watcher.query<{ n: number }>({
+            text: `select count(*)::int as n from pg_stat_activity
+                    where pid <> pg_backend_pid() and state = 'active' and query like $1 and ${where}`,
+            params: [pattern],
+          })
+          return row?.n ?? 0
+        }
+        const until = async (what: string, seen: () => Promise<boolean>): Promise<void> => {
+          for (let tries = 0; tries < 200; tries++) {
+            if (await seen()) return
+            await new Promise((resolve) => setTimeout(resolve, 50))
+          }
+          throw new Error(`never saw ${what}`)
+        }
+        try {
+          const { storage } = await openPostgresStorage(writer)
+          const inv = newId()
+          await storage.apply({ type: 'inventory.create', id: inv, name: `race-${name}`, description: null, currency: 'USD' }, TEST_ACTOR)
+          // The other writer: the revision lock, a sleep long enough to see the apply wait behind it, the bump.
+          const holding = holder.batch([LOCK_REV, { text: `select pg_sleep(6) as ${tag}`, params: [] }, REV_BUMP])
+          // Awaited below; a failure while still waiting to see it must not surface as an unhandled rejection.
+          holding.catch(() => {})
+          await until('the hold of the revision row', async () => (await sessions(`%${tag}%`)) > 0)
+          const applying = storage.apply(
+            { type: 'folder.create', id: newId(), inventoryId: inv, parentId: null, name: 'queued', description: null },
+            TEST_ACTOR,
+          )
+          applying.catch(() => {})
+          await until('the apply wait for the revision row', async () =>
+            (await sessions('%gm_meta%for update%', `wait_event_type = 'Lock'`)) > 0,
+          )
+          const [held, applied] = await Promise.all([holding, applying])
+          const heldRev = held.at(-1)?.[0]?.value
+          expect(typeof heldRev).toBe('string')
+          // The apply read the revision only once the hold committed: exactly the one it wrote.
+          expect(applied.prevRev).toBe(heldRev)
+          expect(applied.rev).not.toBe(heldRev)
+        } finally {
+          await Promise.all([holder.close(), writer.close(), watcher.close()])
+        }
+      }, 60_000)
 
       it('restores a backup: new ids twice without duplicates; the same ids refused next to the copy unless resuming', async () => {
         const { storage } = await openPostgresStorage(exec)

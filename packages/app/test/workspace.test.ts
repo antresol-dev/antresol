@@ -2158,6 +2158,15 @@ describe('workspace photos', () => {
     expect(seen).toHaveLength(1)
   })
 
+  it('defaultFileStore picks the chosen photo store when its keys are set', () => {
+    const base = config('n4', CS('w'))
+    expect(defaultFileStore({ ...base, photoStore: 'cloudinary', cloudinaryCloudName: 'c', cloudinaryUploadPreset: 'p' })?.provider).toBe('cloudinary')
+    expect(defaultFileStore({ ...base, photoStore: 'cloudinary', cloudinaryCloudName: 'c' })).toBeNull()
+    expect(defaultFileStore({ ...base, photoStore: 'imgur', imgurClientId: 'id' })?.provider).toBe('imgur')
+    expect(defaultFileStore({ ...base, photoStore: 'imgur', uploadcarePublicKey: 'pub' })).toBeNull()
+    expect(defaultFileStore({ ...base, uploadcarePublicKey: 'pub' })?.provider).toBe('uploadcare')
+  })
+
   it('fileStoreFor: demo is the device store, Neon without a key is null', async () => {
     const db = createMemoryDeviceDb()
     await db.putSource(demoConfig)

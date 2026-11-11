@@ -29,6 +29,15 @@ describe('cspFor', () => {
     expect(img).toContain('data:')
   })
 
+  it('lets the app upload to and show photos from Cloudinary and Imgur', () => {
+    const connect = directive(csp, 'connect-src')
+    expect(connect).toContain('https://api.cloudinary.com')
+    expect(connect).toContain('https://api.imgur.com')
+    const img = directive(csp, 'img-src')
+    expect(img).toContain('https://res.cloudinary.com')
+    expect(img).toContain('https://i.imgur.com')
+  })
+
   it('allows only the given inline script hashes', () => {
     expect(directive(csp, 'script-src')).toBe("script-src 'self' 'sha256-abc=' 'sha256-def='")
     expect(directive(cspFor([]), 'script-src')).toBe("script-src 'self'")

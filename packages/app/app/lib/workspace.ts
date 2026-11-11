@@ -15,6 +15,8 @@ import {
   type Movement,
   type SnapshotPatch,
 } from '@graymatter/core'
+import { createCloudinaryStore } from '@graymatter/files-cloudinary'
+import { createImgurStore } from '@graymatter/files-imgur'
 import { createUploadcareStore } from '@graymatter/files-uploadcare'
 import { APP_SCHEMA_VERSION } from '@graymatter/storage-postgres'
 import { markRaw, reactive } from 'vue'
@@ -135,16 +137,22 @@ function isRelistCommand(c: Command): boolean {
     (c.type === 'deletePermanently' && c.target === 'inventory')
 }
 
-/** Demo source: the device store. Neon with a public key: Uploadcare. Anything else: none. */
+/** Demo source: the device store. Neon: the chosen photo store (Uploadcare by default) when its keys are set. Anything else: none. */
 export function defaultFileStore(config: SourceConfig, fetchImpl?: typeof fetch): FileStore | null {
   if (config.kind === 'dev-pglite') return createDeviceFileStore()
-  const key = config.uploadcarePublicKey?.trim()
-  if (config.kind === 'neon' && key) {
-    return createUploadcareStore({ publicKey: key, cdnBase: config.uploadcareCdnBase ?? undefined,
-      ...(fetchImpl ? { fetch: fetchImpl } : {}),
-    })
+  if (config.kind !== 'neon') return null
+  const opts = fetchImpl ? { fetch: fetchImpl } : {}
+  if (config.photoStore === 'cloudinary') {
+    const cloudName = config.cloudinaryCloudName?.trim()
+    const uploadPreset = config.cloudinaryUploadPreset?.trim()
+    return cloudName && uploadPreset ? createCloudinaryStore({ cloudName, uploadPreset, ...opts }) : null
   }
-  return null
+  if (config.photoStore === 'imgur') {
+    const clientId = config.imgurClientId?.trim()
+    return clientId ? createImgurStore({ clientId, ...opts }) : null
+  }
+  const key = config.uploadcarePublicKey?.trim()
+  return key ? createUploadcareStore({ publicKey: key, cdnBase: config.uploadcareCdnBase ?? undefined, ...opts }) : null
 }
 
 export function createWorkspace(deps: WorkspaceDeps): Workspace {
@@ -910,7 +918,15 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
         return null
       }
     }
-    const key = `${config.kind}|${config.uploadcarePublicKey ?? ''}|${config.uploadcareCdnBase ?? ''}`
+    const key = [
+      config.kind,
+      config.photoStore ?? '',
+      config.uploadcarePublicKey ?? '',
+      config.uploadcareCdnBase ?? '',
+      config.cloudinaryCloudName ?? '',
+      config.cloudinaryUploadPreset ?? '',
+      config.imgurClientId ?? '',
+    ].join('|')
     const known = stores.get(sourceId)
     if (known?.key === key) return known.store
     let store: FileStore | null

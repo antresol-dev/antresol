@@ -80,6 +80,19 @@ describe.skipIf(!url)('Neon conformance', () => {
         expect((await inspectSchema(exec)).state).toBe('current')
       })
 
+      it('batch returns the rows of each statement in order', async () => {
+        const result = await exec.batch([
+          { text: 'create temp table gm_probe (x int) on commit drop', params: [] },
+          { text: 'insert into gm_probe values (1), (2)', params: [] },
+          { text: 'update gm_probe set x = x + 1 where x = 2', params: [] },
+          { text: 'select x from gm_probe order by x', params: [] },
+        ])
+        expect(result.length).toBe(4)
+        expect(result[1]).toEqual([])
+        expect(result[2]).toEqual([])
+        expect(result[3]).toEqual([{ x: 1 }, { x: 3 }])
+      })
+
       it.skipIf(name !== 'http')('loads an inventory snapshot in one fetch', async () => {
         const { storage } = await openPostgresStorage(exec)
         const inv = newId()

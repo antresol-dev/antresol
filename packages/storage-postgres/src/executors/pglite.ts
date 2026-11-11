@@ -9,8 +9,10 @@ export function createPgliteExecutor(db: PGlite): PgExecutor {
       return result.rows
     },
     async batch(statements) {
-      await db.transaction(async (tx) => {
-        for (const s of statements) await tx.query(s.text, s.params)
+      return db.transaction(async (tx) => {
+        const out: Record<string, unknown>[][] = []
+        for (const s of statements) out.push((await tx.query<Record<string, unknown>>(s.text, s.params)).rows)
+        return out
       })
     },
     async readBatch(statements) {

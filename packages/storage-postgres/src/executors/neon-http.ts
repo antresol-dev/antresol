@@ -24,13 +24,14 @@ export function createNeonHttpExecutor(connectionString: string, options?: { tim
     query: <Row = Record<string, unknown>>(s: { text: string; params: unknown[] }) =>
       guarded(async (fetchOptions) => (await sql.query(s.text, s.params, { fetchOptions })) as Row[]),
     async batch(statements) {
-      if (statements.length === 0) return
-      await guarded(async (fetchOptions) => {
-        await sql.transaction(
-          statements.map((s) => sql.query(s.text, s.params)),
-          { fetchOptions },
-        )
-      })
+      if (statements.length === 0) return []
+      return guarded(
+        async (fetchOptions) =>
+          (await sql.transaction(
+            statements.map((s) => sql.query(s.text, s.params)),
+            { fetchOptions },
+          )) as Record<string, unknown>[][],
+      )
     },
     async readBatch(statements) {
       if (statements.length === 0) return []

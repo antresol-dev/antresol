@@ -175,7 +175,7 @@ describe('replaying a command with client ids is a no-op', () => {
     for (const c of sizeAxis(inv, item, size)) await storage.apply(c, TEST_ACTOR)
     await storage.apply(variantsCreate(item, [[v, { [size]: 'S' }]]), TEST_ACTOR)
     await storage.apply({ type: 'photo.add', id: old, itemId: item, variantId: v, provider: 'imgbb', fileId: old, url: `https://x/${old}` }, TEST_ACTOR)
-    await twice(storage, { type: 'photo.replace', variantId: v, id: next, itemId: item, provider: 'imgbb', fileId: next, url: `https://x/${next}` })
+    await twice(storage, { type: 'photo.replace', variantId: v, id: next, itemId: item, replaces: old, provider: 'imgbb', fileId: next, url: `https://x/${next}` })
     expect((await storage.loadInventory(inv)).photos.map((p) => [p.id, p.variantId, p.position])).toEqual([[next, v, 0]])
   })
 

@@ -6,6 +6,7 @@ import { computed, isReactive } from 'vue'
 import { createMemoryDeviceDb, type DeviceDb } from '../app/lib/device-db'
 import { defaultDeviceName } from '../app/lib/device-name'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
+import { errorMessageKey } from '../app/lib/errors'
 import { createNeonDriver, type SourceDriver } from '../app/lib/sources'
 import type { InventoryRef, SourceConfig } from '../app/lib/types'
 import type { WorkspaceDeps } from '../app/lib/workspace-types'
@@ -38,6 +39,8 @@ function harness() {
     listGate: null as Promise<void> | null,
     /** One-shot: the next listInventories reads, then runs this before answering. */
     afterList: null as (() => Promise<void>) | null,
+    /** One-shot: the next inspect (a refresh's look at the schema) reads, then runs this before answering. */
+    afterInspect: null as (() => Promise<void>) | null,
     /** listInventories calls by connection string. */
     listsBy: new Map<string, number>(),
     /** While set, every listInventories on this connection string waits for the promise first. */
@@ -190,7 +193,11 @@ function harness() {
       }
       const inspect = async (): ReturnType<typeof conn.inspect> => {
         open()
-        return conn.inspect()
+        const inspection = await conn.inspect()
+        const after = flags.afterInspect
+        flags.afterInspect = null
+        if (after) await after()
+        return inspection
       }
       return { ...conn, storage, inspect, close }
     },
@@ -436,6 +443,36 @@ describe('workspace', () => {
     expect(ws.state.sources[0]!.status).toBe('read_only')
     expect(ws.state.readOnly).toBe('schema_newer')
     expect(checkForUpdate).toHaveBeenCalledTimes(1)
+  })
+
+  it('6d. a refresh that looked at the schema before a write was refused for it keeps the source read-only', async () => {
+    const h = setup()
+    const id = await h.seed(CS('one'), 'Inv')
+    await h.db.putSource(config('s1', CS('one')))
+    const checkForUpdate = vi.fn()
+    const ws = h.workspace({ checkForUpdate })
+    await ws.start()
+    // The refresh reuses the connection and finds the schema still one this app writes; before it answers, another
+    // device migrates past this app and a write is refused for it (GM003, the real guard of the write batch).
+    h.flags.afterInspect = async () => {
+      const next = APP_SCHEMA_VERSION + 1
+      await h.pgs[0]!.exec(`update gm_meta set value = '${next}' where key in ('schema_version', 'min_app_schema')`)
+      await expect(ws.apply(folderCreate(id, 'Nope'))).rejects.toMatchObject({ code: 'read_only' })
+      expect(ws.state.readOnly).toBe('schema_newer')
+    }
+    await ws.refresh()
+    expect(h.flags.afterInspect).toBeNull()
+    // What the refresh saw is older than the refusal: the banner stays, the next write is refused on the device.
+    expect(ws.state.sources[0]!.status).toBe('read_only')
+    expect(ws.state.readOnly).toBe('schema_newer')
+    const calls = h.flags.applyCalls
+    await expect(ws.apply(folderCreate(id, 'Nope'))).rejects.toMatchObject({ code: 'read_only' })
+    expect(h.flags.applyCalls).toBe(calls)
+    // A refresh started after the refusal finds the newer schema itself: still read-only, one look for an update in all.
+    await ws.refresh()
+    expect(ws.state.sources[0]!.status).toBe('read_only')
+    expect(checkForUpdate).toHaveBeenCalledTimes(1)
+    expect((await (await h.direct(CS('one'))).loadInventory(id)).folders).toEqual([])
   })
 
   it('7. validates before writing and keeps the written copy on the device', async () => {
@@ -1384,6 +1421,39 @@ describe('workspace', () => {
       await vi.waitFor(() => expect(h.flags.closeCalls).toBe(1))
     })
 
+    it('of two overlapping removals, one that fails does not let an edit save the source back while the other runs', async () => {
+      const { h, ws } = await started('Inv')
+      const deleting = h.gate()
+      const deleteSource = h.db.deleteSource
+      let calls = 0
+      h.db.deleteSource = async (id) => {
+        // The first removal fails on the device; the second one is still deleting.
+        if (++calls === 1) throw new Error('device storage failed')
+        await deleting.promise
+        return deleteSource(id)
+      }
+      const first = ws.removeSource('s1').then(
+        () => null,
+        (e: unknown) => e,
+      )
+      const second = ws.removeSource('s1')
+      expect(await first).toMatchObject({ message: 'device storage failed' })
+      await vi.waitFor(() => expect(calls).toBe(2))
+      // An edit now: its save would land after the second removal deleted the source.
+      const saving = h.holdDb('putSource')
+      const update = ws.updateSource('s1', { name: 'Renamed' }).then(
+        () => null,
+        (e: unknown) => e,
+      )
+      deleting.open()
+      await second
+      saving.open()
+      expect(await update).toMatchObject({ code: 'not_found' })
+      expect(await h.db.getSources()).toEqual([])
+      expect(await h.db.getListings()).toEqual({})
+      expect(ws.state.sources).toEqual([])
+    })
+
     it('a removal that fails midway leaves no saved list without its source; removing again cleans up', async () => {
       const { h, ws } = await started('Inv')
       const failOnce = (method: 'deleteSource' | 'deleteListing'): void => {
@@ -1678,6 +1748,40 @@ describe('workspace writes patch the local copy', () => {
     h.flags.applyError = null
   })
 
+  it('8b. values another device made equal are refused as a conflict: the copy syncs before the error, nothing written', async () => {
+    const { h, ws, inv } = await started('Inv')
+    const [itemId, axis, a, b] = [newId(), newId(), newId(), newId()]
+    await ws.apply(createItem(inv, itemId))
+    await ws.apply({ type: 'attribute.create', id: axis, inventoryId: inv, name: 'Size', kind: 'text', options: [], unit: '', siPrefixes: false })
+    await ws.apply({ type: 'item.setAttribute', itemId, attributeId: axis, value: 'S' })
+    await ws.apply({ type: 'item.addAxis', itemId, attributeId: axis, firstVariantId: a })
+    await ws.apply({ type: 'variant.createMany', itemId, variants: [{ id: b, values: [{ attributeId: axis, value: 'M' }] }] })
+    expect(ws.state.snapshot!.variants.map((v) => v.id).sort()).toEqual([a, b].sort())
+    const valueOf = (variantId: Id): string | null =>
+      ws.state.snapshot!.variantAttributeValues.find((v) => v.variantId === variantId && v.attributeId === axis)?.value ?? null
+    // Another device sets b to L; this copy still shows M.
+    const other = await h.direct(CS('one'))
+    await other.apply({ type: 'variant.setValues', itemId, rows: [{ variantId: b, values: [{ attributeId: axis, value: 'L' }] }] }, { device: 'other' })
+    expect(valueOf(b)).toBe('M')
+    const before = await other.loadInventory(inv)
+    const lists = h.flags.listCalls
+    // L is free on this copy, so the write goes out; the database refuses it whole.
+    const error = await ws
+      .apply({ type: 'variant.setValues', itemId, rows: [{ variantId: a, values: [{ attributeId: axis, value: 'L' }] }] })
+      .then(
+        () => null,
+        (e: unknown) => e,
+      )
+    expect(error).toMatchObject({ name: 'StorageError', code: 'conflict' })
+    expect(errorMessageKey(error)).toBe('errors.storage.conflict')
+    // Synced before the error came back: the form that shows it already sees the other device's values.
+    expect(h.flags.listCalls).toBe(lists + 1)
+    expect(valueOf(b)).toBe('L')
+    expect(valueOf(a)).toBe('S')
+    expect(ws.state.sources[0]!.status).toBe('ready')
+    expect(await other.loadInventory(inv)).toEqual(before)
+  })
+
   it("9. a load that finished during a write is not overwritten by the write's older rows", async () => {
     const { h, ws, inv } = await started('Inv')
     const itemId = newId()
@@ -1859,6 +1963,35 @@ describe('workspace writes patch the local copy', () => {
     expect(created).not.toBeNull()
     expect(ws.state.current).toEqual(created)
     expect(ws.state.inventories.map((e) => e.inventory.name)).toEqual(['Inv', 'New'])
+    expect(Object.values(await h.db.getListings())[0]!.map((i) => i.name).sort()).toEqual(['Inv', 'New'])
+  })
+
+  it('12c. listings answering out of order never let an older one put back the list an own write changed', async () => {
+    const { h, ws, inv } = await started('Inv')
+    const itemId = newId()
+    await ws.apply(createItem(inv, itemId))
+    // Checks are due: the journal and the write each check the source first.
+    h.flags.clock += 16 * 60_000
+    let created: InventoryRef | null = null
+    // L0, a refresh, reads the source (one inventory) and then waits.
+    h.flags.afterList = async () => {
+      // L1, the journal's check, starts and waits before reading.
+      const l1 = h.gate()
+      h.flags.listGate = l1.promise
+      const journal = ws.loadMovements(itemId)
+      await vi.waitFor(() => expect(h.flags.listGate).toBeNull())
+      // An own new inventory lands; its relist (L2) stores the list with it.
+      created = await ws.createInventory({ sourceId: 's1', name: 'New', currency: 'USD' })
+      // L1 reads after that write and answers after L2: the same list, but a listing that started earlier.
+      l1.open()
+      await journal
+      expect(ws.state.inventories.map((e) => e.inventory.name)).toEqual(['Inv', 'New'])
+    }
+    // L0 answers last, at the revision before the write: it must not take the new inventory away.
+    await ws.refresh()
+    expect(created).not.toBeNull()
+    expect(ws.state.inventories.map((e) => e.inventory.name)).toEqual(['Inv', 'New'])
+    expect(ws.state.current).toEqual(created)
     expect(Object.values(await h.db.getListings())[0]!.map((i) => i.name).sort()).toEqual(['Inv', 'New'])
   })
 
@@ -2457,7 +2590,10 @@ describe('workspace photos', () => {
     expect(uploads).toEqual(['one.jpg', 'two.jpg'])
     const photoCommands = commands.filter((c) => c.type.startsWith('photo.')).map((c) => c.type)
     expect(photoCommands).toEqual(['photo.replace', 'photo.replace'])
-    expect(commands.filter((c) => c.type === 'photo.replace')[1]).toMatchObject({ itemId: variant.itemId, variantId: variant.id, fileId: 'f-2' })
+    // Each names the photo the variant had when it was chosen: none, then the first one.
+    const [one, two] = commands.filter((c) => c.type === 'photo.replace')
+    expect(one).toMatchObject({ itemId: variant.itemId, variantId: variant.id, fileId: 'f-1', replaces: null })
+    expect(two).toMatchObject({ itemId: variant.itemId, variantId: variant.id, fileId: 'f-2', replaces: first.id })
   })
 
   it('removePhoto removes one photo', async () => {

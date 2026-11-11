@@ -645,22 +645,30 @@ describe('Plan 9 commands', () => {
       id, itemId, variantId, provider: 'imgbb', fileId: id, url: `https://x/${id}`, position, createdAt: '', createdBy: '',
     })
     const withPhotos = () => ({ ...electronics(), photos: [photo('p1', 'R', null, 0), photo('p2', 'R', 'r1k', 1), photo('p3', 'C', 'c50', 0)] })
-    const replace = (variantId: string, id: string, itemId = 'R'): Command => ({
-      type: 'photo.replace', variantId, id, itemId, provider: 'imgbb', fileId: id, url: `https://x/${id}`,
+    const replace = (variantId: string, id: string, replaces: string | null, itemId = 'R'): Command => ({
+      type: 'photo.replace', variantId, id, itemId, replaces, provider: 'imgbb', fileId: id, url: `https://x/${id}`,
     })
     it('replaces the photo of an active variant of the item, or adds one when it has none', () => {
-      expect(ec(replace('r1k', U('300')), withPhotos())).toBeNull()
-      expect(ec(replace('r10k', U('300')), withPhotos())).toBeNull()
+      expect(ec(replace('r1k', U('300'), 'p2'), withPhotos())).toBeNull()
+      expect(ec(replace('r10k', U('300'), null), withPhotos())).toBeNull()
     })
     it('a retry (the new photo is already the variant’s) passes; an id of another photo does not', () => {
-      expect(ec(replace('r1k', 'p2'), withPhotos())).toBeNull()
-      expect(ec(replace('r1k', 'p1'), withPhotos())).toBe('invalid_option')
-      expect(ec(replace('r1k', 'p3'), withPhotos())).toBe('invalid_option')
+      expect(ec(replace('r1k', 'p2', 'p0'), withPhotos())).toBeNull()
+      expect(ec(replace('r1k', 'p1', 'p2'), withPhotos())).toBe('invalid_option')
+      expect(ec(replace('r1k', 'p3', 'p2'), withPhotos())).toBe('invalid_option')
+    })
+    it('names the photo the variant has on the copy: none when it has none', () => {
+      // The photo it meant to replace is gone (replaced or removed on another device).
+      expect(ec(replace('r1k', U('300'), U('301')), withPhotos())).toBe('not_found')
+      expect(ec(replace('r1k', U('300'), 'p1'), withPhotos())).toBe('not_found')
+      expect(ec(replace('r10k', U('300'), 'p2'), withPhotos())).toBe('not_found')
+      // The variant got a photo meanwhile: it is not this command's to replace.
+      expect(ec(replace('r1k', U('300'), null), withPhotos())).toBe('invalid_option')
     })
     it('needs an active variant of the item', () => {
-      expect(ec(replace('c50', U('300')), withPhotos())).toBe('not_found')
-      expect(ec(replace('zz', U('300')), withPhotos())).toBe('not_found')
-      expect(ec(replace('r4k7', U('300')), withPhotos())).toBe('archived')
+      expect(ec(replace('c50', U('300'), 'p3'), withPhotos())).toBe('not_found')
+      expect(ec(replace('zz', U('300'), null), withPhotos())).toBe('not_found')
+      expect(ec(replace('r4k7', U('300'), null), withPhotos())).toBe('archived')
     })
   })
 })

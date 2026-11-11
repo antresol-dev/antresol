@@ -40,8 +40,8 @@ describe('photo.replace', () => {
       type: 'photo.add', id, itemId: item, variantId, provider: 'imgbb', fileId: id, url: `https://x/${id}`,
     })
     for (const [id, variantId] of [[p1, null], [p2, a], [p3, null]] as const) await run(add(id, variantId))
-    const replace = (variantId: Id, id: Id, itemId: Id = item): Command => ({
-      type: 'photo.replace', variantId, id, itemId, provider: 'uploadcare', fileId: `f-${id}`, url: `https://y/${id}`,
+    const replace = (variantId: Id, id: Id, replaces: Id | null, itemId: Id = item): Command => ({
+      type: 'photo.replace', variantId, id, itemId, replaces, provider: 'uploadcare', fileId: `f-${id}`, url: `https://y/${id}`,
     })
     const photos = async () =>
       (await storage.loadInventory(inv)).photos
@@ -55,7 +55,7 @@ describe('photo.replace', () => {
     const p4 = newId()
     const copy = await storage.loadInventory(inv)
     const before = (await storage.listInventories()).rev
-    const r = await run(replace(a, p4))
+    const r = await run(replace(a, p4, p2))
     expect(r.prevRev).toBe(before)
     expect(r.rev).toBe((await storage.listInventories()).rev)
     expect(await photos()).toEqual([[p1, null, 0], [p4, a, 1], [p3, null, 2]])
@@ -68,17 +68,43 @@ describe('photo.replace', () => {
   it('adds the photo at the end for a variant that has none', async () => {
     const { run, b, p1, p2, p3, replace, photos } = await setup()
     const p4 = newId()
-    await run(replace(b, p4))
+    await run(replace(b, p4, null))
     expect(await photos()).toEqual([[p1, null, 0], [p2, expect.any(String), 1], [p3, null, 2], [p4, b, 3]])
   })
 
   it('touches nothing for a variant that is not the item’s in the database', async () => {
-    const { run, inv, a, replace, photos } = await setup()
+    const { run, inv, a, p2, replace, photos } = await setup()
     const before = await photos()
     const other = newId()
     await run(itemCreate(inv, other, 'Fuse'))
     // Sent unvalidated, as from a copy that is behind.
-    await run(replace(a, newId(), other))
+    await run(replace(a, newId(), p2, other))
+    expect(await photos()).toEqual(before)
+  })
+
+  it('a late replay keeps the newer photo: only the photo the command names is replaced', async () => {
+    const { storage, run, inv, item, a, p1, p2, p3, replace, photos } = await setup()
+    const [p4, p5] = [newId(), newId()]
+    const first = replace(a, p4, p2)
+    await run(first)
+    await run(replace(a, p5, p4))
+    const settled = await photos()
+    expect(settled).toEqual([[p1, null, 0], [p5, a, 1], [p3, null, 2]])
+    // The first write again, long after (a retry whose answer was lost): p2 is gone, so p5 stays and p4 does not return.
+    const copy = await storage.loadInventory(inv)
+    const r = await run(first)
+    expect(await photos()).toEqual(settled)
+    expect(sliceOf(patchSnapshot(copy, r.patch!), item)).toEqual(sliceOf(await storage.loadInventory(inv), item))
+  })
+
+  it('touches nothing when the variant’s photo is not the one named, or it has one and none is named', async () => {
+    const { run, a, b, p2, replace, photos } = await setup()
+    const before = await photos()
+    // Sent unvalidated, as from a copy that is behind.
+    await run(replace(a, newId(), newId()))
+    await run(replace(a, newId(), null))
+    // b has no photo: a photo named for it is not there.
+    await run(replace(b, newId(), p2))
     expect(await photos()).toEqual(before)
   })
 })

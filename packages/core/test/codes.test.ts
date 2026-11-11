@@ -11,6 +11,6 @@ describe('error codes', () => {
     }
   })
   it('lists the storage codes', () => {
-    expect([...STORAGE_ERROR_CODES]).toEqual(['read_only', 'unavailable', 'not_found', 'incompatible', 'outdated', 'failed', 'not_empty'])
+    expect([...STORAGE_ERROR_CODES]).toEqual(['read_only', 'unavailable', 'not_found', 'incompatible', 'outdated', 'failed', 'not_empty', 'conflict'])
   })
 })

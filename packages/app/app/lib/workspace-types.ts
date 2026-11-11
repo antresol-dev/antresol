@@ -158,7 +158,8 @@ export interface Workspace {
   /** Prepares, uploads and records each file in order (photo.add with newId, provider, fileId, url). Stops at the first failure
    *  and rejects with it; photos already added stay. onProgress(doneCount) after each file. */
   addPhotos(itemId: Id, files: File[], onProgress?: (done: number) => void): Promise<void>
-  /** One photo per variant: removes the old one first. */
+  /** One photo per variant: uploads, then one photo.replace that names the variant's photo as shown now (null: none);
+   *  only that one is replaced. */
   setVariantPhoto(itemId: Id, variantId: Id, file: File): Promise<void>
   removePhoto(photoId: Id): Promise<void>
   /** photo.reorder with the chosen photo first. */

@@ -504,12 +504,14 @@ const GENERATORS: Record<Command['type'], Generator> = {
     weight: 3,
     ready: has('variants'),
     build: (s, p) => {
-      // Mostly a variant that has a photo, so one is replaced.
+      // Mostly a variant that has a photo, so one is replaced; mostly naming the photo the copy shows on it.
       const withPhoto = s.variants.filter((v) => s.photos.some((x) => x.variantId === v.id))
       const variant = withPhoto.length > 0 && p.bool() ? p.one(withPhoto) : p.one(s.variants)
+      const shown = s.photos.find((x) => x.variantId === variant.id)?.id ?? null
       const id = newId()
       return {
-        type: 'photo.replace', variantId: variant.id, id, itemId: variant.itemId, provider: 'imgbb', fileId: id,
+        type: 'photo.replace', variantId: variant.id, id, itemId: variant.itemId,
+        replaces: p.nat(6) === 0 ? p.oneOrNull(ids(s.photos)) : shown, provider: 'imgbb', fileId: id,
         url: `https://i.example/${id}`,
       }
     },
@@ -586,8 +588,13 @@ const refusedByDatabase: string[] = []
  *  deleted since (a foreign key). The app answers it with a Sync (sync spec §4.2). */
 const refusedStale: string[] = []
 
+/** Writes the database refused as stale (`conflict`, nothing written), by command type: expected only of a copy that is
+ *  behind; one from an up-to-date copy goes to `refusedByDatabase`. */
+const conflicts = new Map<Command['type'], number>()
+
 /** Applies a command the way the app does: normalized, validated against the copy, sent. Null when skipped: rejected by
- *  validateCommand, or by the database (recorded in `refusedByDatabase`, or in `refusedStale` for an older copy). */
+ *  validateCommand, or by the database (recorded in `refusedByDatabase`, or in `refusedStale` or `conflicts` for an
+ *  older copy). */
 async function send(c: Command, copy: Snap, actor: Actor = TEST_ACTOR, stale = false): Promise<ApplyResult | null> {
   if (validateCommand(c, copy)) return null
   try {
@@ -595,6 +602,11 @@ async function send(c: Command, copy: Snap, actor: Actor = TEST_ACTOR, stale = f
   } catch (e) {
     if (e instanceof StorageError && e.code === 'failed') {
       ;(stale ? refusedStale : refusedByDatabase).push(`${c.type}: ${e.message}`)
+      return null
+    }
+    if (e instanceof StorageError && e.code === 'conflict') {
+      if (stale) conflicts.set(c.type, (conflicts.get(c.type) ?? 0) + 1)
+      else refusedByDatabase.push(`${c.type}: ${e.message}`)
       return null
     }
     throw e
@@ -648,10 +660,15 @@ describe('patch property', () => {
           const behind = other && theirs.rev !== rev
           const c = normalizeCommand(GENERATORS[chooseType(base, step.kind)].build(base, new Picks(step.numbers)))
           const refusals = refusedStale.length
+          const conflicted = conflicts.get(c.type) ?? 0
           const r = await send(c, base, other ? OTHER : TEST_ACTOR, behind)
           if (!r) {
+            if ((conflicts.get(c.type) ?? 0) > conflicted) {
+              // Refused as stale: nothing written, not even the revision.
+              expect((await storage.listInventories()).rev, `#${i} ${c.type} refused as stale`).toBe(rev)
+            }
             // A write the database refused: the other device syncs at once (sync spec §4.2).
-            if (refusedStale.length > refusals) theirs = { copy, rev }
+            if (refusedStale.length > refusals || (conflicts.get(c.type) ?? 0) > conflicted) theirs = { copy, rev }
             continue
           }
           const label = `#${i} ${other ? 'other ' : ''}${c.type}`
@@ -704,10 +721,14 @@ describe('patch property', () => {
             }
           }
           if (c.type === 'photo.replace') {
-            // One photo per variant at most; validated on an up-to-date copy, the new one.
+            // Never a second photo on a variant; validated on an up-to-date copy, the new one. Only the photo the command
+            // names is replaced (or none, when it names none): otherwise, as for a late replay, nothing changes.
             const own = copy.photos.filter((x) => x.variantId === c.variantId).map(byId)
-            expect(own.length, `${label}: photos of the variant`).toBeLessThanOrEqual(1)
+            const had = before.photos.filter((x) => x.variantId === c.variantId).map(byId)
+            expect(own.length, `${label}: photos of the variant`).toBeLessThanOrEqual(Math.max(1, had.length))
             if (!behind) expect(own, label).toEqual([c.id])
+            const named = c.replaces === null ? had.length === 0 : had.includes(c.replaces)
+            if (!named) expect(own, `${label}: replaced a photo it does not name`).toEqual(had)
           }
 
           if (other) {
@@ -726,6 +747,7 @@ describe('patch property', () => {
     expect(COMMAND_TYPES.filter((t) => !applied.has(t)), 'command types no run applied').toEqual([])
     expect(refusedByDatabase, 'valid commands the database refused').toEqual([])
     expect(refusedStale.filter((m) => !/foreign key/.test(m)), 'stale commands refused for another reason').toEqual([])
+    expect([...conflicts.keys()].filter((t) => t !== 'variant.setValues'), 'commands refused as stale').toEqual([])
     expect(staleWrites, 'writes validated on an older copy').toBeGreaterThan(100)
   })
 

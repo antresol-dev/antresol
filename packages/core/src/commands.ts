@@ -97,8 +97,9 @@ export type Command =
     }
   | { type: 'photo.add'; id: Id; itemId: Id; variantId: Id | null; provider: string; fileId: string; url: string }
   /** The variant's photo is removed and this one added in its place (its position), in one transaction; a variant with
-   *  no photo just gets this one. */
-  | { type: 'photo.replace'; variantId: Id; id: Id; itemId: Id; provider: string; fileId: string; url: string }
+   *  no photo just gets this one. `replaces`: the photo the client saw on the variant (null: none). Only while the
+   *  variant still has that one (or still none) is it replaced: a late replay never takes away a newer photo. */
+  | { type: 'photo.replace'; variantId: Id; id: Id; itemId: Id; replaces: Id | null; provider: string; fileId: string; url: string }
   | { type: 'photo.remove'; id: Id }
   | { type: 'photo.reorder'; itemId: Id; orderedIds: Id[] }
   | { type: 'archive'; target: 'inventory' | 'folder' | 'item' | 'variant'; id: Id; archiveId: Id }

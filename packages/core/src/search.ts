@@ -1,6 +1,7 @@
 import MiniSearch from 'minisearch'
 import type { Id } from './ids'
 import type { InventorySnapshot, Item, Variant } from './model'
+import { variantLabel } from './variants'
 
 export interface SearchHit {
   itemId: Id
@@ -90,12 +91,13 @@ export function createSearch(s: InventorySnapshot): { search(query: string, limi
   for (const v of [...s.variants].sort(variantOrder)) {
     if (v.archivedAt !== null || !activeIds.has(v.itemId)) continue
     const attrs = variantAttrs.get(v.id) ?? []
+    const label = variantLabel(s, v)
     docs.push({
       id: `v:${v.id}`,
       itemId: v.itemId,
       variantId: v.id,
-      name: v.name,
-      compact: [v.name, ...attrs].map(compact).join(' '),
+      name: label,
+      compact: [label, ...attrs].map(compact).join(' '),
       extra: [...attrs, v.description ?? ''].join(' '),
     })
   }

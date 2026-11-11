@@ -1,0 +1,213 @@
+import { describe, expect, it } from 'vitest'
+import type { InventorySnapshot, Variant } from '../src/model'
+import {
+  axisRemovalPreview,
+  compareVariants,
+  duplicateOf,
+  formatAttributeValue,
+  itemAxes,
+  sameAxisValue,
+  variantLabel,
+} from '../src/variants'
+import { ARCHIVED, attribute, axis, electronics, item, makeSnapshot, value, variant } from './fixtures'
+
+const v = (s: InventorySnapshot, id: string): Variant => s.variants.find((x) => x.id === id)!
+const sorted = (s: InventorySnapshot, itemId: string) =>
+  s.variants
+    .filter((x) => x.itemId === itemId)
+    .sort((a, b) => compareVariants(s, a, b))
+    .map((x) => x.id)
+
+/** Capacitor C rebuilt with these variants: [id, capacitance, voltage, over?]. */
+function capacitors(rows: [string, string | null, string | null, Partial<Variant>?][]): InventorySnapshot {
+  const s = electronics()
+  const old = new Set(s.variants.filter((x) => x.itemId === 'C').map((x) => x.id))
+  return {
+    ...s,
+    variants: [...s.variants.filter((x) => x.itemId !== 'C'), ...rows.map(([id, , , over]) => variant(id, 'C', over))],
+    variantAttributeValues: [
+      ...s.variantAttributeValues.filter((r) => !old.has(r.variantId)),
+      ...rows.flatMap(([id, cap, volt]) => [value(id, 'cap', cap), value(id, 'volt', volt)]),
+    ],
+  }
+}
+
+describe('itemAxes', () => {
+  it('lists the axes of an item by axis position, not shared attributes', () => {
+    const s = electronics()
+    expect(itemAxes(s, 'C').map((a) => a.id)).toEqual(['cap', 'volt'])
+    expect(itemAxes(s, 'R').map((a) => a.id)).toEqual(['res'])
+    expect(itemAxes(s, 'M')).toEqual([])
+  })
+})
+
+describe('formatAttributeValue', () => {
+  it('formats numbers by the attribute rules and leaves other kinds as they are', () => {
+    expect(formatAttributeValue(attribute('r', 'R', 'number', { unit: 'Ω', siPrefixes: true }), '4700')).toBe('4.7 kΩ')
+    expect(formatAttributeValue(attribute('r', 'R', 'number', { unit: 'Ω', siPrefixes: false }), '4700')).toBe('4700 Ω')
+    expect(formatAttributeValue(attribute('t', 'T', 'text'), '4700')).toBe('4700')
+    expect(formatAttributeValue(attribute('e', 'E', 'enum', { options: ['DIP'] }), 'DIP')).toBe('DIP')
+  })
+})
+
+describe('variantLabel', () => {
+  it('joins the formatted axis values in axis order', () => {
+    const s = electronics()
+    expect(variantLabel(s, v(s, 'r4k7'))).toBe('4.7 kΩ')
+    expect(variantLabel(s, v(s, 'c50'))).toBe('100 nF · 50 V')
+  })
+  it('shows an empty axis value as a dash', () => {
+    const s = capacitors([['c1', '0.0000001', null]])
+    expect(variantLabel(s, v(s, 'c1'))).toBe('100 nF · —')
+    const missing = { ...s, variantAttributeValues: s.variantAttributeValues.filter((r) => !(r.variantId === 'c1' && r.attributeId === 'volt')) }
+    expect(variantLabel(missing, v(s, 'c1'))).toBe('100 nF · —')
+  })
+})
+
+describe('compareVariants', () => {
+  it('orders number axes by value, not by text', () => {
+    expect(sorted(electronics(), 'R')).toEqual(['r1k', 'r4k7', 'r10k'])
+  })
+  it('orders list axes by the order of the options', () => {
+    expect(sorted(electronics(), 'L')).toEqual(['lred', 'lgreen', 'lblue'])
+  })
+  it('orders by the first axis, then the next', () => {
+    const s = capacitors([
+      ['c1', '0.00001', '16'],
+      ['c2', '0.0000001', '50'],
+      ['c3', '0.0000001', '16'],
+    ])
+    expect(sorted(s, 'C')).toEqual(['c3', 'c2', 'c1'])
+  })
+  it('puts empty values last', () => {
+    const s = capacitors([
+      ['c1', null, '16'],
+      ['c2', '0.0000001', null],
+      ['c3', '0.0000001', '50'],
+      ['c4', '0.000001', '16'],
+    ])
+    expect(sorted(s, 'C')).toEqual(['c3', 'c2', 'c4', 'c1'])
+  })
+  it('orders text axes naturally', () => {
+    const s = makeSnapshot({
+      items: [item('B', 'Board')],
+      attributes: [attribute('rev', 'Revision', 'text')],
+      itemAttributes: [axis('B', 'rev', 0)],
+      variants: [variant('b1', 'B'), variant('b2', 'B'), variant('b3', 'B')],
+      variantAttributeValues: [value('b1', 'rev', 'rev 10'), value('b2', 'rev', 'Rev 2'), value('b3', 'rev', 'rev 1')],
+    })
+    expect(sorted(s, 'B')).toEqual(['b3', 'b2', 'b1'])
+  })
+  it('does not throw on values that do not fit the kind and puts them after the ones that do', () => {
+    const r = electronics()
+    const badNumber = { ...r, variantAttributeValues: r.variantAttributeValues.map((x) => (x.variantId === 'r1k' ? { ...x, value: '1k' } : x)) }
+    expect(sorted(badNumber, 'R')).toEqual(['r4k7', 'r10k', 'r1k'])
+    expect(variantLabel(badNumber, v(badNumber, 'r1k'))).toBe('1k Ω')
+    const dropped = { ...r, variantAttributeValues: r.variantAttributeValues.map((x) => (x.variantId === 'lred' ? { ...x, value: 'amber' } : x)) }
+    expect(sorted(dropped, 'L')).toEqual(['lgreen', 'lblue', 'lred'])
+  })
+  it('orders variants with equal values by id, whatever the order of the rows (stale duplicates)', () => {
+    const s = capacitors([
+      ['c2', '0.0000001', '50'],
+      ['c1', '0.0000001', '50'],
+    ])
+    expect(sorted(s, 'C')).toEqual(['c1', 'c2'])
+    const reversed = { ...s, variants: [...s.variants].reverse() }
+    expect(sorted(reversed, 'C')).toEqual(['c1', 'c2'])
+    expect(variantLabel(s, v(s, 'c1'))).toBe(variantLabel(s, v(s, 'c2')))
+  })
+})
+
+describe('sameAxisValue', () => {
+  const text = attribute('t', 'T', 'text')
+  const list = attribute('e', 'E', 'enum', { options: ['Red', 'red'] })
+  const num = attribute('n', 'N', 'number', { unit: 'Ω', siPrefixes: true })
+  it('compares text ignoring case and outer spaces', () => {
+    expect(sameAxisValue(text, ' Red ', 'red')).toBe(true)
+    expect(sameAxisValue(text, 'Red', 'Rot')).toBe(false)
+  })
+  it('compares list values exactly', () => {
+    expect(sameAxisValue(list, 'Red', 'red')).toBe(false)
+    expect(sameAxisValue(list, 'red', 'red')).toBe(true)
+  })
+  it('compares numbers by their canonical string', () => {
+    expect(sameAxisValue(num, '4700', '4700')).toBe(true)
+    expect(sameAxisValue(num, '4700', '470')).toBe(false)
+  })
+  it('treats empty as equal to empty only', () => {
+    for (const a of [text, list, num]) {
+      expect(sameAxisValue(a, null, null)).toBe(true)
+      expect(sameAxisValue(a, null, 'red')).toBe(false)
+      expect(sameAxisValue(a, '4700', null)).toBe(false)
+    }
+  })
+})
+
+describe('duplicateOf', () => {
+  it('finds a variant with the same axis values, archived ones included', () => {
+    const s = electronics()
+    expect(duplicateOf(s, 'R', new Map([['res', '10000']]))?.id).toBe('r10k')
+    expect(duplicateOf(s, 'R', new Map([['res', '4700']]))?.id).toBe('r4k7')
+    expect(duplicateOf(s, 'R', new Map([['res', '2200']]))).toBeNull()
+  })
+  it('needs every axis to match; a missing value is empty', () => {
+    const s = electronics()
+    expect(duplicateOf(s, 'C', new Map([['cap', '0.0000001'], ['volt', '50']]))?.id).toBe('c50')
+    expect(duplicateOf(s, 'C', new Map([['cap', '0.0000001']]))).toBeNull()
+  })
+  it('skips the variant being changed', () => {
+    const s = electronics()
+    expect(duplicateOf(s, 'R', new Map([['res', '10000']]), 'r10k')).toBeNull()
+  })
+})
+
+describe('axisRemovalPreview', () => {
+  it('blocks when the remaining axes no longer tell variants apart, and lists them', () => {
+    const s = capacitors([
+      ['c3', '0.000001', '16'],
+      ['c50', '0.0000001', '50'],
+      ['c16', '0.0000001', '16'],
+    ])
+    const r = axisRemovalPreview(s, 'C', 'volt')
+    expect(r.blocked).toBe('duplicate_variant')
+    expect(r.collisions.map((g) => g.map((x) => x.id))).toEqual([['c16', 'c50']])
+  })
+  it('offers the shared value when every variant has the same one, and lists the values it removes', () => {
+    const s = capacitors([
+      ['c1', '0.0000001', '50'],
+      ['c2', '0.00001', '50'],
+    ])
+    const r = axisRemovalPreview(s, 'C', 'volt')
+    expect(r.blocked).toBeNull()
+    expect(r.collisions).toEqual([])
+    expect(r.sharedValue).toBe('50')
+    expect(r.removedValues).toEqual([
+      { variantId: 'c1', value: '50' },
+      { variantId: 'c2', value: '50' },
+    ])
+  })
+  it('has no shared value when values differ or one is empty', () => {
+    expect(axisRemovalPreview(electronics(), 'C', 'volt').sharedValue).toBeNull()
+    const s = capacitors([
+      ['c1', '0.0000001', '50'],
+      ['c2', '0.00001', null],
+    ])
+    const r = axisRemovalPreview(s, 'C', 'volt')
+    expect(r.sharedValue).toBeNull()
+    expect(r.removedValues).toEqual([{ variantId: 'c1', value: '50' }])
+  })
+  it('counts archived variants', () => {
+    const s = capacitors([
+      ['c1', '0.0000001', '50'],
+      ['c2', '0.0000001', '16', ARCHIVED],
+    ])
+    expect(axisRemovalPreview(s, 'C', 'volt').blocked).toBe('duplicate_variant')
+  })
+  it('refuses to remove the last axis of an item that has variants, archived ones included', () => {
+    const s = electronics()
+    const onlyArchived = { ...s, variants: s.variants.filter((x) => x.itemId !== 'R' || x.archivedAt !== null) }
+    expect(axisRemovalPreview(onlyArchived, 'R', 'res').blocked).toBe('axis_required')
+    const noVariants = { ...s, variants: s.variants.filter((x) => x.itemId !== 'R') }
+    expect(axisRemovalPreview(noVariants, 'R', 'res')).toEqual({ blocked: null, collisions: [], sharedValue: null, removedValues: [] })
+  })
+})

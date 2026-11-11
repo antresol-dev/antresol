@@ -33,11 +33,12 @@ export interface Item extends Audited, Archivable {
   unitKey: string
   tagIds: Id[]
 }
+/** A variant has no name: it is told apart by its values on the item's axes (see variants.ts). */
 export interface Variant extends Audited, Archivable {
   id: Id
   itemId: Id
-  name: string
   description: string | null
+  /** Creation order; variants sort by their axis values, not by this. */
   position: number
 }
 export interface Tag extends Audited {
@@ -45,12 +46,18 @@ export interface Tag extends Audited {
   inventoryId: Id
   name: string
 }
+export type AttributeKind = 'text' | 'enum' | 'number'
 export interface Attribute extends Audited {
   id: Id
   inventoryId: Id
   name: string
-  kind: 'text' | 'enum'
+  kind: AttributeKind
+  /** List values, in display and sort order; empty for other kinds. */
   options: string[]
+  /** Number kind: free-text unit shown after the value, may be empty; empty for other kinds. */
+  unit: string
+  /** Number kind: values are entered and shown with SI prefixes. */
+  siPrefixes: boolean
 }
 export interface CustomUnit extends Audited {
   id: Id
@@ -59,10 +66,13 @@ export interface CustomUnit extends Audited {
   symbol: string
   prefixPowers: number[]
 }
+/** An attribute attached to an item. Shared: `axisPosition` is null and `value` is the item's value (may be empty).
+ *  Variant axis: `axisPosition` orders the axes and `value` is always null; each variant holds its own value. */
 export interface ItemAttribute {
   itemId: Id
   attributeId: Id
   value: string | null
+  axisPosition: number | null
 }
 export interface VariantAttributeValue {
   variantId: Id

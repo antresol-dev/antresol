@@ -1,6 +1,6 @@
 import { newId, type Command, type Quantity } from '@graymatter/core'
 import { describe, expect, it } from 'vitest'
-import { makeStorage, TEST_ACTOR } from './helpers'
+import { attributeCreate, makeStorage, TEST_ACTOR, variantsCreate } from './helpers'
 
 const q = (s: string) => s as Quantity
 
@@ -59,7 +59,7 @@ describe('replaying a command with client ids is a no-op', () => {
     const { storage, inv } = await setup()
     const item = await plainItem(storage, inv)
     const v = newId()
-    await storage.apply({ type: 'variant.createMany', itemId: item, variants: [{ id: v, name: 'v' }] }, TEST_ACTOR)
+    await storage.apply(variantsCreate(item, [[v, {}]]), TEST_ACTOR)
     const qty = async (variantId: string | null) => (await storage.loadInventory(inv)).stock.find((l) => l.variantId === variantId)?.quantity
     const receive = (quantity: string): Command => ({
       type: 'stock.receive', movementId: newId(), itemId: item, variantId: null, quantity: q(quantity), totalPrice: null, sourceUrl: null, note: null,
@@ -86,12 +86,39 @@ describe('replaying a command with client ids is a no-op', () => {
     expect((await storage.loadMovements(item)).filter((m) => m.kind === 'adjustment')).toHaveLength(1)
   })
 
-  it('variant.createMany keeps positions', async () => {
+  it('variant.createMany keeps positions and the values set since', async () => {
     const { storage, inv } = await setup()
     const item = await plainItem(storage, inv)
+    const size = newId()
     const [a, b] = [newId(), newId()]
-    await twice(storage, { type: 'variant.createMany', itemId: item, variants: [{ id: a, name: 'a' }, { id: b, name: 'b' }] })
-    expect((await storage.loadInventory(inv)).variants.map((x) => [x.id, x.position])).toEqual([[a, 0], [b, 1]])
+    await storage.apply(attributeCreate(inv, size, 'Size'), TEST_ACTOR)
+    await storage.apply({ type: 'item.addAxis', itemId: item, attributeId: size, firstVariantId: newId() }, TEST_ACTOR)
+    const create = variantsCreate(item, [[a, { [size]: 'S' }], [b, { [size]: 'M' }]])
+    await twice(storage, create)
+    await storage.apply({ type: 'variant.setAttribute', variantId: a, attributeId: size, value: 'XS' }, TEST_ACTOR)
+    await storage.apply(create, TEST_ACTOR)
+    const s = await storage.loadInventory(inv)
+    expect(s.variants.map((x) => [x.id, x.position])).toEqual([[a, 0], [b, 1]])
+    expect(s.variantAttributeValues).toEqual(
+      [
+        { variantId: a, attributeId: size, value: 'XS' },
+        { variantId: b, attributeId: size, value: 'M' },
+      ].sort((x, y) => (x.variantId < y.variantId ? -1 : 1)),
+    )
+  })
+
+  it('item.addAxis creates the first variant once', async () => {
+    const { storage, inv } = await setup()
+    const item = await plainItem(storage, inv)
+    const ohm = newId()
+    const first = newId()
+    await storage.apply(attributeCreate(inv, ohm, 'Resistance', 'number', { unit: 'Ω', siPrefixes: true }), TEST_ACTOR)
+    await storage.apply({ type: 'item.setAttribute', itemId: item, attributeId: ohm, value: '10000' }, TEST_ACTOR)
+    await twice(storage, { type: 'item.addAxis', itemId: item, attributeId: ohm, firstVariantId: first })
+    const s = await storage.loadInventory(inv)
+    expect(s.variants.map((v) => v.id)).toEqual([first])
+    expect(s.variantAttributeValues).toEqual([{ variantId: first, attributeId: ohm, value: '10000' }])
+    expect(s.itemAttributes).toEqual([{ itemId: item, attributeId: ohm, value: null, axisPosition: 0 }])
   })
 
   it('photo.add keeps the first position', async () => {
@@ -111,7 +138,7 @@ describe('replaying a command with client ids is a no-op', () => {
     expect((await storage.listInventories()).inventories).toHaveLength(2)
     await twice(storage, { type: 'folder.create', id: newId(), inventoryId: inv, parentId: null, name: 'F', description: null })
     await twice(storage, { type: 'tag.create', id: newId(), inventoryId: inv, name: 'again' })
-    await twice(storage, { type: 'attribute.create', id: newId(), inventoryId: inv, name: 'Color', kind: 'text', options: [] })
+    await twice(storage, attributeCreate(inv, newId(), 'Color'))
     await twice(storage, { type: 'unit.create', id: newId(), inventoryId: inv, name: 'Roll', symbol: 'rl', prefixPowers: [] })
     const s = await storage.loadInventory(inv)
     expect([s.folders.length, s.tags.length, s.attributes.length, s.units.length]).toEqual([1, 2, 1, 1])

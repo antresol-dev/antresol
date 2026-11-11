@@ -28,14 +28,17 @@ export function dictionaryStatements(c: DictionaryCommand, actor: Actor): Statem
       return [sql`delete from tags where id = ${c.id}`]
     case 'attribute.create':
       return [
-        sql`insert into attributes (id, inventory_id, name, kind, options, created_by, updated_by)
-            values (${c.id}, ${c.inventoryId}, ${c.name}, ${c.kind}, ${c.options}::text[], ${by}, ${by})
+        sql`insert into attributes (id, inventory_id, name, kind, options, unit, si_prefixes, created_by, updated_by)
+            values (${c.id}, ${c.inventoryId}, ${c.name}, ${c.kind}, ${c.options}::text[], ${c.unit}, ${c.siPrefixes},
+                    ${by}, ${by})
             on conflict (id) do nothing`,
       ]
     case 'attribute.update':
+      // A new unit or prefix setting changes how values are shown and parsed, never the stored values.
       return [
         sql`update attributes
-            set ${updateSet({ name: c.name, options: c.options, updated_by: by })}, updated_at = now()
+            set ${updateSet({ name: c.name, options: c.options, unit: c.unit, si_prefixes: c.siPrefixes, updated_by: by })},
+                updated_at = now()
             where id = ${c.id}`,
       ]
     case 'attribute.delete':

@@ -96,7 +96,7 @@ export const attributes = pgTable(
     ...audit(),
   },
   (t) => [
-    check('attributes_kind_check', sql`${t.kind} in ('text', 'enum')`),
+    check('attributes_kind_check', sql`${t.kind} in ('text', 'enum', 'number')`),
     index('attributes_inventory_id_idx').on(t.inventoryId),
   ],
 )
@@ -157,8 +157,8 @@ export const variants = pgTable(
     itemId: uuid('item_id')
       .notNull()
       .references(() => items.id, { onDelete: 'cascade' }),
-    name: text('name').notNull(),
     description: text('description'),
+    // Creation order only: variants sort by their axis values (core variants.ts).
     position: integer('position').notNull(),
     ...audit(),
     ...archive(),

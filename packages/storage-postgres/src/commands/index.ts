@@ -39,6 +39,9 @@ export function toStatements(c: Command, actor: Actor): Statement[] {
     case 'item.update':
     case 'item.setAttribute':
     case 'item.removeAttribute':
+    case 'item.addAxis':
+    case 'item.removeAxis':
+    case 'item.reorderAxes':
       return itemStatements(c, actor)
     case 'variant.createMany':
     case 'variant.update':

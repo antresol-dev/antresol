@@ -1,8 +1,17 @@
-import { newId, type Command, type Id, type InventorySnapshot, type Quantity } from '@graymatter/core'
+import { newId, patchSnapshot, type Command, type Id, type InventorySnapshot, type Quantity } from '@graymatter/core'
 import { describe, expect, it } from 'vitest'
 import { sql } from '../src/sql'
 import { openPostgresStorage } from '../src/storage'
-import { makeExecutor, TEST_ACTOR } from './helpers'
+import {
+  attributeCreate,
+  itemCreate,
+  makeExecutor,
+  normItemRows,
+  normSnapshot,
+  sliceOf,
+  TEST_ACTOR,
+  variantsCreate,
+} from './helpers'
 
 async function setup() {
   const exec = await makeExecutor()
@@ -13,18 +22,6 @@ async function setup() {
   return { exec, storage, run, inv }
 }
 
-const itemCreate = (inventoryId: Id, id: Id, name = 'Resistor'): Command => ({
-  type: 'item.create',
-  id,
-  inventoryId,
-  folderId: null,
-  name,
-  description: null,
-  unitKey: 'pcs',
-  tagIds: [],
-  initialReceipt: null,
-})
-
 const photoAdd = (itemId: Id, id: Id, variantId: Id | null = null): Command => ({
   type: 'photo.add',
   id,
@@ -34,19 +31,6 @@ const photoAdd = (itemId: Id, id: Id, variantId: Id | null = null): Command => (
   fileId: id,
   url: `https://i.example/${id}`,
 })
-
-/** The rows of one item's slice in a fresh load, in the shape the patch carries them. */
-function sliceOf(s: InventorySnapshot, itemId: Id) {
-  const variantIds = new Set(s.variants.filter((v) => v.itemId === itemId).map((v) => v.id))
-  return {
-    items: s.items.filter((i) => i.id === itemId),
-    variants: s.variants.filter((v) => v.itemId === itemId),
-    itemAttributes: s.itemAttributes.filter((r) => r.itemId === itemId),
-    variantAttributeValues: s.variantAttributeValues.filter((r) => variantIds.has(r.variantId)),
-    photos: s.photos.filter((p) => p.itemId === itemId),
-    stock: s.stock.filter((l) => l.itemId === itemId),
-  }
-}
 
 describe('apply result', () => {
   it('prevRev is the revision before the write and rev the one after', async () => {
@@ -71,7 +55,7 @@ describe('apply result', () => {
     expect(r.patch!.inventoryId).toBe(inv)
     expect(r.patch!.itemIds).toEqual([item])
     expect(r.patch!.stock).toEqual([expect.objectContaining({ itemId: item, variantId: null, quantity: '5' })])
-    expect(r.patch).toMatchObject(sliceOf(await storage.loadInventory(inv), item))
+    expect(normItemRows(r.patch!)).toEqual(sliceOf(await storage.loadInventory(inv), item))
     expect(r.patch!.folders).toBeUndefined()
     expect(r.patch!.inventory).toBeUndefined()
   })
@@ -87,7 +71,7 @@ describe('apply result', () => {
     expect(r.patch!.inventoryId).toBe(inv)
     expect(r.patch!.itemIds).toEqual([item])
     expect(r.patch!.photos.map((p) => p.id)).toEqual([p2])
-    expect(r.patch).toMatchObject(sliceOf(await storage.loadInventory(inv), item))
+    expect(normItemRows(r.patch!)).toEqual(sliceOf(await storage.loadInventory(inv), item))
   })
 
   it("deletePermanently of a variant returns the item's slice without it", async () => {
@@ -96,8 +80,9 @@ describe('apply result', () => {
     const [v1, v2] = [newId(), newId()]
     const attr = newId()
     await run(itemCreate(inv, item))
-    await run({ type: 'attribute.create', id: attr, inventoryId: inv, name: 'Size', kind: 'text', options: [] })
-    await run({ type: 'variant.createMany', itemId: item, variants: [{ id: v1, name: 'S' }, { id: v2, name: 'M' }] })
+    await run(attributeCreate(inv, attr, 'Size'))
+    await run({ type: 'item.addAxis', itemId: item, attributeId: attr, firstVariantId: newId() })
+    await run(variantsCreate(item, [[v1, { [attr]: 'S' }], [v2, { [attr]: 'M' }]]))
     await run({ type: 'variant.setAttribute', variantId: v1, attributeId: attr, value: 'small' })
     await run({ type: 'photo.add', id: newId(), itemId: item, variantId: v1, provider: 'imgbb', fileId: 'f', url: 'https://i.example/f' })
     await run({
@@ -109,17 +94,17 @@ describe('apply result', () => {
     expect(r.patch!.inventoryId).toBe(inv)
     expect(r.patch!.itemIds).toEqual([item])
     expect(r.patch!.variants.map((v) => v.id)).toEqual([v2])
-    expect(r.patch!.variantAttributeValues).toEqual([])
+    expect(r.patch!.variantAttributeValues).toEqual([{ variantId: v2, attributeId: attr, value: 'M' }])
     expect(r.patch!.photos).toEqual([])
     expect(r.patch!.stock.filter((l) => l.variantId === v1)).toEqual([])
-    expect(r.patch).toMatchObject(sliceOf(await storage.loadInventory(inv), item))
+    expect(normItemRows(r.patch!)).toEqual(sliceOf(await storage.loadInventory(inv), item))
   })
 
   it('deletePermanently of an item returns its id with no item row', async () => {
     const { run, inv } = await setup()
     const item = newId()
     await run(itemCreate(inv, item))
-    await run({ type: 'variant.createMany', itemId: item, variants: [{ id: newId(), name: 'S' }] })
+    await run(variantsCreate(item, [[newId(), {}]]))
     await run(photoAdd(item, newId()))
     await run({ type: 'archive', target: 'item', id: item, archiveId: newId() })
     const r = await run({ type: 'deletePermanently', target: 'item', id: item })
@@ -173,7 +158,7 @@ describe('apply result', () => {
     const attr = newId()
     const unit = newId()
     await run({ type: 'tag.create', id: tag, inventoryId: inv, name: 'red' })
-    await run({ type: 'attribute.create', id: attr, inventoryId: inv, name: 'Size', kind: 'text', options: [] })
+    await run(attributeCreate(inv, attr, 'Size'))
     await run({ type: 'unit.create', id: unit, inventoryId: inv, name: 'Roll', symbol: 'roll', prefixPowers: [] })
     const doomed = newId()
     await run({ type: 'inventory.create', id: doomed, name: 'Doomed', description: null, currency: 'USD' })
@@ -246,5 +231,92 @@ describe('apply result', () => {
       expect(size).toBeLessThanOrEqual(5000)
       expect(Math.abs(size - inSmall[i]!) / inSmall[i]!).toBeLessThanOrEqual(0.1)
     }
+  })
+})
+
+describe('apply result of attribute, axis and variant commands', () => {
+  it("every item and variant command returns its item's slice and nothing else", async () => {
+    const { storage, run, inv } = await setup()
+    const [item, other, ohm, volt, size] = [newId(), newId(), newId(), newId(), newId()]
+    const [a, b, first] = [newId(), newId(), newId()]
+    await run(itemCreate(inv, item))
+    await run(itemCreate(inv, other, 'Other'))
+    await run(attributeCreate(inv, ohm, 'Resistance', 'number', { unit: 'Ω', siPrefixes: true }))
+    await run(attributeCreate(inv, volt, 'Voltage', 'number', { unit: 'V' }))
+    await run(attributeCreate(inv, size, 'Size'))
+    await run({ type: 'item.setAttribute', itemId: other, attributeId: size, value: 'big' })
+
+    const commands: Command[] = [
+      { type: 'item.setAttribute', itemId: item, attributeId: ohm, value: '10000' },
+      { type: 'item.addAxis', itemId: item, attributeId: ohm, firstVariantId: first },
+      { type: 'item.addAxis', itemId: item, attributeId: volt, firstVariantId: newId() },
+      variantsCreate(item, [[a, { [ohm]: '4700', [volt]: '50' }], [b, { [ohm]: '1000', [volt]: '50' }]]),
+      { type: 'variant.update', id: a, description: 'Metal film' },
+      { type: 'variant.setAttribute', variantId: first, attributeId: volt, value: '50' },
+      { type: 'variant.setAttribute', variantId: b, attributeId: volt, value: null },
+      { type: 'variant.setAttribute', variantId: b, attributeId: volt, value: '50' },
+      { type: 'item.addAxis', itemId: item, attributeId: size, firstVariantId: newId() },
+      { type: 'item.reorderAxes', itemId: item, attributeIds: [size, volt, ohm] },
+      { type: 'item.removeAxis', itemId: item, attributeId: volt },
+      { type: 'item.setAttribute', itemId: item, attributeId: volt, value: '16' },
+      { type: 'item.removeAttribute', itemId: item, attributeId: size },
+      { type: 'item.removeAttribute', itemId: item, attributeId: volt },
+    ]
+    for (const c of commands) {
+      const r = await run(c)
+      const fresh = await storage.loadInventory(inv)
+      expect(r.patch, c.type).not.toBeNull()
+      expect(r.patch!.inventoryId).toBe(inv)
+      expect(r.patch!.itemIds, c.type).toEqual([item])
+      expect(normItemRows(r.patch!), c.type).toEqual(sliceOf(fresh, item))
+      for (const table of ['inventory', 'folders', 'tags', 'attributes', 'units'] as const) {
+        expect(r.patch![table], `${c.type} ${table}`).toBeUndefined()
+      }
+    }
+    const s = await storage.loadInventory(inv)
+    // The first variant came from the shared Resistance value.
+    expect(s.variants.map((v) => v.id).sort()).toEqual([a, b, first].sort())
+    expect(s.itemAttributes.filter((r) => r.itemId === item)).toEqual([
+      { itemId: item, attributeId: ohm, value: null, axisPosition: 0 },
+    ])
+  })
+
+  it('attribute.create and attribute.update return the attributes table', async () => {
+    const { storage, run, inv } = await setup()
+    const [ohm, size] = [newId(), newId()]
+    await run(attributeCreate(inv, size, 'Size'))
+    const created = await run(attributeCreate(inv, ohm, 'Resistance', 'number', { unit: 'Ω', siPrefixes: true }))
+    expect(created.patch!.itemIds).toEqual([])
+    expect(created.patch!.attributes).toEqual((await storage.loadInventory(inv)).attributes)
+    expect(created.patch!.attributes!.map((a) => a.id).sort()).toEqual([ohm, size].sort())
+    const updated = await run({ type: 'attribute.update', id: ohm, unit: 'kΩ', siPrefixes: false })
+    expect(updated.patch!.itemIds).toEqual([])
+    expect(updated.patch!.attributes).toEqual((await storage.loadInventory(inv)).attributes)
+    expect(updated.patch!.attributes!.find((a) => a.id === ohm)).toMatchObject({ unit: 'kΩ', siPrefixes: false })
+    expect(updated.patch!.items).toEqual([])
+  })
+
+  it('createMany on two axes: the patched copy equals the snapshot after a reload', async () => {
+    const { storage, run, inv } = await setup()
+    const [item, cap, volt] = [newId(), newId(), newId()]
+    let copy: InventorySnapshot = await storage.loadInventory(inv)
+    const step = async (c: Command) => {
+      const r = await run(c)
+      copy = patchSnapshot(copy, r.patch!)
+    }
+    await step(itemCreate(inv, item, 'Capacitor'))
+    await step(attributeCreate(inv, cap, 'Capacitance', 'number', { unit: 'F', siPrefixes: true }))
+    await step(attributeCreate(inv, volt, 'Voltage', 'number', { unit: 'V', siPrefixes: true }))
+    await step({ type: 'item.addAxis', itemId: item, attributeId: cap, firstVariantId: newId() })
+    await step({ type: 'item.addAxis', itemId: item, attributeId: volt, firstVariantId: newId() })
+    await step(
+      variantsCreate(item, [
+        [newId(), { [cap]: '0.0000001', [volt]: '50' }],
+        [newId(), { [cap]: '0.0000001', [volt]: '16' }],
+      ]),
+    )
+    const fresh = await storage.loadInventory(inv)
+    expect(fresh.variantAttributeValues).toHaveLength(4)
+    expect(normSnapshot(copy)).toEqual(normSnapshot(fresh))
   })
 })

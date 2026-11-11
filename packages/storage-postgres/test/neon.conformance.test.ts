@@ -1,9 +1,9 @@
-import { newId, type Quantity } from '@graymatter/core'
+import { newId, patchSnapshot, type Command, type InventorySnapshot, type Quantity } from '@graymatter/core'
 import { neonConfig } from '@neondatabase/serverless'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { assertTestDatabase, createNeonHttpExecutor, createNeonWsExecutor, inspectSchema, type PgExecutor } from '../src'
 import { openPostgresStorage } from '../src/storage'
-import { TEST_ACTOR } from './helpers'
+import { attributeCreate, itemCreate, normSnapshot, TEST_ACTOR, variantsCreate } from './helpers'
 
 describe('assertTestDatabase', () => {
   it('rejects a database whose name does not end with _test', () => {
@@ -123,6 +123,56 @@ describe.skipIf(!url)('Neon conformance', () => {
         )
         expect(received.prevRev).toBe(removed.rev)
         expect(received.patch!.stock).toEqual((await storage.loadInventory(inv)).stock)
+      })
+
+      it('runs the axis scenario: patched copy equals a reload', async () => {
+        const { storage } = await openPostgresStorage(exec)
+        const run = (c: Command) => storage.apply(c, TEST_ACTOR)
+        const [inv, resistor, capacitor, ohm, cap, volt] = [newId(), newId(), newId(), newId(), newId(), newId()]
+        const [first, a, c1, c2] = [newId(), newId(), newId(), newId()]
+        await run({ type: 'inventory.create', id: inv, name: `axes-${name}`, description: null, currency: 'USD' })
+        let copy: InventorySnapshot = await storage.loadInventory(inv)
+        const step = async (c: Command) => {
+          const r = await run(c)
+          expect(r.patch, c.type).not.toBeNull()
+          copy = patchSnapshot(copy, r.patch!)
+        }
+        await step(itemCreate(inv, resistor, 'Resistor'))
+        await step(itemCreate(inv, capacitor, 'Capacitor'))
+        await step(attributeCreate(inv, ohm, 'Resistance', 'number', { unit: 'Ω', siPrefixes: true }))
+        await step(attributeCreate(inv, cap, 'Capacitance', 'number', { unit: 'F', siPrefixes: true }))
+        await step(attributeCreate(inv, volt, 'Voltage', 'number', { unit: 'V' }))
+        // No axes and no variants: the shared value becomes the first variant.
+        await step({ type: 'item.setAttribute', itemId: resistor, attributeId: ohm, value: '10000' })
+        await step({ type: 'item.addAxis', itemId: resistor, attributeId: ohm, firstVariantId: first })
+        await step(variantsCreate(resistor, [[a, { [ohm]: '4700' }]]))
+        // Another axis and no variants: only the role changes, the shared value goes and no variant is made.
+        await step({ type: 'item.addAxis', itemId: capacitor, attributeId: cap, firstVariantId: newId() })
+        await step({ type: 'item.setAttribute', itemId: capacitor, attributeId: volt, value: '50' })
+        await step({ type: 'item.addAxis', itemId: capacitor, attributeId: volt, firstVariantId: newId() })
+        expect(copy.variants.filter((v) => v.itemId === capacitor)).toEqual([])
+        await step(variantsCreate(capacitor, [[c1, { [cap]: '0.0000001', [volt]: '50' }], [c2, { [cap]: '0.00001', [volt]: '50' }]]))
+        await step({ type: 'item.reorderAxes', itemId: capacitor, attributeIds: [volt, cap] })
+        await step({ type: 'variant.setAttribute', variantId: c2, attributeId: volt, value: null })
+        await step({ type: 'variant.setAttribute', variantId: c2, attributeId: volt, value: '50' })
+        await step({ type: 'variant.update', id: c2, description: '105 °C' })
+        // Every variant has 50 V: it becomes the item's value.
+        await step({ type: 'item.removeAxis', itemId: capacitor, attributeId: volt })
+        await step({ type: 'attribute.update', id: ohm, unit: 'kΩ', siPrefixes: false })
+
+        const fresh = await storage.loadInventory(inv)
+        expect(normSnapshot(copy)).toEqual(normSnapshot(fresh))
+        expect(fresh.variants.filter((v) => v.itemId === resistor).map((v) => v.id).sort()).toEqual([first, a].sort())
+        expect(fresh.variants.filter((v) => v.itemId === capacitor).map((v) => v.id).sort()).toEqual([c1, c2].sort())
+        expect(fresh.variantAttributeValues.filter((r) => r.variantId === first)).toEqual([
+          { variantId: first, attributeId: ohm, value: '10000' },
+        ])
+        const links = Object.fromEntries(
+          fresh.itemAttributes.filter((r) => r.itemId === capacitor).map((r) => [r.attributeId, [r.axisPosition, r.value]]),
+        )
+        expect(links).toEqual({ [cap]: [0, null], [volt]: [null, '50'] })
+        expect(fresh.attributes.find((x) => x.id === ohm)).toMatchObject({ kind: 'number', unit: 'kΩ', siPrefixes: false })
+        expect(fresh.attributes.find((x) => x.id === cap)).toMatchObject({ kind: 'number', unit: 'F', siPrefixes: true })
       })
 
       it('concurrent applies are serialized on the revision row', async () => {

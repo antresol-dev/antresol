@@ -69,20 +69,20 @@ export const snapshotSql = {
                            where it.item_id = i.id), '{}') as tag_ids
           from items i where ${where} order by i.name, i.id`,
   variants: (where: Statement) =>
-    sql`select v.id, v.item_id, v.name, v.description, v.position::text as position,
+    sql`select v.id, v.item_id, v.description, v.position::text as position,
                  v.created_at, v.updated_at, v.created_by, v.updated_by, v.archived_at, v.archive_id
           from variants v join items i on i.id = v.item_id
           where ${where} order by v.item_id, v.position, v.id`,
   tags: (inventoryId: Statement) =>
     sql`select id, inventory_id, name, ${raw(AUDIT)} from tags where inventory_id = ${inventoryId} order by name, id`,
   attributes: (inventoryId: Statement) =>
-    sql`select id, inventory_id, name, kind, options, ${raw(AUDIT)}
+    sql`select id, inventory_id, name, kind, options, unit, si_prefixes, ${raw(AUDIT)}
           from attributes where inventory_id = ${inventoryId} order by name, id`,
   units: (inventoryId: Statement) =>
     sql`select id, inventory_id, name, symbol, prefix_powers, ${raw(AUDIT)}
           from custom_units where inventory_id = ${inventoryId} order by name, id`,
   itemAttributes: (where: Statement) =>
-    sql`select ia.item_id, ia.attribute_id, ia.value
+    sql`select ia.item_id, ia.attribute_id, ia.value, ia.axis_position
           from item_attributes ia join items i on i.id = ia.item_id
           where ${where} order by ia.item_id, ia.attribute_id`,
   variantAttributeValues: (where: Statement) =>

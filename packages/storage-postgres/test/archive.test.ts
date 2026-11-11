@@ -2,7 +2,7 @@ import { newId, StorageError, type Command, type InventoryStorage } from '@graym
 import { describe, expect, it } from 'vitest'
 import type { PgExecutor } from '../src/executor'
 import { openPostgresStorage } from '../src/storage'
-import { makeExecutor, TEST_ACTOR } from './helpers'
+import { attributeCreate, makeExecutor, TEST_ACTOR, variantsCreate } from './helpers'
 
 interface Ctx {
   exec: PgExecutor
@@ -110,7 +110,7 @@ describe('archive and restore', () => {
     const it1 = await item(c, F, 'it')
     const v1 = newId()
     const [C, D, E] = [newId(), newId(), newId()]
-    await run(c, { type: 'variant.createMany', itemId: it1, variants: [{ id: v1, name: 'v1' }] })
+    await run(c, variantsCreate(it1, [[v1, {}]]))
     await run(c, { type: 'archive', target: 'variant', id: v1, archiveId: C })
     expect((await state(c)).variants.get(v1)).toEqual({ archiveId: C, archived: true })
     await run(c, { type: 'restore', archiveId: C })
@@ -142,17 +142,20 @@ describe('deletePermanently', () => {
     const c = await setup()
     const tag = newId()
     const attr = newId()
+    const axis = newId()
     await run(c, { type: 'tag.create', id: tag, inventoryId: c.inv, name: 't' })
-    await run(c, { type: 'attribute.create', id: attr, inventoryId: c.inv, name: 'a', kind: 'text', options: [] })
+    await run(c, attributeCreate(c.inv, attr, 'a'))
+    await run(c, attributeCreate(c.inv, axis, 'b'))
     const it1 = newId()
     await run(c, {
       type: 'item.create', id: it1, inventoryId: c.inv, folderId: null, name: 'x', description: null, unitKey: 'pcs',
       tagIds: [tag], initialReceipt: { movementId: newId(), quantity: '2', totalPrice: null, sourceUrl: null },
     })
     const v = newId()
-    await run(c, { type: 'variant.createMany', itemId: it1, variants: [{ id: v, name: 'v' }] })
+    await run(c, { type: 'item.addAxis', itemId: it1, attributeId: axis, firstVariantId: newId() })
+    await run(c, variantsCreate(it1, [[v, { [axis]: 'z' }]]))
     await run(c, { type: 'item.setAttribute', itemId: it1, attributeId: attr, value: 'z' })
-    await run(c, { type: 'variant.setAttribute', variantId: v, attributeId: attr, value: 'z' })
+    expect(await count(c, 'variant_attribute_values')).toBe(1)
     await run(c, { type: 'photo.add', id: newId(), itemId: it1, variantId: v, provider: 'p', fileId: 'f', url: 'u' })
 
     await run(c, { type: 'deletePermanently', target: 'item', id: it1 })
@@ -169,7 +172,7 @@ describe('deletePermanently', () => {
     const c = await setup()
     const it1 = await item(c, null, 'x', '3')
     const v = newId()
-    await run(c, { type: 'variant.createMany', itemId: it1, variants: [{ id: v, name: 'v' }] })
+    await run(c, variantsCreate(it1, [[v, {}]]))
     await run(c, { type: 'stock.receive', movementId: newId(), itemId: it1, variantId: v, quantity: '1', totalPrice: null, sourceUrl: null, note: null })
     await run(c, { type: 'archive', target: 'variant', id: v, archiveId: newId() })
     await run(c, { type: 'deletePermanently', target: 'variant', id: v })

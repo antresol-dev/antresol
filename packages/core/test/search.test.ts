@@ -46,6 +46,10 @@ describe('search', () => {
     expect(search('10 kΩ')[0]).toEqual({ itemId: 'res', variantId: 'v10k' })
     expect(search('1k')[0]).toEqual({ itemId: 'res', variantId: 'v1k' })
   })
+  it('finds a resistor variant by item word plus value in any notation', () => {
+    expect(search('резистор 10k')[0]).toEqual({ itemId: 'res', variantId: 'v10k' })
+    expect(search('резистор 10000')[0]).toEqual({ itemId: 'res', variantId: 'v10k' })
+  })
   it('searches tags and attributes', () => {
     expect(search('opamp').map((h) => h.itemId)).toContain('lm13700')
     expect(search('dip-8').map((h) => h.itemId)).toContain('ne555')
@@ -158,5 +162,45 @@ describe('decimal values', () => {
     expect(() => s('.5')).not.toThrow()
     expect(() => s('1.')).not.toThrow()
     expect(hits('4.')).toContain('r4.7')
+  })
+})
+
+describe('number search', () => {
+  const rules = { unit: 'Ω', siPrefixes: true }
+  const s = makeSnapshot({
+    items: [item('r', 'Resistor'), item('l', 'Length'), item('n', 'Counter')],
+    variants: [variant('v47', 'r'), variant('v1', 'r', { position: 1 })],
+    attributes: [
+      attribute('a-res', 'Resistance', 'number', rules),
+      attribute('a-len', 'Length', 'number', { unit: 'm', siPrefixes: false }),
+      attribute('a-cnt', 'Count', 'number', { unit: '', siPrefixes: false }),
+    ],
+    itemAttributes: [axis('r', 'a-res', 0), shared('l', 'a-len', '5'), shared('n', 'a-cnt', '4700')],
+    variantAttributeValues: [value('v47', 'a-res', '4700'), value('v1', 'a-res', '1000')],
+  })
+  const { search } = createSearch(s)
+  it.each(['4k7', '4.7k', '4,7k', '4.7 kΩ'])('%s finds the 4.7 kΩ variant', (q) => {
+    expect(search(q)[0]).toEqual({ itemId: 'r', variantId: 'v47' })
+  })
+  it('4700 finds the variant and the item holding a plain 4700', () => {
+    const hits = search('4700')
+    expect(hits).toContainEqual({ itemId: 'r', variantId: 'v47' })
+    expect(hits.map((h) => h.itemId)).toContain('n')
+  })
+  it('a prefix is read by the attribute: 5m is 5 m for a length, not 5 mΩ for a resistance', () => {
+    // Length has no prefixes: "5m" parses as 5 with unit m -> equal to 5.
+    expect(search('5m')[0]).toEqual({ itemId: 'l', variantId: null })
+    // Resistance would read it as 5 mΩ = 0.005; no such value, so the resistor is not a hit.
+    expect(search('5m').map((h) => h.itemId)).not.toContain('r')
+  })
+  it('without prefixes 4k7 finds nothing in that attribute', () => {
+    expect(search('4k7').map((h) => h.itemId)).not.toContain('n')
+    expect(search('4k7').map((h) => h.itemId)).not.toContain('l')
+  })
+  it('a plain number finds a shared value', () => {
+    expect(search('4700').map((h) => h.itemId)).toContain('n')
+  })
+  it('text matching still works', () => {
+    expect(search('resistor')[0]?.itemId).toBe('r')
   })
 })

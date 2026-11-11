@@ -1,6 +1,7 @@
 import MiniSearch from 'minisearch'
 import type { Id } from './ids'
-import type { InventorySnapshot, Item, Variant } from './model'
+import type { Attribute, InventorySnapshot, Item, Variant } from './model'
+import { compareNumberValues, parseNumberValue } from './numbers'
 import { variantLabel } from './variants'
 
 export interface SearchHit {
@@ -18,6 +19,8 @@ interface Doc {
 }
 
 const DEFAULT_LIMIT = 50
+/** An equal number is as good as an exact text match; it outranks the score of any text hit within the exact tier. */
+const NUMBER_SCORE = 100
 
 /** A decimal comma between digits is a decimal point: "4,7k" -> "4.7k". */
 const decimalComma = (s: string): string => s.replace(/(\p{N}),(?=\p{N})/gu, '$1.')
@@ -74,6 +77,16 @@ export function createSearch(s: InventorySnapshot): { search(query: string, limi
     if (a.value) variantAttrs.set(a.variantId, [...(variantAttrs.get(a.variantId) ?? []), a.value])
   }
 
+  // Number values by indexed document (spec 4.11): shared values on the item, axis values on the variant.
+  const numberAttrs = new Map(s.attributes.filter((a) => a.kind === 'number').map((a) => [a.id, a] as const))
+  const numbers = new Map<string, { attr: Attribute; value: string }[]>()
+  const addNumber = (docId: string, attributeId: Id, value: string | null) => {
+    const attr = numberAttrs.get(attributeId)
+    if (attr && value) numbers.set(docId, [...(numbers.get(docId) ?? []), { attr, value }])
+  }
+  for (const a of s.itemAttributes) if (a.axisPosition === null) addNumber(`i:${a.itemId}`, a.attributeId, a.value)
+  for (const a of s.variantAttributeValues) addNumber(`v:${a.variantId}`, a.attributeId, a.value)
+
   const docs: Doc[] = []
   const activeItems = s.items.filter((i) => i.archivedAt === null && !folderHidden(i.folderId)).sort(itemOrder)
   const activeIds = new Set(activeItems.map((i) => i.id))
@@ -109,6 +122,7 @@ export function createSearch(s: InventorySnapshot): { search(query: string, limi
     searchOptions: { boost: { name: 2 } },
   })
   index.addAll(docs)
+  const docById = new Map(docs.map((d) => [d.id, d] as const))
 
   return {
     search(query, limit = DEFAULT_LIMIT) {
@@ -131,6 +145,24 @@ export function createSearch(s: InventorySnapshot): { search(query: string, limi
       }
       collect(query, ['name', 'extra'], 1)
       collect(compactQuery, ['compact'], COMPACT_BOOST)
+
+      // Each word is read by the rules of each number attribute and must equal one of that attribute's values. The
+      // whole query counts as a word too ("4 k7"). A number match adds to the text match, it does not replace it.
+      const words = [...new Set([...query.split(/\s+/), query.trim()].filter((w) => w !== ''))]
+      for (const [docId, values] of numbers) {
+        const doc = docById.get(docId)
+        if (!doc) continue
+        const hit = values.some(({ attr, value }) =>
+          words.some((w) => {
+            const n = parseNumberValue(w, attr)
+            return n !== null && compareNumberValues(n, value) === 0
+          }),
+        )
+        if (!hit) continue
+        const cand = { tier: 0, score: NUMBER_SCORE }
+        const prev = ranks.get(docId)
+        if (!prev || better(cand, prev)) ranks.set(docId, { ...cand, itemId: doc.itemId, variantId: doc.variantId })
+      }
 
       const byItem = new Map<Id, { rank: Rank; variant: (Rank & { id: Id }) | null }>()
       for (const r of ranks.values()) {

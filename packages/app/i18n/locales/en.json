@@ -563,6 +563,7 @@
     "invalidAmount": "Enter a valid amount, like 10 or 50 cm.",
     "invalidPrice": "Enter a valid price.",
     "needsAmount": "Enter the amount to add a price or a link.",
+    "linkNeedsAmount": "Add the amount to keep the link",
     "chooseFolder": "Choose a folder",
     "existing": "Already in this inventory",
     "receiveHere": "Receive here",

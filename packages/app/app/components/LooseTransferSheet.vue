@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { newId, type Id } from '@graymatter/core'
+import type { Id } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { errorMessageKey } from '~/lib/errors'
@@ -10,6 +10,7 @@ const props = defineProps<{ itemId: Id; offer: LooseOffer | null; variants: { id
 const emit = defineEmits<{ close: [] }>()
 
 const workspace = useWorkspace()
+const { ids, renew } = useCommandIds(['transferId', 'outMovementId', 'inMovementId'])
 const { state } = workspace
 
 // What the sheet shows while it animates out.
@@ -24,6 +25,7 @@ watch(
     if (!offer) return
     shown.value = { offer, variants: props.variants }
     toId.value = props.variants[0]?.id ?? ''
+    renew()
     busy.value = false
     errorKey.value = null
   },
@@ -45,9 +47,7 @@ async function move(): Promise<void> {
   try {
     await workspace.apply({
       type: 'stock.transfer',
-      transferId: newId(),
-      outMovementId: newId(),
-      inMovementId: newId(),
+      ...ids,
       itemId: props.itemId,
       fromVariantId: null,
       toVariantId: toId.value,

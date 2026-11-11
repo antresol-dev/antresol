@@ -1,7 +1,7 @@
 import { neonConfig } from '@neondatabase/serverless'
 import { afterEach, describe, expect, it } from 'vitest'
 import { StorageError } from '@graymatter/core'
-import { createNeonHttpExecutor, HTTP_TIMEOUT_MS } from '../src/executors/neon-http'
+import { createNeonHttpExecutor, HTTP_FIRST_BYTE_MS, HTTP_TOTAL_MS } from '../src/executors/neon-http'
 import { sql } from '../src/sql'
 
 const URL = 'postgresql://u:secret@ep-x.eu-central-1.aws.neon.tech/db_test'
@@ -44,7 +44,7 @@ describe('neon http executor errors', () => {
       new Promise((_resolve, reject) => {
         init?.signal?.addEventListener('abort', () => reject(init.signal?.reason))
       })
-    const exec = createNeonHttpExecutor(URL, { timeoutMs: 50 })
+    const exec = createNeonHttpExecutor(URL, { firstByteMs: 50, totalMs: 50 })
     for (const run of [
       () => exec.query(sql`select 1`),
       () => exec.batch([sql`select 1`]),
@@ -70,7 +70,8 @@ describe('neon http executor errors', () => {
     }
   })
 
-  it('exports the default timeout', () => {
-    expect(HTTP_TIMEOUT_MS).toBe(20_000)
+  it('exports the default timeouts', () => {
+    expect(HTTP_FIRST_BYTE_MS).toBe(15_000)
+    expect(HTTP_TOTAL_MS).toBe(90_000)
   })
 })

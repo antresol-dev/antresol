@@ -44,6 +44,7 @@ function rememberCurrency(code: string): void {
 }
 
 const workspace = useWorkspace()
+const { ids } = useCommandIds(['inventoryId'])
 const { state } = workspace
 const router = useRouter()
 
@@ -89,7 +90,7 @@ async function submit(): Promise<void> {
   errorKey.value = null
   try {
     if (props.mode === 'create') {
-      await workspace.createInventory({ sourceId: sourceId.value, name: name.value.trim(), currency: currency.value })
+      await workspace.createInventory({ sourceId: sourceId.value, name: name.value.trim(), currency: currency.value, id: ids.inventoryId })
       rememberCurrency(currency.value)
     } else if (existing) {
       await workspace.apply({

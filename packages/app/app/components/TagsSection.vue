@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { newId, type Tag } from '@graymatter/core'
+import type { Tag } from '@graymatter/core'
 import { Pencil, Plus, Trash2 } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,7 @@ defineProps<{ rows: { tag: Tag; itemCount: number }[] }>()
 
 const { t } = useI18n()
 const workspace = useWorkspace()
+const { ids, renew } = useCommandIds(['tagId'])
 const { state } = workspace
 
 type Target = { kind: 'create' } | { kind: 'rename'; tag: Tag } | { kind: 'delete'; tag: Tag; count: number }
@@ -24,6 +25,7 @@ const locked = computed(() => !!state.readOnly || state.saving || busy.value)
 
 function open(next: Target): void {
   target.value = next
+  renew()
   shown.value = next
   name.value = next.kind === 'rename' ? next.tag.name : ''
   errorKey.value = null
@@ -67,10 +69,13 @@ async function submit(): Promise<void> {
   if (locked.value || !snapshot || !cur || cur.kind === 'delete') return
   const ok = await write(
     cur.kind === 'create'
-      ? { type: 'tag.create', id: newId(), inventoryId: snapshot.inventory.id, name: name.value.trim() }
+      ? { type: 'tag.create', id: ids.tagId, inventoryId: snapshot.inventory.id, name: name.value.trim() }
       : { type: 'tag.rename', id: cur.tag.id, name: name.value.trim() },
   )
-  if (ok) target.value = null
+  if (ok) {
+    target.value = null
+    renew()
+  }
 }
 
 async function remove(): Promise<void> {

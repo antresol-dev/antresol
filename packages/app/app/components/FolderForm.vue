@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { newId, type Folder, type Id } from '@graymatter/core'
+import type { Folder, Id } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,6 +10,7 @@ const props = defineProps<{ mode: 'create' | 'rename'; parentId: Id | null; fold
 const emit = defineEmits<{ done: [] }>()
 
 const workspace = useWorkspace()
+const { ids } = useCommandIds(['folderId'])
 const { state } = workspace
 
 const existing = props.mode === 'rename' ? props.folder : null
@@ -44,7 +45,7 @@ async function submit(): Promise<void> {
     if (props.mode === 'create') {
       await workspace.apply({
         type: 'folder.create',
-        id: newId(),
+        id: ids.folderId,
         inventoryId: snapshot.inventory.id,
         parentId: props.parentId,
         name: name.value.trim(),

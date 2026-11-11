@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { newId } from '@graymatter/core'
 import { createReusableTemplate, useMediaQuery } from '@vueuse/core'
 import { Archive, Check, ChevronsUpDown, Pencil, Plus, RefreshCw } from '@lucide/vue'
 import { toast } from 'vue-sonner'
@@ -103,7 +102,10 @@ async function choose(entry: InventoryEntry): Promise<void> {
   }
 }
 
+// One archive id per opening: a retried Confirm after a timeout sends the same command.
+const { ids, renew } = useCommandIds(['archiveId'])
 function openDialog(kind: 'create' | 'rename' | 'archive'): void {
+  renew()
   menuOpen.value = false
   dialog.value = kind
 }
@@ -113,7 +115,7 @@ async function archive(): Promise<void> {
   if (!current) return
   archiving.value = true
   try {
-    await workspace.apply({ type: 'archive', target: 'inventory', id: current.inventoryId, archiveId: newId() })
+    await workspace.apply({ type: 'archive', target: 'inventory', id: current.inventoryId, archiveId: ids.archiveId })
     dialog.value = null
     // force: a new history entry stamped with the inventory that is now current.
     await router.push({ path: '/', force: true })

@@ -22,6 +22,8 @@ watch(
     if (!s) return
     shown.value = s
     openings.value++
+    // A sleeping database answers slowly: wake it while the person types.
+    void workspace.warmUp()
   },
   { immediate: true },
 )

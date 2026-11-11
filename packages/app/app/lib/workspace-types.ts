@@ -81,6 +81,9 @@ export interface Workspace {
   syncIfDue(): Promise<void>
   /** Kept on the device. */
   setCheckInterval(value: CheckInterval): Promise<void>
+  /** When the current source has not answered for over 4 minutes, one light request (listInventories) before a form that
+   *  is about to write; otherwise nothing. Never called by a timer. */
+  warmUp(): Promise<void>
   /** startFromCache() then refresh(). */
   start(): Promise<void>
   /** Saves the shown copy on the device now if a write changed it since it was last saved (otherwise that happens
@@ -111,7 +114,8 @@ export interface Workspace {
   removePhoto(photoId: Id): Promise<void>
   /** photo.reorder with the chosen photo first. */
   makeCover(itemId: Id, photoId: Id): Promise<void>
-  createInventory(input: { sourceId: string; name: string; currency: string }): Promise<InventoryRef>
+  /** `id` is the form's stable id: a retried Save recreates nothing. */
+  createInventory(input: { sourceId: string; name: string; currency: string; id?: Id }): Promise<InventoryRef>
   addSource(input: Omit<SourceConfig, 'id' | 'createdAt'>): Promise<SourceConfig>
   /** Of overlapping calls for one source the last one called wins; an earlier one, or one whose source was removed
    *  meanwhile, resolves without applying its outcome. */

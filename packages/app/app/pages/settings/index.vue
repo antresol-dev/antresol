@@ -130,6 +130,7 @@ async function confirmRemove(): Promise<void> {
             </div>
             <p v-if="s.config.kind === 'neon'" class="text-sm text-subtle-foreground">{{ $t('settings.sources.exportHint') }}</p>
             <p class="text-sm text-subtle-foreground">{{ $t('sync.reloadHint') }}</p>
+            <SourceTraffic v-if="s.config.kind === 'neon'" :source-id="s.config.id" />
           </li>
         </ul>
         <p v-else class="text-subtle-foreground">{{ $t('settings.sources.empty') }}</p>
@@ -170,6 +171,8 @@ async function confirmRemove(): Promise<void> {
           <ThemeSwitch />
         </div>
       </section>
+
+      <DiagnosticsSection />
 
       <AppSheet
         v-model:open="sheetOpen"

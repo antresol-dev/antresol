@@ -328,6 +328,17 @@
       "dark": "Dark"
     }
   },
+  "diagnostics": {
+    "title": "Diagnostics",
+    "hint": "The last errors this device saw. Connection strings and keys are never kept here.",
+    "empty": "No errors.",
+    "copy": "Copy",
+    "share": "Share",
+    "clear": "Clear",
+    "copied": "Copied",
+    "copyFailed": "Could not copy",
+    "traffic": "~{used} of {limit} this month (this device)"
+  },
   "sourceForm": {
     "newTitle": "Add source",
     "editTitle": "Edit source",

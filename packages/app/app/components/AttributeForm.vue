@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Attribute, AttributeKind, Id } from '@graymatter/core'
-import { formatNumberValue, newId, parseNumberValue } from '@graymatter/core'
+import { formatNumberValue, parseNumberValue } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -17,6 +17,7 @@ const props = defineProps<{ attribute: Attribute | null }>()
 const emit = defineEmits<{ done: [attributeId: Id] }>()
 
 const workspace = useWorkspace()
+const { ids } = useCommandIds(['attributeId'])
 const { state } = workspace
 
 const name = ref(props.attribute?.name ?? '')
@@ -74,7 +75,7 @@ async function submit(): Promise<void> {
       })
       emit('done', props.attribute.id)
     } else {
-      const id = newId()
+      const id = ids.attributeId
       await workspace.apply(attributeCreateCommand(form, { id, inventoryId: snapshot.inventory.id }))
       emit('done', id)
     }

@@ -19,6 +19,7 @@ import { createUploadcareStore } from '@graymatter/files-uploadcare'
 import { APP_SCHEMA_VERSION } from '@graymatter/storage-postgres'
 import { markRaw, reactive } from 'vue'
 import { buildBackup, type BackupFile } from './backup'
+import { logError, secretsOf, setSecretSource } from './diagnostics'
 import { createDeviceFileStore, releaseDeviceUrls } from './device-files'
 import { prepareImage as defaultPrepareImage } from './images'
 import type { CachedSnapshot } from './device-db'
@@ -169,6 +170,15 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     saving: false,
     readOnly: null,
   })
+
+  // The error log never holds the secrets of the sources' settings.
+  setSecretSource(() => state.sources.flatMap((s) => secretsOf(s.config)))
+
+  /** When each source last answered a request, in ms: the warm-up (see warmUp) looks at it. */
+  const answeredAt = new Map<string, number>()
+  const noteAnswer = (sourceId: string): void => {
+    answeredAt.set(sourceId, now().getTime())
+  }
 
   /** Open connections; refreshes reuse them until one fails. */
   const conns = new Map<string, SourceConnection>()
@@ -325,8 +335,10 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       conn = await driver.connect(config)
       openedWith.set(conn, config.connectionString)
       const { inventories, rev } = await conn.storage.listInventories()
+      noteAnswer(config.id)
       return { ok: true, conn, inventories, rev, fresh: true }
     } catch (error) {
+      logError('connect', error)
       await conn?.close().catch(() => {})
       return { ok: false, error }
     }
@@ -382,6 +394,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     const config = state.sources.find((s) => s.config.id === sourceId)?.config
     if (!config) return
     const { status, error: text, reason } = failureStatus(error, connectionString)
+    logError('source', error)
     setSource(config, status, text, reason)
   }
 
@@ -400,6 +413,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     // Edited or removed meanwhile: the list is no longer this connection's to set.
     if (generationOf(sourceId) !== generation) return
     sourceRevs.set(sourceId, rev)
+    noteAnswer(sourceId)
     const saving = storeListing(sourceId, inventories)
     rebuildInventories()
     await saving
@@ -1036,16 +1050,34 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   async function guarded<T>(sourceId: string, conn: SourceConnection, call: () => Promise<T>): Promise<T> {
     const connectionString = connectionStringOf(conn)
     try {
-      return await call()
+      const result = await call()
+      noteAnswer(sourceId)
+      return result
     } catch (error) {
       if (error instanceof StorageError && error.code === 'unavailable') markFailure(sourceId, error, connectionString)
+      else logError('storage', error)
       if (error instanceof DomainError) throw new DomainError(error.code, redactSecret(error.message, connectionString))
       throw sanitize(error, connectionString)
     }
   }
 
+  /** Neon's compute sleeps after minutes of quiet: the first request after that is slow. Before a form that is about to
+   *  write, one light request wakes it, only when the source has been silent for longer than this. */
+  const WARM_AFTER_MS = 4 * 60_000
+  let warming: Promise<void> | null = null
+  function warmUp(): Promise<void> {
+    const sourceId = state.current?.sourceId
+    if (!sourceId || !isConnected(statusOf(sourceId))) return Promise.resolve()
+    const last = answeredAt.get(sourceId)
+    if (last !== undefined && now().getTime() - last <= WARM_AFTER_MS) return Promise.resolve()
+    return (warming ??= relist(sourceId).catch(() => {}).finally(() => {
+      warming = null
+    }))
+  }
+
   return {
     state,
+    warmUp,
     startFromCache,
     refresh,
     sync,
@@ -1066,8 +1098,8 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     setVariantPhoto,
     removePhoto,
     makeCover,
-    async createInventory({ sourceId, name, currency }) {
-      const id = newId()
+    async createInventory({ sourceId, name, currency, id: given }) {
+      const id = given ?? newId()
       const ref = { sourceId, inventoryId: id }
       await write(ref, { type: 'inventory.create', id, name, description: null, currency }, async () => null)
       await selectInventory(ref)

@@ -54,7 +54,7 @@ const openStock = (mode: StockMode, variantId: string | null): void => {
 }
 async function step(kind: 'plus' | 'minus', variantId: string | null): Promise<void> {
   try {
-    await workspace.apply(quickStep(kind, { itemId: props.itemId, variantId }))
+    await workspace.apply(quickStep(kind, { itemId: props.itemId, variantId }, newId()))
   } catch (e) {
     toast.error(t(errorMessageKey(e)))
   }
@@ -73,6 +73,7 @@ function added(a: VariantsAdded): void {
 }
 const renameId = ref<Id | null>(null)
 const archiveId = ref<Id | null>(null)
+const { ids: archiveIds, renew: renewArchive } = useCommandIds(['archiveId'])
 // The variant the open sheet is about, kept while the sheet animates out.
 const sheetVariant = shallowRef<{ id: Id; name: string } | null>(null)
 const variantOf = (id: Id) => snapshot.value?.variants.find((v) => v.id === id) ?? null
@@ -95,13 +96,14 @@ function askArchive(id: Id): void {
   if (!v) return
   sheetVariant.value = { id, name: variantLabel(snapshot.value!, v) }
   archiveId.value = id
+  renewArchive()
 }
 async function archiveVariant(): Promise<void> {
   const id = archiveId.value
   if (!id || archiveBusy.value) return
   archiveBusy.value = true
   try {
-    await workspace.apply({ type: 'archive', target: 'variant', id, archiveId: newId() })
+    await workspace.apply({ type: 'archive', target: 'variant', id, archiveId: archiveIds.archiveId })
     archiveId.value = null
   } catch (e) {
     toast.error(t(errorMessageKey(e)))

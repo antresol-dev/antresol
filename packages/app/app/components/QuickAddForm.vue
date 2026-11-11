@@ -14,6 +14,7 @@ const emit = defineEmits<{ done: [added: { id: Id; name: string; photoFailed: bo
 
 const workspace = useWorkspace()
 const { state } = workspace
+const { ids, renew } = useCommandIds(['itemId', 'movementId'])
 
 const name = ref(props.name)
 const folderId = ref<Id | null>(props.folderId)
@@ -64,6 +65,7 @@ async function submit(): Promise<void> {
   const built = buildQuickAdd(
     { folderId: folderId.value, name: name.value, unitKey: unitKey.value, amount: amount.value, price: price.value, url: url.value },
     s,
+    { itemId: ids.itemId, movementId: ids.movementId },
   )
   if ('errorKey' in built) {
     errorKey.value = built.errorKey
@@ -82,6 +84,7 @@ async function submit(): Promise<void> {
         photoFailed = true
       }
     }
+    renew()
     emit('done', { id: built.command.id, name: built.command.name, photoFailed })
   } catch (e) {
     errorKey.value = errorMessageKey(e)

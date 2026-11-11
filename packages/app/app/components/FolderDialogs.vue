@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { newId, type Folder } from '@graymatter/core'
+import type { Folder } from '@graymatter/core'
 import { toast } from 'vue-sonner'
 import type { FolderDialog } from '~/composables/useDialogs'
 import { errorMessageKey } from '~/lib/errors'
@@ -12,6 +12,8 @@ const workspace = useWorkspace()
 const { state } = workspace
 const route = useRoute()
 const router = useRouter()
+// One archive id per opening: a retried Confirm after a timeout sends the same command.
+const { ids, renew } = useCommandIds(['archiveId'])
 const { dialog, close } = useFolderDialog()
 
 // What the sheets show: the last dialog and its folder as they were when it opened. Both stay after closing, so a
@@ -24,6 +26,7 @@ watch(
   (d) => {
     if (!d) return
     shown.value = d
+    renew()
     if (d.kind === 'create') {
       folder.value = null
       return
@@ -71,7 +74,7 @@ async function archive(): Promise<void> {
   archiving.value = true
   let archived = false
   try {
-    await workspace.apply({ type: 'archive', target: 'folder', id: target.id, archiveId: newId() })
+    await workspace.apply({ type: 'archive', target: 'folder', id: target.id, archiveId: ids.archiveId })
     archived = true
     close()
   } catch (e) {

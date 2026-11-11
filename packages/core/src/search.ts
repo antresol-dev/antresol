@@ -53,7 +53,12 @@ const itemOrder = (a: Item, b: Item): number =>
 const variantOrder = (a: Variant, b: Variant): number =>
   compareIds(a.itemId, b.itemId) || a.position - b.position || compareIds(a.id, b.id)
 
-export function createSearch(s: InventorySnapshot): { search(query: string, limit?: number): SearchHit[] } {
+export interface SearchOptions {
+  /** false: exact and prefix hits only, no typo tolerance ("is this one I already have?"). Default true. */
+  fuzzy?: boolean
+}
+
+export function createSearch(s: InventorySnapshot): { search(query: string, limit?: number, options?: SearchOptions): SearchHit[] } {
   const archivedFolders = new Set(s.folders.filter((f) => f.archivedAt !== null).map((f) => f.id))
   const folderParent = new Map(s.folders.map((f) => [f.id, f.parentId] as const))
   const folderHidden = (id: Id | null): boolean => {
@@ -126,7 +131,7 @@ export function createSearch(s: InventorySnapshot): { search(query: string, limi
   const docById = new Map(docs.map((d) => [d.id, d] as const))
 
   return {
-    search(query, limit = DEFAULT_LIMIT) {
+    search(query, limit = DEFAULT_LIMIT, options = {}) {
       if (query.trim() === '' || limit <= 0) return []
       const compactQuery = compact(query)
       type Rank = { tier: number; score: number }
@@ -135,6 +140,7 @@ export function createSearch(s: InventorySnapshot): { search(query: string, limi
       const collect = (q: string, fields: string[], boost: number) => {
         if (q === '') return
         TIERS.forEach((opts, tier) => {
+          if (opts.fuzzy && options.fuzzy === false) return
           for (const r of index.search(q, { fields, ...opts })) {
             const cand = { tier, score: r.score * boost }
             const prev = ranks.get(r.id)

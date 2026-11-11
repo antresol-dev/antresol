@@ -1,16 +1,21 @@
 <script setup lang="ts">
 import { getCurrency, type Id } from '@graymatter/core'
+import { refDebounced } from '@vueuse/core'
 import { ChevronDown, X } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { unitChoices } from '~/lib/amounts'
 import { errorMessageKey } from '~/lib/errors'
-import { buildQuickAdd } from '~/lib/quick-add'
+import { buildQuickAdd, existingMatches, type MatchRow } from '~/lib/quick-add'
 import { folderChoices, pathOf, snapshotIndex } from '~/lib/views'
 
-const props = defineProps<{ name: string; folderId: Id | null }>()
-const emit = defineEmits<{ done: [added: { id: Id; name: string; photoFailed: boolean }] }>()
+const props = defineProps<{ name: string; folderId: Id | null; url?: string }>()
+const emit = defineEmits<{
+  done: [added: { id: Id; name: string; photoFailed: boolean }]
+  /** "Receive here" on a match: receive into it instead, with what was typed. */
+  receive: [into: { itemId: Id; variantId: Id | null; amount: string; price: string; url: string }]
+}>()
 
 const workspace = useWorkspace()
 const { state } = workspace
@@ -21,7 +26,7 @@ const folderId = ref<Id | null>(props.folderId)
 const unitKey = ref('pcs')
 const amount = ref('')
 const price = ref('')
-const url = ref('')
+const url = ref(props.url ?? '')
 const picking = ref(false)
 const photo = ref<File | null>(null)
 const preview = computed(() => (photo.value ? URL.createObjectURL(photo.value) : null))
@@ -53,6 +58,17 @@ const currencySymbol = computed(() => {
 })
 
 const canSubmit = computed(() => !busy.value && !state.readOnly && !!snapshot.value)
+
+// "You already have it" (spec 4.9): up to three things with this name, a moment after typing stops. Save stays free.
+const typedName = refDebounced(name, 150)
+const matches = computed<MatchRow[]>(() => (snapshot.value ? existingMatches(typedName.value, snapshot.value) : []))
+const matchLine = (m: MatchRow): string =>
+  [m.path || snapshot.value?.inventory.name, m.amount].filter((x): x is string => !!x).join(' · ')
+
+function receiveHere(m: MatchRow): void {
+  if (busy.value) return
+  emit('receive', { itemId: m.itemId, variantId: m.variantId, amount: amount.value, price: price.value, url: url.value })
+}
 
 function pick(id: Id | null): void {
   folderId.value = id
@@ -99,6 +115,23 @@ async function submit(): Promise<void> {
     <div class="grid gap-1.5">
       <Label for="quick-add-name">{{ $t('form.name') }}</Label>
       <Input id="quick-add-name" v-model="name" autocomplete="off" class="h-11 rounded-field bg-surface" />
+      <section v-if="matches.length > 0" class="grid gap-1" aria-labelledby="quick-add-existing">
+        <h3 id="quick-add-existing" class="pt-1 text-xs font-semibold text-subtle-foreground">{{ $t('quickAdd.existing') }}</h3>
+        <ul class="grid gap-0.5">
+          <li v-for="m in matches" :key="`${m.itemId}:${m.variantId ?? ''}`" class="flex min-h-11 items-center gap-2.5 rounded-field px-1">
+            <ItemThumb :name="m.name" :cover-url="m.coverUrl" class="size-8 rounded-icon text-xs" />
+            <span class="flex min-w-0 flex-1 flex-col">
+              <span class="truncate text-sm font-bold">
+                {{ m.name }}<span v-if="m.variantName" class="font-semibold text-muted-foreground"> · {{ m.variantName }}</span>
+              </span>
+              <span class="truncate text-xs text-muted-foreground">{{ matchLine(m) }}</span>
+            </span>
+            <Button type="button" variant="outline" size="sm" class="h-9 shrink-0 rounded-field bg-surface" :disabled="busy" @click="receiveHere(m)">
+              {{ $t('quickAdd.receiveHere') }}
+            </Button>
+          </li>
+        </ul>
+      </section>
     </div>
 
     <div class="grid gap-1.5">

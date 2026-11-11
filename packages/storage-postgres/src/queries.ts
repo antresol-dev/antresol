@@ -1,4 +1,4 @@
-import { StorageError, type Id, type InventorySnapshot, type Movement, type Inventory } from '@graymatter/core'
+import { StorageError, type Id, type InventorySnapshot, type Movement, type Inventory, type SourceReceipt } from '@graymatter/core'
 import type { PgExecutor } from './executor'
 import * as rows from './rows'
 import { sql, type Statement } from './sql'
@@ -171,6 +171,42 @@ function movementsStatement(inventoryId: Id) {
   return sql`select id, seq::text as seq, item_id, variant_id, kind, quantity::text as quantity,
                total_price::text as total_price, source_url, note, transfer_id, created_at, created_by
         from movements m where inventory_id = ${inventoryId} order by m.seq asc`
+}
+
+/** Receipts a link search returns at most. */
+const RECEIPTS_BY_SOURCE_LIMIT = 20
+const ALNUM = /[\p{L}\p{N}]/u
+
+/** `key` occurs in `url` (both lowercased) with no letter or digit right before or after it: lot "123" is not in
+ *  "/item/41234.html". */
+function holdsKey(url: string, key: string): boolean {
+  for (let at = url.indexOf(key); at !== -1; at = url.indexOf(key, at + 1)) {
+    const before = url[at - 1]
+    const after = url[at + key.length]
+    if ((before === undefined || !ALNUM.test(before)) && (after === undefined || !ALNUM.test(after))) return true
+  }
+  return false
+}
+
+/** Newest first. `strpos` takes the key as plain text (no LIKE wildcards); the whole-part check runs here. */
+export async function findReceiptsBySource(exec: PgExecutor, inventoryId: Id, key: string): Promise<SourceReceipt[]> {
+  const k = key.trim().toLowerCase()
+  if (k === '') return []
+  const result = await exec.query(
+    sql`select item_id, variant_id, quantity::text as quantity, source_url, created_at
+        from movements m
+        where inventory_id = ${inventoryId} and kind = 'receipt' and strpos(lower(source_url), ${k}) > 0
+        order by m.seq desc`,
+  )
+  return result
+    .filter((r) => holdsKey(String(r.source_url).toLowerCase(), k))
+    .slice(0, RECEIPTS_BY_SOURCE_LIMIT)
+    .map((r) => ({
+      at: rows.toIso(r.created_at),
+      itemId: r.item_id as Id,
+      variantId: (r.variant_id as Id | null) ?? null,
+      quantity: rows.toQuantity(r.quantity),
+    }))
 }
 
 type R = Record<string, unknown>[]

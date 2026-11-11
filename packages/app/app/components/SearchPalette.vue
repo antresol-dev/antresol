@@ -1,13 +1,12 @@
 <script setup lang="ts">
-import { createSearch } from '@graymatter/core'
 import { useMediaQuery } from '@vueuse/core'
-import { Archive, ArrowLeftRight, Cpu, Folder, FolderPlus, Plus, Search, SlidersHorizontal, Tags, X } from '@lucide/vue'
+import { Archive, ArrowLeftRight, Folder, FolderPlus, Plus, Search, SlidersHorizontal, Tags, X } from '@lucide/vue'
 import { DialogContent, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui'
 import type { Component } from 'vue'
 import { toast } from 'vue-sonner'
 import { DialogOverlay } from '@/components/ui/dialog'
 import { errorMessageKey } from '~/lib/errors'
-import { bottomUp, paletteResults, stepSelection, type PaletteAction, type PaletteRow } from '~/lib/palette'
+import { bottomUp, paletteResults, pastedShare, snapshotSearch, stepSelection, type PaletteAction, type PaletteRow } from '~/lib/palette'
 import { currentInventoryName, NAV_SECTIONS, treeCurrent } from '~/lib/shell'
 import { pathOf, snapshotIndex } from '~/lib/views'
 
@@ -24,6 +23,7 @@ const { state } = workspace
 const { paletteOpen } = useShell()
 const folderDialog = useFolderDialog()
 const quickAdd = useQuickAdd()
+const share = useShare()
 // From 1024 px a window near the top; below, the whole screen with the field at the bottom, above the keyboard.
 const desktop = useMediaQuery('(min-width: 1024px)')
 
@@ -45,8 +45,8 @@ const query = ref('')
 const text = computed(() => query.value.trim())
 const inventoryName = computed(() => currentInventoryName(state))
 
-// Built once per snapshot object (snapshots are replaced whole), on the first search.
-const search = computed(() => (state.snapshot ? createSearch(state.snapshot) : null))
+// Built once per snapshot object (snapshots are replaced whole), on the first search; shared with quick add.
+const search = computed(() => (state.snapshot ? snapshotSearch(state.snapshot) : null))
 
 // The folder the screen shows (the item's folder on an item card): where "New folder in …" creates one.
 const screenFolder = computed(() => {
@@ -126,6 +126,17 @@ function onKeydown(event: KeyboardEvent): void {
     event.preventDefault()
     if (selected.value) void run(selected.value)
   }
+}
+
+// A shop link or a long shop title pasted in opens the share sheet instead (spec 4.10); anything else is pasted as usual.
+async function onPaste(event: ClipboardEvent): Promise<void> {
+  const input = pastedShare(event.clipboardData?.getData('text/plain') ?? '')
+  if (!input) return
+  event.preventDefault()
+  paletteOpen.value = false
+  await nextTick()
+  handBackFocus()
+  share.open(input)
 }
 
 // Moving the mouse selects; touch scrolling the list doesn't.
@@ -261,6 +272,7 @@ const kbdClass =
               enterkeyhint="go"
               class="h-11 min-w-0 flex-1 border-none bg-transparent text-base font-semibold text-foreground outline-none placeholder:font-medium placeholder:text-muted-foreground"
               @keydown="onKeydown"
+              @paste="onPaste"
             >
             <button
               v-if="query"
@@ -327,16 +339,20 @@ const kbdClass =
                 @click="run(row)"
               >
                 <template v-if="row.kind === 'item'">
-                  <span class="grid size-8 shrink-0 place-items-center overflow-hidden rounded-icon bg-thumb text-thumb-foreground">
-                    <PhotoImg v-if="row.hit.coverUrl" :url="row.hit.coverUrl" size="thumb" alt="" class="size-full object-cover" />
-                    <Cpu v-else class="size-4" stroke-width="1.75" aria-hidden="true" />
-                  </span>
+                  <ItemThumb :name="row.hit.name" :cover-url="row.hit.coverUrl" class="size-8 rounded-icon text-xs" />
                   <span class="flex min-w-0 flex-1 flex-col">
-                    <span class="truncate text-sm font-bold" :class="row.hit.outOfStock && 'text-dimmed-foreground'">
-                      <template v-for="(p, i) in row.name" :key="i"><mark v-if="p.match" :class="markClass">{{ p.text }}</mark><template v-else>{{ p.text }}</template></template>
-                      <span v-if="row.variant" class="font-semibold text-muted-foreground">
-                        · <template v-for="(p, i) in row.variant" :key="i"><mark v-if="p.match" :class="markClass">{{ p.text }}</mark><template v-else>{{ p.text }}</template></template>
+                    <span class="flex min-w-0 items-center gap-1.5">
+                      <span class="min-w-[min(7.5rem,100%)] truncate text-sm font-bold" :class="row.hit.outOfStock && 'text-dimmed-foreground'">
+                        <template v-for="(p, i) in row.name" :key="i"><mark v-if="p.match" :class="markClass">{{ p.text }}</mark><template v-else>{{ p.text }}</template></template>
+                        <span v-if="row.variant" class="font-semibold text-muted-foreground">
+                          · <template v-for="(p, i) in row.variant" :key="i"><mark v-if="p.match" :class="markClass">{{ p.text }}</mark><template v-else>{{ p.text }}</template></template>
+                        </span>
                       </span>
+                      <span
+                        v-for="(value, i) in row.hit.pinned"
+                        :key="`pin${i}`"
+                        class="max-w-28 min-w-0 shrink truncate rounded-md bg-chip px-1.5 py-px text-[11px] font-semibold text-subtle-foreground"
+                      >{{ value }}</span>
                     </span>
                     <span v-if="row.hit.path" class="truncate text-xs font-semibold text-muted-foreground">{{ row.hit.path }}</span>
                   </span>

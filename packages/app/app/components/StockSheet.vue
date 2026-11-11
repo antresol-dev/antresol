@@ -11,11 +11,13 @@ import { buildStockCommand, type StockMode } from '~/lib/stock-forms'
 export interface StockTarget {
   mode: StockMode
   variantId: Id | null
+  /** What the form starts with instead of empty fields ("Receive here" carries what quick add had). */
+  prefill?: { amount?: string; price?: string; url?: string }
 }
 
 // Receive, use, set or move stock of one bucket of the item. The form resets on every opening.
 const props = defineProps<{ view: ItemView; target: StockTarget | null }>()
-const emit = defineEmits<{ close: [] }>()
+const emit = defineEmits<{ close: []; done: [] }>()
 
 const workspace = useWorkspace()
 const { state } = workspace
@@ -54,9 +56,9 @@ watch(
     void workspace.warmUp()
     openings.value++
     const bucket = props.view.buckets.find((b) => b.variantId === t.variantId)
-    amount.value = t.mode === 'transfer' ? (bucket?.quantity ?? '') : ''
-    price.value = ''
-    url.value = ''
+    amount.value = t.prefill?.amount ?? (t.mode === 'transfer' ? (bucket?.quantity ?? '') : '')
+    price.value = t.prefill?.price ?? ''
+    url.value = t.prefill?.url ?? ''
     note.value = ''
     toKey.value = ''
     busy.value = false
@@ -96,6 +98,7 @@ async function submit(): Promise<void> {
   errorKey.value = null
   try {
     await workspace.apply(built.command)
+    emit('done')
     emit('close')
   } catch (e) {
     errorKey.value = errorMessageKey(e)

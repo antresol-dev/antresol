@@ -1,7 +1,7 @@
-import { newId, type Id, type InventorySnapshot, type InventoryStorage } from '@graymatter/core'
+import { newId, type Command, type Id, type InventorySnapshot, type InventoryStorage } from '@graymatter/core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
-import { buildQuickAdd, type QuickAddInput } from '../app/lib/quick-add'
+import { buildQuickAdd, existingMatches, type QuickAddInput } from '../app/lib/quick-add'
 import type { SourceConfig } from '../app/lib/types'
 
 const cfg: SourceConfig = {
@@ -124,5 +124,61 @@ describe('buildQuickAdd', () => {
     await storage.apply(r.command, { device: 'Test' })
     const after = await storage.loadInventory(snap.inventory.id)
     expect(after.items.some((i) => i.id === r.command.id)).toBe(true)
+  })
+})
+
+describe('existingMatches', () => {
+  let s: InventorySnapshot
+  const add = (name: string, folderId: Id | null, quantity: string | null): Command => ({
+    type: 'item.create',
+    id: newId(),
+    inventoryId: snap.inventory.id,
+    folderId,
+    name,
+    description: null,
+    unitKey: 'pcs',
+    tagIds: [],
+    initialReceipt: quantity ? { movementId: newId(), quantity, totalPrice: null, sourceUrl: null } : null,
+  })
+
+  beforeAll(async () => {
+    const opamps = snap.folders.find((f) => f.name === 'Op-amps')!.id
+    for (const c of [add('NE5532P', opamps, '4'), add('TL072CP', opamps, '12'), add('TL074', opamps, '3')]) {
+      await storage.apply(c, { device: 'Test' })
+    }
+    s = await storage.loadInventory(snap.inventory.id)
+  })
+
+  const names = (rows: { name: string; variantName: string | null }[]) =>
+    rows.map((r) => (r.variantName ? `${r.name} · ${r.variantName}` : r.name))
+
+  it('finds an item whose name starts with what is typed, with its folder and stock', () => {
+    const [row] = existingMatches('ne5532', s)
+    expect(row).toMatchObject({ name: 'NE5532P', path: 'ICs / Op-amps', number: '4', unit: 'pcs', amount: '4 pcs' })
+  })
+
+  it('finds both ways by the part number: TL072 ↔ TL072CP, but never TL074', () => {
+    expect(names(existingMatches('tl072', s))).toEqual(['TL072', 'TL072CP'])
+    expect(names(existingMatches('TL072CP', s))).toEqual(['TL072CP', 'TL072'])
+    expect(names(existingMatches('TL072CN', s))).toEqual(['TL072', 'TL072CP'])
+  })
+
+  it('finds a variant by a value read by its attribute rules', () => {
+    const rows = existingMatches('10k', s)
+    expect(names(rows)[0]).toBe('Резистор 0,25 Вт · 10 kΩ')
+    expect(rows[0]!.number).toBe('100')
+    expect(names(existingMatches('10000', s))[0]).toBe('Резистор 0,25 Вт · 10 kΩ')
+  })
+
+  it('makes no guesses: no fuzzy hits, nothing for a blank or one-letter name', () => {
+    expect(existingMatches('tl073', s)).toEqual([])
+    expect(existingMatches('ne5533', s)).toEqual([])
+    expect(existingMatches('   ', s)).toEqual([])
+    expect(existingMatches('t', s)).toEqual([])
+  })
+
+  it('returns at most `limit` rows', () => {
+    expect(existingMatches('tl07', s)).toHaveLength(3)
+    expect(existingMatches('tl07', s, 2)).toHaveLength(2)
   })
 })

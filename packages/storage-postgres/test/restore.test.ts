@@ -278,10 +278,12 @@ describe('restore', () => {
     ])
     for (const call of counting.calls) {
       expect(call[0]!.text).toBe(LOCK_REV.text)
+      // Right after the lock, as in every write: this app may still write (GM003).
+      expect(call[1]!.text).toMatch(/gm_newer_schema/)
       expect(call.at(-1)!.text).toBe(REV_BUMP.text)
     }
-    // The first batch alone checks, right after the lock, that the source is empty.
-    expect(counting.calls[0]![1]!.text).toMatch(/gm_restore_not_empty/)
+    // The first batch alone then checks that the source is empty.
+    expect(counting.calls[0]![2]!.text).toMatch(/gm_restore_not_empty/)
     expect(counting.calls.slice(1).flat().some((st) => /gm_restore_not_empty/.test(st.text))).toBe(false)
     const stock = (await target.loadInventory(inv)).stock.find((l) => l.itemId === wire)!
     expect(stock.quantity).toBe('1211.75')

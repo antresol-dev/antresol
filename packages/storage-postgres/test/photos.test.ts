@@ -1,6 +1,6 @@
-import { newId } from '@graymatter/core'
+import { newId, patchSnapshot, type Command, type Id } from '@graymatter/core'
 import { describe, expect, it } from 'vitest'
-import { makeStorage, TEST_ACTOR } from './helpers'
+import { itemCreate, makeStorage, sizeAxis, sliceOf, TEST_ACTOR, variantsCreate } from './helpers'
 
 describe('photos', () => {
   it('adds at the end, reorders and removes', async () => {
@@ -22,5 +22,63 @@ describe('photos', () => {
     expect(await positions()).toEqual([[p3, 0], [p1, 1], [p2, 2]])
     await storage.apply({ type: 'photo.remove', id: p1 }, TEST_ACTOR)
     expect((await storage.loadInventory(inv)).photos).toHaveLength(2)
+  })
+})
+
+describe('photo.replace', () => {
+  /** An item with two variants; photos: p1 the item's, p2 variant a's, p3 the item's, in that order. */
+  async function setup() {
+    const storage = await makeStorage()
+    const run = (c: Command) => storage.apply(c, TEST_ACTOR)
+    const [inv, item, size, a, b] = [newId(), newId(), newId(), newId(), newId()]
+    const [p1, p2, p3] = [newId(), newId(), newId()]
+    await run({ type: 'inventory.create', id: inv, name: 'A', description: null, currency: 'USD' })
+    await run(itemCreate(inv, item))
+    for (const c of sizeAxis(inv, item, size)) await run(c)
+    await run(variantsCreate(item, [[a, { [size]: 'S' }], [b, { [size]: 'M' }]]))
+    const add = (id: Id, variantId: Id | null): Command => ({
+      type: 'photo.add', id, itemId: item, variantId, provider: 'imgbb', fileId: id, url: `https://x/${id}`,
+    })
+    for (const [id, variantId] of [[p1, null], [p2, a], [p3, null]] as const) await run(add(id, variantId))
+    const replace = (variantId: Id, id: Id, itemId: Id = item): Command => ({
+      type: 'photo.replace', variantId, id, itemId, provider: 'uploadcare', fileId: `f-${id}`, url: `https://y/${id}`,
+    })
+    const photos = async () =>
+      (await storage.loadInventory(inv)).photos
+        .sort((x, y) => x.position - y.position)
+        .map((p) => [p.id, p.variantId, p.position])
+    return { storage, run, inv, item, a, b, p1, p2, p3, replace, photos }
+  }
+
+  it('puts the new photo in place of the variant’s old one in one write', async () => {
+    const { storage, run, inv, item, a, p1, p2, p3, replace, photos } = await setup()
+    const p4 = newId()
+    const copy = await storage.loadInventory(inv)
+    const before = (await storage.listInventories()).rev
+    const r = await run(replace(a, p4))
+    expect(r.prevRev).toBe(before)
+    expect(r.rev).toBe((await storage.listInventories()).rev)
+    expect(await photos()).toEqual([[p1, null, 0], [p4, a, 1], [p3, null, 2]])
+    const fresh = await storage.loadInventory(inv)
+    expect(fresh.photos.find((p) => p.id === p4)).toMatchObject({ itemId: item, provider: 'uploadcare', fileId: `f-${p4}`, url: `https://y/${p4}`, createdBy: TEST_ACTOR.device })
+    expect(fresh.photos.map((p) => p.id)).not.toContain(p2)
+    expect(sliceOf(patchSnapshot(copy, r.patch!), item)).toEqual(sliceOf(fresh, item))
+  })
+
+  it('adds the photo at the end for a variant that has none', async () => {
+    const { run, b, p1, p2, p3, replace, photos } = await setup()
+    const p4 = newId()
+    await run(replace(b, p4))
+    expect(await photos()).toEqual([[p1, null, 0], [p2, expect.any(String), 1], [p3, null, 2], [p4, b, 3]])
+  })
+
+  it('touches nothing for a variant that is not the item’s in the database', async () => {
+    const { run, inv, a, replace, photos } = await setup()
+    const before = await photos()
+    const other = newId()
+    await run(itemCreate(inv, other, 'Fuse'))
+    // Sent unvalidated, as from a copy that is behind.
+    await run(replace(a, newId(), other))
+    expect(await photos()).toEqual(before)
   })
 })

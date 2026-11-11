@@ -7,7 +7,7 @@ import { bucketStock } from './stock'
 import { cmpQ, parseQuantity, type Quantity } from './quantity'
 import { customUnitKey, resolveUnit, SI_PREFIXES } from './units'
 import { isInSubtree } from './tree'
-import { axisRemovalPreview, duplicateOf, itemAxes, sameAxisValue } from './variants'
+import { axisRemovalPreview, duplicateOf, duplicatesAfter, itemAxes, sameAxisValue, type VariantValuesRow } from './variants'
 
 export const DOMAIN_ERROR_CODES = [
   'name_required',
@@ -90,7 +90,14 @@ export function normalizeCommand(c: Command): Command {
     set('tagIds', c.tagIds && [...new Set(c.tagIds)])
   }
   if (c.type === 'variant.createMany') {
-    out.variants = c.variants.map((v) => ({ ...v, values: v.values.map((x) => ({ ...x, value: typeof x.value === 'string' ? x.value.trim() : x.value })) }))
+    out.variants = c.variants.map((v) => ({
+      ...v,
+      values: v.values.map((x) => ({ ...x, value: typeof x.value === 'string' ? x.value.trim() : x.value })),
+      ...(v.initialReceipt ? { initialReceipt: { ...v.initialReceipt, quantity: canon(v.initialReceipt.quantity) } } : {}),
+    }))
+  }
+  if (c.type === 'variant.setValues') {
+    out.rows = c.rows.map((r) => ({ ...r, values: r.values.map((x) => ({ ...x, value: desc(x.value) ?? null })) }))
   }
   return out as Command
 }
@@ -217,14 +224,20 @@ function checkAxisRemoval(s: Snap, itemId: Id, attributeId: Id) {
   const { blocked } = axisRemovalPreview(s, itemId, attributeId)
   if (blocked) fail(blocked)
 }
-function checkNewVariants(s: Snap, itemId: Id, variants: { id: Id; values: { attributeId: Id; value: string }[] }[]) {
+function checkNewVariants(s: Snap, itemId: Id, variants: Extract<Command, { type: 'variant.createMany' }>['variants']) {
   const axes = itemAxes(s, itemId)
   if (axes.length === 0) fail('axis_required')
   const batch: Map<Id, string | null>[] = []
   const ids = new Set<Id>()
+  const movementIds = new Set<Id>()
   for (const v of variants) {
     if (ids.has(v.id)) fail('invalid_option')
     ids.add(v.id)
+    if (v.initialReceipt) {
+      if (movementIds.has(v.initialReceipt.movementId)) fail('invalid_option')
+      movementIds.add(v.initialReceipt.movementId)
+      checkPositive(v.initialReceipt.quantity)
+    }
     const existing = s.variants.find((x) => x.id === v.id)
     if (existing && existing.itemId !== itemId) fail('invalid_option')
     const values = new Map<Id, string | null>()
@@ -258,6 +271,30 @@ function checkVariantValue(s: Snap, v: Variant, attributeId: Id, value: string |
   for (const r of s.variantAttributeValues) if (r.variantId === v.id) values.set(r.attributeId, r.value)
   values.set(attributeId, value)
   if (duplicateOf(s, v.itemId, values, v.id)) fail('duplicate_variant')
+}
+
+/** variant.setValues: each row an active variant of the item, named once; each value on an axis of the item, named once
+ *  per row and fitting the kind; then no row's variant equal to another variant once all the rows are applied. */
+function checkVariantValues(s: Snap, itemId: Id, rows: VariantValuesRow[]) {
+  activeItem(s, itemId)
+  const axes = new Set(itemAxes(s, itemId).map((a) => a.id))
+  const variants = new Set<Id>()
+  for (const r of rows) {
+    if (variants.has(r.variantId)) fail('invalid_option')
+    variants.add(r.variantId)
+    const v = needVariant(s, r.variantId)
+    if (v.itemId !== itemId) fail('not_found')
+    if (variantArchived(s, v)) fail('archived')
+    const attributes = new Set<Id>()
+    for (const { attributeId, value } of r.values) {
+      const a = needAttribute(s, attributeId)
+      if (!axes.has(attributeId)) fail('not_an_axis')
+      if (attributes.has(attributeId)) fail('invalid_option')
+      attributes.add(attributeId)
+      checkValue(a, value)
+    }
+  }
+  if (duplicatesAfter(s, itemId, rows).length > 0) fail('duplicate_variant')
 }
 
 function check(c: Command, s: Snap | null): void {
@@ -367,6 +404,9 @@ function check(c: Command, s: Snap | null): void {
       checkVariantValue(s, v, c.attributeId, c.value)
       return
     }
+    case 'variant.setValues':
+      checkVariantValues(s, c.itemId, c.rows)
+      return
     case 'tag.create':
       needInventory(s, c.inventoryId)
       checkName(c.name)
@@ -454,6 +494,13 @@ function check(c: Command, s: Snap | null): void {
       activeBucket(s, c.itemId, c.variantId)
       if (c.variantId !== null && s.photos.some((p) => p.variantId === c.variantId)) fail('invalid_option')
       return
+    case 'photo.replace': {
+      activeBucket(s, c.itemId, c.variantId)
+      // The new photo already stored as this variant's: a retry. Any other photo with this id is not this command's.
+      const existing = s.photos.find((p) => p.id === c.id)
+      if (existing && existing.variantId !== c.variantId) fail('invalid_option')
+      return
+    }
     case 'photo.remove':
       if (!s.photos.some((p) => p.id === c.id)) fail('not_found')
       return

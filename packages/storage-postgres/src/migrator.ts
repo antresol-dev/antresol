@@ -45,6 +45,35 @@ export function isConcurrentMigration(e: unknown): boolean {
  *  (hand-edited database, or one the initial migration has not filled yet): nothing to lock. */
 export const LOCK_REV: Statement = sql`select value from gm_meta where key = 'rev' for update`
 
+/** Message and SQLSTATE of the error a write batch raises when the database needs a newer app to write. */
+export const NEWER_SCHEMA_MESSAGE = 'gm_newer_schema'
+export const NEWER_SCHEMA_SQLSTATE = 'GM003'
+
+export function isNewerSchema(e: unknown): boolean {
+  if (!(e instanceof Error)) return false
+  return (e as { code?: unknown }).code === NEWER_SCHEMA_SQLSTATE && e.message.includes(NEWER_SCHEMA_MESSAGE)
+}
+
+/**
+ * Right after LOCK_REV in every write batch (Plan 9 spec G3): fails with GM003 when the oldest app schema that may write
+ * (`min_app_schema`, or without that row the database's own version, as readSchemaMeta reads them) is above
+ * `appVersion`. The status read when the storage opened goes stale once another device migrates; under the revision
+ * lock a migration cannot slip in between this check and the write, since migrations take the same lock. A plain
+ * statement: fits one Neon HTTP transaction.
+ */
+export function schemaGuard(appVersion: number): Statement {
+  if (!Number.isInteger(appVersion) || appVersion < 0) throw new Error(`invalid app version ${appVersion}`)
+  return {
+    text: `do $$ begin
+  if coalesce((select value from gm_meta where key = 'min_app_schema'),
+              (select value from gm_meta where key = 'schema_version'))::int > ${appVersion} then
+    raise exception '${NEWER_SCHEMA_MESSAGE}' using errcode = '${NEWER_SCHEMA_SQLSTATE}';
+  end if;
+end $$`,
+    params: [],
+  }
+}
+
 /** Gives `gm_meta.rev` a new unique value (see storage.ts for why it is opaque); creates the row if it is missing.
  *  Returns the new value (`apply` reports it; a migration ignores it). */
 export const REV_BUMP: Statement = {

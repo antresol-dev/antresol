@@ -213,6 +213,68 @@ describe.skipIf(!url)('Neon conformance', () => {
         )
       })
 
+      it('runs the Plan 9 scenario: values set at once, variants with stock, a photo replaced; a newer schema refuses writes', async () => {
+        const { storage } = await openPostgresStorage(exec)
+        const [inv, item, cap, volt] = [newId(), newId(), newId(), newId()]
+        const [a, b, c, m, p1, p2] = [newId(), newId(), newId(), newId(), newId(), newId()]
+        await storage.apply({ type: 'inventory.create', id: inv, name: `plan9-${name}`, description: null, currency: 'USD' }, TEST_ACTOR)
+        let copy: InventorySnapshot = await storage.loadInventory(inv)
+        const step = async (cmd: Command) => {
+          const r = await storage.apply(cmd, TEST_ACTOR)
+          expect(r.patch, cmd.type).not.toBeNull()
+          copy = patchSnapshot(copy, r.patch!)
+        }
+        const values = (variantId: string) =>
+          Object.fromEntries(copy.variantAttributeValues.filter((r) => r.variantId === variantId).map((r) => [r.attributeId, r.value]))
+        await step(itemCreate(inv, item, 'Capacitor'))
+        await step(attributeCreate(inv, cap, 'Capacitance', 'number', { unit: 'F', siPrefixes: true }))
+        await step(attributeCreate(inv, volt, 'Voltage', 'number', { unit: 'V' }))
+        await step({ type: 'item.addAxis', itemId: item, attributeId: cap, firstVariantId: newId() })
+        await step({ type: 'item.addAxis', itemId: item, attributeId: volt, firstVariantId: newId() })
+        const pair = (x: string, y: string) => [{ attributeId: cap, value: x }, { attributeId: volt, value: y }]
+        await step({
+          type: 'variant.createMany',
+          itemId: item,
+          variants: [
+            { id: a, values: pair('0.0000001', '50'), initialReceipt: { movementId: m, quantity: '10' as Quantity } },
+            { id: b, values: pair('0.00000022', '50') },
+            { id: c, values: pair('0.00000047', '16') },
+          ],
+        })
+        expect((await storage.loadMovements(item)).map((x) => [x.id, x.variantId, x.quantity])).toEqual([[m, a, '10']])
+        const set = (rows: [string, Record<string, string | null>][]): Command => ({
+          type: 'variant.setValues',
+          itemId: item,
+          rows: rows.map(([variantId, v]) => ({ variantId, values: Object.entries(v).map(([attributeId, value]) => ({ attributeId, value })) })),
+        })
+        // C2: 100n·50V -> 220n·25V next to 220n·50V; then b and c trade their values.
+        await step(set([[a, { [cap]: '0.00000022', [volt]: '25' }]]))
+        await step(set([[b, { [cap]: '0.00000047', [volt]: '16' }], [c, { [cap]: '0.00000022', [volt]: '50' }]]))
+        // Sent unvalidated, as from a copy that is behind: c would equal b. Skipped whole.
+        await step(set([[a, { [volt]: '35' }], [c, { [cap]: '0.00000047', [volt]: '16' }]]))
+        expect([values(a), values(b), values(c)]).toEqual([
+          { [cap]: '0.00000022', [volt]: '25' },
+          { [cap]: '0.00000047', [volt]: '16' },
+          { [cap]: '0.00000022', [volt]: '50' },
+        ])
+        await step({ type: 'photo.add', id: p1, itemId: item, variantId: b, provider: 'imgbb', fileId: 'f1', url: 'https://i.example/f1' })
+        await step({ type: 'photo.replace', variantId: b, id: p2, itemId: item, provider: 'imgbb', fileId: 'f2', url: 'https://i.example/f2' })
+        expect(copy.photos.map((p) => [p.id, p.variantId, p.position])).toEqual([[p2, b, 0]])
+        expect(normSnapshot(copy)).toEqual(normSnapshot(await storage.loadInventory(inv)))
+
+        // G3: another device moved the database past this app after it opened: the write is refused, nothing written.
+        const [{ value: min }] = (await exec.query(sql`select value from gm_meta where key = 'min_app_schema'`)) as [{ value: string }]
+        await exec.batch([sql`update gm_meta set value = '99' where key = 'min_app_schema'`])
+        try {
+          const rev = (await storage.listInventories()).rev
+          await expect(storage.apply(itemCreate(inv, newId(), 'Late'), TEST_ACTOR)).rejects.toMatchObject({ code: 'read_only' })
+          expect((await storage.listInventories()).rev).toBe(rev)
+          expect((await storage.loadInventory(inv)).items.map((i) => i.id)).toEqual([item])
+        } finally {
+          await exec.batch([sql`update gm_meta set value = ${min} where key = 'min_app_schema'`])
+        }
+      })
+
       it('concurrent applies are serialized on the revision row', async () => {
         const other = make()
         try {

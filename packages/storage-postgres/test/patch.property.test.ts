@@ -154,6 +154,10 @@ const valuesFor = (a: Attribute): string[] =>
   a.kind === 'enum' ? [...a.options, 'purple'] : a.kind === 'number' ? NUMBER_VALUES : TEXT_VALUES
 const axisRows = (s: Snap) => s.itemAttributes.filter((r) => r.axisPosition !== null)
 const itemsWithAxes = (s: Snap) => [...new Set(axisRows(s).map((r) => r.itemId))]
+const itemsWithAxesAndVariants = (s: Snap) => itemsWithAxes(s).filter((i) => variantIdsOf(s, i).length > 0)
+/** The variant's value on the attribute in the copy; null when there is none. */
+const storedValue = (s: Snap, variantId: Id, attributeId: Id) =>
+  s.variantAttributeValues.find((r) => r.variantId === variantId && r.attributeId === attributeId)?.value ?? null
 
 /** A stock bucket of a random item: the item itself or one of its variants. */
 function bucket(s: Snap, p: Picks): { itemId: Id; variantId: Id | null } {
@@ -319,13 +323,20 @@ const GENERATORS: Record<Command['type'], Generator> = {
       const withAxes = itemsWithAxes(s)
       const itemId = withAxes.length > 0 && p.nat(4) > 0 ? p.one(withAxes) : p.one(ids(s.items))
       const axes = itemAxes(s, itemId)
-      return variantsCreate(
+      const created = variantsCreate(
         itemId,
         Array.from({ length: 1 + p.nat(2) }, () => [
           newId(),
           Object.fromEntries(axes.map((a) => [a.id, p.one(valuesFor(a))])),
         ]),
-      )
+      ) as Extract<Command, { type: 'variant.createMany' }>
+      // Some variants come with their first stock.
+      return {
+        ...created,
+        variants: created.variants.map((v) =>
+          p.bool() ? { ...v, initialReceipt: { movementId: newId(), quantity: p.one(QUANTITIES) } } : v,
+        ),
+      }
     },
   },
   'variant.update': {
@@ -344,6 +355,35 @@ const GENERATORS: Record<Command['type'], Generator> = {
       return {
         type: 'variant.setAttribute', variantId: variant.id, attributeId: attribute.id,
         value: p.oneOrNull(valuesFor(attribute)),
+      }
+    },
+  },
+  'variant.setValues': {
+    weight: 3,
+    ready: (s) => itemsWithAxesAndVariants(s).length > 0,
+    build: (s, p) => {
+      const itemId = p.one(itemsWithAxesAndVariants(s))
+      const axes = itemAxes(s, itemId)
+      const variants = variantIdsOf(s, itemId)
+      // Now and then two variants trade all their values (Review Focus 1).
+      if (variants.length > 1 && p.nat(3) === 0) {
+        const a = p.one(variants)
+        const b = p.one(variants.filter((v) => v !== a))
+        const valuesOf = (from: Id) => axes.map((x) => ({ attributeId: x.id, value: storedValue(s, from, x.id) }))
+        return { type: 'variant.setValues', itemId, rows: [{ variantId: a, values: valuesOf(b) }, { variantId: b, values: valuesOf(a) }] }
+      }
+      // Otherwise new values on some axes of some variants (null erases); now and then any attribute (not_an_axis).
+      const chosen = p.some(variants)
+      return {
+        type: 'variant.setValues',
+        itemId,
+        rows: (chosen.length > 0 ? chosen : [p.one(variants)]).map((variantId) => ({
+          variantId,
+          values: (p.nat(5) === 0 ? [p.one(s.attributes)] : p.some(axes)).map((a) => ({
+            attributeId: a.id,
+            value: p.oneOrNull(valuesFor(a)),
+          })),
+        })),
       }
     },
   },
@@ -457,6 +497,20 @@ const GENERATORS: Record<Command['type'], Generator> = {
       const id = newId()
       return {
         type: 'photo.add', id, ...bucket(s, p), provider: 'imgbb', fileId: id, url: `https://i.example/${id}`,
+      }
+    },
+  },
+  'photo.replace': {
+    weight: 3,
+    ready: has('variants'),
+    build: (s, p) => {
+      // Mostly a variant that has a photo, so one is replaced.
+      const withPhoto = s.variants.filter((v) => s.photos.some((x) => x.variantId === v.id))
+      const variant = withPhoto.length > 0 && p.bool() ? p.one(withPhoto) : p.one(s.variants)
+      const id = newId()
+      return {
+        type: 'photo.replace', variantId: variant.id, id, itemId: variant.itemId, provider: 'imgbb', fileId: id,
+        url: `https://i.example/${id}`,
       }
     },
   },
@@ -639,6 +693,21 @@ describe('patch property', () => {
               duplicates(before, removed.itemId),
             )
             if (!behind) expect(itemAxes(copy, removed.itemId).map(byId)).not.toContain(removed.attributeId)
+          }
+          if (c.type === 'variant.setValues') {
+            // Never makes variants equal, whatever copy validated it; validated on an up-to-date copy, it is carried out.
+            expect(duplicates(copy, c.itemId), `${label}: equal variants`).toBeLessThanOrEqual(duplicates(before, c.itemId))
+            if (!behind) {
+              for (const row of c.rows) {
+                for (const x of row.values) expect(storedValue(copy, row.variantId, x.attributeId), label).toBe(x.value)
+              }
+            }
+          }
+          if (c.type === 'photo.replace') {
+            // One photo per variant at most; validated on an up-to-date copy, the new one.
+            const own = copy.photos.filter((x) => x.variantId === c.variantId).map(byId)
+            expect(own.length, `${label}: photos of the variant`).toBeLessThanOrEqual(1)
+            if (!behind) expect(own, label).toEqual([c.id])
           }
 
           if (other) {

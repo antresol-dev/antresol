@@ -400,6 +400,65 @@ describe('soft migrations (min_app_schema)', () => {
     await expect(ensureSchema(exec)).rejects.toThrow('min_app_schema is not a non-negative integer')
   })
 
+  // G3: the version is checked again under the revision lock of every write, not only when the storage opens.
+  describe('a write after the database moved past this app (GM003)', () => {
+    /** A database this app migrated, opened by an app of `appVersion` (default this one). */
+    async function opened(appVersion?: number) {
+      const exec = await makeExecutor()
+      await ensureSchema(exec)
+      const { storage } = await openPostgresStorage(exec, appVersion === undefined ? {} : { appVersion })
+      expect(storage.readOnly).toBe(false)
+      const inv = newId()
+      await storage.apply({ type: 'inventory.create', id: inv, name: 'A', description: null, currency: 'EUR' }, TEST_ACTOR)
+      return { exec, storage, inv }
+    }
+    const refused = async (storage: Awaited<ReturnType<typeof opened>>['storage'], exec: PgExecutor, inv: Id) => {
+      const rev = await revOf(exec)
+      const item = newId()
+      const error = await storage.apply(itemCreate(inv, item), TEST_ACTOR).catch((e: unknown) => e)
+      expect(error).toBeInstanceOf(StorageError)
+      expect(error).toMatchObject({ code: 'read_only' })
+      // Nothing written: no item, the revision as it was.
+      expect(await revOf(exec)).toBe(rev)
+      expect(await exec.query(sql`select 1 from items where id = ${item}`)).toEqual([])
+    }
+
+    it('is refused with read_only and writes nothing when min_app_schema is above the app', async () => {
+      const { exec, storage, inv } = await opened()
+      await setMeta(exec, 'min_app_schema', 99)
+      await refused(storage, exec, inv)
+      // Back within reach: the same storage writes again.
+      await setMeta(exec, 'min_app_schema', APP_SCHEMA_VERSION)
+      await storage.apply(itemCreate(inv, newId()), TEST_ACTOR)
+    })
+
+    it('without min_app_schema the database version decides', async () => {
+      const { exec, storage, inv } = await opened()
+      await exec.batch([sql`delete from gm_meta where key = 'min_app_schema'`])
+      await storage.apply(itemCreate(inv, newId()), TEST_ACTOR)
+      await setMeta(exec, 'schema_version', APP_SCHEMA_VERSION + 1)
+      await refused(storage, exec, inv)
+    })
+
+    it('an older app compares with its own version', async () => {
+      const { exec, storage, inv } = await opened(3)
+      await setMeta(exec, 'min_app_schema', 4)
+      await refused(storage, exec, inv)
+    })
+
+    it('a restore is refused the same way', async () => {
+      const { exec, storage } = await opened()
+      await setMeta(exec, 'min_app_schema', 99)
+      const rev = await revOf(exec)
+      const backup = await openPostgresStorage(await makeExecutor())
+      const inv = newId()
+      await backup.storage.apply({ type: 'inventory.create', id: inv, name: 'B', description: null, currency: 'EUR' }, TEST_ACTOR)
+      const entry = await backup.storage.exportInventory(inv)
+      await expect(storage.restore({ inventories: [entry] }, 'new-ids', newId())).rejects.toMatchObject({ code: 'read_only' })
+      expect(await revOf(exec)).toBe(rev)
+    })
+  })
+
   it('refuses an app version it has no migrations for', async () => {
     const exec = await makeExecutor()
     for (const v of [SCHEMA_BASE, APP_SCHEMA_VERSION + 1, 3.5]) await expect(ensureSchema(exec, v)).rejects.toThrow(/app version/)

@@ -161,6 +161,50 @@ function preferred(v: Variant, than: Variant): boolean {
   return active !== (than.archivedAt === null) ? active : compareIds(v.id, than.id) < 0
 }
 
+/** New axis values for one variant, as variant.setValues carries them: null erases, an attribute not named keeps its
+ *  value. */
+export interface VariantValuesRow {
+  variantId: Id
+  values: { attributeId: Id; value: string | null }[]
+}
+
+/**
+ * Each row whose variant, once ALL the rows are applied at once, has the same values on every axis as another variant of
+ * the item (archived ones included), with that variant: an active one preferred, then the lowest id. In row order; empty
+ * when the final state has no such pair, so two variants may trade values (Plan 9 spec §C). Values for attributes that
+ * are not axes of the item are ignored here (validateCommand refuses them).
+ */
+export function duplicatesAfter(
+  s: InventorySnapshot,
+  itemId: Id,
+  rows: readonly VariantValuesRow[],
+): { variantId: Id; duplicate: Variant }[] {
+  const axes = axesOf(s, itemId)
+  if (axes.length === 0) return []
+  const changes = new Map(rows.map((r) => [r.variantId, new Map(r.values.map((x) => [x.attributeId, x.value] as const))]))
+  const keyOf = (variantId: Id): string => {
+    const own = changes.get(variantId)
+    return JSON.stringify(
+      axes.map((a) => valueKey(a, own?.has(a.id) ? own.get(a.id) : valueOf(s, variantId, a.id))),
+    )
+  }
+  const byKey = new Map<string, Variant[]>()
+  for (const v of s.variants) {
+    if (v.itemId !== itemId) continue
+    const key = keyOf(v.id)
+    byKey.set(key, [...(byKey.get(key) ?? []), v])
+  }
+  const found: { variantId: Id; duplicate: Variant }[] = []
+  for (const r of rows) {
+    let duplicate: Variant | null = null
+    for (const v of byKey.get(keyOf(r.variantId)) ?? []) {
+      if (v.id !== r.variantId && (!duplicate || preferred(v, duplicate))) duplicate = v
+    }
+    if (duplicate) found.push({ variantId: r.variantId, duplicate })
+  }
+  return found
+}
+
 export interface AxisRemoval {
   /** Why the axis cannot go: it is the last one and the item has variants, or the remaining axes leave variants equal. */
   blocked: 'axis_required' | 'duplicate_variant' | null

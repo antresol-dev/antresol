@@ -37,6 +37,10 @@ function harness() {
     listGate: null as Promise<void> | null,
     /** One-shot: the next listInventories reads, then runs this before answering. */
     afterList: null as (() => Promise<void>) | null,
+    /** listInventories calls by connection string. */
+    listsBy: new Map<string, number>(),
+    /** While set, every listInventories on this connection string waits for the promise first. */
+    listHold: null as { connectionString: string; promise: Promise<void> } | null,
     /** One-shot: the next apply waits for this promise before writing. */
     applyGate: null as Promise<void> | null,
     applyBlocked: false,
@@ -146,6 +150,9 @@ function harness() {
       }
       storage.listInventories = async () => {
         flags.listCalls++
+        flags.listsBy.set(cfg.connectionString, (flags.listsBy.get(cfg.connectionString) ?? 0) + 1)
+        const hold = flags.listHold
+        if (hold?.connectionString === cfg.connectionString) await hold.promise
         const listGate = flags.listGate
         if (listGate) {
           flags.listGate = null
@@ -1695,12 +1702,14 @@ describe('workspace sync and the check interval', () => {
     await (await h.direct(CS('one'))).apply(folderCreate(inv, 'Shelf', shelf), { device: 'other' })
     h.flags.clock += 15 * MINUTE
     const lists = h.flags.listCalls
+    const loads = h.flags.loadCalls
     const applies = h.flags.applyCalls
     const gate = h.gate()
     h.flags.applyGate = gate.promise
     const write = ws.apply({ ...folderCreate(inv, 'Bin'), parentId: shelf } as Command)
     await vi.waitFor(() => expect(h.flags.applyBlocked).toBe(true))
     expect(h.flags.listCalls).toBe(lists + 1)
+    expect(h.flags.loadCalls).toBe(loads + 1)
     expect(h.flags.applyCalls).toBe(applies + 1)
     gate.open()
     await write
@@ -1799,6 +1808,93 @@ describe('workspace sync and the check interval', () => {
     // Within the interval: the journal only.
     await ws.loadMovements(itemId)
     expect([h.flags.listCalls, h.flags.movementCalls]).toEqual([lists + 1, 2])
+  })
+  /** s1 with inventory A (current), s2 with inventory B, both started. */
+  const twoSources = async () => {
+    const h = setup()
+    const a = await h.seed(CS('one'), 'A')
+    const b = await h.seed(CS('two'), 'B')
+    await h.db.putSource(config('s1', CS('one')))
+    await h.db.putSource(config('s2', CS('two')))
+    const ws = h.workspace()
+    await ws.start()
+    expect(ws.state.current).toEqual({ sourceId: 's1', inventoryId: a })
+    return { h, ws, a, b }
+  }
+  const listsOf = (h: ReturnType<typeof harness>, name: string): number => h.flags.listsBy.get(CS(name)) ?? 0
+
+  it('14. a due write checks its own source alone: the changed copy loads once, another source is never waited for or retried', async () => {
+    const { h, ws, a } = await twoSources()
+    const shelf = newId()
+    await (await h.direct(CS('one'))).apply(folderCreate(a, 'Shelf', shelf), { device: 'other' })
+    h.flags.clock += 15 * MINUTE
+    // s2 hangs on every listing; an automatic check of all sources is stuck on it.
+    const hold = h.gate()
+    h.flags.listHold = { connectionString: CS('two'), promise: hold.promise }
+    const auto = ws.syncIfDue()
+    await vi.waitFor(() => expect(listsOf(h, 'two')).toBe(2))
+    const [one, loads] = [listsOf(h, 'one'), h.flags.loadCalls]
+    let written = false
+    const write = ws.apply({ ...folderCreate(a, 'Bin'), parentId: shelf } as Command).then(() => {
+      written = true
+    })
+    await vi.waitFor(() => expect(written).toBe(true))
+    expect(folderNames(ws)).toEqual(['Bin', 'Shelf'])
+    // Listed s1 once more (the automatic check listed it too), loaded once, and left s2 alone.
+    expect(listsOf(h, 'one')).toBe(one + 1)
+    expect(h.flags.loadCalls).toBe(loads + 1)
+    expect(listsOf(h, 'two')).toBe(2)
+    hold.open()
+    h.flags.listHold = null
+    await Promise.all([auto, write])
+  })
+
+  it('15. a failing current source is not retried by a write to another source', async () => {
+    const { h, ws, a, b } = await twoSources()
+    h.flags.applyError = new StorageError('unavailable')
+    await expect(ws.apply(folderCreate(a, 'X'))).rejects.toMatchObject({ code: 'unavailable' })
+    h.flags.applyError = null
+    expect(ws.state.sources.map((s) => s.status)).toEqual(['unreachable', 'ready'])
+    h.flags.clock += 15 * MINUTE
+    const [one, two, connects] = [listsOf(h, 'one'), listsOf(h, 'two'), h.flags.connectCalls]
+    await ws.applyTo({ sourceId: 's2', inventoryId: b }, folderCreate(b, 'Shelf'))
+    expect([listsOf(h, 'one'), listsOf(h, 'two'), h.flags.connectCalls]).toEqual([one, two + 1, connects])
+    expect(ws.state.sources.map((s) => s.status)).toEqual(['unreachable', 'ready'])
+    expect((await (await h.direct(CS('two'))).loadInventory(b)).folders.map((f) => f.name)).toEqual(['Shelf'])
+  })
+
+  it('16. while another source fails, a check of the current one still counts', async () => {
+    const h = setup()
+    await h.seed(CS('one'), 'Inv')
+    await h.db.putSource(config('s1', CS('one')))
+    await h.db.putSource(config('s2', CS('nope')))
+    const ws = h.workspace()
+    await ws.start()
+    expect(ws.state.sources.map((s) => s.status)).toEqual(['ready', 'error'])
+    h.flags.clock += MINUTE
+    expect(await ws.sync()).toBe('unchanged')
+    expect(ws.state.lastRefreshAt).toBe(new Date(h.flags.clock).toISOString())
+  })
+
+  it('17. sync never ends unchanged with a copy it left behind: one more check loads it', async () => {
+    const { h, ws, inv } = await started('Inv')
+    await (await h.direct(CS('one'))).apply(folderCreate(inv, 'Theirs'), { device: 'other' })
+    const gate = h.gate()
+    h.flags.loadGate = gate.promise
+    const synced = ws.sync()
+    // The sync's load has read 'Theirs' and waits; another device writes again, then this one: the load cannot be
+    // placed against the own rows.
+    await vi.waitFor(() => expect(h.flags.loadBlocked).toBe(true))
+    await h.bumpRev(CS('one'))
+    await ws.apply(folderCreate(inv, 'Mine'))
+    const loads = h.flags.loadCalls
+    gate.open()
+    expect(await synced).toBe('updated')
+    expect(h.flags.loadCalls).toBe(loads + 1)
+    expect(folderNames(ws)).toEqual(['Mine', 'Theirs'])
+    // It is current now: the next sync loads nothing.
+    expect(await ws.sync()).toBe('unchanged')
+    expect(h.flags.loadCalls).toBe(loads + 1)
   })
 })
 

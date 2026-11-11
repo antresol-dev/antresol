@@ -37,8 +37,9 @@ export interface WorkspaceState {
   snapshotOrigin: 'cache' | 'live' | null
   /** ISO time the shown data was loaded from the source. */
   snapshotSavedAt: string | null
-  /** Last successful check: a refresh that reached every source and left the shown copy at its source's revision, or
-   *  an own write that proved the shown copy current. The check interval counts from it. */
+  /** Last successful check: one that reached the current inventory's source and left the shown copy at its revision
+   *  (other sources failing do not matter; without a current inventory, every source must answer), or an own write
+   *  that proved the shown copy current. The check interval counts from it. */
   lastRefreshAt: string | null
   /** Device setting; DEFAULT_CHECK_INTERVAL until stored. */
   checkInterval: CheckInterval
@@ -64,17 +65,19 @@ export interface Workspace {
   startFromCache(): Promise<void>
   /** List inventories on each source's open connection (connecting if needed), load the current snapshot. */
   refresh(): Promise<void>
-  /** "Sync": a refresh that starts after this call (one already running may have listed before it). Resolves
-   *  'updated' when the shown copy was replaced by a full load meanwhile; rejects with `unavailable` when the current
-   *  inventory's source is not connected after it. */
+  /** "Sync": a refresh that starts after this call (one already running may have listed before it). A shown copy it
+   *  left behind its source's revision gets one more check of that source. Resolves 'updated' when the shown copy was
+   *  replaced by a full load meanwhile; rejects with `unavailable` when the current inventory's source is not
+   *  connected after it, or the shown copy is still not at its revision. */
   sync(): Promise<'unchanged' | 'updated'>
   /** "Reload everything": no copy of the source is trusted any more (the shown one, those on the device), then as
    *  sync: the current inventory, if from this source, loads in full, the source's others when opened. Rejects with
-   *  `not_found` for an unknown source, with `unavailable` when it is not connected after. */
+   *  `not_found` for an unknown source, with `unavailable` when it is not connected after (or, as sync, the shown copy
+   *  of it is still behind). */
   reloadSource(sourceId: string): Promise<void>
-  /** The one gate before data is used (return to the app, writes, the journal): refreshes at once while the current
-   *  source is failing; while another one is, at most once per FAILED_RETRY_MS; otherwise when the last successful
-   *  check is older than `checkInterval` ('never': not by time). */
+  /** On return to the app, a check of all sources if due: refreshes at once while the current source is failing;
+   *  while another one is, at most once per FAILED_RETRY_MS; otherwise when the last successful check is older than
+   *  `checkInterval` ('never': not by time). Writes and the journal check only their own source (see apply). */
   syncIfDue(): Promise<void>
   /** Kept on the device. */
   setCheckInterval(value: CheckInterval): Promise<void>
@@ -85,14 +88,15 @@ export interface Workspace {
   flushCache(): Promise<void>
   /** Cached copy first, then live. */
   selectInventory(ref: InventoryRef): Promise<void>
-  /** Throws DomainError | StorageError; calls run one after another in call order. A check that is due (syncIfDue)
-   *  runs first, so the command is validated against the copy it loads. The rows the command touched go into the
-   *  shown copy; only a wide command (restore, tag/attribute/unit delete, …) loads the inventory again. */
+  /** Throws DomainError | StorageError; calls run one after another in call order. When the interval has passed, the
+   *  target's source alone is checked first (never another source), so the command is validated against the copy
+   *  that check loads. The rows the command touched go into the shown copy; only a wide command (restore,
+   *  tag/attribute/unit delete, …) loads the inventory again. */
   apply(command: Command): Promise<void>
   /** Like apply, but for any inventory of a connected source; validated against that inventory's snapshot. */
   applyTo(ref: InventoryRef, command: Command): Promise<void>
-  /** Journal of an item of the current inventory, newest first, after a check that is due (syncIfDue). Rejects
-   *  without a network call while the source is unreachable. */
+  /** Journal of an item of the current inventory, newest first, after a check of its source when the interval has
+   *  passed (as apply). Rejects without a network call while the source is unreachable. */
   loadMovements(itemId: Id): Promise<Movement[]>
   /** Read-only copy of every inventory of a connected source (archived included) with all movements. Rejects with
    *  `unavailable` when the source is offline or failing; never returns a partial backup. */

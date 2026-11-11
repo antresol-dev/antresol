@@ -580,31 +580,59 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       )
       let complete = true
       for (const { config, generation, outcome } of outcomes) {
-        if (generation !== generationOf(config.id)) {
-          // The source was edited or removed while connecting: this outcome is stale. A reused connection stays open.
-          if (outcome.ok && outcome.fresh) await outcome.conn.close().catch(() => {})
-          complete = false
-          continue
-        }
-        if (!outcome.ok) complete = false
-        await applyOutcome(config, outcome)
+        if (!(await settle(config, generation, outcome))) complete = false
       }
       rebuildInventories()
       await resolveCurrent()
-      // A failed load (or a source lost meanwhile) is not a check: the next trigger must retry. Nor is one that leaves
-      // the shown copy behind its source's revision (a load that could not be placed against own rows): the interval
-      // must not hold off the load it still needs.
-      const cur = state.current
-      if (complete && (!cur || (isConnected(statusOf(cur.sourceId)) && shownIsCurrent(cur.sourceId)))) {
-        state.lastRefreshAt = nowIso()
-      }
+      noteCheck(complete)
     } finally {
       state.refreshing = false
     }
   }
 
+  /** Applies a source's reconnect outcome unless the source was edited or removed since `generation`. True when the
+   *  source answered and that was applied. */
+  async function settle(config: SourceConfig, generation: number, outcome: Outcome): Promise<boolean> {
+    if (generation !== generationOf(config.id)) {
+      // The source was edited or removed while connecting: this outcome is stale. A reused connection stays open.
+      if (outcome.ok && outcome.fresh) await outcome.conn.close().catch(() => {})
+      return false
+    }
+    await applyOutcome(config, outcome)
+    return outcome.ok
+  }
+
+  /**
+   * A check of one source: lists it (reconnecting if needed) and, when it holds the current inventory, brings the
+   * shown copy to the listed revision as refresh does (a full load only when it is not there). Never waits for, or
+   * retries, another source.
+   */
+  async function checkSource(sourceId: string): Promise<void> {
+    const config = state.sources.find((s) => s.config.id === sourceId)?.config
+    if (!config) return
+    const generation = generationOf(sourceId)
+    await settle(config, generation, await reconnect(config))
+    rebuildInventories()
+    if (state.current?.sourceId !== sourceId) return
+    await resolveCurrent()
+    noteCheck(false)
+  }
+
   /** The shown copy is at the revision last known for its source. */
   const shownIsCurrent = (sourceId: string): boolean => shownRev !== null && shownRev === sourceRevs.get(sourceId)
+
+  /**
+   * A check counts (the interval starts again) when the current inventory's source answered and the shown copy is at
+   * its revision; other sources failing do not matter (syncIfDue retries them on their own). Not one that leaves the
+   * shown copy behind (a load that could not be placed against own rows): the interval must not hold off the load
+   * it still needs. Without a current inventory: when every source answered (`allAnswered`).
+   */
+  function noteCheck(allAnswered: boolean): void {
+    const cur = state.current
+    if (cur ? isConnected(statusOf(cur.sourceId)) && shownIsCurrent(cur.sourceId) : allAnswered) {
+      state.lastRefreshAt = nowIso()
+    }
+  }
 
   function refresh(): Promise<void> {
     // A run that started before the latest source change (or explicit check) cannot satisfy this call.
@@ -631,11 +659,25 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     if (!isConnected(statusOf(sourceId))) throw new StorageError('unavailable')
   }
 
+  /** After a check the user asked for: the shown copy is at its source's revision, or `unavailable`. A copy the check
+   *  left behind (its load could not be placed against own rows, or an own write made the revision unknown) gets one
+   *  more check of its source alone, which lists it and loads the copy in full. */
+  async function requireShownCurrent(): Promise<void> {
+    let cur = state.current
+    if (!cur) return
+    requireConnected(cur.sourceId)
+    if (shownIsCurrent(cur.sourceId)) return
+    await checkSource(cur.sourceId)
+    cur = state.current
+    if (cur && !(isConnected(statusOf(cur.sourceId)) && shownIsCurrent(cur.sourceId))) {
+      throw new StorageError('unavailable')
+    }
+  }
+
   async function sync(): Promise<'unchanged' | 'updated'> {
     const applied = appliedSeq
     await freshRefresh()
-    const cur = state.current
-    if (cur) requireConnected(cur.sourceId)
+    await requireShownCurrent()
     return appliedSeq !== applied ? 'updated' : 'unchanged'
   }
 
@@ -648,6 +690,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     await Promise.all(ids.map((inventoryId) => db.markSnapshotStale({ sourceId, inventoryId })))
     await freshRefresh()
     requireConnected(sourceId)
+    if (state.current?.sourceId === sourceId) await requireShownCurrent()
   }
 
   async function syncIfDue(): Promise<void> {
@@ -661,9 +704,22 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       if (lastAttemptAt === null || time - lastAttemptAt >= FAILED_RETRY_MS) await refresh()
       return
     }
-    if (state.checkInterval === 'never') return
+    if (checkDue(time)) await refresh()
+  }
+
+  /** The device's interval has passed since the last successful check. */
+  function checkDue(time: number): boolean {
+    if (state.checkInterval === 'never') return false
     const last = state.lastRefreshAt ? Date.parse(state.lastRefreshAt) : null
-    if (last === null || time - last >= CHECK_INTERVAL_MS[state.checkInterval]) await refresh()
+    return last === null || time - last >= CHECK_INTERVAL_MS[state.checkInterval]
+  }
+
+  /** The gate before a write to, or the journal of, `sourceId`: a check of that source alone (checkSource) when it is
+   *  healthy and the interval has passed. Other sources are never waited for or retried here: start, `online`, the
+   *  return to the app, sync and reloadSource cover all of them. A failing source is refused by the caller without
+   *  a network call. */
+  async function checkIfDue(sourceId: string): Promise<void> {
+    if (isConnected(statusOf(sourceId)) && checkDue(now().getTime())) await checkSource(sourceId)
   }
 
   /** Runs `job` after all earlier writes; a failed job does not block later ones. */
@@ -695,9 +751,9 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     return enqueue(async () => {
       // First refresh still connecting: wait for it rather than failing with a misleading "can't reach".
       if (!conns.has(sourceId) && refreshing) await refreshing.catch(() => {})
-      // A check that is due goes first: a copy it loads is the one the command is validated against. No deadlock: a
-      // refresh never waits for the queue. A failing source is refused below without one.
-      if (isConnected(statusOf(sourceId))) await syncIfDue().catch(() => {})
+      // A check of the target's source that is due goes first: a copy it loads is the one the command is validated
+      // against. No deadlock: a check never waits for the queue. A failing source is refused below without one.
+      await checkIfDue(sourceId).catch(() => {})
       const status = statusOf(sourceId)
       if (status === 'unreachable' || status === 'read_only' || status === 'error') throw new StorageError('read_only')
       const conn = conns.get(sourceId)
@@ -931,8 +987,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
 
   async function loadMovements(itemId: Id): Promise<Movement[]> {
     // Fails fast first: a failing source is not retried for the journal.
-    journalSource()
-    await syncIfDue().catch(() => {})
+    await checkIfDue(journalSource().sourceId).catch(() => {})
     const { sourceId, conn } = journalSource()
     return guarded(sourceId, conn, () => conn.storage.loadMovements(itemId))
   }

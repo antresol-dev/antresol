@@ -2,7 +2,7 @@ import { PGlite } from '@electric-sql/pglite'
 import { DomainError, FileError, newId, StorageError, variantLabel, type Command, type FileStore, type Id } from '@graymatter/core'
 import { APP_SCHEMA_VERSION, createPgliteExecutor, type PgExecutor } from '@graymatter/storage-postgres'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { isReactive } from 'vue'
+import { computed, isReactive } from 'vue'
 import { createMemoryDeviceDb, type DeviceDb } from '../app/lib/device-db'
 import { defaultDeviceName } from '../app/lib/device-name'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
@@ -57,6 +57,8 @@ function harness() {
     exportCalls: 0,
     applyError: null as Error | null,
     applyCalls: 0,
+    /** Command types the source was asked to apply, in order. */
+    applied: [] as string[],
     /** One-shot: the next apply writes, then runs this before answering; a throw loses the answer of a committed write. */
     afterApply: null as (() => Promise<void>) | null,
     /** loadInventory fails with this after listInventories succeeded. */
@@ -131,6 +133,7 @@ function harness() {
       }
       storage.apply = async (command, actor) => {
         flags.applyCalls++
+        flags.applied.push(command.type)
         const applyGate = flags.applyGate
         if (applyGate) {
           flags.applyGate = null
@@ -1616,6 +1619,96 @@ describe('workspace writes patch the local copy', () => {
     h.flags.clock += 60_000
     await ws.apply(folderCreate(inv, 'Two'))
     expect(ws.state.lastRefreshAt).toBe(checked)
+  })
+
+  describe('per-bucket lock', () => {
+    it('a stock write locks only its bucket: other buckets and forms stay free, a form write waits for its own', async () => {
+      const { h, ws, inv } = await started('Inv')
+      const [a, b] = [newId(), newId()]
+      await ws.apply(createItem(inv, a, 'A'))
+      await ws.apply(createItem(inv, b, 'B'))
+      const lockedA = computed(() => ws.isBucketSaving(a, null))
+      expect(lockedA.value).toBe(false)
+
+      const gate = h.gate()
+      h.flags.applyGate = gate.promise
+      const writing = ws.apply(receive(a, '3'))
+      expect(lockedA.value).toBe(true)
+      expect(ws.isBucketSaving(b, null)).toBe(false)
+      expect(ws.isBucketSaving(a, newId())).toBe(false)
+      expect(ws.state.saving).toBe(false)
+
+      const form = ws.apply(folderCreate(inv, 'Box'))
+      expect(ws.state.saving).toBe(true)
+      expect(ws.isBucketSaving(b, null)).toBe(false)
+
+      gate.open()
+      await Promise.all([writing, form])
+      expect(lockedA.value).toBe(false)
+      expect(ws.state.saving).toBe(false)
+    })
+
+    it('a transfer locks both of its buckets; a failed write releases its bucket', async () => {
+      const { h, ws, inv } = await started('Inv')
+      const itemId = newId()
+      await ws.apply(createItem(inv, itemId))
+      await ws.apply(receive(itemId, '5'))
+      const axis = newId()
+      const variant = newId()
+      await ws.apply({ type: 'attribute.create', id: axis, inventoryId: inv, name: 'Value', kind: 'text', options: [], unit: '', siPrefixes: false })
+      await ws.apply({ type: 'item.addAxis', itemId, attributeId: axis, firstVariantId: variant })
+      await ws.apply({ type: 'variant.createMany', itemId, variants: [{ id: variant, values: [{ attributeId: axis, value: '1k' }] }] })
+      const gate = h.gate()
+      h.flags.applyGate = gate.promise
+      const moving = ws.apply({
+        type: 'stock.transfer',
+        transferId: newId(),
+        outMovementId: newId(),
+        inMovementId: newId(),
+        itemId,
+        fromVariantId: null,
+        toVariantId: variant,
+        quantity: '2',
+      })
+      expect(ws.isBucketSaving(itemId, null)).toBe(true)
+      expect(ws.isBucketSaving(itemId, variant)).toBe(true)
+      gate.open()
+      await moving
+      expect(ws.isBucketSaving(itemId, null)).toBe(false)
+      expect(ws.isBucketSaving(itemId, variant)).toBe(false)
+
+      h.flags.applyError = new StorageError('failed')
+      const failing = ws.apply(receive(itemId, '1'))
+      expect(ws.isBucketSaving(itemId, null)).toBe(true)
+      await expect(failing).rejects.toThrow()
+      expect(ws.isBucketSaving(itemId, null)).toBe(false)
+    })
+
+    it('before any write, the before-write hooks run; a write a hook makes goes first', async () => {
+      const { h, ws, inv } = await started('Inv')
+      const itemId = newId()
+      await ws.apply(createItem(inv, itemId))
+      let waiting = true
+      let sent: Promise<void> | null = null
+      const stop = ws.onBeforeWrite(() => {
+        // Like a stepper flushing its pending delta: its own write calls the hooks again, and they must not loop.
+        if (!waiting) return
+        waiting = false
+        sent = ws.apply(receive(itemId, '2'))
+      })
+      const failing = ws.onBeforeWrite(() => {
+        throw new Error('a broken hook does not stop the write')
+      })
+      const before = h.flags.applied.length
+      await ws.apply(folderCreate(inv, 'Box'))
+      await sent
+      expect(h.flags.applied.slice(before)).toEqual(['stock.receive', 'folder.create'])
+      stop()
+      failing()
+      waiting = true
+      await ws.apply(folderCreate(inv, 'Bin'))
+      expect(h.flags.applied.slice(before)).toEqual(['stock.receive', 'folder.create', 'folder.create'])
+    })
   })
 })
 

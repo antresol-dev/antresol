@@ -1,10 +1,9 @@
 <script setup lang="ts">
 import { useMediaQuery } from '@vueuse/core'
 import type { Component } from 'vue'
-import { Archive, ArrowRightLeft, Camera, Download, Minus, Pencil, PencilLine, Plus, SlidersHorizontal, Upload } from '@lucide/vue'
-import type { Id } from '@graymatter/core'
-import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Archive, ArrowRightLeft, Camera, Download, Pencil, PencilLine, SlidersHorizontal, Upload } from '@lucide/vue'
+import type { Id, UnitDef } from '@graymatter/core'
+import type { BucketStepper } from '~/composables/useItemSteppers'
 import type { BucketRow } from '~/lib/item-view'
 import type { StockMode } from '~/lib/stock-forms'
 
@@ -12,10 +11,12 @@ const props = defineProps<{
   buckets: BucketRow[]
   /** Variant to mark and scroll to (from ?variant=). */
   highlight: string | null
+  /** Each row's deferred stepper (spec 4.12). */
+  stepperOf: (variantId: Id | null) => BucketStepper
+  unit: UnitDef
 }>()
 
 const emit = defineEmits<{
-  step: [step: 'plus' | 'minus', variantId: Id | null]
   open: [mode: StockMode, variantId: Id | null]
   rename: [variantId: Id]
   attributes: [variantId: Id]
@@ -25,7 +26,8 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const { state } = useWorkspace()
-const locked = computed(() => !!state.readOnly || state.saving)
+// Menus open sheets: those wait for their own write; only read-only turns them off.
+const locked = computed(() => !!state.readOnly)
 
 type MenuKey = StockMode | 'rename' | 'archive' | 'attributes' | 'photo'
 
@@ -33,7 +35,7 @@ function actionsOf(row: BucketRow): { key: MenuKey; label: string; icon: Compone
   const all: { key: MenuKey; label: string; icon: Component; destructive?: boolean }[] = [
     { key: 'receive', label: t('stockActions.receive'), icon: Download },
     { key: 'use', label: t('stockActions.use'), icon: Upload },
-    { key: 'set', label: t('stockActions.setQuantity'), icon: PencilLine },
+    { key: 'set', label: t('stock.count'), icon: PencilLine },
     ...(props.buckets.length > 1 ? [{ key: 'transfer' as const, label: t('stockActions.moveTo'), icon: ArrowRightLeft }] : []),
     // The stock kept without a variant is not a variant: nothing to rename or archive.
     ...(row.variantId !== null
@@ -59,8 +61,6 @@ function choose(key: string, row: BucketRow): void {
     if (row.variantId !== null) emit('archive', row.variantId)
   } else emit('open', key as StockMode, row.variantId)
 }
-const stepButton = 'size-11 shrink-0 rounded-field'
-
 const rows = computed(() =>
   props.buckets.map((b) => ({
     ...b,
@@ -92,66 +92,39 @@ watch(() => props.highlight, reveal)
         :data-variant="row.variantId ?? undefined"
         :aria-current="row.variantId !== null && row.variantId === highlight ? 'true' : undefined"
         :class="[
-          'relative flex min-h-[62px] items-center gap-3 px-3.5 py-2',
+          'relative grid min-w-0 px-3.5 py-2',
           'not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-3.5 not-first:before:h-px not-first:before:bg-divider not-first:before:content-[\'\']',
           row.variantId !== null && row.variantId === highlight && 'bg-accent-soft',
         ]"
       >
-        <PhotoImg
-          v-if="row.photo"
-          :url="row.photo.url"
-          size="thumb"
-          alt=""
-          class="size-10 shrink-0 rounded-icon object-cover"
-        />
-        <span class="flex min-w-0 grow flex-col gap-0.5">
-          <span class="truncate text-[15px] font-bold" :class="row.outOfStock && 'text-dimmed-foreground'">
-            {{ row.name ?? $t('item.noVariant') }}
+        <div class="flex min-h-[46px] min-w-0 items-center gap-2.5">
+          <PhotoImg
+            v-if="row.photo"
+            :url="row.photo.url"
+            size="thumb"
+            alt=""
+            class="size-10 shrink-0 rounded-icon object-cover"
+          />
+          <span class="flex min-w-0 grow flex-col gap-0.5">
+            <span class="line-clamp-2 text-[15px] font-bold wrap-anywhere" :class="row.outOfStock && 'text-dimmed-foreground'">
+              {{ row.name ?? $t('item.noVariant') }}
+            </span>
+            <span v-if="row.sub" class="truncate text-[13px] text-muted-foreground">{{ row.sub }}</span>
           </span>
-          <span v-if="row.sub" class="truncate text-[13px] text-muted-foreground">{{ row.sub }}</span>
-        </span>
-        <span class="shrink-0 text-base font-bold tabular-nums" :class="row.outOfStock && 'text-muted-foreground'">
-          {{ row.number }}
-          <span class="text-xs font-semibold text-muted-foreground">{{ row.unit }}</span>
-        </span>
-        <span class="flex shrink-0 items-center">
-          <Tooltip>
-            <TooltipTrigger as-child>
-              <Button
-                variant="ghost"
-                size="icon"
-                :class="stepButton"
-                :aria-label="$t('stockActions.useOneOf', { name: row.name ?? $t('item.noVariant') })"
-                :disabled="locked || row.outOfStock"
-                @click="emit('step', 'minus', row.variantId)"
-              >
-                <Minus class="size-5" aria-hidden="true" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{{ $t('stockActions.useOne') }}</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger as-child>
-              <Button
-                variant="ghost"
-                size="icon"
-                :class="stepButton"
-                :aria-label="$t('stockActions.addOneOf', { name: row.name ?? $t('item.noVariant') })"
-                :disabled="locked"
-                @click="emit('step', 'plus', row.variantId)"
-              >
-                <Plus class="size-5" aria-hidden="true" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{{ $t('stockActions.addOne') }}</TooltipContent>
-          </Tooltip>
+          <StepperPill
+            :stepper="stepperOf(row.variantId)"
+            :name="row.name ?? $t('item.noVariant')"
+            :amount="{ number: row.number, unit: row.unit }"
+            @count="emit('open', 'set', row.variantId)"
+          />
           <RowMenu
-            class="size-11"
+            class="-mr-1.5 size-11"
             :label="row.name ?? $t('item.noVariant')"
             :actions="actionsOf(row)"
             @select="(key) => choose(key, row)"
           />
-        </span>
+        </div>
+        <PendingChip v-if="stepperOf(row.variantId).state.value !== 'idle'" :stepper="stepperOf(row.variantId)" :unit="unit" />
       </li>
     </ul>
   </section>

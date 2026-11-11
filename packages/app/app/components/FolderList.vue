@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Id } from '@graymatter/core'
-import { Archive, Folder, FolderInput, Pencil } from '@lucide/vue'
+import { Archive, ClipboardCheck, Folder, FolderInput, Pencil } from '@lucide/vue'
 import type { ComponentPublicInstance } from 'vue'
 import { piecesLabel, type FolderRow } from '~/lib/views'
 import type RowMenu from './RowMenu.vue'
@@ -13,13 +13,15 @@ const { open } = useFolderDialog()
 
 const locked = computed(() => !!state.readOnly || state.saving)
 const actions = computed(() => [
+  { key: 'count', label: t('countFolder.menu'), icon: ClipboardCheck, disabled: !!state.readOnly },
   { key: 'rename', label: t('folderMenu.rename'), icon: Pencil, disabled: locked.value },
   { key: 'move', label: t('folderMenu.move'), icon: FolderInput, disabled: locked.value },
   { key: 'archive', label: t('folderMenu.archive'), icon: Archive, destructive: true, disabled: locked.value },
 ])
 
 function select(folderId: Id, key: string): void {
-  if (key === 'rename' || key === 'move' || key === 'archive') open({ kind: key, folderId })
+  if (key === 'count') void navigateTo(`/count/${folderId}`)
+  else if (key === 'rename' || key === 'move' || key === 'archive') open({ kind: key, folderId })
 }
 
 // One finger presses one row at a time: a single long-press tracker for the list, aimed at the row it went down on.

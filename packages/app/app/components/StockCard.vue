@@ -1,94 +1,85 @@
 <script setup lang="ts">
-import { Minus, PencilLine, Plus } from '@lucide/vue'
+import type { UnitDef } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import type { BucketStepper } from '~/composables/useItemSteppers'
+import { countedAgo } from '~/lib/counted'
 import { formatUnitPrice } from '~/lib/format'
 import type { ItemView } from '~/lib/item-view'
 import type { StockMode } from '~/lib/stock-forms'
 
+// The stock card (spec 4.12): the big number on the left (a tap opens Count), one pill [− | +] on the right, then
+// "Receive · Use · Count". Under the number: prices and when the stock was last counted. With variants the card shows
+// the total only: every variant row has its own pill.
 const props = defineProps<{
   total: ItemView['total']
   /** Prices are per one base unit (pcs, m), whatever prefix the total shows. */
-  unitSymbol: string
+  unit: UnitDef
   currency: string
-  /** Quick buttons for an item without variants; with variants every row has its own. */
-  controls: boolean
+  /** The stepper of the stock kept without a variant; null for an item with variants. */
+  stepper: BucketStepper | null
+  /** The last recount (all buckets shown counted), or null. */
+  countedAt: string | null
 }>()
 
-const emit = defineEmits<{ step: [step: 'plus' | 'minus']; open: [mode: StockMode] }>()
+const emit = defineEmits<{ open: [mode: StockMode]; count: [] }>()
 
 const { t } = useI18n()
 const { state } = useWorkspace()
-const locked = computed(() => !!state.readOnly || state.saving)
-const setAction = computed(() => [{ key: 'set', label: t('stockActions.setQuantity'), icon: PencilLine }])
+const readOnly = computed(() => !!state.readOnly)
 
 const prices = computed(() => {
   const { avgUnitPrice: avg, lastUnitPrice: last } = props.total
   const price = (minor: number): string => formatUnitPrice(minor, props.currency)
+  const each = props.unit.key === 'pcs'
   return [
-    avg === null ? null : t('item.avgPrice', { price: price(avg), unit: props.unitSymbol }),
-    last === null ? null : t('item.lastPrice', { price: price(last), unit: props.unitSymbol }),
+    avg === null ? null : each ? t('stock.avgEach', { price: price(avg) }) : t('stock.avgPer', { price: price(avg), unit: props.unit.symbol }),
+    last === null ? null : t('stock.last', { price: price(last) }),
   ]
     .filter((x): x is string => x !== null)
     .join(' · ')
 })
+
+const relative = new Intl.RelativeTimeFormat('en', { numeric: 'auto' })
+const counted = computed(() => {
+  if (!props.countedAt) return null
+  const ago = countedAgo(props.countedAt, new Date())
+  return t('stock.counted', { when: relative.format(-ago.value, ago.unit) })
+})
+
+const numberClass = 'text-[32px] leading-none font-bold tracking-[-0.02em] tabular-nums wrap-anywhere'
+const action = 'h-11 min-w-0 rounded-field bg-surface px-2 font-bold'
 </script>
 
 <template>
-  <section class="grid min-w-0 gap-2 rounded-card border border-border bg-surface p-4" :aria-label="$t('item.stock')">
-    <p class="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-1">
-      <span
-        class="text-[32px] leading-none font-bold tracking-[-0.02em] tabular-nums wrap-anywhere"
-        :class="total.outOfStock && 'text-muted-foreground'"
-      >{{ total.number }}</span>
-      <span class="text-sm font-semibold text-muted-foreground">{{ total.unit }}</span>
-      <span v-if="total.outOfStock" class="ml-1.5 text-sm font-semibold text-muted-foreground">{{ $t('item.outOfStock') }}</span>
-    </p>
-    <p v-if="prices" class="text-[13px] text-muted-foreground tabular-nums">{{ prices }}</p>
-    <div v-if="controls" class="mt-1 flex flex-wrap items-center gap-2">
-      <Tooltip>
-        <TooltipTrigger as-child>
-          <Button
-            variant="outline"
-            size="icon"
-            class="size-11 rounded-field bg-surface"
-            :aria-label="$t('stockActions.useOne')"
-            :disabled="locked || total.outOfStock"
-            @click="emit('step', 'minus')"
-          >
-            <Minus class="size-5" aria-hidden="true" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>{{ $t('stockActions.useOne') }}</TooltipContent>
-      </Tooltip>
-      <Tooltip>
-        <TooltipTrigger as-child>
-          <Button
-            variant="outline"
-            size="icon"
-            class="size-11 rounded-field bg-surface"
-            :aria-label="$t('stockActions.addOne')"
-            :disabled="locked"
-            @click="emit('step', 'plus')"
-          >
-            <Plus class="size-5" aria-hidden="true" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>{{ $t('stockActions.addOne') }}</TooltipContent>
-      </Tooltip>
-      <Button variant="outline" class="h-11 min-w-20 flex-1 rounded-field bg-surface px-3 font-bold" :disabled="locked" @click="emit('open', 'receive')">
-        {{ $t('stockActions.receive') }}
-      </Button>
-      <Button variant="outline" class="h-11 min-w-20 flex-1 rounded-field bg-surface px-3 font-bold" :disabled="locked" @click="emit('open', 'use')">
-        {{ $t('stockActions.use') }}
-      </Button>
-      <RowMenu
-        class="size-11"
-        :label="$t('item.stock')"
-        :button-label="$t('stockActions.moreFor')"
-        :actions="setAction.map((a) => ({ ...a, disabled: locked }))"
-        @select="emit('open', 'set')"
-      />
+  <section class="grid min-w-0 gap-3 rounded-card border border-border bg-surface p-4" :aria-label="$t('item.stock')">
+    <div class="flex min-w-0 items-start justify-between gap-3">
+      <div class="grid min-w-0 gap-1.5">
+        <component
+          :is="stepper ? 'button' : 'p'"
+          :type="stepper ? 'button' : undefined"
+          :class="[
+            'flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-1 text-left',
+            stepper &&
+              '-mx-1.5 -my-1 justify-self-start rounded-md px-1.5 py-1 outline-none transition-colors duration-150 enabled:cursor-pointer enabled:hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring',
+          ]"
+          :aria-label="stepper ? $t('stock.countAmount', { amount: `${total.number} ${total.unit}` }) : undefined"
+          :disabled="stepper ? readOnly : undefined"
+          @click="stepper && emit('count')"
+        >
+          <span :class="[numberClass, total.outOfStock && 'text-muted-foreground']">{{ total.number }}</span>
+          <span class="text-sm font-semibold text-muted-foreground">{{ total.unit }}</span>
+          <span v-if="total.outOfStock" class="ml-1.5 text-sm font-semibold text-muted-foreground">{{ $t('item.outOfStock') }}</span>
+        </component>
+        <p v-if="prices" class="text-[13px] text-muted-foreground tabular-nums">{{ prices }}</p>
+        <p v-if="counted" class="text-[13px] text-muted-foreground">{{ counted }}</p>
+      </div>
+      <StepperPill v-if="stepper" :stepper="stepper" :name="null" />
+    </div>
+    <PendingChip v-if="stepper && stepper.state.value !== 'idle'" :stepper="stepper" :unit="unit" />
+    <div v-if="stepper" class="grid grid-cols-3 gap-2">
+      <Button variant="outline" :class="action" :disabled="readOnly" @click="emit('open', 'receive')">{{ $t('stockActions.receive') }}</Button>
+      <Button variant="outline" :class="action" :disabled="readOnly" @click="emit('open', 'use')">{{ $t('stockActions.use') }}</Button>
+      <Button variant="outline" :class="action" :disabled="readOnly" @click="emit('count')">{{ $t('stock.count') }}</Button>
     </div>
   </section>
 </template>

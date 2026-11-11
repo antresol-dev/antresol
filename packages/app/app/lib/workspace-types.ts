@@ -44,6 +44,7 @@ export interface WorkspaceState {
   /** Device setting; DEFAULT_CHECK_INTERVAL until stored. */
   checkInterval: CheckInterval
   refreshing: boolean
+  /** A write other than a stock movement is queued or running. Stock writes lock only their bucket (isBucketSaving). */
   saving: boolean
   readOnly: ReadOnlyReason | null
 }
@@ -101,6 +102,11 @@ export interface Workspace {
   apply(command: Command): Promise<void>
   /** Like apply, but for any inventory of a connected source; validated against that inventory's snapshot. */
   applyTo(ref: InventoryRef, command: Command): Promise<void>
+  /** A stock write to this bucket is queued or running (reactive). Steppers lock on this, not on `state.saving`. */
+  isBucketSaving(itemId: Id, variantId: Id | null): boolean
+  /** `hook` runs synchronously before every write is queued, so a write it starts goes first (a stepper flushing its
+   *  pending delta). Returns the unregister function. */
+  onBeforeWrite(hook: () => void): () => void
   /** Journal of an item of the current inventory, newest first, after a check of its source when the interval has
    *  passed (as apply). Rejects without a network call while the source is unreachable. */
   loadMovements(itemId: Id): Promise<Movement[]>

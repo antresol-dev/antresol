@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { newId, variantLabel, type Id } from '@graymatter/core'
+import { variantLabel, type Id } from '@graymatter/core'
 import { Plus } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { toast } from 'vue-sonner'
 import type { StockTarget } from '~/components/StockSheet.vue'
 import type { LooseOffer, VariantsAdded } from '~/components/VariantsForm.vue'
+import { lastCounted } from '~/lib/counted'
 import { errorMessageKey } from '~/lib/errors'
 import { bucketDescription, itemView } from '~/lib/item-view'
 import { archiveNow } from '~/lib/undo'
-import { quickStep, type StockMode } from '~/lib/stock-forms'
+import type { StockMode } from '~/lib/stock-forms'
 
 const props = defineProps<{ itemId: string; variantId: string | null }>()
 
@@ -48,18 +49,16 @@ function retry(): void {
   void workspace.refresh().catch(() => {})
 }
 
-// Stock movements: "−" and "+" write at once, the other actions open the sheet.
+// Stock movements: "−" and "+" add up in each bucket's deferred stepper (one movement 2 s after the last press); the
+// other actions open the sheet. Count starts from the quantity the bucket shows, the pending delta included.
+const steppers = useItemSteppers(() => props.itemId)
 const stockTarget = ref<StockTarget | null>(null)
 const openStock = (mode: StockMode, variantId: string | null): void => {
-  stockTarget.value = { mode, variantId }
+  stockTarget.value = { mode, variantId, amount: mode === 'set' ? steppers.of(variantId).projected.value : undefined }
 }
-async function step(kind: 'plus' | 'minus', variantId: string | null): Promise<void> {
-  try {
-    await workspace.apply(quickStep(kind, { itemId: props.itemId, variantId }, newId()))
-  } catch (e) {
-    toast.error(t(errorMessageKey(e)))
-  }
-}
+const countedAt = computed(() =>
+  snapshot.value && view.value ? lastCounted(snapshot.value, props.itemId, view.value.buckets.map((b) => b.variantId)) : null,
+)
 
 // Variants: add in bulk (and offer the loose stock to the first of them), rename, archive.
 const locked = computed(() => !!state.readOnly || state.saving)
@@ -222,11 +221,12 @@ const linkClass =
       </div>
       <StockCard
         :total="view.total"
-        :unit-symbol="view.unit.symbol"
+        :unit="view.unit"
         :currency="view.currency"
-        :controls="!view.hasVariants"
-        @step="(kind) => step(kind, null)"
+        :stepper="view.hasVariants ? null : steppers.of(null)"
+        :counted-at="countedAt"
         @open="(mode) => openStock(mode, null)"
+        @count="openStock('set', null)"
       />
       <div v-if="view.hasVariants || view.axes.length > 0" class="grid min-w-0 grid-cols-1">
       <ItemAxes :view="view" />
@@ -234,7 +234,8 @@ const linkClass =
         v-if="view.hasVariants"
         :buckets="view.buckets"
         :highlight="highlight"
-        @step="step"
+        :stepper-of="steppers.of"
+        :unit="view.unit"
         @open="openStock"
         @rename="(id) => (renameId = id)"
         @attributes="(id) => (valuesId = id)"

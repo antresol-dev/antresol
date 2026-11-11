@@ -23,6 +23,8 @@
  *   pill                 the −/+ stepper body, R(3,8), radius 14. Its halves: `pill-step pressable`, seam between.
  *   row-selected         selected row (tree folder, palette row, current variant): accent gradient 17 % → 8 % (24 % →
  *                        12 % dark), text and icons --accent-ink, radius 14; a pill inside takes the accent's shadow.
+ *   concave              a well: the folder tree's panel (three columns) and its card in the phone's drawer. I(4,10)
+ *                        inside, radius 20, the colour of what it is cut into; rows inside stay flat.
  *   glass                menus, select lists, combobox lists: liquid glass — a translucent tinted pane that blurs and
  *                        saturates what is behind it, a specular rim, a soft drop shadow. Radius 20. Items inside:
  *                        hover --glass-hover with --glass-hover-foreground text, separators --glass-divider; muted
@@ -43,7 +45,7 @@
  *   shadows   colours --shadow-dark, --shadow-light, --rim (dark), --shadow-hover, --shadow-pressed, --shadow-selected,
  *             --shadow-selected-pressed; lists --raised-shadow(-hover|-pressed), --raised-sm-shadow(-hover|-pressed),
  *             --card-shadow, --pill-shadow, --pill-shadow-selected, --step-shadow-pressed,
- *             --selected-step-shadow-pressed, --flat-shadow
+ *             --selected-step-shadow-pressed, --flat-shadow, --well-shadow
  *   glass     --glass-bg, --glass-img, --glass-blur, --glass-border, --glass-shadow, --glass-hover,
  *             --glass-hover-foreground, --glass-divider, --glass-muted, --glass-danger
  * Every text/background pair is at 4.5:1 or better in both themes for every accent: test/style.test.ts. Where a
@@ -128,6 +130,8 @@
   --pill-shadow-selected: 1.8px 1.8px 4.9px var(--shadow-selected), -2.3px -2.3px 6.2px var(--shadow-light), inset 0px 0px 0px transparent, inset 0px 0px 0px transparent;
   --step-shadow-pressed: 0px 0px 0px transparent, 0px 0px 0px transparent, inset 1.2px 1.2px 3.1px var(--shadow-pressed), inset -1.5px -1.5px 3.9px var(--shadow-light);
   --selected-step-shadow-pressed: 0px 0px 0px transparent, 0px 0px 0px transparent, inset 1.2px 1.2px 3.1px var(--shadow-selected-pressed), inset -1.5px -1.5px 3.9px var(--shadow-light);
+  /* The well (concave): I(4,10) in the neutral shadow, the depth of a raised button turned inwards. */
+  --well-shadow: 0px 0px 0px transparent, 0px 0px 0px transparent, inset 2.4px 2.4px 6.2px var(--shadow-dark), inset -3.1px -3.1px 7.7px var(--shadow-light);
 
   /* The accent button, soft (board 7, the owner's choice): the accent's tint 14 % (hover 20 %), accent-ink text,
      R(4,10) in the accent's shade DKa(0.45) (hover 0.5), pressed I(3,7) at DKa(0.55). The mock-up's pressed tint
@@ -241,6 +245,7 @@
   --pill-shadow-selected: 2.3px 2.3px 6.1px var(--shadow-selected), -1.7px -1.7px 4.5px var(--shadow-light), inset 0.8px 0.8px 0px var(--rim), inset 0px 0px 0px transparent;
   --step-shadow-pressed: 0px 0px 0px transparent, 0px 0px 0px transparent, inset 1.5px 1.5px 3.8px var(--shadow-pressed), inset -1.1px -1.1px 2.8px var(--shadow-light);
   --selected-step-shadow-pressed: 0px 0px 0px transparent, 0px 0px 0px transparent, inset 1.5px 1.5px 3.8px var(--shadow-selected-pressed), inset -1.1px -1.1px 2.8px var(--shadow-light);
+  --well-shadow: 0px 0px 0px transparent, 0px 0px 0px transparent, inset 3.1px 3.1px 7.7px var(--shadow-dark), inset -2.2px -2.2px 5.6px var(--shadow-light);
 
   /* The accent button, painted (board 8): R(4,10) at DKa(0.55) with the rim, then a thin bevel — the painted edge
      catches the same top-left light; pressed I(3,7) in the paint's deep shade. It darkens on hover and press like
@@ -460,6 +465,13 @@
   .raised-card {
     background-color: var(--surface);
     box-shadow: var(--card-shadow);
+    border-radius: var(--radius-card);
+  }
+
+  /* A well cut into the surface (the owner, 2026-11-12: the folder hierarchy is concave, not raised). No colour of its
+     own: the rail in the drawer, the panel's surface in three columns. */
+  .concave {
+    box-shadow: var(--well-shadow);
     border-radius: var(--radius-card);
   }
 

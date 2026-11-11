@@ -78,12 +78,13 @@ const pressHandlers = computed(() =>
 
 <template>
   <li class="flex flex-col gap-0.5">
-    <!-- `group`: the row reveals its "+" and "⋯" (.row-action) on hover and focus. The count keeps its colour. -->
+    <!-- `group`: the row reveals its "+" and "⋯" (.row-action) on hover and focus. The count keeps its colour. Rows are
+         flat in the tree's well: a translucent tint under the pointer lets its shading show through. -->
     <div
       :class="[
         'group relative flex items-center gap-1.5 rounded-field pr-2 text-sm font-semibold transition-colors duration-150',
         panel ? 'h-8 pl-1' : 'min-h-11',
-        row.current ? 'row-selected' : 'text-icon hover:bg-hover hover:text-foreground',
+        row.current ? 'row-selected' : 'text-icon hover:bg-(--ghost-hover) hover:text-foreground',
       ]"
     >
       <button

@@ -158,7 +158,7 @@ async function submit(): Promise<void> {
     <div v-if="mode === 'create' && sources.length > 1" class="grid gap-1.5">
       <Label for="inventory-source">{{ $t('inventoryForm.source') }}</Label>
       <Select v-model="sourceId">
-        <SelectTrigger id="inventory-source" class="h-11 w-full data-[size=default]:h-11">
+        <SelectTrigger id="inventory-source" class="h-11 w-full">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

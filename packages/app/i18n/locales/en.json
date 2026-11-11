@@ -100,7 +100,7 @@
     "unitHint": "Optional, up to 16 characters: Ω, V, mm.",
     "unitTooLong": "The unit can’t be longer than 16 characters.",
     "siPrefixes": "SI prefixes",
-    "siExample": "Example: {example}",
+    "siExample": "With SI prefixes: {example}",
     "options": "Options",
     "hint": "One per line or separated by commas: DIP-8, SOIC-8",
     "optionsRequired": "Add at least one option.",

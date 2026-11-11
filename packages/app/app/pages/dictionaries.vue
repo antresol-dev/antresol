@@ -46,9 +46,10 @@ function retry(): void {
     <ScreenHeader :title="$t('dictionaries.title')" />
     <ScreenBody>
       <template v-if="view">
+        <!-- A divider and room between the sections: their headings lead, not their buttons. -->
         <TagsSection :rows="view.tags" />
-        <AttributesSection :rows="view.attributes" />
-        <UnitsSection :rows="view.units" />
+        <AttributesSection :rows="view.attributes" class="mt-1.5 border-t border-divider pt-5" />
+        <UnitsSection :rows="view.units" class="mt-1.5 border-t border-divider pt-5" />
       </template>
       <EmptyState v-else-if="blocker?.kind === 'none'" :text="$t('empty.noInventories')">
         <Button class="h-11 rounded-field" :disabled="!!state.readOnly" @click="creating = true">

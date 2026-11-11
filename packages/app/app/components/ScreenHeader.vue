@@ -26,8 +26,9 @@ const desktop = useMediaQuery('(min-width: 1024px)')
 const crumbs = computed(() => props.crumbs ?? [])
 const shortCrumbs = computed(() => collapseCrumbs(crumbs.value))
 
-// ☰ is a raised icon button like the screen's actions (R(3,7), radius 14).
-const iconButton = 'raised-sm pressable grid size-11 shrink-0 place-items-center'
+// ☰ is a flat icon button like the screen's actions in the phone's top bar: raised ones sit too close to the screen's
+// top edge (the owner, 2026-11-12), and a margin would take room the screen needs.
+const iconButton = 'pressable grid size-11 shrink-0 place-items-center'
 // tabindex -1: where focus lands when a sheet closes and the control that opened it is gone (AppSheet).
 const heading = 'rounded-chip text-2xl font-bold tracking-[-0.02em] outline-none focus-visible:ring-2 focus-visible:ring-ring'
 // Path links are flat: the accent tint and ink under the pointer.
@@ -96,9 +97,8 @@ const crumbLink = 'pressable min-w-0 truncate rounded-chip'
               <span class="sr-only">{{ $t('status.saving') }}</span>
             </span>
           </span>
-          <!-- At 360 px the row is 344 px, 8 px from the screen's edges so the shadows have room: ☰ 44, the two 32 px
-               arrows, four raised 44 px actions 10 px apart (wider than their shadows reach, 7.7 px) and 4 px gaps take
-               326 px; the saving indicator takes 16 of the 18 left. -->
+          <!-- At 360 px the row is 344 px, 8 px from the screen's edges: ☰ 44, the two 32 px arrows, four flat 44 px
+               actions 10 px apart and 4 px gaps take 326 px; the saving indicator takes 16 of the 18 left. -->
           <div v-if="$slots.actions" class="flex shrink-0 items-center gap-2.5">
             <slot name="actions" :compact="true" />
           </div>

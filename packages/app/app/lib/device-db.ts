@@ -1,5 +1,6 @@
 import type { Inventory, InventorySnapshot } from '@graymatter/core'
 import { createStore, del, get, getMany, keys, set, setMany, update, type UseStore } from 'idb-keyval'
+import type { AccentName } from './accent'
 import type { InventoryRef, SourceConfig } from './types'
 import type { CheckInterval } from './workspace-types'
 
@@ -8,6 +9,8 @@ export interface DeviceSettings {
   current: InventoryRef | null
   /** Absent until chosen: DEFAULT_CHECK_INTERVAL. */
   checkInterval?: CheckInterval
+  /** Absent until chosen: DEFAULT_ACCENT. A value this app does not know (from a newer one) counts as absent. */
+  accent?: AccentName
 }
 
 export interface CachedSnapshot {

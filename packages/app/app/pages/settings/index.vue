@@ -166,8 +166,10 @@ async function confirmRemove(): Promise<void> {
 
       <section class="grid gap-2" aria-labelledby="settings-appearance">
         <h2 id="settings-appearance" class="text-sm font-semibold text-subtle-foreground">{{ $t('settings.appearance.title') }}</h2>
-        <div class="rounded-card border bg-surface px-4 py-1">
+        <div class="raised-card grid gap-2 px-4.5 pt-2 pb-4.5">
           <ThemeSwitch />
+          <div class="h-px bg-divider" aria-hidden="true" />
+          <AccentPicker class="pt-2" />
         </div>
       </section>
 

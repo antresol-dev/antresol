@@ -325,7 +325,20 @@
       "title": "Appearance",
       "system": "System",
       "light": "Light",
-      "dark": "Dark"
+      "dark": "Dark",
+      "accent": "Accent",
+      "accents": {
+        "indigo": "Indigo",
+        "violet": "Violet",
+        "blue": "Blue",
+        "sky": "Sky",
+        "teal": "Teal",
+        "green": "Green",
+        "orange": "Orange",
+        "rose": "Rose",
+        "pink": "Pink",
+        "slate": "Slate"
+      }
     }
   },
   "sourceForm": {

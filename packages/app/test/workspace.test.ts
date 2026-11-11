@@ -1479,6 +1479,38 @@ describe('workspace writes patch the local copy', () => {
     expect(folderNames(ws)).toEqual(['Theirs'])
   })
 
+  it('9d. a load started before switching away and back cannot drop rows written meanwhile', async () => {
+    const { h, ws, refs } = await started('A', 'B')
+    const [a, b] = refs as [InventoryRef, InventoryRef]
+    await ws.selectInventory(b)
+    // Another device writes; B is loaded at the new revision, A's cached copy is behind it.
+    await h.bumpRev(CS('one'))
+    await ws.refresh()
+    // L0: selecting A loads it (held before it reads). L1: a refresh loads A too (held after it read).
+    const first = h.gate()
+    h.flags.beforeLoad = () => first.promise
+    const selecting = ws.selectInventory(a)
+    await vi.waitFor(() => expect(h.flags.beforeLoad).toBeNull())
+    const second = h.gate()
+    h.flags.loadGate = second.promise
+    const refresh = ws.refresh()
+    await vi.waitFor(() => expect(h.flags.loadBlocked).toBe(true))
+    first.open()
+    await selecting
+    // An own write in sync, then B and back to A: both cached copies are current, nothing loads.
+    await ws.apply(folderCreate(a.inventoryId, 'Mine'))
+    const loads = h.flags.loadCalls
+    await ws.selectInventory(b)
+    await ws.selectInventory(a)
+    expect(h.flags.loadCalls).toBe(loads)
+    // L1, which read A before the write, lands now.
+    second.open()
+    await refresh
+    expect(folderNames(ws)).toEqual(['Mine'])
+    await ws.flushCache()
+    expect((await h.db.getSnapshot(a))!.snapshot.folders.map((f) => f.name)).toEqual(['Mine'])
+  })
+
   it('10. the cached copy and its revision are saved together', async () => {
     const { h, ws, inv } = await started('Inv')
     const ref = ws.state.current!

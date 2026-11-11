@@ -164,6 +164,9 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   /** Number of the last started snapshot load, and of the last one written to state. */
   let loadSeq = 0
   let appliedSeq = 0
+  /** Bumped whenever another inventory (or none) becomes current. A load started before is never shown, even when its
+   *  inventory is selected again: the own rows it might miss are only remembered for the selection they were put in. */
+  let selection = 0
   /** Full loads still running, and the own rows put into the shown copy meanwhile (see catchUp). */
   let loadsRunning = 0
   let ownRows: OwnRows[] = []
@@ -214,6 +217,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     if (!sameRef(state.current, ref)) {
       // Written rows of the copy shown so far go to the device first: opening it again then loads nothing.
       void saveShown()
+      selection++
       state.snapshot = null
       state.snapshotOrigin = null
       state.snapshotSavedAt = null
@@ -401,8 +405,11 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     }
     const token = ++loadSeq
     const generation = generationOf(ref.sourceId)
-    // Another inventory selected, or the source edited or removed meanwhile: the result is nobody's.
-    const gone = (): boolean => !sameRef(state.current, ref) || generationOf(ref.sourceId) !== generation
+    const selected = selection
+    // Another inventory selected (even if this one was selected again since), or the source edited or removed
+    // meanwhile: the result is nobody's.
+    const gone = (): boolean =>
+      selection !== selected || !sameRef(state.current, ref) || generationOf(ref.sourceId) !== generation
     loadsRunning++
     const loaded = await conn.storage.loadInventoryWithRev(ref.inventoryId).then(
       (value) => ({ ok: true as const, ...value }),

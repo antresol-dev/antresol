@@ -1,6 +1,6 @@
 import MiniSearch from 'minisearch'
 import type { Id } from './ids'
-import type { InventorySnapshot } from './model'
+import type { InventorySnapshot, Item, Variant } from './model'
 
 export interface SearchHit {
   itemId: Id
@@ -41,6 +41,14 @@ const TIERS = [
 /** A match on the whole compact query is stronger than a match on one raw token. */
 const COMPACT_BOOST = 2
 
+const compareIds = (a: Id, b: Id): number => (a < b ? -1 : a > b ? 1 : 0)
+/** The order documents enter the index in, which is the order of hits that tie. Never the snapshot's row order: a fresh
+ *  load holds rows in SQL order, a patched snapshot holds the rows a write returned at the end. */
+const itemOrder = (a: Item, b: Item): number =>
+  a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }) || compareIds(a.id, b.id)
+const variantOrder = (a: Variant, b: Variant): number =>
+  compareIds(a.itemId, b.itemId) || a.position - b.position || compareIds(a.id, b.id)
+
 export function createSearch(s: InventorySnapshot): { search(query: string, limit?: number): SearchHit[] } {
   const archivedFolders = new Set(s.folders.filter((f) => f.archivedAt !== null).map((f) => f.id))
   const folderParent = new Map(s.folders.map((f) => [f.id, f.parentId] as const))
@@ -66,7 +74,7 @@ export function createSearch(s: InventorySnapshot): { search(query: string, limi
   }
 
   const docs: Doc[] = []
-  const activeItems = s.items.filter((i) => i.archivedAt === null && !folderHidden(i.folderId))
+  const activeItems = s.items.filter((i) => i.archivedAt === null && !folderHidden(i.folderId)).sort(itemOrder)
   const activeIds = new Set(activeItems.map((i) => i.id))
   for (const i of activeItems) {
     const tags = i.tagIds.map((t) => tagNames.get(t)).filter((t): t is string => !!t)
@@ -79,7 +87,7 @@ export function createSearch(s: InventorySnapshot): { search(query: string, limi
       extra: [...tags, ...(itemAttrs.get(i.id) ?? []), i.description ?? ''].join(' '),
     })
   }
-  for (const v of s.variants) {
+  for (const v of [...s.variants].sort(variantOrder)) {
     if (v.archivedAt !== null || !activeIds.has(v.itemId)) continue
     const attrs = variantAttrs.get(v.id) ?? []
     docs.push({

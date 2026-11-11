@@ -80,6 +80,15 @@ describe('ranking', () => {
   it('reports the matched variant when the item also matches', () => {
     expect(r.search('резистор 10k')[0]).toEqual({ itemId: 'Резистор', variantId: 'v10k' })
   })
+  it('orders ties the same whatever the order of the rows', () => {
+    // A fresh load holds rows in SQL order; a patched snapshot holds the rows a write returned at the end.
+    const twins = makeSnapshot({
+      items: [item('b', 'Resistor'), item('a', 'resistor'), item('c', 'Resistor')],
+      variants: [variant('v2', 'b', '1k'), variant('v1', 'b', '1k'), variant('v3', 'c', '1k', { position: 1 })],
+    })
+    const reversed = { ...twins, items: [...twins.items].reverse(), variants: [...twins.variants].reverse() }
+    for (const q of ['resistor', '1k']) expect(createSearch(reversed).search(q)).toEqual(createSearch(twins).search(q))
+  })
 })
 
 describe('decimal values', () => {

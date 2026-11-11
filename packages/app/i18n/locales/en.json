@@ -218,14 +218,16 @@
     "variantTitle": "Photo for {name}",
     "variantHint": "One photo per variant. A new photo replaces the current one."
   },
+  "undo": {
+    "action": "Undo",
+    "archived": "“{name}” archived"
+  },
   "variantMenu": {
     "rename": "Rename",
     "attributes": "Attribute values",
     "archive": "Archive variant",
     "photo": "Photo…",
-    "renameTitle": "Rename variant",
-    "archiveTitle": "Archive variant?",
-    "archiveConfirm": "Variant “{name}” moves to the archive with its stock and history."
+    "renameTitle": "Rename variant"
   },
   "looseTransfer": {
     "title": "Move {number} {unit} without a variant into a variant?",
@@ -396,9 +398,7 @@
     "archive": "Archive",
     "editTitle": "Edit item",
     "moveTitle": "Move item",
-    "moveHint": "Choose the folder for this item.",
-    "archiveTitle": "Archive item?",
-    "archiveConfirm": "“{name}” moves to the archive with its variants and history. You can restore it from the archive."
+    "moveHint": "Choose the folder for this item."
   },
   "itemForm": {
     "unit": "Unit",
@@ -417,9 +417,7 @@
     "move": "Move",
     "moveTitle": "Move folder",
     "moveHint": "Choose where this folder goes.",
-    "archive": "Archive",
-    "archiveTitle": "Archive folder",
-    "archiveConfirm": "Archive “{name}” and everything in it? You can restore it from the Archive."
+    "archive": "Archive"
   },
   "quickAdd": {
     "title": "Add item",

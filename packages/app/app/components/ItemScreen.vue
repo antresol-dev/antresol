@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { newId, variantLabel, type Id } from '@graymatter/core'
+import { variantLabel, type Id } from '@graymatter/core'
 import { Plus } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { toast } from 'vue-sonner'
@@ -7,6 +7,7 @@ import type { StockTarget } from '~/components/StockSheet.vue'
 import type { LooseOffer, VariantsAdded } from '~/components/VariantsForm.vue'
 import { errorMessageKey } from '~/lib/errors'
 import { itemView } from '~/lib/item-view'
+import { archiveNow } from '~/lib/undo'
 import { quickStep, type StockMode } from '~/lib/stock-forms'
 
 const props = defineProps<{ itemId: string; variantId: string | null }>()
@@ -72,9 +73,6 @@ function added(a: VariantsAdded): void {
   if (a.offer) looseOffer.value = { offer: a.offer, variants: created }
 }
 const renameId = ref<Id | null>(null)
-const archiveId = ref<Id | null>(null)
-// The variant the open sheet is about, kept while the sheet animates out.
-const sheetVariant = shallowRef<{ id: Id; name: string } | null>(null)
 const variantOf = (id: Id) => snapshot.value?.variants.find((v) => v.id === id) ?? null
 const renaming = computed(() => (renameId.value ? variantOf(renameId.value) : null))
 const renameOpen = computed({
@@ -83,31 +81,11 @@ const renameOpen = computed({
     if (!open) renameId.value = null
   },
 })
-const archiveOpen = computed({
-  get: () => archiveId.value !== null,
-  set: (open: boolean) => {
-    if (!open) archiveId.value = null
-  },
-})
-const archiveBusy = ref(false)
 function askArchive(id: Id): void {
   const v = variantOf(id)
-  if (!v) return
-  sheetVariant.value = { id, name: variantLabel(snapshot.value!, v) }
-  archiveId.value = id
-}
-async function archiveVariant(): Promise<void> {
-  const id = archiveId.value
-  if (!id || archiveBusy.value) return
-  archiveBusy.value = true
-  try {
-    await workspace.apply({ type: 'archive', target: 'variant', id, archiveId: newId() })
-    archiveId.value = null
-  } catch (e) {
-    toast.error(t(errorMessageKey(e)))
-  } finally {
-    archiveBusy.value = false
-  }
+  if (!v || locked.value) return
+  // No question: the toast offers Undo.
+  void archiveNow('variant', id, variantLabel(snapshot.value!, v)).catch((e) => toast.error(t(errorMessageKey(e))))
 }
 
 // Variant photo: one per variant, uploaded and swapped in by setVariantPhoto.
@@ -296,15 +274,6 @@ const linkClass =
         </div>
         <PhotoPicker v-else class="py-3" :disabled="photoBusy || locked" @pick="pickVariantPhoto" />
       </AppSheet>
-      <ConfirmSheet
-        v-model:open="archiveOpen"
-        :title="$t('variantMenu.archiveTitle')"
-        :description="$t('variantMenu.archiveConfirm', { name: sheetVariant?.name ?? '' })"
-        :confirm-label="$t(archiveBusy ? 'status.saving' : 'variantMenu.archive')"
-        :busy="archiveBusy"
-        destructive
-        @confirm="archiveVariant"
-      />
       <ItemAttributes
         :attributes="view.attributes"
         @add="openAttribute(null)"

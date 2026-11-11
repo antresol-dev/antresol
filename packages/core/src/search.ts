@@ -1,6 +1,8 @@
 import MiniSearch from 'minisearch'
 import type { Id } from './ids'
 import type { Attribute, InventorySnapshot, Item, Variant } from './model'
+import { cmpQ as compareQuantities, type Quantity } from './quantity'
+import { bucketStock, itemStock } from './stock'
 import { compareNumberValues, isCanonicalNumber, parseNumberValue, type NumberValue } from './numbers'
 import { variantLabel } from './variants'
 
@@ -192,4 +194,68 @@ export function createSearch(s: InventorySnapshot): { search(query: string, limi
         .map(([itemId, e]) => ({ itemId, variantId: e.variant?.id ?? null }))
     },
   }
+}
+
+export interface NearestHit {
+  itemId: Id
+  variantId: Id | null
+  value: NumberValue
+  quantity: Quantity
+}
+
+/** The nearest smaller and the nearest larger value of a number attribute among variant axis values and shared item
+ *  values ("No 4.7 kΩ — nearest: 4.3 kΩ (12) · 5.1 kΩ (40)"). An equal value is neither. Archived items, variants and
+ *  items in archived folders do not count. Of several holders of one value, the one with more in stock, then the lower id. */
+export function nearestValues(
+  s: InventorySnapshot,
+  attribute: Attribute,
+  value: NumberValue,
+): { below: NearestHit | null; above: NearestHit | null } {
+  const folderParent = new Map(s.folders.map((f) => [f.id, f] as const))
+  const folderHidden = (id: Id | null): boolean => {
+    const seen = new Set<Id>()
+    for (let cur = id; cur !== null && !seen.has(cur); ) {
+      const f = folderParent.get(cur)
+      if (!f) return false
+      if (f.archivedAt !== null) return true
+      seen.add(cur)
+      cur = f.parentId
+    }
+    return false
+  }
+  const liveItems = new Set(s.items.filter((i) => i.archivedAt === null && !folderHidden(i.folderId)).map((i) => i.id))
+  const liveVariants = new Map(s.variants.filter((v) => v.archivedAt === null).map((v) => [v.id, v] as const))
+
+  let below: NearestHit | null = null
+  let above: NearestHit | null = null
+  const consider = (itemId: Id, variantId: Id | null, v: string | null) => {
+    if (!v || !isCanonicalNumber(v)) return
+    const c = compareNumberValues(v, value)
+    if (c === 0) return
+    const hit: NearestHit = {
+      itemId,
+      variantId,
+      value: v,
+      quantity: (variantId === null ? itemStock(s, itemId) : bucketStock(s, itemId, variantId)).quantity,
+    }
+    const cur = c < 0 ? below : above
+    const better =
+      !cur ||
+      (c < 0 ? compareNumberValues(v, cur.value) > 0 : compareNumberValues(v, cur.value) < 0) ||
+      (compareNumberValues(v, cur.value) === 0 &&
+        (compareQuantities(hit.quantity, cur.quantity) > 0 ||
+          (compareQuantities(hit.quantity, cur.quantity) === 0 &&
+            (hit.itemId + (hit.variantId ?? '')) < cur.itemId + (cur.variantId ?? ''))))
+    if (!better) return
+    if (c < 0) below = hit
+    else above = hit
+  }
+  for (const a of s.itemAttributes) {
+    if (a.attributeId === attribute.id && a.axisPosition === null && liveItems.has(a.itemId)) consider(a.itemId, null, a.value)
+  }
+  for (const a of s.variantAttributeValues) {
+    const v = liveVariants.get(a.variantId)
+    if (a.attributeId === attribute.id && v && liveItems.has(v.itemId)) consider(v.itemId, v.id, a.value)
+  }
+  return { below, above }
 }

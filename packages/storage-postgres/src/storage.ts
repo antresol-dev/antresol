@@ -44,9 +44,9 @@ export async function openPostgresStorage(
     loadMovements: (itemId) => wrapFailure(() => queries.loadMovements(exec, itemId)),
     loadAllMovements: (inventoryId) => wrapFailure(() => queries.loadAllMovements(exec, inventoryId)),
     exportInventory: (id) => wrapFailure(() => queries.exportInventory(exec, id)),
-    async restore(backup, mode, runId, onProgress) {
+    async restore(backup, mode, runId, options) {
       if (readOnly) throw new StorageError('read_only')
-      return wrapFailure(() => restoreBackup(exec, backup, mode, runId, onProgress))
+      return wrapFailure(() => restoreBackup(exec, backup, mode, runId, options))
     },
     findReceiptsBySource: (inventoryId, key) => wrapFailure(() => queries.findReceiptsBySource(exec, inventoryId, key)),
     async apply(command, actor) {

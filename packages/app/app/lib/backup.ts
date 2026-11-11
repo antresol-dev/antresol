@@ -1,5 +1,9 @@
-import { parseQuantity, type InventoryExport, type InventorySnapshot, type Movement } from '@graymatter/core'
-import { APP_SCHEMA_VERSION } from '@graymatter/storage-postgres'
+import { parseQuantity, type InventoryExport, type InventorySnapshot, type Movement, type RestoreMode } from '@graymatter/core'
+import { APP_SCHEMA_VERSION, backupProblems, SCHEMA_BASE } from '@graymatter/storage-postgres'
+import { computed, watch, type WatchStopHandle } from 'vue'
+import type { BackupInfo, RestoreRun } from './device-db'
+import type { SourceConfig } from './types'
+import type { Workspace } from './workspace-types'
 
 export interface BackupFile {
   format: 'graymatter-backup'
@@ -113,7 +117,8 @@ export async function fingerprint(text: string): Promise<string> {
 
 // ---- reading a file back ----
 
-export type BackupProblem = 'format' | 'version' | 'newer_schema'
+/** `prerelease`: made by a pre-release GrayMatter, whose data no longer fits the schema. */
+export type BackupProblem = 'format' | 'version' | 'newer_schema' | 'prerelease'
 
 type Check = (value: unknown) => boolean
 
@@ -227,24 +232,48 @@ function inventoryExport(value: unknown): InventoryExport | null {
   return { snapshot: snapshot as unknown as InventorySnapshot, movements }
 }
 
+/** The last schema whose files may come from a pre-release build: variants with names, item attributes without an
+ *  axis position, attributes without the number kind's fields (before Plan 7). Older schemas are all pre-release. */
+const LAST_PRE_RELEASE_SCHEMA = SCHEMA_BASE + 1
+
+/** Raw inventories of a file in the shape of a pre-release build (see LAST_PRE_RELEASE_SCHEMA). */
+function preReleaseShape(inventories: unknown[]): boolean {
+  const any = (list: unknown, test: (r: Record<string, unknown>) => boolean): boolean =>
+    Array.isArray(list) && list.some((r) => isRecord(r) && test(r))
+  return inventories.some((entry) => {
+    const s = isRecord(entry) && isRecord(entry.snapshot) ? entry.snapshot : null
+    return (
+      s !== null &&
+      (any(s.variants, (v) => Object.hasOwn(v, 'name')) ||
+        any(s.itemAttributes, (r) => !Object.hasOwn(r, 'axisPosition')) ||
+        any(s.attributes, (a) => !Object.hasOwn(a, 'siPrefixes')))
+    )
+  })
+}
+
 /**
  * A file's JSON as a backup, every record checked field by field (nothing it does not know is kept), or why not:
- * `format` (not a GrayMatter backup, or damaged), `version` (a file format this app does not know), `newer_schema` (made
- * by a newer GrayMatter: its data may not fit this app's schema). Whether every reference resolves is checked when it is
- * restored (InventoryStorage.restore), before anything is written.
+ * `format` (not a GrayMatter backup, or damaged; `reason` says what, when it is more than a field's shape),
+ * `version` (a file format this app does not know), `newer_schema` (made by a newer GrayMatter: its data may not fit
+ * this app's schema), `prerelease` (made by a pre-release GrayMatter). Every reference must resolve inside its
+ * inventory and every value fit the schema (backupProblems), as the restore checks again before writing anything.
  */
-export function parseBackup(json: unknown): BackupFile | { error: BackupProblem } {
+export function parseBackup(json: unknown): BackupFile | { error: BackupProblem; reason?: string } {
   if (!isRecord(json) || json.format !== 'graymatter-backup') return { error: 'format' }
   if (json.version !== 1) return { error: 'version' }
   const app = record<{ schemaVersion: number }>(json.app, { schemaVersion: int })
   if (!app) return { error: 'format' }
   if (app.schemaVersion > APP_SCHEMA_VERSION) return { error: 'newer_schema' }
+  if (app.schemaVersion <= SCHEMA_BASE) return { error: 'prerelease' }
   const source = record<{ name: string; kind: string }>(json.source, { name: str, kind: str })
   if (!source || !time(json.exportedAt) || !Array.isArray(json.inventories)) return { error: 'format' }
+  if (app.schemaVersion <= LAST_PRE_RELEASE_SCHEMA && preReleaseShape(json.inventories)) return { error: 'prerelease' }
   const inventories: InventoryExport[] = []
   for (const entry of json.inventories) {
     const parsed = inventoryExport(entry)
     if (!parsed) return { error: 'format' }
+    const problems = backupProblems(parsed)
+    if (problems.length) return { error: 'format', reason: problems.join('; ') }
     inventories.push(parsed)
   }
   return buildBackup({ exportedAt: json.exportedAt as string, app, source, inventories })
@@ -268,6 +297,37 @@ export function backupSummary(backup: BackupFile): { inventories: number; items:
     items: backup.inventories.reduce((n, e) => n + e.snapshot.items.length, 0),
     movements: backup.inventories.reduce((n, e) => n + e.movements.length, 0),
   }
+}
+
+/** How the restore sheet offers a file, from this device's last run of it (DeviceDb.getRestoreRun) and how many
+ *  inventories the source holds (archived included). `unfinished`: that run, into this source, did not finish: it is
+ *  offered again in its mode. The same ids only into an empty source, or to go on with such a run. `restoredBefore`:
+ *  that run, into this source, finished; new ids now make another copy. */
+export function restoreChoice(input: { run: RestoreRun | null; sourceId: string; sourceInventories: number }): {
+  mode: RestoreMode
+  sameIdsAllowed: boolean
+  unfinished: boolean
+  restoredBefore: boolean
+} {
+  const here = input.run?.sourceId === input.sourceId ? input.run : null
+  const unfinished = here !== null && !here.finished
+  const empty = input.sourceInventories === 0
+  return {
+    mode: unfinished ? here.mode : empty ? 'same-ids' : 'new-ids',
+    sameIdsAllowed: empty || (unfinished && here.mode === 'same-ids'),
+    unfinished,
+    restoredBefore: here !== null && here.finished,
+  }
+}
+
+/** The toast after a restore, by what it actually added: inventories when any, otherwise records, otherwise nothing. */
+export function restoreOutcome(added: { inventories: number; rows: number }): {
+  key: 'backup.restored' | 'backup.restoredRows' | 'backup.restoredNothing'
+  count: number
+} {
+  if (added.inventories > 0) return { key: 'backup.restored', count: added.inventories }
+  if (added.rows > 0) return { key: 'backup.restoredRows', count: added.rows }
+  return { key: 'backup.restoredNothing', count: 0 }
 }
 
 // ---- reminder ----
@@ -306,4 +366,36 @@ export function lastBackupAgo(iso: string | null, now: Date): LastBackup {
   if (hours < 1) return { key: 'backup.lastJustNow' }
   if (hours < 24) return { key: 'backup.lastHours', count: hours }
   return { key: 'backup.lastDays', count: Math.floor(hours / 24) }
+}
+
+/**
+ * The reminder's watch: when the current inventory's Neon source is ready, and again after every write any source took
+ * (state.writeCount: stock writes too, which never set `saving`), reads this device's bookkeeping of it and calls
+ * `remind` the first time a backup is due (createBackupReminder: once per session). Never by a timer. A source never
+ * backed up counts from when it was added on this device. The demo source lives on the device: never reminded about.
+ */
+export function watchBackupReminder(
+  workspace: Pick<Workspace, 'state' | 'backupInfo'>,
+  remind: (config: SourceConfig, info: BackupInfo) => void,
+  now: () => Date = () => new Date(),
+): WatchStopHandle {
+  const { state } = workspace
+  const reminder = createBackupReminder()
+  const target = computed(() => {
+    const source = state.sources.find((s) => s.config.id === state.current?.sourceId)
+    return source?.config.kind === 'neon' && source.status === 'ready' ? source.config : null
+  })
+  let shown = false
+  return watch(
+    [target, () => state.writeCount],
+    async ([config]) => {
+      // Once reminded, nothing more to read this session.
+      if (!config || shown) return
+      const info = await workspace.backupInfo(config.id)
+      if (!reminder.due({ lastBackupAt: info.lastBackupAt ?? config.createdAt, writesSince: info.writesSince, now: now() })) return
+      shown = true
+      remind(config, info)
+    },
+    { immediate: true },
+  )
 }

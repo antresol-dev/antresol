@@ -233,15 +233,16 @@ describe.skipIf(!url)('Neon conformance', () => {
         }
       })
 
-      it('restores a backup: new ids twice without duplicates, then the same ids after the original is gone', async () => {
+      it('restores a backup: new ids twice without duplicates; the same ids refused next to the copy unless resuming', async () => {
         const { storage } = await openPostgresStorage(exec)
         const inv = await seedRich(storage, `restore-${name}`)
         const backup = { inventories: [await storage.exportInventory(inv)] }
         const journal = (await storage.loadAllMovements(inv)).map(({ seq: _seq, ...m }) => m)
         const runId = newId()
         const first = await storage.restore(backup, 'new-ids', runId)
+        expect(first.added.inventories).toBe(1)
         // A second run of the same file (after a break, say) adds nothing.
-        expect(await storage.restore(backup, 'new-ids', runId)).toEqual(first)
+        expect(await storage.restore(backup, 'new-ids', runId)).toEqual({ ...first, added: { inventories: 0, rows: 0 } })
         const m = (id: string) => uuidV5(id, runId)
         expect(first.inventoryIds).toEqual([m(inv)])
         const copy = await storage.loadInventory(m(inv))
@@ -250,7 +251,9 @@ describe.skipIf(!url)('Neon conformance', () => {
 
         await storage.apply({ type: 'archive', target: 'inventory', id: inv, archiveId: newId() }, TEST_ACTOR)
         await storage.apply({ type: 'deletePermanently', target: 'inventory', id: inv }, TEST_ACTOR)
-        await storage.restore(backup, 'same-ids', newId())
+        // The copy is still there: the same ids only as a run that goes on with an earlier one.
+        await expect(storage.restore(backup, 'same-ids', newId())).rejects.toMatchObject({ code: 'not_empty' })
+        await storage.restore(backup, 'same-ids', newId(), { resumeSameIds: true })
         expect(normSnapshot(await storage.loadInventory(inv))).toEqual(normSnapshot(backup.inventories[0]!.snapshot))
         expect((await storage.loadAllMovements(inv)).map(({ seq: _seq, ...m }) => m)).toEqual(journal)
         // Some forty writes to seed it, one round trip each: slow over the websocket.

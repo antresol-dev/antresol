@@ -7,22 +7,31 @@ const AUDIT = 'created_at, updated_at, created_by, updated_by'
 const ARCHIVE = 'archived_at, archive_id'
 
 /** The inventories and the revision counter, read in one snapshot transaction (so `rev` matches the list). */
+const revStatement = sql`select value from gm_meta where key = 'rev'`
+
+/** A missing row (hand-edited database) is "unknown": a value that never equals one a device cached. */
+const toRev = (result: Record<string, unknown>[] | undefined): string =>
+  String((result?.[0] as { value?: unknown } | undefined)?.value ?? `unknown:${Math.random().toString(36).slice(2)}`)
+
 export async function listInventories(exec: PgExecutor): Promise<{ inventories: Inventory[]; rev: string }> {
   const [list, rev] = await exec.readBatch([
     sql`select id, name, description, currency::text as currency, ${raw(`${AUDIT}, ${ARCHIVE}`)}
         from inventories order by name, id`,
-    sql`select value from gm_meta where key = 'rev'`,
+    revStatement,
   ])
-  return {
-    inventories: (list as Record<string, unknown>[]).map(rows.toInventory),
-    // A missing row (hand-edited database) is "unknown": a value that never equals one a device cached.
-    rev: String((rev?.[0] as { value?: unknown } | undefined)?.value ?? `unknown:${Math.random().toString(36).slice(2)}`),
-  }
+  return { inventories: (list as Record<string, unknown>[]).map(rows.toInventory), rev: toRev(rev) }
 }
 
 /** Fixed number of queries (one per kind of data), in one read-only snapshot transaction; archived records included. */
 export async function loadInventory(exec: PgExecutor, id: Id): Promise<InventorySnapshot> {
   return toSnapshot((await exec.readBatch(snapshotStatements(id))) as SnapshotRows, id)
+}
+
+/** The snapshot and the source revision, in ONE read-only snapshot transaction: the revision is exactly the one the
+ *  snapshot is at. */
+export async function loadInventoryWithRev(exec: PgExecutor, id: Id): Promise<{ snapshot: InventorySnapshot; rev: string }> {
+  const result = await exec.readBatch([...snapshotStatements(id), revStatement])
+  return { snapshot: toSnapshot(result.slice(0, SNAPSHOT_STATEMENTS) as SnapshotRows, id), rev: toRev(result[SNAPSHOT_STATEMENTS]) }
 }
 
 /** The snapshot and every movement of the inventory, in ONE read-only snapshot transaction (one round trip), so a

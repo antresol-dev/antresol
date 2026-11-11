@@ -41,3 +41,19 @@ describe('snapshot stock aggregate', () => {
     expect(movements[0]!.seq).toBeGreaterThan(movements[1]!.seq)
   })
 })
+
+describe('loadInventoryWithRev', () => {
+  it('returns the revision read with the snapshot', async () => {
+    const exec = await makeExecutor()
+    const { storage } = await openPostgresStorage(exec)
+    const inv = newId()
+    await storage.apply({ type: 'inventory.create', id: inv, name: 'A', description: null, currency: 'USD' }, TEST_ACTOR)
+    const first = await storage.loadInventoryWithRev(inv)
+    expect(first.snapshot).toEqual(await storage.loadInventory(inv))
+    expect(first.rev).toBe((await storage.listInventories()).rev)
+    await storage.apply({ type: 'inventory.update', id: inv, name: 'B' }, TEST_ACTOR)
+    const second = await storage.loadInventoryWithRev(inv)
+    expect(second.rev).toBe((await storage.listInventories()).rev)
+    expect(second.rev).not.toBe(first.rev)
+  })
+})

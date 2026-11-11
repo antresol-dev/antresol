@@ -44,6 +44,8 @@ function harness() {
     /** One-shot: the next loadInventory reads its data, then waits for this promise. */
     loadGate: null as Promise<void> | null,
     loadBlocked: false,
+    /** One-shot: the next full load (either method) runs this first, before it reads anything. */
+    beforeLoad: null as (() => Promise<void>) | null,
     missing: new Set<string>(),
     exportCalls: 0,
     applyError: null as Error | null,
@@ -93,12 +95,15 @@ function harness() {
       if (gate) await gate
       const conn = await inner.connect(cfg)
       const storage = Object.create(conn.storage) as typeof conn.storage
-      storage.loadInventory = async (id) => {
+      const gated = async <T>(id: Id, read: () => Promise<T>): Promise<T> => {
         flags.loadCalls++
+        const before = flags.beforeLoad
+        flags.beforeLoad = null
+        if (before) await before()
         if (flags.loadError) throw flags.loadError
         if (flags.loadErrorFor?.id === id) throw flags.loadErrorFor.error
         if (flags.missing.has(id)) throw new StorageError('not_found')
-        const result = await conn.storage.loadInventory(id)
+        const result = await read()
         const loadGate = flags.loadGate
         if (loadGate) {
           flags.loadGate = null
@@ -107,6 +112,8 @@ function harness() {
         }
         return result
       }
+      storage.loadInventory = (id) => gated(id, () => conn.storage.loadInventory(id))
+      storage.loadInventoryWithRev = (id) => gated(id, () => conn.storage.loadInventoryWithRev(id))
       storage.exportInventory = async (id) => {
         flags.exportCalls++
         if (flags.loadError) throw flags.loadError
@@ -1419,6 +1426,19 @@ describe('workspace photos', () => {
       expect(h.flags.loadCalls).toBe(loads)
       expect(ws.state.snapshotOrigin).toBe('live')
       expect(ws.state.snapshot).not.toBeNull()
+    })
+
+    it('a foreign write between the list and the load is not loaded twice', async () => {
+      const h = setup()
+      await h.seed(CS('one'), 'Inv')
+      await h.db.putSource(config('s1', CS('one')))
+      const ws = h.workspace()
+      h.flags.beforeLoad = () => h.bumpRev(CS('one'))
+      await ws.start()
+      const loads = h.flags.loadCalls
+      expect(loads).toBeGreaterThan(0)
+      await ws.refresh()
+      expect(h.flags.loadCalls).toBe(loads)
     })
 
     it('refresh with a changed rev loads again', async () => {

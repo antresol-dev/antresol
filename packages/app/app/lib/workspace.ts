@@ -291,20 +291,18 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
    * `skipIfUnchanged`: do nothing but mark the shown copy live (its saved time stays as persisted) when it is already at the source's revision. Only the
    * refresh paths ask for this; a load after our own write never does (it must reload).
    *
-   * Ordering argument: the revision stored with a snapshot is `sourceRevs`, captured BEFORE `loadInventory` starts. That
-   * value was read by a `listInventories` that completed earlier (or is absent after our own write: stored as null,
-   * which never matches, so the next refresh reloads once). Each write bumps the revision in the same transaction as its
-   * data, so a snapshot read after revision R was read contains every write up to R. If another device writes between
-   * the listing and the load, the snapshot is newer than its stored revision: the next refresh sees a different
-   * revision and reloads once more (a needless reload, never a missed one). Storing a revision read AFTER the load would
-   * be wrong: a write in between would be recorded as seen and skipped for good.
+   * Ordering argument: the revision stored with a snapshot is the one `loadInventoryWithRev` read in the same
+   * transaction as the snapshot, so it is exactly the revision the data is at. A write by another device that lands
+   * between the listing and the load is therefore recorded as seen (it is in the snapshot), and the next refresh does
+   * not load again. The skip check compares the source's known revision (`sourceRevs`, from the last listInventories)
+   * with `shownRev`: a different one means the source changed since this copy was read.
    */
   async function loadCurrent(skipIfUnchanged = false): Promise<void> {
     const ref = state.current
     const conn = ref && conns.get(ref.sourceId)
     if (!ref || !conn) return
-    const rev = sourceRevs.get(ref.sourceId) ?? null
-    if (skipIfUnchanged && rev !== null && shownRev === rev && state.snapshot?.inventory.id === ref.inventoryId) {
+    const knownRev = sourceRevs.get(ref.sourceId) ?? null
+    if (skipIfUnchanged && knownRev !== null && shownRev === knownRev && state.snapshot?.inventory.id === ref.inventoryId) {
       state.snapshotOrigin = 'live'
       return
     }
@@ -313,8 +311,9 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     // Another inventory selected, or the source edited or removed meanwhile: the result is nobody's.
     const gone = (): boolean => !sameRef(state.current, ref) || generationOf(ref.sourceId) !== generation
     let snapshot: InventorySnapshot
+    let rev: string
     try {
-      snapshot = await conn.storage.loadInventory(ref.inventoryId)
+      ;({ snapshot, rev } = await conn.storage.loadInventoryWithRev(ref.inventoryId))
     } catch (error) {
       // Only the most recently started load reports a failure.
       if (token !== loadSeq || gone()) return

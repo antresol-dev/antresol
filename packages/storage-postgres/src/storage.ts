@@ -33,6 +33,7 @@ export async function openPostgresStorage(
     readOnly,
     listInventories: () => wrapFailure(() => queries.listInventories(exec)),
     loadInventory: (id) => wrapFailure(() => queries.loadInventory(exec, id)),
+    loadInventoryWithRev: (id) => wrapFailure(() => queries.loadInventoryWithRev(exec, id)),
     loadMovements: (itemId) => wrapFailure(() => queries.loadMovements(exec, itemId)),
     loadAllMovements: (inventoryId) => wrapFailure(() => queries.loadAllMovements(exec, inventoryId)),
     exportInventory: (id) => wrapFailure(() => queries.exportInventory(exec, id)),

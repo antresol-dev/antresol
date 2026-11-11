@@ -33,6 +33,9 @@ export interface InventoryStorage {
    *  unchanged `rev` means nothing in the source changed. Opaque: compare for equality only, never for order. */
   listInventories(): Promise<{ inventories: Inventory[]; rev: string }>
   loadInventory(id: Id): Promise<InventorySnapshot>
+  /** `loadInventory` plus the source revision read in the same read-only snapshot transaction, so `rev` is exactly the
+   *  revision the snapshot is at (never older, never newer). Opaque, like `listInventories`' rev. */
+  loadInventoryWithRev(id: Id): Promise<{ snapshot: InventorySnapshot; rev: string }>
   /** Newest first (seq desc). */
   loadMovements(itemId: Id): Promise<Movement[]>
   /** Every movement of the inventory, all items (archived included), newest last (seq asc). */

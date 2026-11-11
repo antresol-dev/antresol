@@ -68,8 +68,8 @@ export default defineNuxtConfig({
       short_name: 'GrayMatter',
       description: 'Personal inventory of anything',
       display: 'standalone',
-      background_color: '#F7F7F8',
-      theme_color: '#F7F7F8',
+      background_color: '#EDEFF3',
+      theme_color: '#EDEFF3',
       start_url: '.',
       scope: '.',
       // Relative to the manifest, so they work under /graymatter/ too. The layout reads and clears `action`.
@@ -77,6 +77,9 @@ export default defineNuxtConfig({
         { name: 'Add item', url: './?action=add' },
         { name: 'Search', url: './?action=search' },
       ],
+      // "Share" from a shop app opens /share (relative, so /graymatter/share on Pages); Android puts the link in `text`.
+      // GET needs no service worker of its own; a cold start goes through 404.html and navigateFallback like any deep link.
+      share_target: { action: './share', method: 'GET', params: { title: 'title', text: 'text', url: 'url' } },
     },
     workbox: {
       globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],

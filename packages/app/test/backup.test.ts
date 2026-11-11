@@ -1,6 +1,7 @@
 import { PGlite } from '@electric-sql/pglite'
-import { newId, StorageError, type InventoryStorage, type Movement } from '@graymatter/core'
+import { newId, StorageError, type InventoryStorage, type Movement, type Quantity } from '@graymatter/core'
 import { APP_SCHEMA_VERSION, createPgliteExecutor, openPostgresStorage, type PgExecutor } from '@graymatter/storage-postgres'
+import { createStore, set } from 'idb-keyval'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   backupFileName,
@@ -11,9 +12,12 @@ import {
   fingerprint,
   lastBackupAgo,
   parseBackup,
+  restoreChoice,
+  restoreOutcome,
   REVOKE_DELAY_MS,
   shareOrDownload,
   shouldRemindBackup,
+  watchBackupReminder,
   withInventoryNames,
   type BackupFile,
 } from '../app/lib/backup'
@@ -22,6 +26,7 @@ import { createDemoDriver, type DemoDriver } from '../app/lib/dev/demo-source'
 import { createNeonDriver } from '../app/lib/sources'
 import type { SourceConfig } from '../app/lib/types'
 import { createWorkspace } from '../app/lib/workspace'
+import type { Workspace } from '../app/lib/workspace-types'
 
 describe('backup file', () => {
   it('holds no connection string or key, even when the source object carries them', () => {
@@ -176,6 +181,66 @@ describe('parseBackup', () => {
   })
 })
 
+describe('parseBackup: what the schema cannot hold', () => {
+  type Raw = { app: { schemaVersion: number }; inventories: { snapshot: Record<string, Rec[]> & { inventory: Rec } }[] }
+  async function electronics() {
+    const { file } = await demoBackup()
+    const all = JSON.parse(JSON.stringify(file)) as Raw
+    const entry = all.inventories.find((e) => e.snapshot.inventory.name === 'Electronics')!
+    return { all, s: entry.snapshot }
+  }
+
+  it('refuses, with the reason, a value the schema cannot hold or a reference that does not resolve', async () => {
+    const cases: [(s: Raw['inventories'][number]['snapshot']) => void, RegExp][] = [
+      [(s) => void (s.inventory.currency = 'XXQ'), /currency/],
+      [(s) => void (s.units.push({ ...unitLike(s), prefixPowers: [3, 40_000] })), /prefix power/],
+      [
+        (s) => {
+          const axis = s.itemAttributes.find((r) => r.axisPosition !== null)!
+          const other = s.itemAttributes.find((r) => r.itemId === axis.itemId && r.axisPosition === null)
+          if (other) other.axisPosition = axis.axisPosition
+          else s.itemAttributes.push({ ...axis, attributeId: s.attributes.find((a) => a.id !== axis.attributeId)!.id })
+        },
+        /axis position/,
+      ],
+      [(s) => void (s.variants[0]!.position = 2 ** 31), /position/],
+      [(s) => void (s.items[0]!.folderId = newId()), /folder/],
+    ]
+    for (const [damage, reason] of cases) {
+      const { all, s } = await electronics()
+      damage(s)
+      const parsed = parseBackup(all)
+      expect(parsed, String(reason)).toMatchObject({ error: 'format' })
+      expect((parsed as { reason?: string }).reason, String(reason)).toMatch(reason)
+    }
+  })
+
+  it('says a file of a pre-release GrayMatter cannot be restored, rather than calling it damaged', async () => {
+    const { all, s } = await electronics()
+    expect(s.variants.length).toBeGreaterThan(0)
+    // Before variants were defined by their axes: variants had names, item attributes no axis position.
+    all.app.schemaVersion = 3
+    for (const v of s.variants) v.name = 'Variant'
+    for (const r of s.itemAttributes) delete r.axisPosition
+    expect(parseBackup(all)).toEqual({ error: 'prerelease' })
+    const older = (await electronics()).all
+    older.app.schemaVersion = 2
+    expect(parseBackup(older)).toEqual({ error: 'prerelease' })
+    // A schema-3 file of today's shape is read.
+    const current = (await electronics()).all
+    current.app.schemaVersion = 3
+    expect('error' in parseBackup(current)).toBe(false)
+  })
+})
+
+/** A custom unit record to damage (the demo may hold none). */
+function unitLike(s: Record<string, Rec[]> & { inventory: Rec }): Rec {
+  return {
+    id: newId(), inventoryId: s.inventory.id, name: 'Unit', symbol: 'u', prefixPowers: [],
+    createdAt: s.inventory.createdAt, updatedAt: s.inventory.updatedAt, createdBy: 'Test', updatedBy: 'Test',
+  }
+}
+
 describe('withInventoryNames', () => {
   it('renames each inventory, nothing else, and leaves the original backup as it was', async () => {
     const { file } = await demoBackup()
@@ -249,16 +314,73 @@ describe('device bookkeeping', () => {
     expect(await db.getBackupInfo('a')).toEqual({ lastBackupAt: null, writesSince: 0 })
   })
 
-  it('keeps one restore run id per backup file fingerprint', async () => {
+  it('keeps the restore run of each backup file: one that did not finish into the same source in the same way goes on', async () => {
     const db = await openDeviceDb()
-    const [a1, a2, b] = await Promise.all([db.restoreRunId('sha-a'), db.restoreRunId('sha-a'), db.restoreRunId('sha-b')])
-    expect(a1).toBe(a2)
-    expect(b).not.toBe(a1)
-    expect(await (await openDeviceDb()).restoreRunId('sha-a')).toBe(a1)
+    expect(await db.getRestoreRun('sha-a')).toBeNull()
+    const [a1, a2] = await Promise.all([db.beginRestoreRun('sha-a', 's1', 'new-ids'), db.beginRestoreRun('sha-a', 's1', 'new-ids')])
+    expect(a1.resumed).toBe(false)
+    expect(a2).toEqual({ run: a1.run, resumed: true })
+    expect(a1.run).toMatchObject({ sourceId: 's1', mode: 'new-ids', finished: false })
+    // Kept across a reload of the app.
+    expect(await (await openDeviceDb()).getRestoreRun('sha-a')).toEqual(a1.run)
+    // Into another source, or the other way: a new run.
+    const other = await db.beginRestoreRun('sha-a', 's2', 'new-ids')
+    expect(other.resumed).toBe(false)
+    expect(other.run.runId).not.toBe(a1.run.runId)
+    const same = await db.beginRestoreRun('sha-a', 's2', 'same-ids')
+    expect(same.resumed).toBe(false)
+    // Finished: running the file again is a new run (a fresh copy).
+    await db.finishRestoreRun('sha-a', same.run.runId)
+    expect(await db.getRestoreRun('sha-a')).toEqual({ ...same.run, finished: true })
+    const fresh = await db.beginRestoreRun('sha-a', 's2', 'same-ids')
+    expect(fresh.resumed).toBe(false)
+    expect(fresh.run.runId).not.toBe(same.run.runId)
+    // A run that wrote nothing is dropped; a stale id changes nothing.
+    await db.finishRestoreRun('sha-a', same.run.runId)
+    await db.dropRestoreRun('sha-a', same.run.runId)
+    expect(await db.getRestoreRun('sha-a')).toEqual(fresh.run)
+    await db.dropRestoreRun('sha-a', fresh.run.runId)
+    expect(await db.getRestoreRun('sha-a')).toBeNull()
+    // What an earlier build kept there (a bare run id) is no run.
+    await set('restoreRun:sha-c', newId(), createStore('graymatter', 'kv'))
+    expect(await db.getRestoreRun('sha-c')).toBeNull()
+    expect((await db.beginRestoreRun('sha-c', 's1', 'new-ids')).resumed).toBe(false)
   })
 
   it('fingerprints a file by its SHA-256', async () => {
     expect(await fingerprint('abc')).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')
+  })
+})
+
+describe('restoreChoice', () => {
+  const run = (patch: object) => ({ runId: newId(), sourceId: 's1', mode: 'same-ids' as const, finished: false, ...patch })
+
+  it('the same ids only into an empty source, or to go on with a run of this file into this source that did not finish', () => {
+    expect(restoreChoice({ run: null, sourceId: 's1', sourceInventories: 0 })).toEqual({
+      mode: 'same-ids', sameIdsAllowed: true, unfinished: false, restoredBefore: false,
+    })
+    expect(restoreChoice({ run: null, sourceId: 's1', sourceInventories: 2 })).toEqual({
+      mode: 'new-ids', sameIdsAllowed: false, unfinished: false, restoredBefore: false,
+    })
+    expect(restoreChoice({ run: run({}), sourceId: 's1', sourceInventories: 2 })).toEqual({
+      mode: 'same-ids', sameIdsAllowed: true, unfinished: true, restoredBefore: false,
+    })
+    // Another source's run, or a finished one, says nothing about this source's data.
+    expect(restoreChoice({ run: run({ sourceId: 's2' }), sourceId: 's1', sourceInventories: 2 })).toMatchObject({
+      mode: 'new-ids', sameIdsAllowed: false, unfinished: false,
+    })
+    expect(restoreChoice({ run: run({ finished: true }), sourceId: 's1', sourceInventories: 2 })).toEqual({
+      mode: 'new-ids', sameIdsAllowed: false, unfinished: false, restoredBefore: true,
+    })
+    expect(restoreChoice({ run: run({ mode: 'new-ids' }), sourceId: 's1', sourceInventories: 2 })).toEqual({
+      mode: 'new-ids', sameIdsAllowed: false, unfinished: true, restoredBefore: false,
+    })
+  })
+
+  it('tells what a run actually added', () => {
+    expect(restoreOutcome({ inventories: 3, rows: 50 })).toEqual({ key: 'backup.restored', count: 3 })
+    expect(restoreOutcome({ inventories: 0, rows: 150 })).toEqual({ key: 'backup.restoredRows', count: 150 })
+    expect(restoreOutcome({ inventories: 0, rows: 0 })).toEqual({ key: 'backup.restoredNothing', count: 0 })
   })
 })
 
@@ -271,8 +393,9 @@ describe('workspace restore', () => {
 
   async function setup() {
     const execs = new Map<string, PgExecutor>()
-    /** One-shot: the next write batch fails as a dropped connection does. */
-    const flags = { failNextBatch: false }
+    /** One-shot: the next write batch fails as a dropped connection does, before it reaches the database
+     *  (`failNextBatch`) or after it committed (`dropAfterCommit`). */
+    const flags = { failNextBatch: false, dropAfterCommit: false }
     for (const id of ['empty', 'full']) {
       const exec = (await emptyStorage()).exec
       execs.set(`postgresql://u:pw@h/${id}`, {
@@ -282,7 +405,12 @@ describe('workspace restore', () => {
             flags.failNextBatch = false
             throw new StorageError('unavailable', 'connection dropped')
           }
-          return exec.batch(statements)
+          const rows = await exec.batch(statements)
+          if (flags.dropAfterCommit) {
+            flags.dropAfterCommit = false
+            throw new StorageError('unavailable', 'connection dropped')
+          }
+          return rows
         },
         close: async () => {},
       })
@@ -290,10 +418,37 @@ describe('workspace restore', () => {
     const db = createMemoryDeviceDb()
     await db.putSource(neon('empty'))
     await db.putSource(neon('full'))
-    const workspace = createWorkspace({ db, drivers: { neon: createNeonDriver((cs) => execs.get(cs)!) }, userAgent: UA })
-    await workspace.start()
-    return { workspace, db, flags }
+    const drivers = { neon: createNeonDriver((cs) => execs.get(cs)!) }
+    /** The app opened again on this device's data (or another device's). */
+    const reopen = async (on = db) => {
+      const opened = createWorkspace({ db: on, drivers, userAgent: UA })
+      await opened.start()
+      return opened
+    }
+    const workspace = await reopen()
+    const storageOf = async (id: string) => (await openPostgresStorage(execs.get(`postgresql://u:pw@h/${id}`)!)).storage
+    return { workspace, db, flags, reopen, storageOf }
   }
+
+  /** The demo backup with `count` more receipts in Electronics: more than one batch. */
+  function bigger(backup: BackupFile, count: number): BackupFile {
+    return {
+      ...backup,
+      inventories: backup.inventories.map((e) => {
+        if (e.snapshot.inventory.name !== 'Electronics') return e
+        const itemId = e.snapshot.items[0]!.id
+        const extra: Movement[] = Array.from({ length: count }, (_, i) => ({
+          id: newId(), seq: 100_000 + i, itemId, variantId: null, kind: 'receipt', quantity: '1' as Quantity, totalPrice: null,
+          sourceUrl: null, note: null, transferId: null, createdAt: '2026-11-11T10:00:00.000Z', createdBy: 'Test',
+        }))
+        return { ...e, movements: [...e.movements, ...extra] }
+      }),
+    }
+  }
+
+  /** The source's inventories as the workspace lists them, archived ones included. */
+  const inventoriesOf = (workspace: Workspace, sourceId: string) =>
+    [...workspace.state.inventories, ...workspace.state.archivedInventories].filter((e) => e.ref.sourceId === sourceId)
 
   it('restores into an empty source with the same ids, then shows a restored inventory loaded in full', async () => {
     const { file } = await demoBackup()
@@ -312,20 +467,72 @@ describe('workspace restore', () => {
     expect(state.snapshotOrigin).toBe('live')
   })
 
-  it('as new inventories: the same file twice adds nothing twice; another file is another run', async () => {
+  it('as new inventories: a finished run of the same file, run again, is another copy; each says what it added', async () => {
     const { file } = await demoBackup()
     const backup = parseBackup(file) as BackupFile
     const { workspace } = await setup()
-    await workspace.restoreSource('full', backup, 'same-ids', 'sha-1')
+    const restored = await workspace.restoreSource('full', backup, 'same-ids', 'sha-1')
+    expect(restored.added.inventories).toBe(3)
     const first = await workspace.restoreSource('full', backup, 'new-ids', 'sha-1')
-    const again = await workspace.restoreSource('full', backup, 'new-ids', 'sha-1')
-    expect(again.inventoryIds).toEqual(first.inventoryIds)
-    const names = () => [...workspace.state.inventories, ...workspace.state.archivedInventories]
-      .filter((e) => e.ref.sourceId === 'full').map((e) => e.inventory.name).sort()
+    expect(first.added).toEqual(restored.added)
+    expect(await workspace.restoreRun('sha-1')).toMatchObject({ sourceId: 'full', mode: 'new-ids', finished: true })
+    const names = () => inventoriesOf(workspace, 'full').map((e) => e.inventory.name).sort()
     expect(names()).toEqual(['Archive test', 'Archive test', 'Electronics', 'Electronics', 'Workshop', 'Workshop'])
     expect(workspace.state.current).toEqual({ sourceId: 'full', inventoryId: first.inventoryIds.find((id) => workspace.state.inventories.some((e) => e.inventory.id === id))! })
-    await workspace.restoreSource('full', backup, 'new-ids', 'sha-2')
+    const again = await workspace.restoreSource('full', backup, 'new-ids', 'sha-1')
+    expect(again.inventoryIds.filter((id) => first.inventoryIds.includes(id))).toEqual([])
+    expect(again.added).toEqual(restored.added)
     expect(names()).toHaveLength(9)
+  })
+
+  it('refuses the same ids into a source that holds inventories; the device keeps no run of it to go on with', async () => {
+    const { file } = await demoBackup()
+    const backup = parseBackup(file) as BackupFile
+    const { workspace } = await setup()
+    await workspace.createInventory({ sourceId: 'empty', name: 'Live', currency: 'USD' })
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await expect(workspace.restoreSource('empty', backup, 'same-ids', 'sha-1')).rejects.toMatchObject({ code: 'not_empty' })
+      expect(await workspace.restoreRun('sha-1')).toBeNull()
+    }
+    expect(inventoriesOf(workspace, 'empty').map((e) => e.inventory.name)).toEqual(['Live'])
+  })
+
+  it('a same-ids restore cut off after a batch landed goes on with the same ids after a reload, and only on this device', async () => {
+    const { file, storage: original } = await demoBackup()
+    const backup = bigger(parseBackup(file) as BackupFile, 600)
+    const { workspace, flags, reopen, storageOf } = await setup()
+    flags.dropAfterCommit = true
+    let total = 0
+    await expect(workspace.restoreSource('empty', backup, 'same-ids', 'sha-1', (_, all) => (total = all))).rejects.toMatchObject({ code: 'unavailable' })
+    expect(total).toBeGreaterThan(500)
+
+    const reloaded = await reopen()
+    const run = await reloaded.restoreRun('sha-1')
+    expect(run).toMatchObject({ sourceId: 'empty', mode: 'same-ids', finished: false })
+    const held = inventoriesOf(reloaded, 'empty').length
+    expect(held).toBeGreaterThan(0)
+    expect(restoreChoice({ run, sourceId: 'empty', sourceInventories: held })).toEqual({
+      mode: 'same-ids', sameIdsAllowed: true, unfinished: true, restoredBefore: false,
+    })
+    // Another device knows of no such run: the source is not empty, so the same ids are refused there.
+    const other = await reopen(await (async () => {
+      const db = createMemoryDeviceDb()
+      await db.putSource(neon('empty'))
+      return db
+    })())
+    await expect(other.restoreSource('empty', backup, 'same-ids', 'sha-1')).rejects.toMatchObject({ code: 'not_empty' })
+
+    const result = await reloaded.restoreSource('empty', backup, 'same-ids', 'sha-1')
+    expect(result.added.rows).toBe(total - 500)
+    expect(await reloaded.restoreRun('sha-1')).toMatchObject({ runId: run!.runId, finished: true })
+    const storage = await storageOf('empty')
+    for (const { snapshot, movements } of backup.inventories) {
+      const id = snapshot.inventory.id
+      const { stock: _stock, ...rows } = await storage.loadInventory(id)
+      const { stock: _was, ...expected } = await original.loadInventory(id)
+      expect(rows).toEqual(expected)
+      expect((await storage.loadAllMovements(id)).map((m) => m.id).sort()).toEqual(movements.map((m) => m.id).sort())
+    }
   })
 
   it('counts this device\'s writes since the last backup of the source', async () => {
@@ -338,18 +545,49 @@ describe('workspace restore', () => {
     expect((await workspace.backupInfo('empty')).lastBackupAt).not.toBeNull()
   })
 
-  it('a restore cut off by the network rejects and reloads the source; the same file run again restores everything once', async () => {
+  it('a new-ids restore cut off by the network rejects and reloads the source; run again, it adds the rest once', async () => {
     const { file } = await demoBackup()
-    const backup = parseBackup(file) as BackupFile
+    const backup = bigger(parseBackup(file) as BackupFile, 600)
     const { workspace, flags } = await setup()
     flags.failNextBatch = true
     await expect(workspace.restoreSource('empty', backup, 'new-ids', 'sha-1')).rejects.toMatchObject({ code: 'unavailable' })
     // The reload after the failed run reached the source again.
     expect(workspace.state.sources.find((s) => s.config.id === 'empty')!.status).toBe('ready')
-    await workspace.restoreSource('empty', backup, 'new-ids', 'sha-1')
-    await workspace.restoreSource('empty', backup, 'new-ids', 'sha-1')
-    const restored = [...workspace.state.inventories, ...workspace.state.archivedInventories].filter((e) => e.ref.sourceId === 'empty')
-    expect(restored.map((e) => e.inventory.name).sort()).toEqual(['Archive test', 'Electronics', 'Workshop'])
+    flags.dropAfterCommit = true
+    let total = 0
+    await expect(workspace.restoreSource('empty', backup, 'new-ids', 'sha-1', (_, all) => (total = all))).rejects.toMatchObject({ code: 'unavailable' })
+    const rest = await workspace.restoreSource('empty', backup, 'new-ids', 'sha-1')
+    expect(rest.added.rows).toBe(total - 500)
+    const names = () => inventoriesOf(workspace, 'empty').map((e) => e.inventory.name).sort()
+    expect(names()).toEqual(['Archive test', 'Electronics', 'Workshop'])
+  })
+
+  it('the backup reminder looks again after a stock write, which does not mark the app as saving', async () => {
+    const { workspace, db } = await setup()
+    const ref = await workspace.createInventory({ sourceId: 'empty', name: 'A', currency: 'USD' })
+    const itemId = newId()
+    await workspace.applyTo(ref, {
+      type: 'item.create', id: itemId, inventoryId: ref.inventoryId, folderId: null, name: 'Wire', description: null, unitKey: 'pcs',
+      tagIds: [], initialReceipt: null,
+    })
+    // Exactly at the threshold: not due yet.
+    while ((await db.getBackupInfo('empty')).writesSince < 200) await db.countWrite('empty')
+    const remind = vi.fn()
+    const stop = watchBackupReminder(workspace, remind, () => new Date('2026-11-11T12:00:00Z'))
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(remind).not.toHaveBeenCalled()
+      await workspace.applyTo(ref, {
+        type: 'stock.receive', movementId: newId(), itemId, variantId: null, quantity: '1' as Quantity, totalPrice: null, sourceUrl: null,
+        note: null,
+      })
+      expect(workspace.state.saving).toBe(false)
+      await vi.waitFor(() => expect(remind).toHaveBeenCalledTimes(1))
+      expect(remind.mock.calls[0]![0]).toMatchObject({ id: 'empty' })
+      expect(remind.mock.calls[0]![1]).toMatchObject({ writesSince: 201 })
+    } finally {
+      stop()
+    }
   })
 
   it('refuses a source that is not connected and writable', async () => {

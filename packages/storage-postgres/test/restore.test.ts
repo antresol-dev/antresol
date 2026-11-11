@@ -9,7 +9,7 @@ import {
 } from '@graymatter/core'
 import { describe, expect, it } from 'vitest'
 import type { PgExecutor } from '../src/executor'
-import { RESTORE_BATCH_ROWS, RESTORE_TABLES, restoreBackup, uuidV5 } from '../src/restore'
+import { backupProblems, RESTORE_BATCH_ROWS, RESTORE_TABLES, restoreBackup, uuidV5 } from '../src/restore'
 import { LOCK_REV, REV_BUMP } from '../src/migrator'
 import { sql, type Statement } from '../src/sql'
 import { openPostgresStorage } from '../src/storage'
@@ -81,6 +81,17 @@ function failingAt(exec: PgExecutor, failAt: number): PgExecutor & { calls: Stat
   return wrapped
 }
 
+/** The StorageError `run` rejects with (it must reject). `toMatchObject` does not test a RegExp against an Error's
+ *  message, so messages are checked on what this returns. */
+async function refusal(run: Promise<unknown>): Promise<StorageError> {
+  const error = await run.then(
+    () => null,
+    (e: unknown) => e,
+  )
+  expect(error).toBeInstanceOf(StorageError)
+  return error as StorageError
+}
+
 describe('uuidV5', () => {
   it('matches RFC 4122 v5 (Python uuid.uuid5)', () => {
     const dns = '6ba7b810-9dad-11d1-80b4-00c04fd430c8'
@@ -115,6 +126,17 @@ describe('restore', () => {
       if (data_type === 'uuid') expect(column!.ref, `${table_name}.${column_name}`).toBe('id')
     }
     expect(declared.get('items')!.get('unit_key')!.ref).toBe('unitKey')
+    // The conflict target of each insert is the table's primary key, as the database has it.
+    const keys = await exec.query<{ table_name: string; column_name: string }>(
+      sql`select tc.table_name, kcu.column_name from information_schema.table_constraints tc
+          join information_schema.key_column_usage kcu
+            on kcu.constraint_schema = tc.constraint_schema and kcu.constraint_name = tc.constraint_name
+          where tc.table_schema = 'public' and tc.constraint_type = 'PRIMARY KEY' and tc.table_name <> 'gm_meta'`,
+    )
+    for (const table of RESTORE_TABLES) {
+      const key = keys.filter((k) => k.table_name === table.name).map((k) => k.column_name).sort()
+      expect([...table.key].sort(), table.name).toEqual(key)
+    }
   })
 
   it('same-ids: an export restored into an empty database gives the same snapshots and journal', async () => {
@@ -126,9 +148,10 @@ describe('restore', () => {
 
     const target = await makeStorage()
     const progress: [number, number][] = []
-    const result = await target.restore(backup, 'same-ids', newId(), (done, total) => progress.push([done, total]))
+    const result = await target.restore(backup, 'same-ids', newId(), { onProgress: (done, total) => progress.push([done, total]) })
 
     expect(result.inventoryIds).toEqual(backup.inventories.map((e) => e.snapshot.inventory.id))
+    expect(result.added).toEqual({ inventories: 2, rows: progress.at(-1)![1] })
     expect((await target.listInventories()).inventories).toEqual((await source.listInventories()).inventories)
     for (const id of [inv, second]) {
       expect(normSnapshot(await target.loadInventory(id))).toEqual(normSnapshot(await source.loadInventory(id)))
@@ -149,10 +172,11 @@ describe('restore', () => {
     const oldIds = idsIn(before, columns)
     const runId = newId()
 
-    const { inventoryIds } = await storage.restore(backup, 'new-ids', runId)
+    const { inventoryIds, added } = await storage.restore(backup, 'new-ids', runId)
 
     const m = (id: Id) => uuidV5(id, runId)
     expect(inventoryIds).toEqual([m(inv)])
+    expect(added).toEqual({ inventories: 1, rows: [...before.values()].flat().length })
     expect((await storage.listInventories()).inventories.map((i) => i.id).sort()).toEqual([inv, m(inv)].sort())
     // The original is untouched; the copy is the original with every id renamed: same stock, same journal.
     const original = await storage.loadInventory(inv)
@@ -190,7 +214,9 @@ describe('restore', () => {
     const partial = await allRows(exec)
     expect([...partial.values()].flat().length).toBe([...before.values()].flat().length + 7)
 
-    await restoreBackup(exec, backup, 'new-ids', runId, undefined, 7)
+    const second = await restoreBackup(exec, backup, 'new-ids', runId, undefined, 7)
+    // What the first run wrote is not counted again: its inventory row among it.
+    expect(second.added).toEqual({ inventories: 0, rows: [...before.values()].flat().length - 7 })
     const after = await allRows(exec)
     for (const [table, rows] of after) {
       const old = new Set(before.get(table))
@@ -199,7 +225,7 @@ describe('restore', () => {
       expect([...idsIn(new Map([[table, added]]), columns)].filter((id) => oldIds.has(id)), table).toEqual([])
     }
     // And a third run of the same file adds nothing at all.
-    await restoreBackup(exec, backup, 'new-ids', runId, undefined, 7)
+    expect((await restoreBackup(exec, backup, 'new-ids', runId, undefined, 7)).added).toEqual({ inventories: 0, rows: 0 })
     expect(await allRows(exec)).toEqual(after)
   })
 
@@ -211,7 +237,11 @@ describe('restore', () => {
     const target = await openOn(exec)
 
     await expect(restoreBackup(failingAt(exec, 4), backup, 'same-ids', newId(), undefined, 5)).rejects.toThrow()
-    await restoreBackup(exec, backup, 'same-ids', newId(), undefined, 5)
+    // The source now holds what the first run wrote: only a run that says it goes on with that one may write into it.
+    const partial = await allRows(exec)
+    await expect(restoreBackup(exec, backup, 'same-ids', newId(), undefined, 5)).rejects.toMatchObject({ code: 'not_empty' })
+    expect(await allRows(exec)).toEqual(partial)
+    await restoreBackup(exec, backup, 'same-ids', newId(), { resumeSameIds: true }, 5)
 
     expect(normSnapshot(await target.loadInventory(inv))).toEqual(normSnapshot(await source.loadInventory(inv)))
     expect(withoutSeq(await target.loadAllMovements(inv))).toEqual(withoutSeq(await source.loadAllMovements(inv)))
@@ -236,7 +266,7 @@ describe('restore', () => {
     const { storage } = await openPostgresStorage(counting)
     counting.calls.length = 0
     const progress: [number, number][] = []
-    await storage.restore(big, 'same-ids', newId(), (done, total) => progress.push([done, total]))
+    await storage.restore(big, 'same-ids', newId(), { onProgress: (done, total) => progress.push([done, total]) })
 
     const total = progress[0]![1]
     expect(new Set(progress.map(([, t]) => t))).toEqual(new Set([total]))
@@ -250,6 +280,9 @@ describe('restore', () => {
       expect(call[0]!.text).toBe(LOCK_REV.text)
       expect(call.at(-1)!.text).toBe(REV_BUMP.text)
     }
+    // The first batch alone checks, right after the lock, that the source is empty.
+    expect(counting.calls[0]![1]!.text).toMatch(/gm_restore_not_empty/)
+    expect(counting.calls.slice(1).flat().some((st) => /gm_restore_not_empty/.test(st.text))).toBe(false)
     const stock = (await target.loadInventory(inv)).stock.find((l) => l.itemId === wire)!
     expect(stock.quantity).toBe('1211.75')
   })
@@ -278,7 +311,86 @@ describe('restore', () => {
     const target = await openOn(exec)
     const rev = (await target.listInventories()).rev
     await expect(target.restore(dangling, 'new-ids', newId())).rejects.toMatchObject({ code: 'failed' })
-    await expect(target.restore(cycle, 'same-ids', newId())).rejects.toMatchObject({ code: 'failed', message: /cycle/ })
+    expect(await refusal(target.restore(cycle, 'same-ids', newId()))).toMatchObject({ code: 'failed', message: expect.stringMatching(/cycle/) })
+    expect((await target.listInventories()).rev).toBe(rev)
+    expect((await target.listInventories()).inventories).toEqual([])
+  })
+
+  it('same-ids: refused into a source that holds any inventory, its live original or another one; nothing is written', async () => {
+    const source = await makeStorage()
+    const inv = await seedRich(source)
+    const backup = await exported(source)
+    // The live original, changed since the backup: the same ids would mix the two states.
+    const exec = await makeExecutor()
+    const target = await openOn(exec)
+    await target.restore(backup, 'same-ids', newId())
+    await target.apply({ type: 'folder.create', id: newId(), inventoryId: inv, parentId: null, name: 'Later', description: null }, TEST_ACTOR)
+    const other = await makeExecutor()
+    const otherTarget = await openOn(other)
+    await seedRich(otherTarget, 'Other')
+    for (const [e, storage] of [[exec, target], [other, otherTarget]] as const) {
+      const rows = await allRows(e)
+      const { rev } = await storage.listInventories()
+      await expect(storage.restore(backup, 'same-ids', newId())).rejects.toMatchObject({ code: 'not_empty' })
+      expect(await allRows(e)).toEqual(rows)
+      expect((await storage.listInventories()).rev).toBe(rev)
+    }
+    // New ids go next to anything.
+    await expect(otherTarget.restore(backup, 'new-ids', newId())).resolves.toMatchObject({ added: { inventories: 1 } })
+  })
+
+  it('skips only rows whose primary key is there: a collision on another unique index fails loudly', async () => {
+    const source = await makeStorage()
+    await seedRich(source)
+    const backup = await exported(source)
+    const { snapshot } = backup.inventories[0]!
+    const resistor = snapshot.items.find((i) => i.name === 'Resistor')!.id
+    const attribute = (name: string) => snapshot.attributes.find((a) => a.name === name)!.id
+    const exec = await makeExecutor()
+    const target = await openOn(exec)
+    await target.restore(backup, 'same-ids', newId())
+    // The resistor's first axis is now Package: the backup's (Resistor, Resistance) row is missing by its primary key,
+    // yet it takes axis position 0 again.
+    await exec.batch([
+      sql`delete from item_attributes where item_id = ${resistor}::uuid and attribute_id = ${attribute('Resistance')}::uuid`,
+      sql`update item_attributes set axis_position = 0 where item_id = ${resistor}::uuid and attribute_id = ${attribute('Package')}::uuid`,
+    ])
+    const rows = await allRows(exec)
+    expect(await refusal(target.restore(backup, 'same-ids', newId(), { resumeSameIds: true }))).toMatchObject({
+      code: 'failed',
+      message: expect.stringMatching(/item_attributes_axis_position_idx/),
+    })
+    expect(await allRows(exec)).toEqual(rows)
+  })
+
+  it('refuses, before writing anything, values the schema cannot hold', async () => {
+    const source = await makeStorage()
+    await seedRich(source)
+    const backup = await exported(source)
+    const entry = backup.inventories[0]!
+    const s = entry.snapshot
+    const resistor = s.items.find((i) => i.name === 'Resistor')!.id
+    const withSnapshot = (patch: Partial<typeof s>) => ({ ...entry, snapshot: { ...s, ...patch } })
+    const cases: [InventoryExport, RegExp][] = [
+      [withSnapshot({ inventory: { ...s.inventory, currency: 'XXQ' } }), /currency/],
+      [withSnapshot({ units: s.units.map((u) => ({ ...u, prefixPowers: [3, 40_000] })) }), /prefix/],
+      [
+        withSnapshot({ itemAttributes: s.itemAttributes.map((r) => (r.itemId === resistor && r.axisPosition === null ? { ...r, axisPosition: 1 } : r)) }),
+        /axis position/,
+      ],
+      [withSnapshot({ variants: s.variants.map((v, i) => (i === 0 ? { ...v, position: 2 ** 31 } : v)) }), /position/],
+    ]
+    expect(backupProblems(entry)).toEqual([])
+    const exec = await makeExecutor()
+    const target = await openOn(exec)
+    const rev = (await target.listInventories()).rev
+    for (const [bad, reason] of cases) {
+      expect(backupProblems(bad).join('; ')).toMatch(reason)
+      expect(await refusal(target.restore({ inventories: [bad] }, 'new-ids', newId()))).toMatchObject({
+        code: 'failed',
+        message: expect.stringMatching(reason),
+      })
+    }
     expect((await target.listInventories()).rev).toBe(rev)
     expect((await target.listInventories()).inventories).toEqual([])
   })

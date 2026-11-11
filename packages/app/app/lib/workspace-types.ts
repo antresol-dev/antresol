@@ -1,6 +1,16 @@
-import type { Command, FileStore, Id, Inventory, InventorySnapshot, Movement, RestoreMode, SourceReceipt } from '@graymatter/core'
+import type {
+  Command,
+  FileStore,
+  Id,
+  Inventory,
+  InventorySnapshot,
+  Movement,
+  RestoreMode,
+  RestoreResult,
+  SourceReceipt,
+} from '@graymatter/core'
 import type { BackupFile } from './backup'
-import type { BackupInfo, DeviceDb } from './device-db'
+import type { BackupInfo, DeviceDb, RestoreRun } from './device-db'
 import type { FailureReason, SourceDriver } from './sources'
 import type { InventoryRef, SourceConfig, SourceKind } from './types'
 
@@ -46,6 +56,9 @@ export interface WorkspaceState {
   refreshing: boolean
   /** A write other than a stock movement is queued or running. Stock writes lock only their bucket (isBucketSaving). */
   saving: boolean
+  /** Writes a source took this session, stock writes included, each counted once this device's write count for the
+   *  backup reminder is stored: the reminder looks again when it moves. */
+  writeCount: number
   readOnly: ReadOnlyReason | null
 }
 
@@ -118,16 +131,20 @@ export interface Workspace {
   exportSource(sourceId: string): Promise<BackupFile>
   /** Writes a parsed backup into a ready source (InventoryStorage.restore), in the write queue. A wide write: afterwards
    *  the source reloads as with reloadSource (also after a failure: some batches may have landed) and the first restored
-   *  active inventory is shown. `fileSha256`: the file's fingerprint; the device keeps one run id per fingerprint, so
-   *  the same file restored again (after a break, or with new ids twice) adds nothing twice. onProgress(rows written,
-   *  rows in all). Rejects with `not_found`, `read_only`, `unavailable`, or the restore's own failure. */
+   *  active inventory is shown. `fileSha256`: the file's fingerprint. The device keeps the file's run (restoreRun): one
+   *  that did not finish into this source in this mode goes on (nothing is added twice; the same ids may go into what
+   *  it left); otherwise a new run, so a finished one run again with new ids is a fresh copy. onProgress(rows written,
+   *  rows in all). Resolves with what this run added. Rejects with `not_found`, `read_only`, `unavailable`, `not_empty`
+   *  (the same ids into a source holding inventories, not going on with a run), or the restore's own failure. */
   restoreSource(
     sourceId: string,
     backup: BackupFile,
     mode: RestoreMode,
     fileSha256: string,
     onProgress?: (done: number, total: number) => void,
-  ): Promise<{ inventoryIds: Id[] }>
+  ): Promise<RestoreResult>
+  /** This device's last restore run of a backup file, by its fingerprint; null: none. */
+  restoreRun(fileSha256: string): Promise<RestoreRun | null>
   /** This device's last backup of the source and its writes to it since (DeviceDb). */
   backupInfo(sourceId: string): Promise<BackupInfo>
   /** A backup of the source was saved or shared now. */

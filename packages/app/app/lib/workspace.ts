@@ -14,6 +14,7 @@ import {
   type InventorySnapshot,
   type Movement,
   type RestoreMode,
+  type RestoreResult,
   type SnapshotPatch,
   type SourceReceipt,
 } from '@graymatter/core'
@@ -196,6 +197,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     checkInterval: DEFAULT_CHECK_INTERVAL,
     refreshing: false,
     saving: false,
+    writeCount: 0,
     readOnly: null,
   })
 
@@ -855,8 +857,13 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
         await writeFailed(sourceId, error)
         throw error
       }
-      // For the backup reminder; a lost count only delays it.
-      void db.countWrite(sourceId).catch(() => {})
+      // For the backup reminder, which looks again once the count is stored; a lost count only delays it.
+      void db
+        .countWrite(sourceId)
+        .catch(() => {})
+        .then(() => {
+          state.writeCount++
+        })
       let reload: boolean
       if (generationOf(sourceId) === generation) {
         const settled = settleWrite(target, result, seq)
@@ -1127,6 +1134,12 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
    * A wide write: the backup's rows go into the source in batches (InventoryStorage.restore), after the writes queued
    * before it and before those queued after. Then, as "Reload everything", no copy of the source is trusted (a run that
    * failed midway may have written some batches too), and the first restored active inventory is shown.
+   *
+   * The device keeps the run of each file (DeviceDb.beginRestoreRun): a run that did not finish into this source in this
+   * mode goes on with the same run id, so new ids come out the same and nothing is added twice; with the same ids it may
+   * write into the source that run left non-empty. Anything else is a new run: the storage refuses the same ids into a
+   * source that holds inventories. The run is recorded only once the source is ready, and forgotten when refused that way
+   * (it wrote nothing), so a refused run is never gone on with.
    */
   async function restoreSource(
     sourceId: string,
@@ -1134,24 +1147,33 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     mode: RestoreMode,
     fileSha256: string,
     onProgress?: (done: number, total: number) => void,
-  ): Promise<{ inventoryIds: Id[] }> {
+  ): Promise<RestoreResult> {
     if (!state.sources.some((s) => s.config.id === sourceId)) throw new StorageError('not_found')
-    const runId = await db.restoreRunId(fileSha256)
-    let started = false
-    let result: { inventoryIds: Id[] }
+    /** Set when the run is recorded, right before the storage is called. */
+    const started: { runId?: string } = {}
+    let result: RestoreResult
     try {
       result = await enqueue(async () => {
         const status = statusOf(sourceId)
         if (status === 'read_only') throw new StorageError('read_only')
         const conn = conns.get(sourceId)
         if (status !== 'ready' || !conn) throw new StorageError('unavailable')
-        started = true
-        return guarded(sourceId, conn, () => conn.storage.restore(backup, mode, runId, onProgress))
+        const { run, resumed } = await db.beginRestoreRun(fileSha256, sourceId, mode)
+        started.runId = run.runId
+        const options = { onProgress, resumeSameIds: resumed && mode === 'same-ids' }
+        return guarded(sourceId, conn, () => conn.storage.restore(backup, mode, run.runId, options))
       })
     } catch (error) {
-      if (started) await reloadSource(sourceId).catch(() => {})
+      if (started.runId === undefined) throw error
+      if (error instanceof StorageError && error.code === 'not_empty') {
+        await db.dropRestoreRun(fileSha256, started.runId).catch(() => {})
+      }
+      await reloadSource(sourceId).catch(() => {})
       throw error
     }
+    // Lost (the device database failed), the next run of this file into this source would count as going on with this
+    // one: new ids add nothing, but the same ids would be let in next to what the source holds by then. Rare enough.
+    if (started.runId !== undefined) await db.finishRestoreRun(fileSha256, started.runId).catch(() => {})
     await reloadSource(sourceId).catch(() => {})
     const first = state.inventories.find((e) => e.ref.sourceId === sourceId && result.inventoryIds.includes(e.inventory.id))
     if (first) await selectInventory(first.ref)
@@ -1215,6 +1237,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     findReceiptsBySource,
     exportSource,
     restoreSource,
+    restoreRun: (fileSha256) => db.getRestoreRun(fileSha256),
     backupInfo: (sourceId) => db.getBackupInfo(sourceId),
     noteBackup: (sourceId) => db.noteBackup(sourceId, nowIso()),
     fileStoreFor,

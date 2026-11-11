@@ -1,4 +1,4 @@
-import { newId, type Inventory, type InventorySnapshot } from '@graymatter/core'
+import { newId, type Inventory, type InventorySnapshot, type RestoreMode } from '@graymatter/core'
 import { createStore, del, get, getMany, keys, set, setMany, update, type UseStore } from 'idb-keyval'
 import type { AccentName } from './accent'
 import type { InventoryRef, SourceConfig } from './types'
@@ -19,6 +19,16 @@ export interface BackupInfo {
   lastBackupAt: string | null
   /** Writes this device made to the source since then. */
   writesSince: number
+}
+
+/** A restore of one backup file into a source, as this device last ran it (see DeviceDb.beginRestoreRun). */
+export interface RestoreRun {
+  /** The namespace of the new ids (InventoryStorage.restore). */
+  runId: string
+  sourceId: string
+  mode: RestoreMode
+  /** Every batch landed. Until then, running the file again into the same source the same way goes on with this run. */
+  finished: boolean
 }
 
 export interface CachedSnapshot {
@@ -65,9 +75,16 @@ export interface DeviceDb {
   noteBackup(sourceId: string, at: string): Promise<void>
   /** One more write to the source since its last backup. */
   countWrite(sourceId: string): Promise<void>
-  /** The id of the restore run for a backup file, by the file's SHA-256: made on first use, then always the same, so a
-   *  restore of the same file with new ids gets the same ids every time it is run (nothing is added twice). */
-  restoreRunId(fileSha256: string): Promise<string>
+  /** The last restore run of a backup file on this device, by the file's SHA-256; null: none. */
+  getRestoreRun(fileSha256: string): Promise<RestoreRun | null>
+  /** Atomic. The recorded run of the file goes on (`resumed`) when it did not finish and was into `sourceId` in `mode`:
+   *  with new ids it gives the same ids again, so nothing is added twice. Otherwise a new run (a new run id) replaces
+   *  it: a finished restore run again is a fresh copy. */
+  beginRestoreRun(fileSha256: string, sourceId: string, mode: RestoreMode): Promise<{ run: RestoreRun; resumed: boolean }>
+  /** Every batch of run `runId` landed. Nothing happens when another run of the file has replaced it. */
+  finishRestoreRun(fileSha256: string, runId: string): Promise<void>
+  /** Run `runId` wrote nothing (refused before its first batch): forgotten, so nothing goes on with it. */
+  dropRestoreRun(fileSha256: string, runId: string): Promise<void>
 }
 
 const SOURCES = 'sources'
@@ -80,6 +97,15 @@ const revPrefix = (sourceId: string): string => `snapshotRev:${sourceId}:`
 const backupKey = (sourceId: string): string => `backup:${sourceId}`
 const runKey = (fileSha256: string): string => `restoreRun:${fileSha256}`
 const noBackup = (): BackupInfo => ({ lastBackupAt: null, writesSince: 0 })
+const RESTORE_MODES: readonly unknown[] = ['same-ids', 'new-ids'] satisfies RestoreMode[]
+/** A stored run as written by this app; anything else (an older build kept a bare run id there) counts as none. */
+const asRun = (v: unknown): RestoreRun | null => {
+  if (typeof v !== 'object' || v === null) return null
+  const r = v as Record<string, unknown>
+  return typeof r.runId === 'string' && typeof r.sourceId === 'string' && RESTORE_MODES.includes(r.mode) && typeof r.finished === 'boolean'
+    ? { runId: r.runId, sourceId: r.sourceId, mode: r.mode as RestoreMode, finished: r.finished }
+    : null
+}
 const defaultSettings = (): DeviceSettings => ({ deviceName: null, current: null })
 
 function upsertSource(list: SourceConfig[] | undefined, s: SourceConfig): SourceConfig[] {
@@ -186,10 +212,31 @@ function buildDeviceDb(kv: Kv, persistent: boolean): DeviceDb {
         return { ...base, writesSince: base.writesSince + 1 }
       })
     },
-    async restoreRunId(fileSha256) {
-      // Atomic: two calls for one file agree on the id.
-      await kv.update<string>(runKey(fileSha256), (id) => id ?? newId())
-      return (await kv.get<string>(runKey(fileSha256)))!
+    async getRestoreRun(fileSha256) {
+      return asRun(await kv.get(runKey(fileSha256)))
+    },
+    async beginRestoreRun(fileSha256, sourceId, mode) {
+      let begun: { run: RestoreRun; resumed: boolean } | undefined
+      // Atomic: two calls for one file agree on the run.
+      await kv.update<unknown>(runKey(fileSha256), (stored) => {
+        const run = asRun(stored)
+        begun =
+          run && !run.finished && run.sourceId === sourceId && run.mode === mode
+            ? { run, resumed: true }
+            : { run: { runId: newId(), sourceId, mode, finished: false }, resumed: false }
+        return begun.run
+      })
+      return begun!
+    },
+    async finishRestoreRun(fileSha256, runId) {
+      await kv.update<unknown>(runKey(fileSha256), (stored) => {
+        const run = asRun(stored)
+        return run?.runId === runId ? { ...run, finished: true } : stored
+      })
+    },
+    async dropRestoreRun(fileSha256, runId) {
+      // Atomic, unlike a read then a delete: an empty value is no run.
+      await kv.update<unknown>(runKey(fileSha256), (stored) => (asRun(stored)?.runId === runId ? undefined : stored))
     },
   }
 }

@@ -17,7 +17,8 @@ export interface SchemaStatus {
    *  migrations), the database's own version. */
   minAppSchema: number
 }
-export const STORAGE_ERROR_CODES = ['read_only', 'unavailable', 'not_found', 'incompatible', 'outdated', 'failed'] as const
+/** `not_empty`: a restore with the same ids into a source that already holds inventories (InventoryStorage.restore). */
+export const STORAGE_ERROR_CODES = ['read_only', 'unavailable', 'not_found', 'incompatible', 'outdated', 'failed', 'not_empty'] as const
 export type StorageErrorCode = (typeof STORAGE_ERROR_CODES)[number]
 
 /** What a database holds, read without writing. `older` is upgraded on open; `outdated` (made by a pre-release build)
@@ -47,6 +48,22 @@ export interface InventoryExport {
 
 /** `same-ids`: restored rows keep their ids; `new-ids`: they get deterministic new ones (see InventoryStorage.restore). */
 export type RestoreMode = 'same-ids' | 'new-ids'
+
+export interface RestoreOptions {
+  /** After each batch: rows written so far (counting rows an earlier run already wrote), rows in all. */
+  onProgress?: (done: number, total: number) => void
+  /** Same ids only: this goes on with a run of the same backup into this source that stopped midway, so the source may
+   *  hold what that run wrote. Without it, a same-ids restore into a source that holds any inventory is refused. */
+  resumeSameIds?: boolean
+}
+
+export interface RestoreResult {
+  /** The inventories' ids in the source, in the backup's order. */
+  inventoryIds: Id[]
+  /** What this run wrote: rows already there (from an earlier run of the same restore) are not counted. `inventories`:
+   *  inventory rows among `rows`. */
+  added: { inventories: number; rows: number }
+}
 
 export class StorageError extends Error {
   readonly code: StorageErrorCode
@@ -83,20 +100,17 @@ export interface InventoryStorage {
   exportInventory(id: Id): Promise<InventoryExport>
   /**
    * Writes a backup's inventories into the source, parents first, in atomic batches of about RESTORE_BATCH_ROWS rows,
-   * each one bumping the revision (a wide write: devices reload). Inserts only, `on conflict do nothing`: a run stopped
-   * midway is run again with the same arguments and adds only what is missing.
-   * - `same-ids`: the rows keep their ids (into an empty source, after a loss).
+   * each one bumping the revision (a wide write: devices reload). Inserts only: a row whose primary key is already
+   * there is skipped, so a run stopped midway is run again with the same arguments and adds only what is missing; any
+   * other collision (a unique index) fails the batch.
+   * - `same-ids`: the rows keep their ids. Only into a source without inventories (after a loss), checked under the
+   *   revision lock in the first batch (`not_empty` otherwise, nothing written), unless `resumeSameIds`.
    * - `new-ids`: every id, and every reference to one, becomes UUID v5 of the old id in the namespace `runId`; the same
    *   file with the same `runId` gives the same new ids, so running it again adds nothing twice.
-   * Checks that every reference resolves inside the backup before writing anything (`failed` otherwise). Returns the
-   * ids the inventories have in the source, in the backup's order.
+   * Checks the backup before writing anything (`failed` otherwise): every reference resolves inside it, and every value
+   * fits the schema (see backupProblems in storage-postgres).
    */
-  restore(
-    backup: { inventories: InventoryExport[] },
-    mode: RestoreMode,
-    runId: Id,
-    onProgress?: (done: number, total: number) => void,
-  ): Promise<{ inventoryIds: Id[] }>
+  restore(backup: { inventories: InventoryExport[] }, mode: RestoreMode, runId: Id, options?: RestoreOptions): Promise<RestoreResult>
   /** Receipts of the inventory (archived items included) whose `sourceUrl` holds `key` as a whole part of the address,
    *  case-insensitively: a lot id ("1005001234567890") or an address without its scheme ("lcsc.com/product-detail/c7593.html").
    *  Newest first, at most 20. [] for an empty key. */

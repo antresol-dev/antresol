@@ -399,19 +399,25 @@
     "problem": {
       "format": "This file is not a GrayMatter backup, or it is damaged.",
       "version": "This version of GrayMatter can’t read this backup file.",
-      "newer_schema": "This backup was made by a newer GrayMatter. Update the app to restore it."
+      "newer_schema": "This backup was made by a newer GrayMatter. Update the app to restore it.",
+      "prerelease": "This backup was made by a pre-release version of GrayMatter and can’t be restored."
     },
     "mode": "How to restore",
-    "sameIds": "Into an empty source",
-    "sameIdsHint": "Everything keeps its ids, as before the data was lost.",
-    "sameIdsBlocked": "Only for a source without other inventories.",
+    "sameIds": "With the same ids",
+    "sameIdsHint": "Into this empty source, as before the data was lost: everything keeps its ids.",
+    "sameIdsBlocked": "Only into an empty source: this one holds inventories.",
+    "sameIdsResume": "Goes on with the restore of this file that didn’t finish.",
     "newIds": "As new inventories",
     "newIdsHint": "Next to what the source holds, with new ids and “(restored)” after their names.",
     "start": "Restore",
     "restoring": "Restoring…",
     "running": "{done} of {total} records",
+    "unfinished": "This restore didn’t finish — run it again to complete it.",
+    "restoredBefore": "This file was restored here before: restoring it again adds another copy.",
     "again": "Run it again to finish: nothing is added twice.",
     "restored": "Restored {count} inventory | Restored {count} inventories",
+    "restoredRows": "Restore finished: {count} record added | Restore finished: {count} records added",
+    "restoredNothing": "Nothing to add: everything in this file is already here.",
     "restoredName": "{name} (restored)",
     "open": "Open",
     "remind": "Time to back up “{name}”",
@@ -648,7 +654,8 @@
       "not_found": "That item no longer exists.",
       "incompatible": "This database isn’t a GrayMatter source.",
       "outdated": "This database was made by a pre-release version of GrayMatter. Reset it to use it here.",
-      "failed": "The source reported an error. Try again."
+      "failed": "The source reported an error. Try again.",
+      "not_empty": "This source already holds inventories. Restore the backup as new inventories instead."
     },
     "file": {
       "no_store": "Photos aren’t set up for this source. Check the Uploadcare key and photo address in Settings.",

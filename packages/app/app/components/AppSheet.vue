@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/dialog'
 
 import { KEYBOARD_SETTLE_MS, keyboardWatch, opensKeyboard, revealDelta } from '~/lib/keyboard'
+import { keepOpener, waitsForKeyboard } from '~/lib/sheet-close'
 import { isSubmitChord, pressPrimary } from '~/lib/sheet-keys'
 
 const props = defineProps<{
@@ -39,6 +40,9 @@ const shown = ref(open.value)
 let sheet: HTMLElement | null = null
 // The sheet's height while it leaves: content its parent drops at once (a form under v-if="open") doesn't shrink it.
 const leavingHeight = ref<number | null>(null)
+// From the moment the close starts until the sheet is gone or reopened: the content takes no taps (a second tap on Add
+// during the keyboard wait would save twice).
+const leaving = ref(false)
 // When a text field in the sheet last lost focus: a tap on a button or outside starts the keyboard down before the close.
 let fieldLeftAt = Number.NEGATIVE_INFINITY
 const coarse = useMediaQuery('(pointer: coarse)')
@@ -53,27 +57,44 @@ watch(
   open,
   (isOpen) => {
     if (isOpen) {
-      opener = openerOf(document.activeElement)
+      opener = keepOpener(shown.value, opener, openerOf(document.activeElement))
       leavingHeight.value = null
+      leaving.value = false
       shown.value = true
-    } else void leave()
+    } else {
+      leaving.value = true
+      void leave()
+    }
   },
   { immediate: true },
 )
 
 async function leave(): Promise<void> {
-  if (!shown.value) return
+  if (!shown.value) {
+    leaving.value = false
+    return
+  }
   // Closed before this opening's content mounted: `sheet` is still the last one's, gone from the page.
   const el = sheet?.isConnected ? sheet : null
   const active = document.activeElement
   const typing = !!el && active instanceof HTMLElement && el.contains(active) && opensKeyboard(active)
   if (el) leavingHeight.value = el.getBoundingClientRect().height
   if (typing) active.blur()
-  if ((typing || performance.now() - fieldLeftAt < KEYBOARD_SETTLE_MS) && keyboard?.isOpen()) {
-    await keyboard.closed(KEYBOARD_SETTLE_MS)
+  if (
+    waitsForKeyboard({
+      coarse: coarse.value,
+      typing,
+      recentlyTyped: performance.now() - fieldLeftAt < KEYBOARD_SETTLE_MS,
+      keyboardOpen: !!keyboard?.isOpen(),
+    })
+  ) {
+    await keyboard!.closed(KEYBOARD_SETTLE_MS)
   }
   // Opened again meanwhile: it stays.
-  if (!open.value) shown.value = false
+  if (!open.value) {
+    shown.value = false
+    leaving.value = false
+  }
 }
 
 function noteFieldLeft(event: FocusEvent): void {
@@ -90,7 +111,8 @@ function openerOf(active: Element | null): HTMLElement | null {
 
 // A sheet with fields focuses the one named by the selector, not the first focusable thing. On a touch screen it waits
 // for the slide-in to finish, so the keyboard doesn't arrive in the middle of it (Ionic focuses after a modal's present
-// animation; Vaul leaves autofocus off). Reka holds focus on the sheet itself meanwhile.
+// animation; Vaul leaves autofocus off). Focus goes to the sheet itself meanwhile (left alone it stays on the opener behind
+// the modal for the length of the slide-in).
 function focusInitial(event: Event): void {
   sheet = event.target instanceof HTMLElement ? event.target : null
   const el = sheet
@@ -98,6 +120,7 @@ function focusInitial(event: Event): void {
   const target = el.querySelector<HTMLElement>(props.initialFocus)
   if (!target) return
   event.preventDefault()
+  el.focus({ preventScroll: true })
   if (!coarse.value) {
     target.focus()
     return
@@ -157,6 +180,8 @@ function returnFocus(event: Event): void {
     <DialogContent
       :show-close-button="false"
       class="max-h-[calc(100dvh-1rem)] overflow-y-auto top-auto bottom-0 left-0 max-w-full translate-x-0 translate-y-0 rounded-b-none rounded-t-card border-x-0 border-b-0 bg-surface p-4 pb-6 outline-none motion-safe:data-[state=open]:animate-sheet-in motion-safe:data-[state=closed]:animate-sheet-out motion-reduce:animate-none sm:max-w-full md:top-1/2 md:bottom-auto md:left-1/2 md:max-w-[480px] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-card md:border md:pb-4 md:motion-safe:data-[state=open]:animate-pop-in md:motion-safe:data-[state=closed]:animate-pop-out"
+      :inert="leaving || undefined"
+      :class="leaving && 'pointer-events-none'"
       :style="leavingHeight === null ? undefined : { height: `${leavingHeight}px` }"
       @escape-key-down="refuseWhileLocked"
       @pointer-down-outside="refuseWhileLocked"

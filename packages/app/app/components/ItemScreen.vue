@@ -68,7 +68,9 @@ const renameBusy = ref(false)
 const looseOffer = ref<{ offer: LooseOffer; variants: { id: Id; name: string }[] } | null>(null)
 function added(a: VariantsAdded): void {
   addOpen.value = false
-  if (a.offer) looseOffer.value = { offer: a.offer, variants: a.created }
+  // Task 8 renamed the created variants' `name` to `label`; both shapes are read until the branches meet.
+  const created = (a.created as { id: Id; label?: string; name?: string }[]).map((c) => ({ id: c.id, name: c.label ?? c.name ?? '' }))
+  if (a.offer) looseOffer.value = { offer: a.offer, variants: created }
 }
 const renameId = ref<Id | null>(null)
 const archiveId = ref<Id | null>(null)
@@ -150,6 +152,16 @@ function openAttribute(id: Id | null): void {
   attributeId.value = id
   attributeOpen.value = true
 }
+// An attribute turned into a variant axis: the item may get its first variant, and the stock it had without one is offered to it.
+const addAxis = useAddAxis()
+async function makeAxis(id: Id): Promise<void> {
+  try {
+    const added = await addAxis(props.itemId, id)
+    if (added) looseOffer.value = added
+  } catch (e) {
+    toast.error(t(errorMessageKey(e)))
+  }
+}
 const removeId = ref<Id | null>(null)
 const removeBusy = ref(false)
 // The attribute's name as it was when the sheet opened: it stays while the sheet animates out.
@@ -217,6 +229,8 @@ const linkClass =
         @step="(kind) => step(kind, null)"
         @open="(mode) => openStock(mode, null)"
       />
+      <div v-if="view.hasVariants || view.axes.length > 0" class="grid min-w-0 grid-cols-1">
+      <ItemAxes :view="view" @loose="(a) => (looseOffer = { offer: a.offer, variants: a.variants })" />
       <BucketList
         v-if="view.hasVariants"
         :buckets="view.buckets"
@@ -228,6 +242,7 @@ const linkClass =
         @photo="askPhoto"
         @archive="askArchive"
       />
+      </div>
       <Button variant="outline" class="h-11 justify-self-start rounded-field bg-surface px-4 font-bold" :disabled="locked" @click="addOpen = true">
         <Plus class="size-5" aria-hidden="true" />
         {{ $t('variantsForm.open') }}
@@ -241,7 +256,7 @@ const linkClass =
         :variants="looseOffer?.variants ?? []"
         @close="looseOffer = null"
       />
-      <AppSheet v-model:open="renameOpen" :title="$t('variantMenu.renameTitle')" :locked="renameBusy" initial-focus="#variant-name">
+      <AppSheet v-model:open="renameOpen" :title="$t('item.editVariant')" :locked="renameBusy" initial-focus="#variant-name">
         <VariantForm v-if="renaming" :key="renaming.id" v-model:busy="renameBusy" :variant="renaming" @done="renameId = null" />
       </AppSheet>
       <AppSheet
@@ -275,6 +290,7 @@ const linkClass =
         :attributes="view.attributes"
         @add="openAttribute(null)"
         @edit="openAttribute"
+        @axis="makeAxis"
         @remove="askRemoveAttribute"
       />
       <ConfirmSheet

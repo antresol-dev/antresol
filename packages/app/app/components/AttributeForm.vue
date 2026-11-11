@@ -1,16 +1,18 @@
 <script setup lang="ts">
-import type { Attribute, Id } from '@graymatter/core'
-import { newId } from '@graymatter/core'
+import type { Attribute, AttributeKind, Id } from '@graymatter/core'
+import { formatNumberValue, newId, parseNumberValue } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { captureBaseline, changedFields } from '~/lib/changed-fields'
+import { attributeCreateCommand, attributeFormError, MAX_UNIT_LENGTH } from '~/lib/axes'
 import { errorMessageKey } from '~/lib/errors'
 import { parseNameList } from '~/lib/lists'
 
-// Creates an inventory attribute or edits one: the name and, for a list, its options. The type can't change afterwards.
+// Creates an inventory attribute or edits one: the name, a list's options, a number's unit and SI prefixes. The type can't change afterwards.
 const props = defineProps<{ attribute: Attribute | null }>()
 const emit = defineEmits<{ done: [attributeId: Id] }>()
 
@@ -18,15 +20,31 @@ const workspace = useWorkspace()
 const { state } = workspace
 
 const name = ref(props.attribute?.name ?? '')
-const kind = ref<'text' | 'enum'>(props.attribute?.kind ?? 'text')
+const kind = ref<AttributeKind>(props.attribute?.kind ?? 'text')
+const unit = ref(props.attribute?.unit ?? '')
+const siPrefixes = ref(props.attribute?.siPrefixes ?? false)
 const options = ref(props.attribute?.options.join('\n') ?? '')
 // The sheet around the form locks while this is set.
 const busy = defineModel<boolean>('busy', { default: false })
 const errorKey = ref<string | null>(null)
 // Editing sends only what differs from the attribute as it was opened: a stale form must not revert another device's
 // edit. Options are compared as the text typed, because their order is meaningful.
-const baseline = captureBaseline({ name: props.attribute?.name ?? '', options: props.attribute?.options.join('\n') ?? '' })
-const changes = computed(() => changedFields(baseline, { name: name.value.trim(), options: options.value.trim() }))
+const baseline = captureBaseline({
+  name: props.attribute?.name ?? '',
+  options: props.attribute?.options.join('\n') ?? '',
+  unit: props.attribute?.unit ?? '',
+  siPrefixes: props.attribute?.siPrefixes ?? false,
+})
+const changes = computed(() =>
+  changedFields(baseline, { name: name.value.trim(), options: options.value.trim(), unit: unit.value.trim(), siPrefixes: siPrefixes.value }),
+)
+
+// The example under the switch: what the unit and prefixes make of "4k7".
+const example = computed(() => {
+  const rules = { unit: unit.value.trim() || 'Ω', siPrefixes: true }
+  const stored = parseNumberValue('4k7', rules)
+  return stored === null ? null : `4k7 → ${formatNumberValue(stored, rules)}`
+})
 const canSubmit = computed(
   () => !busy.value && !state.readOnly && !!state.snapshot && (!props.attribute || Object.keys(changes.value).length > 0),
 )
@@ -35,8 +53,10 @@ async function submit(): Promise<void> {
   const snapshot = state.snapshot
   if (!canSubmit.value || !snapshot) return
   const list = kind.value === 'enum' ? parseNameList(options.value) : []
-  if (kind.value === 'enum' && list.length === 0) {
-    errorKey.value = 'attributeForm.optionsRequired'
+  const form = { name: name.value, kind: kind.value, options: options.value, unit: unit.value, siPrefixes: siPrefixes.value }
+  const invalid = attributeFormError(form)
+  if (invalid) {
+    errorKey.value = invalid
     return
   }
   busy.value = true
@@ -48,18 +68,13 @@ async function submit(): Promise<void> {
         id: props.attribute.id,
         ...(changes.value.name !== undefined ? { name: changes.value.name } : {}),
         ...(kind.value === 'enum' && changes.value.options !== undefined ? { options: list } : {}),
+        ...(kind.value === 'number' && changes.value.unit !== undefined ? { unit: unit.value.trim() } : {}),
+        ...(kind.value === 'number' && changes.value.siPrefixes !== undefined ? { siPrefixes: siPrefixes.value } : {}),
       })
       emit('done', props.attribute.id)
     } else {
       const id = newId()
-      await workspace.apply({
-        type: 'attribute.create',
-        id,
-        inventoryId: snapshot.inventory.id,
-        name: name.value.trim(),
-        kind: kind.value,
-        options: list,
-      })
+      await workspace.apply(attributeCreateCommand(form, { id, inventoryId: snapshot.inventory.id }))
       emit('done', id)
     }
   } catch (e) {
@@ -89,15 +104,15 @@ async function submit(): Promise<void> {
         v-model="kind"
         aria-labelledby="attribute-kind-label"
         :disabled="!!attribute"
-        class="grid grid-cols-2 gap-0.5 rounded-field border border-border bg-background p-1"
+        class="grid grid-cols-3 gap-0.5 rounded-field border border-border bg-background p-1"
       >
         <label
-          v-for="k in ['text', 'enum'] as const"
+          v-for="k in ['text', 'enum', 'number'] as const"
           :key="k"
           class="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-sm px-2 text-sm transition-colors duration-150 hover:bg-hover"
         >
           <RadioGroupItem :value="k" />
-          {{ $t(k === 'text' ? 'attributeForm.text' : 'attributeForm.list') }}
+          {{ $t(k === 'text' ? 'attributeForm.text' : k === 'enum' ? 'attributeForm.list' : 'attributeForm.number') }}
         </label>
       </RadioGroup>
     </div>
@@ -106,6 +121,20 @@ async function submit(): Promise<void> {
       <Textarea id="attribute-options" v-model="options" rows="3" autocomplete="off" class="rounded-field bg-surface" />
       <p class="text-[13px] text-subtle-foreground">{{ $t('attributeForm.hint') }}</p>
     </div>
+    <template v-if="kind === 'number'">
+      <div class="grid gap-1.5">
+        <Label for="attribute-unit">{{ $t('attributeForm.unit') }}</Label>
+        <Input id="attribute-unit" v-model="unit" autocomplete="off" :maxlength="MAX_UNIT_LENGTH" class="h-11 rounded-field bg-surface" />
+        <p class="text-[13px] text-subtle-foreground">{{ $t('attributeForm.unitHint') }}</p>
+      </div>
+      <div class="grid gap-1">
+        <label class="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm font-semibold">
+          {{ $t('attributeForm.siPrefixes') }}
+          <Switch v-model="siPrefixes" />
+        </label>
+        <p v-if="example" class="text-[13px] text-subtle-foreground">{{ $t('attributeForm.siExample', { example }) }}</p>
+      </div>
+    </template>
     <p id="attribute-form-error" role="alert" class="text-sm text-destructive">
       <template v-if="errorKey">{{ $t(errorKey) }}</template>
     </p>

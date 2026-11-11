@@ -90,12 +90,12 @@ async function remove(): Promise<void> {
   <section class="grid min-w-0 gap-2" aria-labelledby="dictionaries-tags">
     <div class="flex min-h-11 items-center justify-between gap-2 px-1">
       <h2 id="dictionaries-tags" class="text-[13px] font-semibold text-subtle-foreground">{{ $t('dictionaries.tags') }}</h2>
-      <Button variant="outline" class="h-11 rounded-field bg-surface" :disabled="locked" @click="open({ kind: 'create' })">
+      <Button variant="outline" class="h-11" :disabled="locked" @click="open({ kind: 'create' })">
         <Plus class="size-4" aria-hidden="true" />
         {{ $t('dictionaries.addTag') }}
       </Button>
     </div>
-    <ul v-if="rows.length > 0" class="rounded-card border border-border bg-surface py-1">
+    <ul v-if="rows.length > 0">
       <li
         v-for="row in rows"
         :key="row.tag.id"
@@ -128,7 +128,7 @@ async function remove(): Promise<void> {
             autocomplete="off"
             :aria-invalid="errorKey ? true : undefined"
             aria-describedby="tag-form-error"
-            class="h-11 rounded-field bg-surface"
+            class="h-11"
           />
         </div>
         <p id="tag-form-error" role="alert" class="text-sm text-destructive">

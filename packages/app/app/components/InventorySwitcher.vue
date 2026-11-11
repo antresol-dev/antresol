@@ -126,10 +126,11 @@ async function archive(): Promise<void> {
   }
 }
 
-// Menu items show focus with their highlight; buttons in the sheet get the focus ring.
+// Menu items show focus with their highlight (radius 10 inside the menu's 20 and 6 px padding); the sheet's rows are
+// flat pressable tiles with the base focus outline.
 const itemClass = computed(() => [
-  'flex min-h-11 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm outline-none transition-colors duration-150 hover:bg-hover disabled:pointer-events-none disabled:opacity-50',
-  desktop.value ? '' : 'focus-visible:ring-2 focus-visible:ring-ring',
+  'flex min-h-11 w-full items-center gap-2 px-2 py-1.5 text-left text-sm disabled:pointer-events-none disabled:opacity-50',
+  desktop.value ? 'rounded-chip' : 'pressable',
 ])
 </script>
 
@@ -138,7 +139,7 @@ const itemClass = computed(() => [
   <DefineTrigger>
     <button
       type="button"
-      class="flex min-h-11 w-full min-w-0 items-center gap-2.5 rounded-field border border-border bg-surface px-2.5 py-2 text-left outline-none transition-colors duration-150 hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring"
+      class="raised pressable flex min-h-11 w-full min-w-0 items-center gap-2.5 px-2.5 py-2 text-left"
     >
       <span class="flex min-w-0 flex-1 flex-col">
         <span class="text-[11px] font-semibold text-subtle-foreground">{{ $t('inventory.label') }}</span>
@@ -167,7 +168,7 @@ const itemClass = computed(() => [
           @click="choose(entry)"
         >
           <span class="min-w-0 flex-1 truncate">{{ entry.inventory.name }}</span>
-          <Check v-if="isCurrent(entry)" class="size-4 shrink-0 text-primary" aria-hidden="true" />
+          <Check v-if="isCurrent(entry)" class="size-4 shrink-0 text-accent-ink" aria-hidden="true" />
         </component>
       </template>
       <component :is="desktop ? DropdownMenuSeparator : 'hr'" class="my-1 border-divider" />
@@ -227,7 +228,7 @@ const itemClass = computed(() => [
     </DropdownMenuTrigger>
     <DropdownMenuContent
       align="start"
-      class="w-72 rounded-thumb bg-surface p-1.5 motion-safe:data-[state=open]:animate-pop-in motion-safe:data-[state=closed]:animate-pop-out"
+      class="w-72 motion-safe:data-[state=open]:animate-pop-in motion-safe:data-[state=closed]:animate-pop-out"
     >
       <ReuseContent />
     </DropdownMenuContent>

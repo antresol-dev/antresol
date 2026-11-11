@@ -75,12 +75,12 @@ async function move(): Promise<void> {
       <RadioGroup
         v-model="toId"
         :aria-label="$t('looseTransfer.choose')"
-        class="grid max-h-[30dvh] gap-0.5 overflow-y-auto rounded-field border border-border bg-background p-1"
+        class="grid max-h-[30dvh] gap-0.5 overflow-y-auto rounded-field border border-input bg-field p-1"
       >
         <label
           v-for="v in shown?.variants ?? []"
           :key="v.id"
-          class="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-sm px-2 text-sm transition-colors duration-150 hover:bg-hover"
+          class="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-chip px-2 text-sm transition-colors duration-150 hover:bg-hover"
         >
           <RadioGroupItem :value="v.id" />
           <span class="min-w-0 flex-1 truncate">{{ v.name }}</span>
@@ -94,7 +94,7 @@ async function move(): Promise<void> {
       <Button type="button" data-primary class="h-11 rounded-field" :disabled="busy || !!state.readOnly" @click="move">
         {{ $t(busy ? 'status.saving' : 'looseTransfer.move') }}
       </Button>
-      <Button type="button" variant="outline" class="h-11 rounded-field bg-surface" :disabled="busy" @click="open = false">
+      <Button type="button" variant="outline" class="h-11" :disabled="busy" @click="open = false">
         {{ $t('looseTransfer.keep') }}
       </Button>
     </template>

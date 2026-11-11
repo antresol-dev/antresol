@@ -36,7 +36,7 @@ const sheetOpen = computed({
 })
 
 // Neutral hover; the text keeps its colour.
-const sourceAction = 'h-11 rounded-field transition-colors duration-150 hover:bg-hover'
+const sourceAction = 'h-11'
 
 const reloading = ref<string | null>(null)
 
@@ -81,8 +81,8 @@ async function confirmRemove(): Promise<void> {
     <ScreenBody>
       <section class="grid gap-2" aria-labelledby="settings-sources">
         <h2 id="settings-sources" class="text-sm font-semibold text-subtle-foreground">{{ $t('settings.sources.title') }}</h2>
-        <ul v-if="state.sources.length" class="divide-y divide-divider rounded-card border bg-surface">
-          <li v-for="s in state.sources" :key="s.config.id" class="grid gap-1 px-4 py-2.5">
+        <ul v-if="state.sources.length" class="raised-card divide-y divide-divider">
+          <li v-for="s in state.sources" :key="s.config.id" class="grid gap-1 px-4.5 py-3">
             <div class="flex flex-wrap items-center gap-2">
               <span class="min-w-0 break-words font-semibold">{{ s.config.name }}</span>
               <span v-if="kindLabel(s.config) !== s.config.name" class="text-sm text-subtle-foreground">{{ kindLabel(s.config) }}</span>
@@ -90,12 +90,12 @@ async function confirmRemove(): Promise<void> {
             </div>
             <p v-if="s.reason" class="break-words text-sm text-destructive">{{ $t(`errors.probe.${s.reason}`) }}</p>
             <div class="-mx-2 flex">
-              <Button v-if="s.config.kind === 'neon'" as-child variant="ghost" :class="[sourceAction, 'text-primary']">
+              <Button v-if="s.config.kind === 'neon'" as-child variant="ghost" :class="[sourceAction, 'text-accent-ink']">
                 <NuxtLink :to="`/settings/sources/${s.config.id}`">{{ $t('settings.sources.edit') }}</NuxtLink>
               </Button>
               <Button
                 variant="ghost"
-                :class="[sourceAction, 'text-primary']"
+                :class="[sourceAction, 'text-accent-ink']"
                 :disabled="reloading !== null || (s.status !== 'ready' && s.status !== 'read_only')"
                 @click="reload(s.config)"
               >
@@ -111,14 +111,14 @@ async function confirmRemove(): Promise<void> {
           </li>
         </ul>
         <p v-else class="text-subtle-foreground">{{ $t('settings.sources.empty') }}</p>
-        <Button as-child variant="outline" class="h-11 rounded-field bg-surface">
+        <Button as-child variant="outline" class="h-11">
           <NuxtLink to="/settings/sources/new">{{ $t('settings.sources.add') }}</NuxtLink>
         </Button>
       </section>
 
       <section class="grid gap-2" aria-labelledby="settings-device">
         <h2 id="settings-device" class="text-sm font-semibold text-subtle-foreground">{{ $t('settings.device.title') }}</h2>
-        <div class="grid gap-1.5 rounded-card border bg-surface p-4">
+        <div class="raised-card grid gap-1.5 p-4.5">
           <Label for="device-name">{{ $t('settings.device.name') }}</Label>
           <Input
             id="device-name"
@@ -131,7 +131,7 @@ async function confirmRemove(): Promise<void> {
           <p class="text-sm text-subtle-foreground">{{ $t('settings.device.hint') }}</p>
           <Label for="check-interval" class="mt-2">{{ $t('sync.interval') }}</Label>
           <Select :model-value="state.checkInterval" @update:model-value="changeInterval($event as CheckInterval)">
-            <SelectTrigger id="check-interval" class="h-11 w-full rounded-field bg-surface">
+            <SelectTrigger id="check-interval" class="h-11 w-full">
               <SelectValue v-slot="{ modelValue }">{{ $t(`sync.${modelValue === 'never' ? 'never' : `every${modelValue}`}`) }}</SelectValue>
             </SelectTrigger>
             <SelectContent>
@@ -159,11 +159,11 @@ async function confirmRemove(): Promise<void> {
         :description="$t('settings.sources.removeConfirm', { name: removing?.name ?? '' })"
       >
         <template #footer>
-          <Button variant="outline" class="h-11 rounded-field bg-surface" @click="removing = null">{{ $t('ui.cancel') }}</Button>
+          <Button variant="outline" class="h-11" @click="removing = null">{{ $t('ui.cancel') }}</Button>
           <Button
             variant="destructive"
             data-primary
-            class="h-11 rounded-field bg-destructive text-primary-foreground hover:bg-destructive/90 dark:bg-destructive dark:hover:bg-destructive/90"
+            class="h-11"
             @click="confirmRemove"
           >
             {{ $t('settings.sources.remove') }}

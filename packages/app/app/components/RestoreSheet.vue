@@ -132,7 +132,7 @@ const percent = computed(() =>
   >
     <div class="mt-2 grid gap-3.5">
       <input ref="input" type="file" accept=".json,application/json" class="hidden" tabindex="-1" @change="choose" >
-      <div v-if="picked" class="grid gap-0.5 rounded-field border border-border bg-background px-3 py-2.5">
+      <div v-if="picked" class="grid gap-0.5 rounded-field bg-chip px-3 py-2.5">
         <p class="text-sm font-semibold break-words">{{ summary }}</p>
         <p class="text-sm text-subtle-foreground break-words">
           {{ $t('backup.exported', { date: formatDateTime(picked.backup.exportedAt), name: picked.backup.source.name }) }}
@@ -142,7 +142,7 @@ const percent = computed(() =>
       <Button
         type="button"
         variant="outline"
-        class="h-11 justify-self-start rounded-field bg-surface"
+        class="h-11 justify-self-start"
         :disabled="busy || reading"
         @click="input?.click()"
       >
@@ -152,7 +152,7 @@ const percent = computed(() =>
       <RadioGroup v-if="picked" v-model="mode" :aria-label="$t('backup.mode')" :disabled="busy" class="grid gap-1">
         <label
           :class="[
-            'flex min-h-11 items-start gap-2.5 rounded-sm px-2 py-2 text-sm transition-colors duration-150',
+            'flex min-h-11 items-start gap-2.5 rounded-field px-2 py-2 text-sm transition-colors duration-150',
             sameIdsAllowed && 'cursor-pointer hover:bg-hover',
           ]"
         >
@@ -162,7 +162,7 @@ const percent = computed(() =>
             <span class="text-subtle-foreground">{{ $t(sameIdsAllowed ? 'backup.sameIdsHint' : 'backup.sameIdsBlocked') }}</span>
           </span>
         </label>
-        <label class="flex min-h-11 cursor-pointer items-start gap-2.5 rounded-sm px-2 py-2 text-sm transition-colors duration-150 hover:bg-hover">
+        <label class="flex min-h-11 cursor-pointer items-start gap-2.5 rounded-field px-2 py-2 text-sm transition-colors duration-150 hover:bg-hover">
           <RadioGroupItem value="new-ids" class="mt-0.5" />
           <span class="grid gap-0.5">
             <span class="font-semibold">{{ $t('backup.newIds') }}</span>
@@ -193,7 +193,7 @@ const percent = computed(() =>
       >
         {{ busy ? $t('backup.restoring') : $t('backup.start') }}
       </Button>
-      <Button type="button" variant="outline" class="h-11 rounded-field bg-surface" :disabled="busy" @click="open = false">
+      <Button type="button" variant="outline" class="h-11" :disabled="busy" @click="open = false">
         {{ $t('ui.cancel') }}
       </Button>
     </template>

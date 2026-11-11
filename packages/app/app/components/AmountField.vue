@@ -21,7 +21,7 @@ const single = computed(() => (props.units.length === 1 ? props.units[0]! : null
         inputmode="decimal"
         autocomplete="off"
         :aria-invalid="invalid ? true : undefined"
-        class="h-11 rounded-field bg-surface"
+        class="h-11"
         :class="single ? 'pr-14' : ''"
       />
       <span
@@ -32,7 +32,7 @@ const single = computed(() => (props.units.length === 1 ? props.units[0]! : null
       </span>
     </div>
     <Select v-if="!single" v-model="unitKey">
-      <SelectTrigger :aria-label="$t('quickAdd.unit')" class="h-11 w-32 shrink-0 rounded-field bg-surface">
+      <SelectTrigger :aria-label="$t('quickAdd.unit')" class="h-11 w-32 shrink-0">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

@@ -216,9 +216,9 @@ async function act(action: PaletteAction): Promise<void> {
   }
 }
 
-const markClass = 'rounded-sm bg-chip text-foreground'
-const kbdClass =
-  'rounded-md border border-b-2 border-border bg-surface px-1.5 text-[11px] font-semibold text-subtle-foreground'
+// A match is a square chip inside the text; keys are chips (radius scale, spec 4.2).
+const markClass = 'rounded-none bg-chip text-foreground'
+const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-subtle-foreground'
 </script>
 
 <template>
@@ -250,7 +250,7 @@ const kbdClass =
           <div
             :class="[
               'flex min-w-0 flex-1 items-center gap-2.5',
-              desktop ? 'min-h-11' : 'h-[50px] rounded-card border-2 border-primary pr-0.5 pl-3.5',
+              desktop ? 'min-h-11' : 'h-[50px] rounded-field border-2 border-primary pr-0.5 pl-3.5',
             ]"
           >
             <Search class="size-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -277,7 +277,7 @@ const kbdClass =
             <button
               v-if="query"
               type="button"
-              class="grid size-11 shrink-0 place-items-center rounded-icon text-muted-foreground outline-none transition-colors duration-150 hover:bg-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring lg:size-8"
+              class="pressable grid size-11 shrink-0 place-items-center rounded-chip text-muted-foreground hover:text-accent-ink lg:size-8"
               :aria-label="$t('search.clear')"
               @click="clear"
             >
@@ -293,7 +293,7 @@ const kbdClass =
           <button
             v-if="!desktop"
             type="button"
-            class="h-11 shrink-0 rounded-icon px-2 font-bold text-primary outline-none transition-colors duration-150 hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring"
+            class="pressable h-11 shrink-0 px-2 font-bold text-accent-ink"
             @click="paletteOpen = false"
           >
             {{ $t('ui.cancel') }}
@@ -330,9 +330,10 @@ const kbdClass =
                 role="option"
                 :aria-selected="row.key === selected?.key"
                 :class="[
-                  'flex min-h-11 cursor-pointer items-center gap-2.5 rounded-icon px-2.5 transition-colors duration-150 select-none',
+                  // The selected option is a selected row (spec 4.1): accent gradient, text and icons in its ink.
+                  'flex min-h-11 cursor-pointer items-center gap-2.5 rounded-field px-2.5 select-none',
                   desktop ? 'py-1.5' : 'py-2',
-                  row.key === selected?.key ? 'bg-accent-soft' : '',
+                  row.key === selected?.key ? 'row-selected' : '',
                 ]"
                 @mousedown.prevent
                 @pointermove="hover(row, $event)"
@@ -351,7 +352,7 @@ const kbdClass =
                       <span
                         v-for="(value, i) in row.hit.pinned"
                         :key="`pin${i}`"
-                        class="max-w-28 min-w-0 shrink truncate rounded-md bg-chip px-1.5 py-px text-[11px] font-semibold text-subtle-foreground"
+                        class="max-w-28 min-w-0 shrink truncate rounded-chip bg-chip px-1.5 py-px text-[11px] font-semibold text-subtle-foreground"
                       >{{ value }}</span>
                     </span>
                     <span v-if="row.hit.path" class="truncate text-xs font-semibold text-muted-foreground">{{ row.hit.path }}</span>
@@ -365,7 +366,7 @@ const kbdClass =
                   <span
                     :class="[
                       'grid size-8 shrink-0 place-items-center rounded-icon text-accent-soft-foreground',
-                      row.key === selected?.key ? 'bg-surface' : 'bg-accent-soft',
+                      row.key === selected?.key ? 'bg-(--selected-pill)' : 'bg-accent-soft',
                     ]"
                   >
                     <Folder class="size-4" aria-hidden="true" />
@@ -378,7 +379,12 @@ const kbdClass =
                   </span>
                 </template>
                 <template v-else>
-                  <span class="grid size-8 shrink-0 place-items-center rounded-icon bg-chip text-icon">
+                  <span
+                    :class="[
+                      'grid size-8 shrink-0 place-items-center rounded-icon text-icon',
+                      row.key === selected?.key ? 'bg-(--selected-pill)' : 'bg-chip',
+                    ]"
+                  >
                     <component :is="actionIcon(row.action)" class="size-4" aria-hidden="true" />
                   </span>
                   <span class="min-w-0 flex-1 truncate text-sm font-bold">{{ row.label }}</span>

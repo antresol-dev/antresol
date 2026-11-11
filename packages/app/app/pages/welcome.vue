@@ -34,7 +34,7 @@ async function useDemo(): Promise<void> {
       <Button as-child class="h-11 rounded-field">
         <NuxtLink to="/settings/sources/new">{{ $t('welcome.addSource') }}</NuxtLink>
       </Button>
-      <Button v-if="isDev" variant="outline" class="h-11 rounded-field bg-surface" :disabled="busy" @click="useDemo">
+      <Button v-if="isDev" variant="outline" class="h-11" :disabled="busy" @click="useDemo">
         {{ $t('welcome.useDemo') }}
       </Button>
     </div>

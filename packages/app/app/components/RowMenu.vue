@@ -23,7 +23,9 @@ const attrs = useAttrs()
 const triggerAttrs = computed(() => ({
   ...attrs,
   class: cn(
-    'grid shrink-0 place-items-center rounded-lg text-icon outline-none transition-colors duration-150 hover:bg-chip hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-chip',
+    // A flat ghost button (radius 10 like the mock-up's "⋯"): muted, the accent tint and ink under the pointer and while
+    // its menu is open.
+    'pressable grid shrink-0 place-items-center rounded-chip text-muted-foreground hover:text-accent-ink data-[state=open]:bg-(--ghost-pressed) data-[state=open]:text-accent-ink',
     attrs.class as HTMLAttributes['class'],
   ),
 }))
@@ -65,14 +67,14 @@ defineExpose({
     </DropdownMenuTrigger>
     <DropdownMenuContent
       align="end"
-      class="grid w-56 gap-0.5 rounded-thumb bg-surface p-1.5 motion-safe:data-[state=open]:animate-pop-in motion-safe:data-[state=closed]:animate-pop-out"
+      class="grid w-56 gap-0.5 motion-safe:data-[state=open]:animate-pop-in motion-safe:data-[state=closed]:animate-pop-out"
     >
       <DropdownMenuItem
         v-for="a in actions"
         :key="a.key"
         :disabled="a.disabled"
         :variant="a.destructive ? 'destructive' : 'default'"
-        class="min-h-11 gap-2.5 rounded-lg px-2.5 font-semibold transition-colors duration-150 focus:bg-hover focus:text-foreground"
+        class="min-h-11 gap-2.5 px-2.5 font-semibold"
         @select="emit('select', a.key)"
       >
         <component :is="a.icon" class="size-4" aria-hidden="true" />
@@ -82,13 +84,14 @@ defineExpose({
   </DropdownMenu>
 
   <AppSheet v-model:open="sheetOpen" :title="label">
-    <ul class="-mx-1.5 grid gap-0.5">
+    <ul class="-mx-1 grid gap-0.5">
       <li v-for="a in actions" :key="a.key">
         <button
           type="button"
           :disabled="a.disabled"
           :class="[
-            'flex min-h-11 w-full items-center gap-3 rounded-thumb px-1.5 py-1 text-left text-[15px] font-bold outline-none transition-colors duration-150 hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
+            // A row tile (14); its icon square 4 px in stays concentric (10).
+            'pressable flex min-h-11 w-full items-center gap-3 px-1 py-1 text-left text-[15px] font-bold disabled:pointer-events-none disabled:opacity-50',
             a.destructive ? 'text-destructive' : '',
           ]"
           @click="choose(a.key)"

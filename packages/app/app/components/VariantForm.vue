@@ -92,7 +92,7 @@ async function submit(): Promise<void> {
         {{ $t('variantForm.description') }}
         <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
       </Label>
-      <Input id="variant-description" v-model="description" autocomplete="off" class="h-11 rounded-field bg-surface" />
+      <Input id="variant-description" v-model="description" autocomplete="off" class="h-11" />
     </div>
     <p v-if="clash" role="alert" class="flex flex-wrap items-center justify-between gap-2 text-sm text-destructive">
       {{ $t(clash.archived ? 'variantForm.inArchive' : 'variantForm.exists') }}

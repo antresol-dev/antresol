@@ -18,7 +18,7 @@ function picked(event: Event): void {
   input.value = ''
   if (files.length > 0) emit('pick', props.multiple ? files : files.slice(0, 1))
 }
-const buttonClass = 'h-11 rounded-field bg-surface px-4 font-bold'
+const buttonClass = 'h-11 px-4 font-bold'
 </script>
 
 <template>

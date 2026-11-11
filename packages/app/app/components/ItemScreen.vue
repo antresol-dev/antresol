@@ -198,7 +198,7 @@ const shops = computed(() => (view.value ? shopLinks(view.value.item.name) : [])
 
 const highlight = computed(() => (view.value?.hasVariants ? props.variantId : null))
 const linkClass =
-  'min-h-11 content-center rounded-md text-sm font-semibold text-primary underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring'
+  'min-h-11 content-center rounded-chip text-sm font-semibold text-accent-ink underline-offset-4 hover:underline'
 </script>
 
 <template>
@@ -211,7 +211,7 @@ const linkClass =
     <template v-if="view && snapshot">
       <StockSheet :view="view" :target="stockTarget" @close="stockTarget = null" />
       <ul v-if="pinned.length > 0" class="-mt-1 flex min-w-0 flex-wrap gap-1.5" :aria-label="$t('list.pinned')">
-        <li v-for="(value, i) in pinned" :key="i" class="max-w-full truncate rounded-md bg-chip px-2 py-0.5 text-[13px] font-semibold text-subtle-foreground">
+        <li v-for="(value, i) in pinned" :key="i" class="max-w-full truncate rounded-chip bg-chip px-2 py-0.5 text-[13px] font-semibold text-subtle-foreground">
           {{ value }}
         </li>
       </ul>
@@ -254,7 +254,7 @@ const linkClass =
         @archive="askArchive"
       />
       </div>
-      <Button variant="outline" class="h-11 justify-self-start rounded-field bg-surface px-4 font-bold" :disabled="locked" @click="addOpen = true">
+      <Button variant="outline" class="h-11 justify-self-start px-4.5 font-bold" :disabled="locked" @click="addOpen = true">
         <Plus class="size-5" aria-hidden="true" />
         {{ $t('variantsForm.open') }}
       </Button>
@@ -336,7 +336,7 @@ const linkClass =
       </NuxtLink>
     </EmptyState>
     <EmptyState v-else-if="blocker?.kind === 'offline'" :text="$t('empty.offlineNoCopy')">
-      <Button variant="outline" class="h-11 rounded-field bg-surface" @click="retry">{{ $t('status.retry') }}</Button>
+      <Button variant="outline" class="h-11" @click="retry">{{ $t('status.retry') }}</Button>
     </EmptyState>
     <EmptyState
       v-else-if="blocker?.kind === 'error'"

@@ -15,7 +15,7 @@ const total = computed(() => formatAmountParts(props.stepper.projected.value, pr
 const deltaUnit = computed(() => (delta.value.unit === total.value.unit ? '' : ` ${delta.value.unit}`))
 
 const RING = 2 * Math.PI * 8
-const action = 'h-11 rounded-field px-3 font-bold'
+const action = 'h-11 px-3 font-bold'
 </script>
 
 <template>
@@ -23,7 +23,7 @@ const action = 'h-11 rounded-field px-3 font-bold'
     v-if="state !== 'idle'"
     role="status"
     class="flex min-w-0 flex-wrap items-center gap-x-2 text-sm"
-    :style="{ '--ring': `${RING}`, '--ring-time': `${STEP_DELAY_MS}ms` }"
+    :style="{ '--countdown-length': `${RING}`, '--countdown-time': `${STEP_DELAY_MS}ms` }"
   >
     <span class="flex min-h-11 min-w-0 items-center gap-2 font-semibold tabular-nums" :class="state === 'failed' && 'text-destructive'">
       <svg
@@ -57,11 +57,11 @@ const action = 'h-11 rounded-field px-3 font-bold'
 <style scoped>
 .countdown {
   stroke-dashoffset: 0;
-  animation: countdown var(--ring-time) linear forwards;
+  animation: countdown var(--countdown-time) linear forwards;
 }
 @keyframes countdown {
   to {
-    stroke-dashoffset: var(--ring);
+    stroke-dashoffset: var(--countdown-length);
   }
 }
 @media (prefers-reduced-motion: reduce) {

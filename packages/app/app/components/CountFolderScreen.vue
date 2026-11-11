@@ -91,7 +91,7 @@ async function apply(): Promise<void> {
 onBeforeRouteLeave(() => changes.value.length === 0 || window.confirm(t('countFolder.leave')))
 
 const linkClass =
-  'min-h-11 content-center rounded-md text-sm font-semibold text-primary underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring'
+  'min-h-11 content-center rounded-chip text-sm font-semibold text-accent-ink underline-offset-4 hover:underline'
 const divider =
   "relative not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-3.5 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
 </script>
@@ -105,13 +105,13 @@ const divider =
       </EmptyState>
       <template v-else>
         <p class="px-1 text-sm text-muted-foreground">{{ $t('countFolder.hint') }}</p>
-        <ul ref="list" class="overflow-hidden rounded-card border border-border bg-surface py-1">
+        <ul ref="list">
           <template v-for="g in groups" :key="g.itemId">
             <li v-if="g.hasVariants" :class="[divider, 'px-3.5 pt-2.5 pb-1 text-[15px] font-bold wrap-anywhere']">{{ g.name }}</li>
             <li
               v-for="row in g.rows"
               :key="row.key"
-              :class="[divider, 'flex min-h-[58px] items-center gap-3 py-1.5 pr-3.5', g.hasVariants ? 'pl-7' : 'pl-3.5', changeOf.has(row.key) && 'bg-accent-soft']"
+              :class="[divider, 'flex min-h-[58px] items-center gap-3 py-1.5 pr-3.5', g.hasVariants ? 'pl-7' : 'pl-3.5', changeOf.has(row.key) && 'rounded-field bg-accent-soft']"
             >
               <label :for="`count-${row.key}`" class="flex min-w-0 grow flex-col gap-0.5">
                 <span class="line-clamp-2 text-[15px] wrap-anywhere" :class="g.hasVariants ? 'font-semibold' : 'font-bold'">
@@ -136,7 +136,7 @@ const divider =
                   :aria-label="$t('countFolder.field', { name: labelOf(row) })"
                   :aria-invalid="changeOf.get(row.key)?.target === null ? true : undefined"
                   :readonly="busy"
-                  class="h-11 rounded-field bg-surface pr-12 text-right font-bold tabular-nums"
+                  class="h-11 pr-12 text-right font-bold tabular-nums"
                   @update:model-value="(v) => edit(row, v)"
                   @keydown.enter.prevent="next"
                   @focus="selectAll"

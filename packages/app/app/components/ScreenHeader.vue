@@ -26,12 +26,12 @@ const desktop = useMediaQuery('(min-width: 1024px)')
 const crumbs = computed(() => props.crumbs ?? [])
 const shortCrumbs = computed(() => collapseCrumbs(crumbs.value))
 
-const iconButton =
-  'grid size-11 shrink-0 place-items-center rounded-field text-icon outline-none transition-colors duration-150 hover:bg-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring'
+// ☰ is a raised icon button like the screen's actions (R(3,7), radius 14).
+const iconButton = 'raised-sm pressable grid size-11 shrink-0 place-items-center'
 // tabindex -1: where focus lands when a sheet closes and the control that opened it is gone (AppSheet).
-const heading = 'rounded-md text-2xl font-bold tracking-[-0.02em] outline-none focus-visible:ring-2 focus-visible:ring-ring'
-const crumbLink =
-  'min-w-0 truncate rounded-md outline-none transition-colors duration-150 hover:bg-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring'
+const heading = 'rounded-chip text-2xl font-bold tracking-[-0.02em] outline-none focus-visible:ring-2 focus-visible:ring-ring'
+// Path links are flat: the accent tint and ink under the pointer.
+const crumbLink = 'pressable min-w-0 truncate rounded-chip'
 </script>
 
 <template>
@@ -76,7 +76,7 @@ const crumbLink =
       </template>
 
       <template v-else>
-        <div class="-mx-3 flex min-w-0 items-center">
+        <div class="-mx-2 flex min-w-0 items-center gap-1">
           <button
             :id="MENU_BUTTON_ID"
             type="button"
@@ -90,12 +90,13 @@ const crumbLink =
           </button>
           <NavArrows />
           <span class="flex-1" />
-          <span v-if="state.saving" role="status" class="flex size-11 shrink-0 items-center justify-center text-subtle-foreground">
+          <span v-if="state.saving" role="status" class="flex h-11 w-6 shrink-0 items-center justify-center text-subtle-foreground">
             <Loader2 class="size-4 animate-spin" aria-hidden="true" />
             <span class="sr-only">{{ $t('status.saving') }}</span>
           </span>
-          <!-- No gap: at 360 px ☰, the arrows, the saving indicator and four 44 px actions fill the row exactly. -->
-          <div v-if="$slots.actions" class="flex shrink-0 items-center">
+          <!-- At 360 px ☰, the two 32 px arrows, the saving indicator and four raised 44 px actions 6 px apart fit the row
+               (342 of 344 px), 8 px from the screen's edges so the shadows have room. -->
+          <div v-if="$slots.actions" class="flex shrink-0 items-center gap-1.5">
             <slot name="actions" :compact="true" />
           </div>
         </div>

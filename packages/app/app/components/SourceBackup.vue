@@ -20,7 +20,7 @@ const connected = computed(() => props.source.status === 'ready' || props.source
 const restoring = ref(false)
 
 // Neutral hover; the text keeps its colour.
-const action = 'h-11 rounded-field text-primary transition-colors duration-150 hover:bg-hover'
+const action = 'h-11 text-accent-ink'
 </script>
 
 <template>

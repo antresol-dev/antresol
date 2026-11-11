@@ -17,7 +17,7 @@ const source = computed(() => state.sources.find((s) => s.config.id === route.pa
     <ScreenHeader :title="$t('settings.title')" />
     <ScreenBody>
       <EmptyState :text="$t('empty.sourceGone')">
-        <Button as-child variant="outline" class="h-11 rounded-field bg-surface">
+        <Button as-child variant="outline" class="h-11">
           <NuxtLink to="/settings">{{ $t('empty.backToSettings') }}</NuxtLink>
         </Button>
       </EmptyState>

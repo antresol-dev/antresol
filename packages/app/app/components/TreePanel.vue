@@ -58,7 +58,7 @@ function key(e: KeyboardEvent): void {
     />
     <button
       type="button"
-      class="mx-3 mt-3.5 mb-2 flex min-h-11 shrink-0 items-center gap-2 rounded-thumb border border-border bg-background px-3 text-left text-sm font-semibold text-muted-foreground outline-none transition-colors duration-150 hover:bg-surface hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+      class="raised pressable mx-3 mt-3.5 mb-2 flex min-h-11 shrink-0 items-center gap-2 px-3 text-left text-sm font-semibold text-muted-foreground hover:text-accent-ink disabled:pointer-events-none disabled:opacity-50"
       aria-haspopup="dialog"
       :aria-expanded="paletteOpen"
       :aria-keyshortcuts="mac ? 'Meta+K' : 'Control+K'"
@@ -69,7 +69,7 @@ function key(e: KeyboardEvent): void {
       <span class="flex-1">{{ $t('search.label') }}</span>
       <kbd
         aria-hidden="true"
-        class="rounded-md border border-b-2 border-border bg-surface px-1.5 text-[11px] font-semibold text-subtle-foreground"
+        class="rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-subtle-foreground"
       >
         {{ mac ? $t('search.shortcut.mac') : $t('search.shortcut.other') }}
       </kbd>
@@ -82,7 +82,7 @@ function key(e: KeyboardEvent): void {
         <TooltipTrigger as-child>
           <button
             type="button"
-            class="grid size-7 shrink-0 place-items-center rounded-lg text-icon outline-none transition-colors duration-150 hover:bg-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
+            class="pressable grid size-7 shrink-0 place-items-center rounded-chip disabled:pointer-events-none disabled:opacity-50"
             :aria-label="$t('folderMenu.new')"
             :disabled="locked"
             @click="open({ kind: 'create', parentId: null })"

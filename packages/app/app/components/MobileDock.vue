@@ -38,7 +38,7 @@ onBeforeUnmount(() => document.documentElement.style.removeProperty('--dock-h'))
         type="button"
         aria-haspopup="dialog"
         :aria-expanded="paletteOpen"
-        class="pointer-events-auto flex h-[52px] min-w-0 flex-1 items-center gap-2.5 rounded-[18px] border border-border bg-surface px-4 text-left text-[15px] font-semibold text-muted-foreground shadow-sm outline-none transition-colors duration-150 hover:bg-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+        class="raised pressable pointer-events-auto flex h-[52px] min-w-0 flex-1 items-center gap-2.5 px-4 text-left text-[15px] font-semibold text-muted-foreground hover:text-accent-ink"
         @click="paletteOpen = true"
       >
         <Search class="size-[18px] shrink-0" aria-hidden="true" />
@@ -48,7 +48,7 @@ onBeforeUnmount(() => document.documentElement.style.removeProperty('--dock-h'))
         v-if="canAdd"
         type="button"
         :aria-label="$t('quickAdd.title')"
-        class="pointer-events-auto grid size-[52px] shrink-0 place-items-center rounded-fab bg-primary text-primary-foreground shadow-md outline-none transition-colors duration-150 hover:bg-primary/90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+        class="painted pressable pointer-events-auto grid size-[52px] shrink-0 place-items-center"
         @click="quickAdd.open()"
       >
         <Plus class="size-6" aria-hidden="true" />

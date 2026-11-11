@@ -50,15 +50,16 @@ const rows = computed(() =>
 <template>
   <section class="grid gap-2">
     <h2 class="px-1 text-[13px] font-semibold text-subtle-foreground">{{ $t('folder.items', { count: items.length }) }}</h2>
-    <ul class="overflow-hidden rounded-card border border-border bg-surface py-1">
+    <!-- A flat list on the page: rows divided by lines, a row tile tinted under the pointer. -->
+    <ul>
       <li
         v-for="item in rows"
         :key="item.id"
-        class="group relative flex items-center transition-colors duration-150 hover:bg-hover not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-[68px] not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
+        class="group relative flex items-center rounded-field transition-colors duration-150 hover:bg-hover not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-[68px] not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
       >
         <NuxtLink
           :to="`/item/${item.id}`"
-          class="flex h-[62px] min-w-0 flex-1 items-center gap-3 px-3.5 outline-none select-none [-webkit-touch-callout:none] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+          class="flex h-[62px] min-w-0 flex-1 items-center gap-3 rounded-field px-3.5 select-none [-webkit-touch-callout:none]"
           @pointerdown="pointerdown(item.id, $event)"
           @pointermove="press.onPointermove"
           @pointerup="press.onPointerup"
@@ -73,7 +74,7 @@ const rows = computed(() =>
               <span
                 v-for="(value, i) in item.pinned"
                 :key="i"
-                class="max-w-32 min-w-0 shrink truncate rounded-md bg-chip px-1.5 py-px text-xs font-semibold text-subtle-foreground"
+                class="max-w-32 min-w-0 shrink truncate rounded-chip bg-chip px-1.5 py-px text-xs font-semibold text-subtle-foreground"
               >{{ value }}</span>
             </span>
             <span v-if="item.buckets.length > 0" class="truncate text-[13px] text-muted-foreground">
@@ -85,7 +86,7 @@ const rows = computed(() =>
           </span>
           <span
             v-if="item.outOfStock"
-            class="shrink-0 rounded-md bg-chip px-2 py-0.5 text-xs font-bold text-subtle-foreground"
+            class="shrink-0 rounded-chip bg-chip px-2 py-0.5 text-xs font-bold text-subtle-foreground"
           >{{ $t('list.out') }}</span>
           <span v-else class="shrink-0 text-base font-bold tabular-nums">
             {{ item.number }}<span v-if="item.unit" class="text-xs font-semibold text-muted-foreground" :class="item.unitGap && 'ml-0.5'">{{ item.unit }}</span>

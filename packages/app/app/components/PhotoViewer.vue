@@ -88,9 +88,9 @@ async function remove(): Promise<void> {
   if (await run(() => workspace.removePhoto(p.id))) confirmOpen.value = false
 }
 
-const iconButton = 'size-11 shrink-0 rounded-field'
+const iconButton = 'size-11 shrink-0'
 const arrow =
-  'absolute top-1/2 z-10 grid size-11 -translate-y-1/2 place-items-center rounded-full bg-surface/80 text-foreground outline-none transition-colors duration-150 hover:bg-surface focus-visible:ring-2 focus-visible:ring-ring'
+  'raised-sm pressable absolute top-1/2 z-10 grid size-11 -translate-y-1/2 place-items-center rounded-full'
 </script>
 
 <template>
@@ -135,7 +135,7 @@ const arrow =
         <Button
           type="button"
           variant="outline"
-          class="h-11 rounded-field bg-surface px-4 font-bold"
+          class="h-11 px-4 font-bold"
           :disabled="locked || index === 0"
           @click="makeCover"
         >
@@ -145,7 +145,7 @@ const arrow =
         <Button
           type="button"
           variant="outline"
-          class="h-11 rounded-field bg-surface px-4 font-bold"
+          class="h-11 px-4 font-bold"
           :disabled="locked"
           @click="confirmOpen = true"
         >

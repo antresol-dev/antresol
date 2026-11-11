@@ -121,7 +121,7 @@ async function submit(): Promise<void> {
   <form class="grid gap-3.5" novalidate @submit.prevent="submit">
     <div class="grid gap-1.5">
       <Label for="quick-add-name">{{ $t('form.name') }}</Label>
-      <Input id="quick-add-name" v-model="name" autocomplete="off" class="h-11 rounded-field bg-surface" />
+      <Input id="quick-add-name" v-model="name" autocomplete="off" class="h-11" />
       <section v-if="matches.length > 0" class="grid gap-1" aria-labelledby="quick-add-existing">
         <h3 id="quick-add-existing" class="pt-1 text-xs font-semibold text-subtle-foreground">{{ $t('quickAdd.existing') }}</h3>
         <ul class="grid gap-0.5">
@@ -133,7 +133,7 @@ async function submit(): Promise<void> {
               </span>
               <span class="truncate text-xs text-muted-foreground">{{ matchLine(m) }}</span>
             </span>
-            <Button type="button" variant="outline" size="sm" class="h-9 shrink-0 rounded-field bg-surface" :disabled="busy" @click="receiveHere(m)">
+            <Button type="button" variant="outline" size="sm" class="h-9 shrink-0" :disabled="busy" @click="receiveHere(m)">
               {{ $t(m.variantId === null && m.hasVariants ? 'quickAdd.openMatch' : 'quickAdd.receiveHere') }}
             </Button>
           </li>
@@ -147,7 +147,7 @@ async function submit(): Promise<void> {
         id="quick-add-folder"
         type="button"
         :aria-expanded="picking"
-        class="flex h-11 w-full min-w-0 items-center gap-2 rounded-field border border-input bg-surface px-3 text-left text-sm outline-none transition-colors duration-150 hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring"
+        class="flex h-11 w-full min-w-0 items-center gap-2 rounded-field border border-input bg-field px-3 text-left text-sm transition-colors duration-150 hover:bg-hover"
         @click="picking = !picking"
       >
         <span class="min-w-0 flex-1 truncate">{{ folderPath }}</span>
@@ -179,7 +179,7 @@ async function submit(): Promise<void> {
           inputmode="decimal"
           autocomplete="off"
           aria-describedby="quick-add-price-hint"
-          class="h-11 rounded-field bg-surface pl-10"
+          class="h-11 pl-10"
         />
       </div>
       <p id="quick-add-price-hint" class="text-xs text-subtle-foreground">{{ $t('quickAdd.priceHint') }}</p>
@@ -190,7 +190,7 @@ async function submit(): Promise<void> {
         {{ $t('quickAdd.url') }}
         <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
       </Label>
-      <Input id="quick-add-url" v-model="url" type="url" autocomplete="off" class="h-11 rounded-field bg-surface" />
+      <Input id="quick-add-url" v-model="url" type="url" autocomplete="off" class="h-11" />
     </div>
 
     <div v-if="canPhoto" class="grid gap-1.5">

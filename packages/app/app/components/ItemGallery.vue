@@ -113,7 +113,9 @@ onBeforeUnmount(() => document.removeEventListener('paste', onPaste))
 
 const cover = computed(() => props.photos[0] ?? null)
 const alt = (i: number): string => t('photos.alt', { n: i + 1, total: props.photos.length })
-const tile = 'relative size-16 shrink-0 overflow-hidden rounded-thumb outline-none focus-visible:ring-2 focus-visible:ring-ring'
+// The mock-up's photo block: the cover and its thumbnails lie flat on the photo backing; "Add photos" is a raised tile.
+// Tiles are 14 like every tile; 6 px apart, so the raised one has room for its shadow.
+const tile = 'relative size-16 shrink-0 overflow-hidden rounded-field'
 const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thumb-foreground motion-safe:animate-pulse'
 </script>
 
@@ -121,7 +123,7 @@ const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thu
   <section
     v-if="photos.length > 0 || progress || !readOnly"
     :aria-label="$t('photos.viewer')"
-    :class="['grid min-w-0 gap-0.5 rounded-card', dragging && 'ring-2 ring-ring']"
+    :class="['grid min-w-0 gap-1.5 rounded-card', dragging && 'ring-2 ring-ring']"
     @dragover="onDragOver"
     @dragleave="onDragLeave"
     @drop.prevent="onDrop"
@@ -129,14 +131,14 @@ const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thu
     <template v-if="cover">
       <button
         type="button"
-        class="aspect-[4/3] max-h-96 w-full overflow-hidden rounded-card bg-thumb outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        class="aspect-[4/3] max-h-96 w-full overflow-hidden rounded-card bg-thumb"
         :aria-label="alt(0)"
         @click="show(0)"
       >
         <PhotoImg :url="cover.url" size="card" :alt="alt(0)" class="size-full object-cover" />
       </button>
-      <div v-if="photos.length > 1 || progress || canAdd" class="flex flex-wrap gap-0.5">
-        <button v-for="(p, i) in photos" :key="p.id" type="button" :class="tile" :aria-label="alt(i)" @click="show(i)">
+      <div v-if="photos.length > 1 || progress || canAdd" class="flex flex-wrap gap-1.5">
+        <button v-for="(p, i) in photos" :key="p.id" type="button" :class="[tile, 'bg-thumb']" :aria-label="alt(i)" @click="show(i)">
           <PhotoImg :url="p.url" size="thumb" :alt="alt(i)" class="size-full object-cover" />
         </button>
         <div
@@ -151,7 +153,7 @@ const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thu
         <button
           v-if="canAdd"
           type="button"
-          :class="[tile, 'grid place-items-center border border-dashed border-border bg-surface text-icon transition-colors duration-150 hover:bg-hover hover:text-foreground']"
+          :class="[tile, 'raised-sm pressable grid place-items-center']"
           :aria-label="$t('photos.add')"
           @click="addOpen = true"
         >
@@ -170,12 +172,12 @@ const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thu
       </div>
       <div
         v-else
-        class="grid aspect-[4/3] max-h-96 w-full place-items-center gap-2 rounded-card border border-dashed border-border bg-surface p-4 text-center"
+        class="raised-card grid aspect-[4/3] max-h-96 w-full place-items-center gap-2 p-4.5 text-center"
       >
         <p v-if="!hasStore" class="text-sm text-muted-foreground">{{ $t('photos.noStore') }}</p>
         <PhotoPicker v-else multiple :disabled="!canAdd" @pick="upload" />
       </div>
-      <div v-if="skeletons.length > 1" class="flex flex-wrap gap-0.5">
+      <div v-if="skeletons.length > 1" class="flex flex-wrap gap-1.5">
         <div v-for="n in skeletons.slice(1)" :key="`up${n}`" :class="[tile, pending]">
           {{ $t('photos.progress', { n, total: progress?.total ?? 0 }) }}
         </div>
@@ -187,7 +189,7 @@ const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thu
     <NuxtLink
       v-if="!hasStore && sourceId && !readOnly"
       :to="`/settings/sources/${sourceId}`"
-      class="min-h-11 content-center rounded-md px-1 text-sm font-semibold text-primary underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+      class="min-h-11 content-center rounded-chip px-1 text-sm font-semibold text-accent-ink underline-offset-4 hover:underline"
     >
       {{ $t('photos.noStoreLink') }}
     </NuxtLink>

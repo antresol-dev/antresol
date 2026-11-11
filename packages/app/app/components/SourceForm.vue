@@ -133,7 +133,7 @@ async function save(): Promise<void> {
   <form class="grid gap-3.5" novalidate @submit.prevent="check">
     <div class="grid gap-1.5">
       <Label for="source-name">{{ $t('sourceForm.name') }}</Label>
-      <Input id="source-name" v-model="name" autocomplete="off" class="h-11 rounded-field bg-surface" />
+      <Input id="source-name" v-model="name" autocomplete="off" class="h-11" />
     </div>
 
     <div class="grid gap-1.5">
@@ -148,13 +148,13 @@ async function save(): Promise<void> {
           spellcheck="false"
           :aria-invalid="problem ? true : undefined"
           aria-describedby="source-cs-hint source-cs-problem"
-          class="h-11 rounded-field bg-surface"
+          class="h-11"
         />
         <Button
           type="button"
           variant="outline"
           size="icon"
-          class="size-11 shrink-0 rounded-field bg-surface"
+          class="size-11 shrink-0"
           :aria-label="$t(reveal ? 'sourceForm.hide' : 'sourceForm.show')"
           :aria-pressed="reveal"
           @click="reveal = !reveal"
@@ -192,7 +192,7 @@ async function save(): Promise<void> {
         {{ $t('sourceForm.uploadcareKey') }}
         <span class="font-normal text-subtle-foreground">· {{ $t('sourceForm.optional') }}</span>
       </Label>
-      <Input id="source-key" v-model="uploadcareKey" autocomplete="off" class="h-11 rounded-field bg-surface" />
+      <Input id="source-key" v-model="uploadcareKey" autocomplete="off" class="h-11" />
       <p class="text-sm text-subtle-foreground">
         {{ $t('sourceForm.uploadcareKeyHint') }}
         <a
@@ -219,7 +219,7 @@ async function save(): Promise<void> {
         placeholder="https://abc123.ucarecd.net"
         :aria-invalid="cdnProblem ? true : undefined"
         aria-describedby="source-cdn-problem"
-        class="h-11 rounded-field bg-surface"
+        class="h-11"
       />
       <p class="text-sm text-subtle-foreground">{{ $t('sourceForm.uploadcareCdnHint') }}</p>
       <p id="source-cdn-problem" role="alert" class="text-sm text-destructive">
@@ -243,7 +243,7 @@ async function save(): Promise<void> {
           spellcheck="false"
           :aria-invalid="storeProblem === 'cloudinaryCloud' || storeProblem === 'cloudinaryCloudFormat' ? true : undefined"
           aria-describedby="source-store-problem"
-          class="h-11 rounded-field bg-surface"
+          class="h-11"
         />
       </div>
       <div class="grid gap-1.5">
@@ -259,7 +259,7 @@ async function save(): Promise<void> {
           spellcheck="false"
           :aria-invalid="storeProblem === 'cloudinaryPreset' ? true : undefined"
           aria-describedby="source-store-problem"
-          class="h-11 rounded-field bg-surface"
+          class="h-11"
         />
         <p id="source-store-problem" role="alert" class="text-sm text-destructive">
           <template v-if="storeProblem">{{ $t(`sourceForm.problem.${storeProblem}`) }}</template>
@@ -287,7 +287,7 @@ async function save(): Promise<void> {
         autocomplete="off"
         autocapitalize="off"
         spellcheck="false"
-        class="h-11 rounded-field bg-surface"
+        class="h-11"
       />
       <p class="text-sm text-subtle-foreground">
         {{ $t('sourceForm.imgurHint') }}
@@ -300,7 +300,7 @@ async function save(): Promise<void> {
       </p>
     </div>
 
-    <Button type="submit" variant="outline" class="h-11 rounded-field bg-surface" :disabled="checking || saving">
+    <Button type="submit" variant="outline" class="h-11" :disabled="checking || saving">
       {{ $t(checking ? 'sourceForm.checking' : 'sourceForm.check') }}
     </Button>
 

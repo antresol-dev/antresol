@@ -69,12 +69,12 @@ async function remove(): Promise<void> {
       <h2 id="dictionaries-attributes" class="text-[13px] font-semibold text-subtle-foreground">
         {{ $t('dictionaries.attributes') }}
       </h2>
-      <Button variant="outline" class="h-11 rounded-field bg-surface" :disabled="locked" @click="open({ kind: 'form', attribute: null })">
+      <Button variant="outline" class="h-11" :disabled="locked" @click="open({ kind: 'form', attribute: null })">
         <Plus class="size-4" aria-hidden="true" />
         {{ $t('dictionaries.addAttribute') }}
       </Button>
     </div>
-    <ul v-if="rows.length > 0" class="rounded-card border border-border bg-surface py-1">
+    <ul v-if="rows.length > 0">
       <li
         v-for="row in rows"
         :key="row.attribute.id"

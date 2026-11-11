@@ -31,7 +31,7 @@ const fixTo = computed(() => {
   return b && b.kind === 'error' && b.source.config.kind === 'neon' ? `/settings/sources/${b.source.config.id}` : '/settings'
 })
 const linkClass =
-  'min-h-11 content-center rounded-md text-sm font-semibold text-primary underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring'
+  'min-h-11 content-center rounded-chip text-sm font-semibold text-accent-ink underline-offset-4 hover:underline'
 
 const creating = ref(false)
 const creatingBusy = ref(false)
@@ -59,7 +59,7 @@ function retry(): void {
         </AppSheet>
       </EmptyState>
       <EmptyState v-else-if="blocker?.kind === 'offline'" :text="$t('empty.offlineNoCopy')">
-        <Button variant="outline" class="h-11 rounded-field bg-surface" @click="retry">{{ $t('status.retry') }}</Button>
+        <Button variant="outline" class="h-11" @click="retry">{{ $t('status.retry') }}</Button>
       </EmptyState>
       <EmptyState
         v-else-if="blocker?.kind === 'error'"

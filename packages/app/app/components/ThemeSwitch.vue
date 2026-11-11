@@ -16,7 +16,7 @@ const options = ['system', 'light', 'dark'] as const
       v-for="option in options"
       :key="option"
       :for="`theme-${option}`"
-      class="-mx-2 min-h-11 cursor-pointer rounded-lg px-2 text-base font-medium transition-colors duration-150 hover:bg-hover"
+      class="-mx-2 min-h-11 rounded-chip px-2 text-base font-medium transition-colors duration-150 hover:bg-hover"
     >
       <RadioGroupItem :id="`theme-${option}`" :value="option" class="size-5" />
       {{ $t(`settings.appearance.${option}`) }}

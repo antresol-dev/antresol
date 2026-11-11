@@ -69,7 +69,7 @@ const crumbLink = 'pressable min-w-0 truncate rounded-chip'
             <h1 tabindex="-1" :class="[heading, wrapTitle ? 'wrap-anywhere' : 'truncate']">{{ title }}</h1>
             <p v-if="subtitle" class="mt-0.5 truncate text-[13px] font-semibold text-muted-foreground">{{ subtitle }}</p>
           </div>
-          <div v-if="$slots.actions" class="flex shrink-0 items-center gap-1.5">
+          <div v-if="$slots.actions" class="flex shrink-0 items-center gap-3">
             <slot name="actions" :compact="false" />
           </div>
         </div>
@@ -96,7 +96,7 @@ const crumbLink = 'pressable min-w-0 truncate rounded-chip'
           </span>
           <!-- At 360 px ☰, the two 32 px arrows, the saving indicator and four raised 44 px actions 6 px apart fit the row
                (342 of 344 px), 8 px from the screen's edges so the shadows have room. -->
-          <div v-if="$slots.actions" class="flex shrink-0 items-center gap-1.5">
+          <div v-if="$slots.actions" class="flex shrink-0 items-center gap-3">
             <slot name="actions" :compact="true" />
           </div>
         </div>

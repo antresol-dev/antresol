@@ -55,7 +55,7 @@ const rows = computed(() =>
       <li
         v-for="item in rows"
         :key="item.id"
-        class="group relative flex items-center rounded-field transition-colors duration-150 hover:bg-hover not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-[68px] not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
+        class="group relative flex items-center rounded-field transition-colors duration-150 hover:bg-hover not-first:before:absolute not-first:before:top-0 not-first:before:right-3.5 not-first:before:left-[68px] not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
       >
         <NuxtLink
           :to="`/item/${item.id}`"

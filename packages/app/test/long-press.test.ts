@@ -3,7 +3,7 @@ import { effectScope, type EffectScope } from 'vue'
 import { useLongPress, type LongPressHandlers } from '../app/composables/useLongPress'
 
 const touch = (x: number, y: number) => ({ pointerType: 'touch', clientX: x, clientY: y })
-const event = () => ({ preventDefault: vi.fn(), stopPropagation: vi.fn() })
+const event = () => ({ preventDefault: vi.fn(), stopImmediatePropagation: vi.fn() })
 
 let scope: EffectScope
 let h: LongPressHandlers
@@ -71,11 +71,11 @@ describe('useLongPress', () => {
     const e1 = event()
     h.onClickCapture(e1)
     expect(e1.preventDefault).toHaveBeenCalled()
-    expect(e1.stopPropagation).toHaveBeenCalled()
+    expect(e1.stopImmediatePropagation).toHaveBeenCalled()
     const e2 = event()
     h.onClickCapture(e2)
     expect(e2.preventDefault).not.toHaveBeenCalled()
-    expect(e2.stopPropagation).not.toHaveBeenCalled()
+    expect(e2.stopImmediatePropagation).not.toHaveBeenCalled()
 
     // A short tap opens the row as usual.
     h.onPointerdown(touch(10, 10))
@@ -84,7 +84,7 @@ describe('useLongPress', () => {
     const tap = event()
     h.onClickCapture(tap)
     expect(tap.preventDefault).not.toHaveBeenCalled()
-    expect(tap.stopPropagation).not.toHaveBeenCalled()
+    expect(tap.stopImmediatePropagation).not.toHaveBeenCalled()
   })
 
   it('does not swallow the next tap when the browser sent no click after the press', () => {

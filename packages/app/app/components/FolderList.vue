@@ -46,7 +46,7 @@ function pointerdown(id: Id, e: PointerEvent): void {
     <li
       v-for="f in folders"
       :key="f.id"
-      class="group relative flex items-center rounded-field transition-colors duration-150 not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-[58px] not-first:before:h-px not-first:before:bg-divider not-first:before:content-[''] hover:bg-hover"
+      class="group relative flex items-center rounded-field transition-colors duration-150 not-first:before:absolute not-first:before:top-0 not-first:before:right-3.5 not-first:before:left-[58px] not-first:before:h-px not-first:before:bg-divider not-first:before:content-[''] hover:bg-hover"
     >
       <NuxtLink
         :to="`/folder/${f.id}`"

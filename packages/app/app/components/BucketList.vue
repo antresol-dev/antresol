@@ -100,7 +100,7 @@ watch(() => props.highlight, reveal)
           isHighlight(row.variantId)
             ? 'row-selected my-0.5'
             : !isHighlight(rows[i - 1]?.variantId) &&
-              'not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-3.5 not-first:before:h-px not-first:before:bg-divider not-first:before:content-[\'\']',
+              'not-first:before:absolute not-first:before:top-0 not-first:before:right-3.5 not-first:before:left-3.5 not-first:before:h-px not-first:before:bg-divider not-first:before:content-[\'\']',
         ]"
       >
         <div class="flex min-h-[46px] min-w-0 items-center gap-2.5">

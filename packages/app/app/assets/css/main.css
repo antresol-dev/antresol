@@ -106,6 +106,9 @@
   --raised-sm-shadow-hover: 2.3px 2.3px 5.5px var(--shadow-hover), -3.2px -3.2px 7.6px var(--shadow-light), inset 0px 0px 0px transparent, inset 0px 0px 0px transparent;
   --raised-sm-shadow-pressed: 0px 0px 0px transparent, 0px 0px 0px transparent, inset 1.9px 1.9px 4.8px var(--shadow-pressed), inset -2.7px -2.7px 6.5px var(--shadow-light);
   --card-shadow: 4.7px 4.7px 11.1px var(--shadow-dark), -6.5px -6.5px 15.1px var(--shadow-light);
+  /* Menus, selects and lists that float over the page: a plain lifted shadow, not a neumorphic one (they overlap
+     other surfaces, where paired light and dark shadows read as stains). */
+  --popover-shadow: 0px 14px 32px -10px rgba(28, 32, 48, 0.28), 0px 3px 8px rgba(28, 32, 48, 0.08);
   --pill-shadow: 2.3px 2.3px 6.3px var(--shadow-dark), -3.2px -3.2px 8.6px var(--shadow-light);
   --pill-shadow-selected: 2.3px 2.3px 6.3px var(--shadow-selected), -3.2px -3.2px 8.6px var(--shadow-light);
   --step-shadow-pressed: 0px 0px 0px transparent, 0px 0px 0px transparent, inset 1.6px 1.6px 4px var(--shadow-pressed), inset -2.2px -2.2px 5.4px var(--shadow-light);
@@ -162,7 +165,9 @@
   --shadow-light: rgba(255, 255, 255, 0.06);
   --shade-base: #000000;
   --shade-share: 25%;
-  --shadow-hover: color-mix(in srgb, var(--tint-shadow) 60%, transparent);
+  /* Hover only tints the control: the resting shadow stays, so a raised control keeps its depth until pressed. */
+  --shadow-hover: var(--shadow-dark);
+  --popover-shadow: 0px 16px 36px -10px rgba(0, 0, 0, 0.7), 0px 3px 8px rgba(0, 0, 0, 0.35);
   --shadow-pressed: color-mix(in srgb, var(--tint-shadow) 65%, transparent);
   --shadow-selected: color-mix(in srgb, var(--tint-shadow) 62%, transparent);
   --painted-alpha: 70%;
@@ -285,17 +290,24 @@
 }
 
 @layer components {
+  .floating {
+    border-radius: var(--radius-card);
+    box-shadow: var(--popover-shadow);
+  }
+
   /* Order matters: the kinds below override the ghost defaults of .pressable. */
   .pressable {
     --hover-bg: var(--ghost-hover);
     --active-bg: var(--ghost-pressed);
     --hover-ink: var(--accent-ink);
     border-radius: var(--radius-field);
+    /* The shadow and the sink share one duration and curve, so the raised shadow never fades before the control
+       goes down (or comes back before it rises). */
     transition:
       background-color 180ms ease,
       color 180ms ease,
-      box-shadow 200ms ease-out,
-      transform 120ms ease-out;
+      box-shadow 160ms cubic-bezier(0.4, 0, 0.2, 1),
+      transform 160ms cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .raised {

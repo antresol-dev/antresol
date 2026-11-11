@@ -397,3 +397,28 @@ describe('components and pages', () => {
     expect(problems).toEqual([])
   })
 })
+
+describe('owner fixes after Plan 8', () => {
+  const ui = fileURLToPath(new URL('../app/components/ui/', import.meta.url))
+  const floatingFiles = [
+    'dropdown-menu/DropdownMenuContent.vue',
+    'dropdown-menu/DropdownMenuSubContent.vue',
+    'select/SelectContent.vue',
+    'combobox/ComboboxList.vue',
+  ]
+  it.each(floatingFiles)('%s floats on a plain lifted shadow, not a neumorphic one', (file) => {
+    const source = readFileSync(join(ui, file), 'utf8')
+    expect(source).toMatch(/\bfloating\b/)
+    expect(source).not.toMatch(/\braised-card\b/)
+  })
+  it('dark theme: hover keeps the resting shadow (only the colour changes until pressed)', () => {
+    expect(dark['shadow-hover']).toBe('var(--shadow-dark)')
+  })
+  it('the shadow and the sink of a press share one duration and curve', () => {
+    const block = /\.pressable \{[^}]*transition:([^;]*);/.exec(css)?.[1] ?? ''
+    const shadow = /box-shadow\s+([^,]+)/.exec(block)?.[1]?.trim()
+    const sink = /transform\s+([^,]+)/.exec(block)?.[1]?.trim()
+    expect(shadow).toBeDefined()
+    expect(shadow).toBe(sink)
+  })
+})

@@ -79,7 +79,7 @@ const action = 'h-11 min-w-0 px-2 font-bold'
       <StepperPill v-if="stepper" :stepper="stepper" :name="null" />
     </div>
     <PendingChip v-if="stepper && stepper.state.value !== 'idle'" :stepper="stepper" :unit="unit" />
-    <div v-if="stepper" class="grid grid-cols-3 gap-2">
+    <div v-if="stepper" class="grid grid-cols-3 gap-4">
       <Button variant="outline" :class="action" :disabled="readOnly" @click="emit('open', 'receive')">{{ $t('stockActions.receive') }}</Button>
       <Button variant="outline" :class="action" :disabled="readOnly" @click="emit('open', 'use')">{{ $t('stockActions.use') }}</Button>
       <Button variant="outline" :class="action" :disabled="readOnly" @click="emit('count')">{{ $t('stock.count') }}</Button>

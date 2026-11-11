@@ -8,7 +8,7 @@ export interface LongPressHandlers {
   /** Blocks the browser menu while a touch press is held or has just fired. */
   onContextmenu(e: Pick<Event, 'preventDefault'>): void
   /** Swallows the one click that follows a fired long press, so the row link does not open. */
-  onClickCapture(e: Pick<Event, 'preventDefault' | 'stopPropagation'>): void
+  onClickCapture(e: Pick<Event, 'preventDefault' | 'stopImmediatePropagation'>): void
 }
 
 /** Touch only. Fires after `delay` (500 ms) unless the finger moves more than `tolerance` (10 px), lifts or the press is cancelled. */
@@ -59,7 +59,8 @@ export function useLongPress(
       if (!fired) return
       fired = false
       e.preventDefault()
-      e.stopPropagation()
+      // Immediate: no other click listener on the row runs (the link's navigation, a row's own click handler).
+      e.stopImmediatePropagation()
     },
   }
 }

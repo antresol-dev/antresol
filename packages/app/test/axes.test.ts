@@ -1,6 +1,6 @@
 import { axisRemovalPreview } from '@graymatter/core'
 import { describe, expect, it } from 'vitest'
-import { attributeCreateCommand, attributeFormError, axesSummary, axisRemovalNotice, movedAxes } from '../app/lib/axes'
+import { attributeCreateCommand, attributeFormError, axesSummary, axisAddLoss, axisRemovalNotice, movedAxes, variantClash } from '../app/lib/axes'
 import { axisSnapshot } from './fixtures/axis-snapshot'
 
 const ids = { id: 'a1', inventoryId: 'inv' }
@@ -57,5 +57,35 @@ describe('axisRemovalNotice', () => {
     const s = axisSnapshot()
     s.variantAttributeValues = s.variantAttributeValues.filter((x) => x.attributeId !== 'volt' && x.variantId !== 'c16')
     expect(axisRemovalNotice(s, axisRemovalPreview(s, 'C', 'volt'))).toEqual({ kind: 'none' })
+  })
+})
+
+describe('axisAddLoss', () => {
+  it('names the formatted shared value an axis would drop', () => {
+    const s = axisSnapshot()
+    // Capacitor has axes and no shared value of its own: give it one, and remove its variants.
+    s.attributes.find((a) => a.id === 'res')!.unit = 'Ω'
+    s.itemAttributes.push({ itemId: 'C', attributeId: 'res', value: '4700', axisPosition: null })
+    s.variants = s.variants.filter((v) => v.itemId !== 'C')
+    expect(axisAddLoss(s, 'C', 'res')).toEqual({ name: 'Resistance', value: '4.7 kΩ' })
+  })
+  it('says nothing when variants take the value or the value becomes the first variant', () => {
+    const s = axisSnapshot()
+    s.itemAttributes.push({ itemId: 'C', attributeId: 'res', value: '4700', axisPosition: null })
+    expect(axisAddLoss(s, 'C', 'res')).toBeNull()
+    expect(axisAddLoss(s, 'R', 'pkg')).toBeNull()
+    expect(axisAddLoss(s, 'M', 'pkg')).toBeNull()
+  })
+})
+
+describe('variantClash', () => {
+  it('finds an archived variant with the final values, with its archive', () => {
+    expect(variantClash(axisSnapshot(), 'R', { res: '4700' }, 'r1k')).toEqual({ variantId: 'r4k7', archived: true, archiveId: 'arch' })
+  })
+  it('finds an active one, and ignores the variant itself', () => {
+    const s = axisSnapshot()
+    expect(variantClash(s, 'R', { res: '10000' }, 'r1k')).toMatchObject({ variantId: 'r10k', archived: false })
+    expect(variantClash(s, 'R', { res: '10000' }, 'r10k')).toBeNull()
+    expect(variantClash(s, 'C', { cap: '0.0000001', volt: null }, 'c50')).toMatchObject({ variantId: 'c16' })
   })
 })

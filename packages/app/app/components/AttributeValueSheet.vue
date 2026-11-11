@@ -106,6 +106,7 @@ async function save(): Promise<void> {
           <Label for="attribute-value">{{ $t('attributeSheet.value') }}</Label>
           <AttributeValueField
             id="attribute-value"
+            :key="choice"
             v-model="value"
             :attribute="attribute"
             :disabled="locked"

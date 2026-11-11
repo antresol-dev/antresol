@@ -209,3 +209,23 @@ export function axisRemovalPreview(s: InventorySnapshot, itemId: Id, attributeId
   const collisions = [...groups.values()].filter((g) => g.length > 1)
   return { blocked: collisions.length > 0 ? 'duplicate_variant' : null, collisions, sharedValue, removedValues }
 }
+
+export interface AxisAddition {
+  /** The item gets its first variant from the shared value. */
+  createsVariant: boolean
+  /** The shared value that is lost: the attribute had one, no variant takes it and the item has no variants to copy it to. */
+  dropsValue: string | null
+}
+
+/**
+ * What making a shared attribute an axis does (spec §4.6), archived variants counted as variants: with no variants and
+ * no other axis the shared value becomes the first variant; with variants it is copied to each of them; with another
+ * axis and no variants it has nowhere to go and is dropped. item.addAxis never rejects; the interface asks before a drop.
+ */
+export function addAxisPreview(s: InventorySnapshot, itemId: Id, attributeId: Id): AxisAddition {
+  const none: AxisAddition = { createsVariant: false, dropsValue: null }
+  const link = s.itemAttributes.find((r) => r.itemId === itemId && r.attributeId === attributeId)
+  if (!link || link.axisPosition !== null || isEmpty(link.value)) return none
+  if (s.variants.some((v) => v.itemId === itemId)) return none
+  return axesOf(s, itemId).length === 0 ? { createsVariant: true, dropsValue: null } : { createsVariant: false, dropsValue: link.value }
+}

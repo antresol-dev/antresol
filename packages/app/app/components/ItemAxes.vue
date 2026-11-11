@@ -4,7 +4,6 @@ import { ArrowDown, ArrowUp, Link2, ListOrdered, Plus, Trash2 } from '@lucide/vu
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import type { AxisAdded } from '~/composables/useAddAxis'
 import { axesSummary, axisRemovalNotice, movedAxes, type AxisRemovalNotice } from '~/lib/axes'
 import { errorMessageKey } from '~/lib/errors'
 import type { ItemView } from '~/lib/item-view'
@@ -12,12 +11,11 @@ import type { ItemView } from '~/lib/item-view'
 // The head of the variants section: what the variants differ by, and the menu that changes it (add an attribute, reorder,
 // make one shared, remove one). Making an axis shared or removing it shows what that would do first.
 const props = defineProps<{ view: ItemView }>()
-const emit = defineEmits<{ loose: [added: AxisAdded] }>()
 
 const { t } = useI18n()
 const workspace = useWorkspace()
 const { state } = workspace
-const addAxis = useAddAxis()
+const { add: addAxis, loss: axisLoss } = useAddAxis()
 
 const itemId = computed(() => props.view.item.id)
 const summary = computed(() => axesSummary(props.view.axes))
@@ -54,17 +52,34 @@ const addSheetOpen = computed({
     if (!open && !addLocked.value) addOpen.value = false
   },
 })
-async function submitAdd(): Promise<void> {
+// A shared value the new axis would drop (another axis exists and there are no variants to take it) is confirmed first.
+// The item always has an axis here, so the new one never makes a first variant and there is no stock offer to make.
+const dropLoss = ref<{ name: string; value: string } | null>(null)
+const dropShown = shallowRef<{ name: string; value: string } | null>(null)
+const dropOpen = computed({
+  get: () => dropLoss.value !== null,
+  set: (open: boolean) => {
+    if (!open && !busy.value) dropLoss.value = null
+  },
+})
+function submitAdd(): void {
   if (addLocked.value || state.readOnly || creating.value || !choice.value) return
+  const loss = axisLoss(itemId.value, choice.value)
+  if (!loss) return void applyAdd()
+  dropShown.value = loss
+  dropLoss.value = loss
+}
+async function applyAdd(): Promise<void> {
+  if (busy.value || state.readOnly || !choice.value) return
   busy.value = true
   errorKey.value = null
   try {
-    const added = await addAxis(itemId.value, choice.value)
+    await addAxis(itemId.value, choice.value)
     addOpen.value = false
-    if (added) emit('loose', added)
   } catch (e) {
     errorKey.value = errorMessageKey(e)
   } finally {
+    dropLoss.value = null
     busy.value = false
   }
 }
@@ -175,6 +190,16 @@ function select(key: string): void {
         </Button>
       </template>
     </AppSheet>
+
+    <ConfirmSheet
+      v-model:open="dropOpen"
+      :title="$t('axes.dropTitle', { name: dropShown?.name ?? '' })"
+      :description="$t('axes.dropBody', { name: dropShown?.name ?? '', value: dropShown?.value ?? '' })"
+      :confirm-label="$t(busy ? 'status.saving' : 'axes.dropConfirm')"
+      :busy="busy"
+      destructive
+      @confirm="applyAdd"
+    />
 
     <AppSheet v-model:open="reorderOpen" :title="$t('axes.reorderTitle')" :locked="busy">
       <ol class="mt-3.5 grid gap-1">

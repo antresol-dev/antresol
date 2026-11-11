@@ -1,4 +1,4 @@
-import { BUILTIN_UNITS, duplicateOf, formatAmount, formatAttributeValue, itemAxes, resolveUnit, sameAxisValue, type Id, type InventorySnapshot, type Quantity } from '@graymatter/core'
+import { BUILTIN_UNITS, duplicateOf, formatAmountParts, formatAttributeValue, itemAxes, resolveUnit, sameAxisValue, type Id, type InventorySnapshot, type Quantity, type UnitDef } from '@graymatter/core'
 import { parseAmountText } from './amounts'
 import { parseAttributeInput } from './attribute-values'
 import { splitValueList, splitVariantLines } from './lists'
@@ -23,6 +23,12 @@ export interface BatchLine {
 
 const SEPARATOR = ' · '
 
+/** `formatAmount`, but pieces keep their unit past a thousand (`10k pcs`): a bare "10k" next to a value reads as another value. */
+function quantityText(q: Quantity, unit: UnitDef): string {
+  const { number, unit: symbol } = formatAmountParts(q, unit)
+  return unit.key === 'pcs' && symbol !== unit.symbol ? `${number}${symbol} ${unit.symbol}` : `${number} ${symbol}`
+}
+
 /**
  * Reads what was typed into "Add variants" against the item's axes. A variant per line, its values separated by `;` in
  * axis order, then an optional quantity (`100n; 50V; 10`, or `1k; 100` on one axis). One axis and no `;` on the line:
@@ -44,7 +50,7 @@ export function planVariantBatch(s: InventorySnapshot, itemId: Id, input: string
     const row = all.slice(0, axes.length)
     const tail = all.slice(axes.length)
     if (row.length !== axes.length || row.some((part) => part === '')) return fail('errors.domain.axis_value_required')
-    if (tail.length > 1) return fail('errors.domain.axis_value_required')
+    if (tail.length > 1) return fail('errors.domain.variant_line_too_long')
     let quantity: Quantity | null = null
     if (tail.length === 1) {
       quantity = parseAmountText(tail[0]!, unit)
@@ -68,7 +74,7 @@ export function planVariantBatch(s: InventorySnapshot, itemId: Id, input: string
       duplicate: existing ? { variantId: existing.id, archived: existing.archivedAt !== null, archiveId: existing.archiveId } : null,
       repeat,
       quantity,
-      quantityLabel: quantity === null ? null : formatAmount(quantity, unit),
+      quantityLabel: quantity === null ? null : quantityText(quantity, unit),
     }
   })
 }

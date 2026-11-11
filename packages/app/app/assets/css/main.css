@@ -425,6 +425,16 @@
     }
   }
 
+  /* High-contrast preference: the pane is the opaque popover surface, nothing shows through it. */
+  @media (prefers-contrast: more) {
+    .glass {
+      background-color: var(--popover);
+      background-image: none;
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+  }
+
   /* Order matters: the kinds below override the ghost defaults of .pressable. */
   .pressable {
     --hover-bg: var(--ghost-hover);

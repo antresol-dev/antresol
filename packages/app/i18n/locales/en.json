@@ -676,6 +676,7 @@
       "duplicate_variant": "A variant with these values already exists.",
       "axis_required": "Variants need at least one attribute they differ by.",
       "axis_value_required": "Every variant needs a value for each attribute it differs by.",
+      "variant_line_too_long": "A line is the values, then at most one quantity. Use commas for a list: 2k2, 4k7, 6k8.",
       "attribute_is_axis": "Variants differ by this attribute. Change that on the item first.",
       "not_an_axis": "Variants don’t differ by this attribute.",
       "option_in_use": "This value is still in use. Change it where it’s used first.",

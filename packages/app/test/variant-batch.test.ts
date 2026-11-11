@@ -55,6 +55,17 @@ describe('planVariantBatch', () => {
     expect(list.map((l) => [l.label, l.quantity])).toEqual([['1 kΩ', null], ['10 kΩ', null]])
   })
 
+  it('always shows the unit on the quantity, also from a thousand up', () => {
+    const [big] = planVariantBatch(axisSnapshot(), 'R', '1k; 10k')
+    expect([big!.quantity, big!.quantityLabel]).toEqual(['10000', '10k pcs'])
+  })
+
+  it('explains a ";" list on one axis instead of asking for values', () => {
+    const [line] = planVariantBatch(axisSnapshot(), 'R', '2k2; 4k7; 6k8')
+    expect(line!.error).toBe('errors.domain.variant_line_too_long')
+    expect(isNewLine(line!)).toBe(false)
+  })
+
   it('accepts an expression as the quantity and refuses a bad or zero one', () => {
     const [expr] = planVariantBatch(axisSnapshot(), 'R', '2k; 5x100')
     expect(expr!.quantity).toBe('500')

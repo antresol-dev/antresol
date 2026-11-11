@@ -39,11 +39,12 @@ const changes = computed(() =>
   changedFields(baseline, { name: name.value.trim(), options: options.value.trim(), unit: unit.value.trim(), siPrefixes: siPrefixes.value }),
 )
 
-// The example under the switch: what the unit and prefixes make of "4k7".
+// The example under the switch: what the unit and prefixes make of "4k7" (or of a plain "4700" without prefixes).
 const example = computed(() => {
-  const rules = { unit: unit.value.trim() || 'Ω', siPrefixes: true }
-  const stored = parseNumberValue('4k7', rules)
-  return stored === null ? null : `4k7 → ${formatNumberValue(stored, rules)}`
+  const rules = { unit: unit.value.trim(), siPrefixes: siPrefixes.value }
+  const input = rules.siPrefixes ? '4k7' : '4700'
+  const stored = parseNumberValue(input, rules)
+  return stored === null ? null : `${input} → ${formatNumberValue(stored, rules)}`
 })
 const canSubmit = computed(
   () => !busy.value && !state.readOnly && !!state.snapshot && (!props.attribute || Object.keys(changes.value).length > 0),

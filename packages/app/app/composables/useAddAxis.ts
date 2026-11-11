@@ -1,4 +1,5 @@
 import { newId, variantLabel, type Id } from '@graymatter/core'
+import { axisAddLoss } from '~/lib/axes'
 import { looseTransferOffer } from '~/lib/item-view'
 
 export interface AxisAdded {
@@ -10,11 +11,15 @@ export interface AxisAdded {
 /**
  * Makes an attribute a variant axis of an item. An item with no variants gets its first one from the shared value; when it
  * had stock without a variant, the result carries the offer to move that stock into the new variant (null otherwise).
- * Throws what the write throws.
+ * `loss` says what a shared value would be lost by it (to confirm first), null when nothing is. Throws what the write throws.
  */
 export function useAddAxis() {
   const workspace = useWorkspace()
-  return async (itemId: Id, attributeId: Id): Promise<AxisAdded | null> => {
+  const loss = (itemId: Id, attributeId: Id) => {
+    const s = workspace.state.snapshot
+    return s ? axisAddLoss(s, itemId, attributeId) : null
+  }
+  const add = async (itemId: Id, attributeId: Id): Promise<AxisAdded | null> => {
     const before = workspace.state.snapshot
     const offer = before ? looseTransferOffer(before, itemId) : null
     const firstVariantId = newId()
@@ -24,4 +29,5 @@ export function useAddAxis() {
     if (!offer || !after || !created) return null
     return { offer, variants: [{ id: created.id, name: variantLabel(after, created) }] }
   }
+  return { add, loss }
 }

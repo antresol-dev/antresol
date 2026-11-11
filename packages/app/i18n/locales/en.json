@@ -107,7 +107,10 @@
     "menu": "Variant attributes",
     "add": "Add attribute variants differ by",
     "addTitle": "Add attribute variants differ by",
-    "addHint": "Each variant gets its own value of it. A value this item already has becomes its first variant.",
+    "addHint": "Each variant gets its own value of it. If this item already has a value for it, the variants it has keep that value.",
+    "dropTitle": "Make “{name}” a variant attribute?",
+    "dropBody": "This item’s value for “{name}” is {value}. A variant attribute has a value per variant, and this item has no variants yet, so that value will be removed.",
+    "dropConfirm": "Make variant attribute",
     "addConfirm": "Add",
     "reorder": "Reorder",
     "reorderTitle": "Reorder attributes",
@@ -176,8 +179,21 @@
     "continue": "Continue",
     "add": "Add"
   },
-  "variantForm": { "save": "Save", "description": "Description" },
-  "variantValues": { "title": "Values", "save": "Save", "empty": "No attributes to fill in." },
+  "variantForm": {
+    "save": "Save",
+    "description": "Description",
+    "exists": "These values match a variant that already exists.",
+    "inArchive": "These values match a variant in the archive.",
+    "restore": "Restore"
+  },
+  "variantValues": {
+    "title": "Values",
+    "save": "Save",
+    "empty": "No attributes to fill in.",
+    "exists": "{label} would match a variant that already exists.",
+    "inArchive": "{label} would match a variant in the archive.",
+    "restore": "Restore"
+  },
   "photos": {
     "add": "Add photos",
     "addTitle": "Add photos",

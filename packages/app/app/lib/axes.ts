@@ -1,4 +1,4 @@
-import { variantLabel, type AttributeKind, type AxisRemoval, type Command, type Id, type InventorySnapshot } from '@graymatter/core'
+import { addAxisPreview, duplicateOf, formatAttributeValue, variantLabel, type AttributeKind, type AxisRemoval, type Command, type Id, type InventorySnapshot } from '@graymatter/core'
 import { parseNameList } from './lists'
 
 /** The unit of a number attribute is at most this many characters (the same limit as core's). */
@@ -76,4 +76,25 @@ export function axisRemovalNotice(s: InventorySnapshot, preview: AxisRemoval): A
       return { variantId: r.variantId, label: v ? variantLabel(s, v) : '', value: r.value }
     }),
   }
+}
+
+/** The shared value that making the attribute an axis would remove, formatted as it is shown; null when nothing is lost
+ *  and the axis can be added at once. */
+export function axisAddLoss(s: InventorySnapshot, itemId: Id, attributeId: Id): { name: string; value: string } | null {
+  const attribute = s.attributes.find((a) => a.id === attributeId)
+  const { dropsValue } = addAxisPreview(s, itemId, attributeId)
+  return attribute && dropsValue !== null ? { name: attribute.name, value: formatAttributeValue(attribute, dropsValue) } : null
+}
+
+export interface VariantClash {
+  variantId: Id
+  /** The variant with these values is in the archive: it can be restored (with `archiveId`) instead. */
+  archived: boolean
+  archiveId: Id | null
+}
+
+/** The other variant of the item that already has these values on its axes (archived ones too, §4.7); null when none. */
+export function variantClash(s: InventorySnapshot, itemId: Id, values: Record<Id, string | null | undefined>, exceptVariantId: Id): VariantClash | null {
+  const found = duplicateOf(s, itemId, new Map(Object.entries(values).map(([k, v]) => [k, v ?? null])), exceptVariantId)
+  return found ? { variantId: found.id, archived: found.archivedAt !== null, archiveId: found.archiveId } : null
 }

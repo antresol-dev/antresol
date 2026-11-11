@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { InventorySnapshot, Variant } from '../src/model'
 import {
+  addAxisPreview,
   axisRemovalPreview,
   compareVariants,
   duplicateOf,
@@ -9,7 +10,7 @@ import {
   sameAxisValue,
   variantLabel,
 } from '../src/variants'
-import { ARCHIVED, attribute, axis, electronics, item, makeSnapshot, value, variant } from './fixtures'
+import { ARCHIVED, attribute, axis, electronics, item, makeSnapshot, shared, value, variant } from './fixtures'
 
 const v = (s: InventorySnapshot, id: string): Variant => s.variants.find((x) => x.id === id)!
 const sorted = (s: InventorySnapshot, itemId: string) =>
@@ -239,5 +240,37 @@ describe('axisRemovalPreview', () => {
     expect(axisRemovalPreview(onlyArchived, 'R', 'res').blocked).toBe('axis_required')
     const noVariants = { ...s, variants: s.variants.filter((x) => x.itemId !== 'R') }
     expect(axisRemovalPreview(noVariants, 'R', 'res')).toEqual({ blocked: null, collisions: [], sharedValue: null, removedValues: [] })
+  })
+})
+
+describe('addAxisPreview', () => {
+  const base = (over: Partial<InventorySnapshot>) =>
+    makeSnapshot({
+      items: [item('I', 'Item')],
+      attributes: [attribute('a', 'A', 'text'), attribute('b', 'B', 'text')],
+      ...over,
+    })
+  it('makes the first variant from a shared value when the item has no variants and no axis', () => {
+    const s = base({ itemAttributes: [shared('I', 'a', 'x')] })
+    expect(addAxisPreview(s, 'I', 'a')).toEqual({ createsVariant: true, dropsValue: null })
+  })
+  it('creates nothing and drops nothing without a shared value', () => {
+    expect(addAxisPreview(base({ itemAttributes: [shared('I', 'a', null)] }), 'I', 'a')).toEqual({ createsVariant: false, dropsValue: null })
+    expect(addAxisPreview(base({ itemAttributes: [shared('I', 'a', '  ')] }), 'I', 'a')).toEqual({ createsVariant: false, dropsValue: null })
+    expect(addAxisPreview(base({}), 'I', 'a')).toEqual({ createsVariant: false, dropsValue: null })
+  })
+  it('copies the value to existing variants, so nothing is dropped', () => {
+    const s = base({ itemAttributes: [axis('I', 'b', 0), shared('I', 'a', 'x')], variants: [variant('v', 'I')], variantAttributeValues: [value('v', 'b', 'y')] })
+    expect(addAxisPreview(s, 'I', 'a')).toEqual({ createsVariant: false, dropsValue: null })
+    const archived = base({ itemAttributes: [shared('I', 'a', 'x')], variants: [variant('v', 'I', ARCHIVED)] })
+    expect(addAxisPreview(archived, 'I', 'a')).toEqual({ createsVariant: false, dropsValue: null })
+  })
+  it('drops the value when another axis exists and there are no variants', () => {
+    const s = base({ itemAttributes: [axis('I', 'b', 0), shared('I', 'a', 'x')] })
+    expect(addAxisPreview(s, 'I', 'a')).toEqual({ createsVariant: false, dropsValue: 'x' })
+  })
+  it('does nothing for an attribute that is already an axis', () => {
+    const s = base({ itemAttributes: [axis('I', 'a', 0)] })
+    expect(addAxisPreview(s, 'I', 'a')).toEqual({ createsVariant: false, dropsValue: null })
   })
 })

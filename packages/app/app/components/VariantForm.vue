@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { captureBaseline, changedFields } from '~/lib/changed-fields'
+import { variantClash } from '~/lib/axes'
 import { errorMessageKey } from '~/lib/errors'
 
 // A variant is its values on the item's axes, plus a description.
@@ -32,7 +33,26 @@ const changedValues = computed(() => changedFields(valueBaseline, { ...values.va
 const changedDescription = computed(() => changedFields(descriptionBaseline, { description: description.value.trim() || null }))
 const hasChanges = computed(() => Object.keys(changedValues.value).length > 0 || Object.keys(changedDescription.value).length > 0)
 const hasFieldError = computed(() => Object.values(fieldErrors.value).some((e) => e))
-const canSubmit = computed(() => !busy.value && !state.readOnly && hasChanges.value && !hasFieldError.value)
+// The values as they would be saved already belong to another variant (an archived one can be restored instead, §4.7).
+const clash = computed(() =>
+  state.snapshot && Object.keys(changedValues.value).length > 0 && !hasFieldError.value
+    ? variantClash(state.snapshot, props.variant.itemId, values.value, props.variant.id)
+    : null,
+)
+const canSubmit = computed(() => !busy.value && !state.readOnly && hasChanges.value && !hasFieldError.value && !clash.value)
+
+async function restore(archiveId: Id): Promise<void> {
+  if (busy.value || state.readOnly) return
+  busy.value = true
+  errorKey.value = null
+  try {
+    await workspace.apply({ type: 'restore', archiveId })
+  } catch (e) {
+    errorKey.value = errorMessageKey(e)
+  } finally {
+    busy.value = false
+  }
+}
 
 async function submit(): Promise<void> {
   if (!canSubmit.value) return
@@ -74,6 +94,20 @@ async function submit(): Promise<void> {
       </Label>
       <Input id="variant-description" v-model="description" autocomplete="off" class="h-11 rounded-field bg-surface" />
     </div>
+    <p v-if="clash" role="alert" class="flex flex-wrap items-center justify-between gap-2 text-sm text-destructive">
+      {{ $t(clash.archived ? 'variantForm.inArchive' : 'variantForm.exists') }}
+      <Button
+        v-if="clash.archived && clash.archiveId"
+        type="button"
+        variant="outline"
+        size="sm"
+        class="h-9 rounded-field"
+        :disabled="busy || !!state.readOnly"
+        @click="restore(clash.archiveId)"
+      >
+        {{ $t('variantForm.restore') }}
+      </Button>
+    </p>
     <p id="variant-form-error" role="alert" class="text-sm text-destructive">
       <template v-if="errorKey">{{ $t(errorKey) }}</template>
     </p>

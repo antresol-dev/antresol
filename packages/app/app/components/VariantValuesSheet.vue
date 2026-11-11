@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Id } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
+import { variantClash, type VariantClash } from '~/lib/axes'
 import { errorMessageKey } from '~/lib/errors'
 import type { AxisRow, ItemView } from '~/lib/item-view'
 
@@ -51,7 +52,34 @@ const open = computed({
 
 const changed = computed(() => Object.keys(values.value).filter((k) => (values.value[k] ?? null) !== (baseline.value[k] ?? null)))
 const hasFieldError = computed(() => Object.values(fieldErrors.value).some((e) => e))
-const canSave = computed(() => !saving.value && !state.readOnly && changed.value.length > 0 && !hasFieldError.value)
+// Rows whose edited values would equal another variant's (an archived one can be restored instead, §4.7).
+const clashes = computed(() => {
+  const s = state.snapshot
+  const found: { row: { id: Id; label: string }; clash: VariantClash }[] = []
+  if (!s || hasFieldError.value) return found
+  const edited = new Set(changed.value.map((k) => k.split(':')[0]))
+  for (const row of rows.value) {
+    if (!edited.has(row.id)) continue
+    const final = Object.fromEntries(axes.value.map((a) => [a.attributeId, values.value[key(row.id, a.attributeId)] ?? null]))
+    const clash = variantClash(s, props.view.item.id, final, row.id)
+    if (clash) found.push({ row, clash })
+  }
+  return found
+})
+const canSave = computed(() => !saving.value && !state.readOnly && changed.value.length > 0 && !hasFieldError.value && clashes.value.length === 0)
+
+async function restore(archiveId: Id): Promise<void> {
+  if (saving.value || state.readOnly) return
+  saving.value = true
+  errorKey.value = null
+  try {
+    await workspace.apply({ type: 'restore', archiveId })
+  } catch (e) {
+    errorKey.value = errorMessageKey(e)
+  } finally {
+    saving.value = false
+  }
+}
 
 async function save(): Promise<void> {
   if (!canSave.value) return
@@ -106,6 +134,22 @@ async function save(): Promise<void> {
           </tbody>
         </table>
       </div>
+      <ul v-if="clashes.length > 0" role="alert" class="grid gap-1.5 text-sm text-destructive">
+        <li v-for="c in clashes" :key="c.row.id" class="flex flex-wrap items-center justify-between gap-2">
+          {{ $t(c.clash.archived ? 'variantValues.inArchive' : 'variantValues.exists', { label: c.row.label }) }}
+          <Button
+            v-if="c.clash.archived && c.clash.archiveId"
+            type="button"
+            variant="outline"
+            size="sm"
+            class="h-9 rounded-field"
+            :disabled="saving || !!state.readOnly"
+            @click="restore(c.clash.archiveId)"
+          >
+            {{ $t('variantValues.restore') }}
+          </Button>
+        </li>
+      </ul>
       <p role="alert" class="text-sm text-destructive">
         <template v-if="errorKey">{{ $t(errorKey) }}</template>
       </p>

@@ -152,14 +152,34 @@ function openAttribute(id: Id | null): void {
   attributeOpen.value = true
 }
 // An attribute turned into a variant axis: the item may get its first variant, and the stock it had without one is offered to it.
-const addAxis = useAddAxis()
-async function makeAxis(id: Id): Promise<void> {
+const { add: addAxis, loss: axisLoss } = useAddAxis()
+// A shared value that would be dropped (the item has another axis and no variants) is confirmed first.
+const axisLossAsk = ref<{ id: Id; name: string; value: string } | null>(null)
+const axisLossShown = shallowRef<{ id: Id; name: string; value: string } | null>(null)
+const axisBusy = ref(false)
+const axisLossOpen = computed({
+  get: () => axisLossAsk.value !== null,
+  set: (open: boolean) => {
+    if (!open && !axisBusy.value) axisLossAsk.value = null
+  },
+})
+async function applyAxis(id: Id): Promise<void> {
+  if (axisBusy.value) return
+  axisBusy.value = true
   try {
     const added = await addAxis(props.itemId, id)
     if (added) looseOffer.value = added
   } catch (e) {
     toast.error(t(errorMessageKey(e)))
+  } finally {
+    axisLossAsk.value = null
+    axisBusy.value = false
   }
+}
+async function makeAxis(id: Id): Promise<void> {
+  const loss = axisLoss(props.itemId, id)
+  if (!loss) return applyAxis(id)
+  axisLossShown.value = axisLossAsk.value = { id, ...loss }
 }
 const removeId = ref<Id | null>(null)
 const removeBusy = ref(false)
@@ -229,7 +249,7 @@ const linkClass =
         @open="(mode) => openStock(mode, null)"
       />
       <div v-if="view.hasVariants || view.axes.length > 0" class="grid min-w-0 grid-cols-1">
-      <ItemAxes :view="view" @loose="(a) => (looseOffer = { offer: a.offer, variants: a.variants })" />
+      <ItemAxes :view="view" />
       <BucketList
         v-if="view.hasVariants"
         :buckets="view.buckets"
@@ -291,6 +311,15 @@ const linkClass =
         @edit="openAttribute"
         @axis="makeAxis"
         @remove="askRemoveAttribute"
+      />
+      <ConfirmSheet
+        v-model:open="axisLossOpen"
+        :title="$t('axes.dropTitle', { name: axisLossShown?.name ?? '' })"
+        :description="$t('axes.dropBody', { name: axisLossShown?.name ?? '', value: axisLossShown?.value ?? '' })"
+        :confirm-label="$t(axisBusy ? 'status.saving' : 'axes.dropConfirm')"
+        :busy="axisBusy"
+        destructive
+        @confirm="axisLossShown && applyAxis(axisLossShown.id)"
       />
       <ConfirmSheet
         v-model:open="removeOpen"

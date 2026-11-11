@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { errorMessageKey } from '~/lib/errors'
-import { attributeChoices, looseTransferOffer } from '~/lib/item-view'
+import { looseTransferOffer } from '~/lib/item-view'
 import { parseNameList } from '~/lib/lists'
 import { isNewLine, planVariantBatch } from '~/lib/variant-batch'
 
@@ -28,6 +28,7 @@ const emit = defineEmits<{ done: [added: VariantsAdded] }>()
 
 const workspace = useWorkspace()
 const { state } = workspace
+const { add: addAxisTo } = useAddAxis()
 
 // The sheet around the form locks while this is set.
 const busy = defineModel<boolean>('busy', { default: false })
@@ -37,7 +38,8 @@ const writable = computed(() => !busy.value && !state.readOnly && !!state.snapsh
 const axes = computed(() => (state.snapshot ? itemAxes(state.snapshot, props.itemId) : []))
 
 // ---- step 1: the first axis, for an item that has none ----
-const choices = computed(() => (state.snapshot ? attributeChoices(state.snapshot, props.itemId) : []))
+// Every attribute of the inventory, the item's shared ones included: the item has no axis yet, so any of them can be the first.
+const choices = computed(() => [...(state.snapshot?.attributes ?? [])].sort((a, b) => a.name.localeCompare(b.name)))
 const creating = ref(false)
 const picked = ref<Id | null>(null)
 const newName = ref('')
@@ -76,8 +78,10 @@ async function addAxis(): Promise<void> {
       })
     }
     if (attributeId === null) return
-    // The new axis shows the values step by itself once the snapshot has it.
-    await workspace.apply({ type: 'item.addAxis', itemId: props.itemId, attributeId, firstVariantId: newId() })
+    // The new axis shows the values step by itself once the snapshot has it. A shared value that became the first variant,
+    // on an item with stock outside variants, ends here instead: the stock offer goes with it.
+    const first = await addAxisTo(props.itemId, attributeId)
+    if (first) emit('done', { created: first.variants.map((v) => ({ id: v.id, label: v.name })), offer: first.offer })
   } catch (e) {
     errorKey.value = errorMessageKey(e)
   } finally {
@@ -206,6 +210,9 @@ async function restore(archiveId: Id): Promise<void> {
         v-model="text"
         rows="4"
         autocomplete="off"
+        autocapitalize="off"
+        autocorrect="off"
+        :spellcheck="false"
         :placeholder="placeholder"
         :aria-invalid="hasError || errorKey ? true : undefined"
         aria-describedby="variants-hint variants-preview variants-error"

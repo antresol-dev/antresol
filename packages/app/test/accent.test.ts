@@ -5,7 +5,7 @@ import { contrast, mixHex } from './fixtures/color'
 
 const names = Object.keys(ACCENTS) as AccentName[]
 const LIGHT_BG = '#EDEFF3'
-const DARK_BG = '#24272E'
+const DARK_BG = '#2A2E37'
 
 /** A stand-in for <html>: only the inline style is touched. */
 function fakeRoot(): { el: HTMLElement; props: Map<string, string> } {
@@ -34,12 +34,12 @@ describe('accent palette (spec 4.1)', () => {
     expect(contrast(ink, mixHex(LIGHT_BG, A, 0.17))).toBeGreaterThanOrEqual(4.5)
   })
 
-  it.each(names)('%s: the dark-theme variant is the light one, mix(accent, white, 0.55)', (name) => {
-    expect(ACCENTS[name].dark).toBe(mixHex(ACCENTS[name].light, '#FFFFFF', 0.55))
+  it.each(names)('%s: the dark-theme accent is the light one lifted by 12 % white (board 8)', (name) => {
+    expect(ACCENTS[name].dark).toBe(mixHex(ACCENTS[name].light, '#FFFFFF', 0.12))
   })
 
-  it.each(names)('%s: the dark-theme variant on #24272E is at least 4.5:1', (name) => {
-    expect(contrast(ACCENTS[name].dark, DARK_BG)).toBeGreaterThanOrEqual(4.5)
+  it.each(names)('%s: dark-theme accent text mix(accent, white, 0.5) on #2A2E37 is at least 4.5:1', (name) => {
+    expect(contrast(mixHex(ACCENTS[name].light, '#FFFFFF', 0.5), DARK_BG)).toBeGreaterThanOrEqual(4.5)
   })
 })
 

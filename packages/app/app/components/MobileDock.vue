@@ -48,7 +48,7 @@ onBeforeUnmount(() => document.documentElement.style.removeProperty('--dock-h'))
         v-if="canAdd"
         type="button"
         :aria-label="$t('quickAdd.title')"
-        class="painted pressable pointer-events-auto grid size-[52px] shrink-0 place-items-center"
+        class="accent-button pressable pointer-events-auto grid size-[52px] shrink-0 place-items-center"
         @click="quickAdd.open()"
       >
         <Plus class="size-6" aria-hidden="true" />

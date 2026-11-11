@@ -89,14 +89,17 @@ const crumbLink = 'pressable min-w-0 truncate rounded-chip'
             <Menu class="size-5" aria-hidden="true" />
           </button>
           <NavArrows />
-          <span class="flex-1" />
-          <span v-if="state.saving" role="status" class="flex h-11 w-6 shrink-0 items-center justify-center text-subtle-foreground">
-            <Loader2 class="size-4 animate-spin" aria-hidden="true" />
-            <span class="sr-only">{{ $t('status.saving') }}</span>
+          <!-- The free space; the saving indicator sits in it instead of taking a slot of its own. -->
+          <span class="flex min-w-0 flex-1 items-center justify-end">
+            <span v-if="state.saving" role="status" class="flex h-11 shrink-0 items-center text-subtle-foreground">
+              <Loader2 class="size-4 animate-spin" aria-hidden="true" />
+              <span class="sr-only">{{ $t('status.saving') }}</span>
+            </span>
           </span>
-          <!-- At 360 px ☰, the two 32 px arrows, the saving indicator and four raised 44 px actions 6 px apart fit the row
-               (342 of 344 px), 8 px from the screen's edges so the shadows have room. -->
-          <div v-if="$slots.actions" class="flex shrink-0 items-center gap-3">
+          <!-- At 360 px the row is 344 px, 8 px from the screen's edges so the shadows have room: ☰ 44, the two 32 px
+               arrows, four raised 44 px actions 10 px apart (wider than their shadows reach, 7.7 px) and 4 px gaps take
+               326 px; the saving indicator takes 16 of the 18 left. -->
+          <div v-if="$slots.actions" class="flex shrink-0 items-center gap-2.5">
             <slot name="actions" :compact="true" />
           </div>
         </div>

@@ -261,7 +261,8 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
           <div
             :class="[
               'flex min-w-0 flex-1 items-center gap-2.5',
-              desktop ? 'min-h-11' : 'h-[50px] rounded-field border-2 border-primary pr-0.5 pl-3.5',
+              // A plain field on the phone: colour belongs to the accent button only.
+              desktop ? 'min-h-11' : 'h-[50px] rounded-field border border-input bg-field pr-0.5 pl-3.5',
             ]"
           >
             <Search class="size-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />

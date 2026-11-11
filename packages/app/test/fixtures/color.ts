@@ -64,12 +64,13 @@ export function contrast(fg: Rgba | string, bg: Rgba | string, base: Rgba | stri
 
 export type Vars = Record<string, string>
 
-/** Declarations of every rule in `css` whose selector is exactly `selector` and whose body has no nested braces
- *  (custom properties only, later blocks win). */
+/** Declarations of every rule in `css` whose selector is exactly `selector` (`.painted` is not `.dark .painted`) and
+ *  whose body has no nested braces (custom properties only, later blocks win). Values keep their own line breaks. */
 export function cssVars(css: string, selector: string): Vars {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const vars: Vars = {}
-  for (const block of css.matchAll(new RegExp(`(?:^|[\\s};])${escaped}\\s*\\{([^{}]*)\\}`, 'g'))) {
+  // A rule starts the file or follows a block, a declaration or a comment.
+  for (const block of css.matchAll(new RegExp(`(?:^|[};/])\\s*${escaped}\\s*\\{([^{}]*)\\}`, 'g'))) {
     const body = block[1]!.replace(/\/\*[\s\S]*?\*\//g, '')
     for (const m of body.matchAll(/--([\w-]+)\s*:\s*([^;]+);/g)) vars[m[1]!] = m[2]!.trim()
   }

@@ -135,6 +135,24 @@ function isRelistCommand(c: Command): boolean {
     (c.type === 'deletePermanently' && c.target === 'inventory')
 }
 
+/** One stock bucket of an item: the stock kept under a variant, or without one (variantId null). */
+export const bucketKey = (itemId: Id, variantId: Id | null): string => `${itemId}:${variantId ?? ''}`
+
+/** The stock buckets a command writes to; empty for every other command. */
+function bucketsOf(c: Command): string[] {
+  switch (c.type) {
+    case 'stock.receive':
+    case 'stock.use':
+    case 'stock.return':
+    case 'stock.set':
+      return [bucketKey(c.itemId, c.variantId)]
+    case 'stock.transfer':
+      return [bucketKey(c.itemId, c.fromVariantId), bucketKey(c.itemId, c.toVariantId)]
+    default:
+      return []
+  }
+}
+
 /** Demo source: the device store. Neon with a public key: Uploadcare. Anything else: none. */
 export function defaultFileStore(config: SourceConfig, fetchImpl?: typeof fetch): FileStore | null {
   if (config.kind === 'dev-pglite') return createDeviceFileStore()
@@ -185,6 +203,9 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   let shownRev: string | null = null
   let queue: Promise<void> = Promise.resolve()
   let pendingWrites = 0
+  /** Queued or running writes per stock bucket (bucketKey); reactive, read by isBucketSaving. */
+  const savingBuckets = reactive(new Map<string, number>())
+  const beforeWrite = new Set<() => void>()
   let refreshing: Promise<void> | null = null
   let refreshEpoch = 0
   let refreshingEpoch = -1
@@ -731,19 +752,42 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     if (isConnected(statusOf(sourceId)) && checkDue(now().getTime())) await checkSource(sourceId)
   }
 
-  /** Runs `job` after all earlier writes; a failed job does not block later ones. */
-  function enqueue<T>(job: () => Promise<T>): Promise<T> {
-    pendingWrites++
-    state.saving = true
+  /** Runs `job` after all earlier writes; a failed job does not block later ones. A write to stock buckets marks only
+   *  those buckets as saving (spec 4.12): the rest of the app is not locked by it; any other write sets `saving`. */
+  function enqueue<T>(job: () => Promise<T>, buckets: string[] = []): Promise<T> {
+    if (buckets.length > 0) for (const key of buckets) savingBuckets.set(key, (savingBuckets.get(key) ?? 0) + 1)
+    else {
+      pendingWrites++
+      state.saving = true
+    }
     const run = queue.then(job)
     queue = run.then(
       () => {},
       () => {},
     )
     return run.finally(() => {
-      pendingWrites--
-      state.saving = pendingWrites > 0
+      if (buckets.length > 0) {
+        for (const key of buckets) {
+          const left = (savingBuckets.get(key) ?? 1) - 1
+          if (left > 0) savingBuckets.set(key, left)
+          else savingBuckets.delete(key)
+        }
+      } else {
+        pendingWrites--
+        state.saving = pendingWrites > 0
+      }
     })
+  }
+
+  /** Called before any write is queued, so what they write goes first (a stepper's pending delta, spec 4.12). */
+  function runBeforeWrite(): void {
+    for (const hook of [...beforeWrite]) {
+      try {
+        hook()
+      } catch {
+        // A hook never stops the write it runs before.
+      }
+    }
   }
 
   /**
@@ -757,6 +801,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     snapshotFor: (conn: SourceConnection) => Promise<InventorySnapshot | null>,
   ): Promise<void> {
     const { sourceId } = target
+    runBeforeWrite()
     return enqueue(async () => {
       // First refresh still connecting: wait for it rather than failing with a misleading "can't reach".
       if (!conns.has(sourceId) && refreshing) await refreshing.catch(() => {})
@@ -803,7 +848,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       } else if (reload) {
         await loadCurrent()
       }
-    })
+    }, bucketsOf(command))
   }
 
   /**
@@ -1059,6 +1104,13 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     selectInventory,
     apply,
     applyTo,
+    isBucketSaving: (itemId, variantId) => savingBuckets.has(bucketKey(itemId, variantId)),
+    onBeforeWrite(hook) {
+      beforeWrite.add(hook)
+      return () => {
+        beforeWrite.delete(hook)
+      }
+    },
     loadMovements,
     exportSource,
     fileStoreFor,

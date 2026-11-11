@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { getCurrency, type Id } from '@graymatter/core'
+import { getCurrency, type Id, type Quantity } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,6 +11,8 @@ import { buildStockCommand, type StockMode } from '~/lib/stock-forms'
 export interface StockTarget {
   mode: StockMode
   variantId: Id | null
+  /** Count: the quantity to start from (the bucket's own when not given). */
+  amount?: Quantity
 }
 
 // Receive, use, set or move stock of one bucket of the item. The form resets on every opening.
@@ -30,6 +32,14 @@ const note = ref('')
 const toKey = ref('')
 const busy = ref(false)
 const errorKey = ref<string | null>(null)
+
+/** The next focus of the amount field selects its text (Count). */
+let selectAmount = false
+function focusin(event: FocusEvent): void {
+  if (!selectAmount || !(event.target instanceof HTMLInputElement) || event.target.id !== 'stock-amount') return
+  selectAmount = false
+  event.target.select()
+}
 
 const NONE = '__none__'
 const keyOf = (id: Id | null): string => id ?? NONE
@@ -52,7 +62,9 @@ watch(
     shown.value = t
     openings.value++
     const bucket = props.view.buckets.find((b) => b.variantId === t.variantId)
-    amount.value = t.mode === 'transfer' ? (bucket?.quantity ?? '') : ''
+    // Count starts from the current quantity, selected so that typing replaces it (spec 4.12).
+    amount.value = t.mode === 'transfer' ? (bucket?.quantity ?? '') : t.mode === 'set' ? (t.amount ?? bucket?.quantity ?? '') : ''
+    selectAmount = t.mode === 'set'
     price.value = ''
     url.value = ''
     note.value = ''
@@ -109,7 +121,7 @@ async function submit(): Promise<void> {
     initial-focus="#stock-amount"
     :locked="busy"
   >
-    <form :key="openings" class="mt-3.5 grid gap-3.5" novalidate @submit.prevent="submit">
+    <form :key="openings" class="mt-3.5 grid gap-3.5" novalidate @submit.prevent="submit" @focusin="focusin">
       <div class="grid gap-1.5">
         <Label for="stock-amount">{{ $t(mode === 'set' ? 'stockForm.actual' : 'stockForm.amount') }}</Label>
         <AmountField id="stock-amount" v-model="amount" :unit-key="unitKey" :units="units" :invalid="errorKey === 'stockForm.invalidAmount'" />

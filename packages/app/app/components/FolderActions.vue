@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Id } from '@graymatter/core'
-import { Archive, FolderInput, FolderPlus, Pencil, Plus } from '@lucide/vue'
+import { Archive, ClipboardCheck, FolderInput, FolderPlus, Pencil, Plus } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
@@ -26,6 +26,10 @@ const folderActions = computed(() => {
     { key: 'archive', label: 'folderMenu.archive', icon: Archive, run: () => open({ kind: 'archive', folderId: id }) },
   ]
 })
+
+// "Count this folder" (spec 4.14), from 1024 px: at 360 px the top bar has no room for a fifth 44 px button, so on a
+// phone it is in the folder row's menu (FolderList, long press).
+const countTo = computed(() => (props.folderId === null ? null : `/count/${props.folderId}`))
 
 const compactButton = 'size-11 rounded-field text-icon hover:text-foreground disabled:opacity-35'
 const iconButton = 'size-9 rounded-thumb text-icon'
@@ -60,6 +64,14 @@ const iconButton = 'size-9 rounded-thumb text-icon'
       <FolderPlus aria-hidden="true" />
       {{ $t('folderMenu.new') }}
     </Button>
+    <Tooltip v-if="countTo">
+      <TooltipTrigger as-child>
+        <Button variant="outline" size="icon" :class="iconButton" :aria-label="$t('countFolder.menu')" :disabled="!!state.readOnly" @click="navigateTo(countTo)">
+          <ClipboardCheck aria-hidden="true" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{{ $t('countFolder.menu') }}</TooltipContent>
+    </Tooltip>
     <Tooltip v-for="a in folderActions" :key="a.key">
       <TooltipTrigger as-child>
         <Button variant="outline" size="icon" :class="iconButton" :aria-label="$t(a.label)" :disabled="locked" @click="a.run">

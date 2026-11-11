@@ -41,9 +41,13 @@ export interface FolderView {
   items: ItemRow[]
 }
 
-/** @internal Name order used by every list: case-insensitive, numbers in numeric order. */
-export const byName = (a: { name: string }, b: { name: string }): number =>
-  a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+/** @internal The last key of every list order. Lists never keep the order of the snapshot's rows: a fresh load holds them
+ *  in SQL order, a patched snapshot holds the rows a write returned at the end. */
+export const compareIds = (a: Id, b: Id): number => (a < b ? -1 : a > b ? 1 : 0)
+
+/** @internal Name order used by every list: case-insensitive, numbers in numeric order; equal names by id. */
+export const byName = (a: { name: string; id?: Id }, b: { name: string; id?: Id }): number =>
+  a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }) || compareIds(a.id ?? '', b.id ?? '')
 
 /** @internal Lookups built once per snapshot object (snapshots are replaced whole, never mutated); shared by views.ts and item-view.ts. */
 export interface Index {

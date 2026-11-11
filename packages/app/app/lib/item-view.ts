@@ -19,7 +19,7 @@ import {
   type StockLine,
   type UnitDef,
 } from '@graymatter/core'
-import { byName, pathOf, snapshotIndex, type Crumb } from './views'
+import { byName, compareIds, pathOf, snapshotIndex, type Crumb } from './views'
 
 export interface BucketRow {
   variantId: Id | null
@@ -154,7 +154,7 @@ export function itemView(s: InventorySnapshot, itemId: Id): ItemView | null {
       const value = valueOf(a.value)
       return [{ attributeId: def.id, name: def.name, kind: def.kind, options: def.options, value, perVariant: value === null && hasVariants }]
     })
-    .sort(byName)
+    .sort((a, b) => byName(a, b) || compareIds(a.attributeId, b.attributeId))
   const perVariant = attributes.filter((a) => a.perVariant)
 
   const valueKey = (variantId: Id, attributeId: Id): string => `${variantId}\u0000${attributeId}`

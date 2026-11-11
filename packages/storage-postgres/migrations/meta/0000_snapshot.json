@@ -1,5 +1,5 @@
 {
-  "id": "a19b3d5b-ac8a-42c4-bb64-ee472f40a675",
+  "id": "5ac77c1b-2607-4c05-8560-fca189a4038c",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -38,6 +38,20 @@
           "primaryKey": false,
           "notNull": true,
           "default": "'{}'"
+        },
+        "unit": {
+          "name": "unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "''"
+        },
+        "si_prefixes": {
+          "name": "si_prefixes",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         },
         "created_at": {
           "name": "created_at",
@@ -475,9 +489,38 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
+        },
+        "axis_position": {
+          "name": "axis_position",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "item_attributes_axis_position_idx": {
+          "name": "item_attributes_axis_position_idx",
+          "columns": [
+            {
+              "expression": "item_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "axis_position",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"item_attributes\".\"axis_position\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "item_attributes_item_id_items_id_fk": {
           "name": "item_attributes_item_id_items_id_fk",

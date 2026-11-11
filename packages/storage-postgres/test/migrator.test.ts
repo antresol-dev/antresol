@@ -1,6 +1,7 @@
+import { StorageError } from '@graymatter/core'
 import { describe, expect, it } from 'vitest'
 import type { PgExecutor } from '../src/executor'
-import { APP_SCHEMA_VERSION, MIGRATION_LOCK_KEY, ensureSchema, isConcurrentMigration } from '../src/migrator'
+import { APP_SCHEMA_VERSION, MIGRATION_LOCK_KEY, SCHEMA_BASE, ensureSchema, isConcurrentMigration } from '../src/migrator'
 import { sql } from '../src/sql'
 import journal from '../migrations/meta/_journal.json'
 import { makeExecutor } from './helpers'
@@ -19,6 +20,27 @@ describe('ensureSchema', () => {
     const names = rows.map((r) => r.table_name)
     expect(names).toContain('items')
     expect(names).toContain('movements')
+    expect(APP_SCHEMA_VERSION).toBe(3)
+    expect(await exec.query(sql`select 1 from gm_meta where key = 'rev'`)).toHaveLength(1)
+  })
+
+  it('rejects a pre-release database as outdated and leaves it as it was', async () => {
+    const exec = await makeExecutor()
+    await exec.batch([
+      sql`create table gm_meta (key text primary key, value text not null)`,
+      sql`insert into gm_meta (key, value) values ('schema_version', '2')`,
+    ])
+    const err = await ensureSchema(exec).catch((e) => e)
+    expect(err).toBeInstanceOf(StorageError)
+    expect(err.code).toBe('outdated')
+    expect(await exec.query(sql`select value from gm_meta where key = 'schema_version'`)).toEqual([{ value: '2' }])
+    expect(await exec.query(sql`select 1 from information_schema.tables where table_name = 'items'`)).toEqual([])
+  })
+
+  it('two devices on an empty database both end ready', async () => {
+    const exec = await makeExecutor()
+    const results = await Promise.all([ensureSchema(exec), ensureSchema(exec)])
+    expect(results.map((r) => r.state)).toEqual(['ready', 'ready'])
   })
 
   it('is idempotent', async () => {
@@ -100,7 +122,7 @@ describe('ensureSchema concurrency', () => {
     const { wrapped, batches } = recording(await makeExecutor())
     await ensureSchema(wrapped)
     const migrationBatches = batches.filter((b) => b.some((t) => t.includes('schema_version')))
-    expect(migrationBatches).toHaveLength(APP_SCHEMA_VERSION)
+    expect(migrationBatches).toHaveLength(APP_SCHEMA_VERSION - SCHEMA_BASE)
     for (const b of migrationBatches) {
       expect(b[0]).toBe(`select pg_advisory_xact_lock(${MIGRATION_LOCK_KEY})`)
       expect(b[1]).toContain('gm_concurrent_migration')
@@ -166,6 +188,6 @@ describe('migration files', () => {
       .sort()
     expect(journal.entries.map((e) => e.tag)).toEqual(files)
     expect(journal.entries.map((e) => e.idx)).toEqual(files.map((_, i) => i))
-    expect(APP_SCHEMA_VERSION).toBe(files.length)
+    expect(APP_SCHEMA_VERSION).toBe(SCHEMA_BASE + files.length)
   })
 })

@@ -1,4 +1,4 @@
-import type { SchemaStatus } from '@graymatter/core'
+import { StorageError, type SchemaStatus } from '@graymatter/core'
 import type { PgExecutor } from './executor'
 import { sql, type Statement } from './sql'
 
@@ -18,7 +18,11 @@ const migrations: Statement[][] = Object.keys(files)
       .map((text) => ({ text, params: [] })),
   )
 
-export const APP_SCHEMA_VERSION = migrations.length
+/** Versions 1..SCHEMA_BASE belong to pre-release builds whose schema is gone; they are rejected, not migrated.
+ *  The version is not 1 so that an old build sees this one's databases as newer and leaves them alone. */
+export const SCHEMA_BASE = 2
+
+export const APP_SCHEMA_VERSION = SCHEMA_BASE + migrations.length
 
 /** Arbitrary GrayMatter-specific key for pg_advisory_xact_lock; serialises migrations across devices. */
 export const MIGRATION_LOCK_KEY = 7164290317
@@ -76,14 +80,17 @@ export async function ensureSchema(exec: PgExecutor): Promise<SchemaStatus> {
   for (;;) {
     const dbVersion = await readVersion(exec)
     if (dbVersion > APP_SCHEMA_VERSION) return { state: 'newer', dbVersion, appVersion: APP_SCHEMA_VERSION }
+    if (dbVersion >= 1 && dbVersion <= SCHEMA_BASE) {
+      throw new StorageError('outdated', 'the database was created by a pre-release GrayMatter; reset it')
+    }
     if (dbVersion === APP_SCHEMA_VERSION) {
       return { state: 'ready', dbVersion: APP_SCHEMA_VERSION, appVersion: APP_SCHEMA_VERSION }
     }
-    const version = dbVersion + 1
+    const version = Math.max(dbVersion, SCHEMA_BASE) + 1
     try {
       await exec.batch([
         ...migrationPrologue(dbVersion),
-        ...(migrations[version - 1] as Statement[]),
+        ...(migrations[version - SCHEMA_BASE - 1] as Statement[]),
         // A migration may change data without any write passing through `apply`: devices must reload.
         REV_BUMP,
         sql`insert into gm_meta (key, value) values ('schema_version', ${String(version)})

@@ -3,6 +3,7 @@
 import { sql } from 'drizzle-orm'
 import {
   bigint,
+  boolean,
   char,
   check,
   foreignKey,
@@ -14,6 +15,7 @@ import {
   smallint,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core'
 
@@ -89,6 +91,8 @@ export const attributes = pgTable(
     name: text('name').notNull(),
     kind: text('kind').notNull(),
     options: text('options').array().notNull().default(sql`'{}'`),
+    unit: text('unit').notNull().default(''),
+    siPrefixes: boolean('si_prefixes').notNull().default(false),
     ...audit(),
   },
   (t) => [
@@ -172,8 +176,14 @@ export const itemAttributes = pgTable(
       .notNull()
       .references(() => attributes.id, { onDelete: 'cascade' }),
     value: text('value'),
+    axisPosition: integer('axis_position'),
   },
-  (t) => [primaryKey({ columns: [t.itemId, t.attributeId] })],
+  (t) => [
+    primaryKey({ columns: [t.itemId, t.attributeId] }),
+    uniqueIndex('item_attributes_axis_position_idx')
+      .on(t.itemId, t.axisPosition)
+      .where(sql`${t.axisPosition} is not null`),
+  ],
 )
 
 export const variantAttributeValues = pgTable(

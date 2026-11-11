@@ -13,6 +13,7 @@ import {
   type Inventory,
   type InventorySnapshot,
   type Movement,
+  type RestoreMode,
   type SnapshotPatch,
 } from '@graymatter/core'
 import { createCloudinaryStore } from '@graymatter/files-cloudinary'
@@ -808,6 +809,8 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
         await writeFailed(sourceId, error)
         throw error
       }
+      // For the backup reminder; a lost count only delays it.
+      void db.countWrite(sourceId).catch(() => {})
       let reload: boolean
       if (generationOf(sourceId) === generation) {
         const settled = settleWrite(target, result, seq)
@@ -1067,6 +1070,41 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     })
   }
 
+  /**
+   * A wide write: the backup's rows go into the source in batches (InventoryStorage.restore), after the writes queued
+   * before it and before those queued after. Then, as "Reload everything", no copy of the source is trusted (a run that
+   * failed midway may have written some batches too), and the first restored active inventory is shown.
+   */
+  async function restoreSource(
+    sourceId: string,
+    backup: BackupFile,
+    mode: RestoreMode,
+    fileSha256: string,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<{ inventoryIds: Id[] }> {
+    if (!state.sources.some((s) => s.config.id === sourceId)) throw new StorageError('not_found')
+    const runId = await db.restoreRunId(fileSha256)
+    let started = false
+    let result: { inventoryIds: Id[] }
+    try {
+      result = await enqueue(async () => {
+        const status = statusOf(sourceId)
+        if (status === 'read_only') throw new StorageError('read_only')
+        const conn = conns.get(sourceId)
+        if (status !== 'ready' || !conn) throw new StorageError('unavailable')
+        started = true
+        return guarded(sourceId, conn, () => conn.storage.restore(backup, mode, runId, onProgress))
+      })
+    } catch (error) {
+      if (started) await reloadSource(sourceId).catch(() => {})
+      throw error
+    }
+    await reloadSource(sourceId).catch(() => {})
+    const first = state.inventories.find((e) => e.ref.sourceId === sourceId && result.inventoryIds.includes(e.inventory.id))
+    if (first) await selectInventory(first.ref)
+    return result
+  }
+
   /** Runs a storage call on `conn`: an `unavailable` failure marks the source, any failure is redacted with the
    *  connection string `conn` was opened with, even if the source was edited or removed since. */
   async function guarded<T>(sourceId: string, conn: SourceConnection, call: () => Promise<T>): Promise<T> {
@@ -1115,6 +1153,9 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     applyTo,
     loadMovements,
     exportSource,
+    restoreSource,
+    backupInfo: (sourceId) => db.getBackupInfo(sourceId),
+    noteBackup: (sourceId) => db.noteBackup(sourceId, nowIso()),
     fileStoreFor,
     addPhotos,
     setVariantPhoto,

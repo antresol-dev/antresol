@@ -38,6 +38,15 @@ export interface ApplyResult {
   patch: SnapshotPatch | null
 }
 
+/** One inventory as a backup holds it: the snapshot and every movement, oldest first (seq asc). */
+export interface InventoryExport {
+  snapshot: InventorySnapshot
+  movements: Movement[]
+}
+
+/** `same-ids`: restored rows keep their ids; `new-ids`: they get deterministic new ones (see InventoryStorage.restore). */
+export type RestoreMode = 'same-ids' | 'new-ids'
+
 export class StorageError extends Error {
   readonly code: StorageErrorCode
   constructor(code: StorageErrorCode, message?: string) {
@@ -62,7 +71,23 @@ export interface InventoryStorage {
   loadAllMovements(inventoryId: Id): Promise<Movement[]>
   /** The snapshot and every movement (seq asc) read in ONE read-only snapshot transaction: a consistent backup.
    *  Rejects with `not_found` when the inventory does not exist. */
-  exportInventory(id: Id): Promise<{ snapshot: InventorySnapshot; movements: Movement[] }>
+  exportInventory(id: Id): Promise<InventoryExport>
+  /**
+   * Writes a backup's inventories into the source, parents first, in atomic batches of about RESTORE_BATCH_ROWS rows,
+   * each one bumping the revision (a wide write: devices reload). Inserts only, `on conflict do nothing`: a run stopped
+   * midway is run again with the same arguments and adds only what is missing.
+   * - `same-ids`: the rows keep their ids (into an empty source, after a loss).
+   * - `new-ids`: every id, and every reference to one, becomes UUID v5 of the old id in the namespace `runId`; the same
+   *   file with the same `runId` gives the same new ids, so running it again adds nothing twice.
+   * Checks that every reference resolves inside the backup before writing anything (`failed` otherwise). Returns the
+   * ids the inventories have in the source, in the backup's order.
+   */
+  restore(
+    backup: { inventories: InventoryExport[] },
+    mode: RestoreMode,
+    runId: Id,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<{ inventoryIds: Id[] }>
   /** One atomic write: the command, the revision bump and the reads of what it touched. Opaque revisions, like
    *  `listInventories`' rev. */
   apply(command: Command, actor: Actor): Promise<ApplyResult>

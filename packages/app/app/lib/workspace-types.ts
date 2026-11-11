@@ -1,6 +1,6 @@
-import type { Command, FileStore, Id, Inventory, InventorySnapshot, Movement } from '@graymatter/core'
+import type { Command, FileStore, Id, Inventory, InventorySnapshot, Movement, RestoreMode } from '@graymatter/core'
 import type { BackupFile } from './backup'
-import type { DeviceDb } from './device-db'
+import type { BackupInfo, DeviceDb } from './device-db'
 import type { FailureReason, SourceDriver } from './sources'
 import type { InventoryRef, SourceConfig, SourceKind } from './types'
 
@@ -107,6 +107,22 @@ export interface Workspace {
   /** Read-only copy of every inventory of a connected source (archived included) with all movements. Rejects with
    *  `unavailable` when the source is offline or failing; never returns a partial backup. */
   exportSource(sourceId: string): Promise<BackupFile>
+  /** Writes a parsed backup into a ready source (InventoryStorage.restore), in the write queue. A wide write: afterwards
+   *  the source reloads as with reloadSource (also after a failure: some batches may have landed) and the first restored
+   *  active inventory is shown. `fileSha256`: the file's fingerprint; the device keeps one run id per fingerprint, so
+   *  the same file restored again (after a break, or with new ids twice) adds nothing twice. onProgress(rows written,
+   *  rows in all). Rejects with `not_found`, `read_only`, `unavailable`, or the restore's own failure. */
+  restoreSource(
+    sourceId: string,
+    backup: BackupFile,
+    mode: RestoreMode,
+    fileSha256: string,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<{ inventoryIds: Id[] }>
+  /** This device's last backup of the source and its writes to it since (DeviceDb). */
+  backupInfo(sourceId: string): Promise<BackupInfo>
+  /** A backup of the source was saved or shared now. */
+  noteBackup(sourceId: string): Promise<void>
   /** The chosen photo store (Uploadcare by default) for a Neon source with its keys, the device store for the demo source, otherwise null. */
   fileStoreFor(sourceId: string): FileStore | null
   /** Prepares, uploads and records each file in order (photo.add with newId, provider, fileId, url). Stops at the first failure

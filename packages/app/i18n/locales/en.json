@@ -333,6 +333,42 @@
       "dark": "Dark"
     }
   },
+  "backup": {
+    "title": "Backup",
+    "lastNever": "No backup yet",
+    "lastJustNow": "Last backup: just now",
+    "lastHours": "Last backup: {count} h ago",
+    "lastDays": "Last backup: {count} day ago | Last backup: {count} days ago",
+    "restore": "Restore from backup…",
+    "restoreTitle": "Restore from backup",
+    "restoreDescription": "Writes a backup file into “{name}”. Nothing already there is changed or deleted.",
+    "chooseFile": "Choose file…",
+    "chooseOther": "Choose another file…",
+    "inventories": "{count} inventory | {count} inventories",
+    "items": "{count} item | {count} items",
+    "movements": "{count} movement | {count} movements",
+    "exported": "Exported {date} from “{name}”",
+    "problem": {
+      "format": "This file is not a GrayMatter backup, or it is damaged.",
+      "version": "This version of GrayMatter can’t read this backup file.",
+      "newer_schema": "This backup was made by a newer GrayMatter. Update the app to restore it."
+    },
+    "mode": "How to restore",
+    "sameIds": "Into an empty source",
+    "sameIdsHint": "Everything keeps its ids, as before the data was lost.",
+    "sameIdsBlocked": "Only for a source without other inventories.",
+    "newIds": "As new inventories",
+    "newIdsHint": "Next to what the source holds, with new ids and “(restored)” after their names.",
+    "start": "Restore",
+    "restoring": "Restoring…",
+    "running": "{done} of {total} records",
+    "again": "Run it again to finish: nothing is added twice.",
+    "restored": "Restored {count} inventory | Restored {count} inventories",
+    "restoredName": "{name} (restored)",
+    "open": "Open",
+    "remind": "Time to back up “{name}”",
+    "remindAction": "Back up"
+  },
   "diagnostics": {
     "title": "Diagnostics",
     "hint": "The last errors this device saw. Connection strings and keys are never kept here.",

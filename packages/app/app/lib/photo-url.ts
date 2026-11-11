@@ -12,7 +12,8 @@ export function isDeviceUrl(url: string): boolean {
 }
 
 const CLOUDINARY_SIDE: Record<PhotoSize, number> = { thumb: 400, card: 800, full: 2048 }
-const IMGUR_SUFFIX = { thumb: 'm', card: 'l', full: 'h' } as const
+/** Imgur has no size above 'h' (1024 px); the full view takes the original, which is the stored url. */
+const IMGUR_SUFFIX = { thumb: 'm', card: 'l' } as const
 
 /** What may be put in an <img>: urls of the three photo stores (transformed), and device: urls unchanged (resolved by the caller).
  *  Any other url in the data is never loaded (it would be a tracking pixel); null then. */
@@ -26,7 +27,7 @@ export function displayablePhotoUrl(url: string, size: PhotoSize): string | null
  *  Other URLs unchanged. */
 export function photoUrl(url: string, size: PhotoSize): string {
   if (isCloudinaryUrl(url)) return cloudinaryThumbUrl(url, CLOUDINARY_SIDE[size])
-  if (isImgurUrl(url)) return imgurThumbUrl(url, IMGUR_SUFFIX[size])
+  if (isImgurUrl(url)) return size === 'full' ? url : imgurThumbUrl(url, IMGUR_SUFFIX[size])
   if (!isUploadcareUrl(url)) return url
   const n = SIDE[size]
   const base = url.endsWith('/') ? url : `${url}/`

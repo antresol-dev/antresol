@@ -9,6 +9,9 @@ export interface QuickAddInput {
   amount: string
   price: string
   url: string
+  /** The link the form opened with (from the share sheet). Left as it is and without an amount, it is not a receipt's
+   *  link the person asked for: the item is created without it instead of demanding an amount. */
+  prefilledUrl?: string
 }
 /** Ids the form keeps for as long as the dialog is open, so a retried submit sends the same command. */
 export interface QuickAddIds {
@@ -24,7 +27,8 @@ export function buildQuickAdd(input: QuickAddInput, s: InventorySnapshot, ids: Q
   if (name === '') return { errorKey: 'errors.domain.name_required' }
   const amountText = input.amount.trim()
   const priceText = input.price.trim()
-  const url = input.url.trim()
+  const typedUrl = input.url.trim()
+  const url = typedUrl !== '' && typedUrl === input.prefilledUrl?.trim() && amountText === '' ? '' : typedUrl
 
   let quantity: string | null = null
   if (amountText !== '') {
@@ -94,8 +98,10 @@ function searchWords(text: string): string {
 
 /** Up to `limit` items (or variants) the inventory already has under this name (spec 4.9), best first: exact and prefix
  *  hits of core search without typo tolerance, values read by the number attributes' rules, and the base of a part
- *  number both ways ("TL072CP" also finds "TL072"). Nothing for a name shorter than two letters or digits. */
-export function existingMatches(name: string, s: InventorySnapshot, limit = 3): MatchRow[] {
+ *  number both ways ("TL072CP" also finds "TL072"). Nothing for a name shorter than two letters or digits.
+ *  `everyWord`: an item must match every significant word of the name (quick add: "LM358 DIP-8" must not find a TL072
+ *  that merely has Package = DIP-8); the share sheet keeps any-word matching for its long shop titles. */
+export function existingMatches(name: string, s: InventorySnapshot, limit = 3, opts: { everyWord?: boolean } = {}): MatchRow[] {
   const query = searchWords(kiloK(name.trim()))
   if (compactLength(query) < 2 || limit <= 0) return []
   const search = snapshotSearch(s)
@@ -108,8 +114,28 @@ export function existingMatches(name: string, s: InventorySnapshot, limit = 3): 
       hits.push(h)
     }
   }
+  const ALL = 1000
+  const words = query.split(/\s+/)
+  const find = (text: string, n: number): SearchHit[] => search.search(text, n, { fuzzy: false, combineWith: 'AND' })
+  if (opts.everyWord && words.length > 1) {
+    // Per word: the word itself or its part-number base; an item has to be in every word's set.
+    let keep: Set<Id> | null = null as Set<Id> | null
+    for (const word of words) {
+      const base = partBase(word)
+      const ids = new Set(find(word, ALL).map((h) => h.itemId))
+      if (base) for (const h of find(base, ALL)) ids.add(h.itemId)
+      const prev: Set<Id> | null = keep
+      keep = prev ? new Set([...prev].filter((id) => ids.has(id))) : ids
+      if (keep.size === 0) return []
+    }
+    const ok = keep ?? new Set<Id>()
+    add(find(query, ALL).filter((h) => ok.has(h.itemId)))
+    // Items that matched every word but not the whole query in one piece: the best hit of each word's own search.
+    for (const word of words) add(find(word, ALL).filter((h) => ok.has(h.itemId)))
+    return searchRows(s, hits.slice(0, limit))
+  }
   add(search.search(query, limit, { fuzzy: false }))
-  for (const word of query.split(/\s+/)) {
+  for (const word of words) {
     if (hits.length >= limit) break
     const base = partBase(word)
     if (base) add(search.search(base, limit, { fuzzy: false }))

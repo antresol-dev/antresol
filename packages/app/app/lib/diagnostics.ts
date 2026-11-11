@@ -67,6 +67,14 @@ export function deviceKeyValue(): KeyValue {
 
 const URL_PATTERN = /postgres(?:ql)?:\/\/\S+/gi
 const SECRET_KEY = /key|secret|token|password|passwd|preset|auth/i
+/** The photo stores' settings, whatever their names look like (an Imgur Client-ID or a Cloudinary cloud name has no
+ *  "key" in it): every one is a credential of the person's account. */
+const PHOTO_FIELDS: ReadonlySet<string> = new Set([
+  'uploadcarePublicKey',
+  'cloudinaryCloudName',
+  'cloudinaryUploadPreset',
+  'imgurClientId',
+])
 /** Shorter values would blank out ordinary words. */
 const MIN_SECRET_LENGTH = 4
 
@@ -96,7 +104,7 @@ export function secretsOf(config: object): string[] {
       } catch {
         // Not a URL: the whole text is already a secret.
       }
-    } else if (SECRET_KEY.test(name)) out.push(value)
+    } else if (PHOTO_FIELDS.has(name) || SECRET_KEY.test(name)) out.push(value)
   }
   return out
 }

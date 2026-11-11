@@ -65,6 +65,7 @@ describe('lotKey', () => {
     expect(lotKey(ALI)).toBe('1005001234567890')
     expect(lotKey('https://m.aliexpress.us/item/1005001234567890.html?gatewayAdapt=glo2usa')).toBe('1005001234567890')
     expect(lotKey('https://aliexpress.ru/item/1005001234567890.html')).toBe('1005001234567890')
+    expect(lotKey('https://www.aliexpress.com/i/1005001234567890.html?spm=x')).toBe('1005001234567890')
   })
 
   it('is null for AliExpress links without an item id', () => {

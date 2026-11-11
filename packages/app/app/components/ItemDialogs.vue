@@ -3,7 +3,7 @@ import type { Id, Item } from '@graymatter/core'
 import { toast } from 'vue-sonner'
 import type { ItemDialog } from '~/composables/useDialogs'
 import { errorMessageKey } from '~/lib/errors'
-import { archiveNow } from '~/lib/undo'
+import { archiveNow, focusHeadingIfLost } from '~/lib/undo'
 import { folderChoices } from '~/lib/views'
 
 // The item sheets for the whole app: the card's header buttons and the rows' menus open them through useItemDialog().
@@ -78,6 +78,7 @@ async function archive(): Promise<void> {
     busy.value = false
   }
   if (archived && leave) await router.push(target.folderId === null ? '/' : `/folder/${target.folderId}`)
+  if (archived) focusHeadingIfLost()
 }
 </script>
 

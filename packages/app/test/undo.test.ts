@@ -59,6 +59,16 @@ describe('undo toast', () => {
     ])
   })
 
+  it('takes the physical Z key on any layout and ignores key repeat', () => {
+    const t = setup()
+    t.undo.undoToast('a', { type: 'restore', archiveId: 'x' })
+    t.undo.undoToast('b', { type: 'restore', archiveId: 'y' })
+    expect(t.undo.onKey(t.key({ key: 'я', code: 'KeyZ', repeat: true }))).toBe(false)
+    expect(t.applied).toEqual([])
+    expect(t.undo.onKey(t.key({ key: 'я', code: 'KeyZ' }))).toBe(true)
+    expect(t.applied).toEqual([{ type: 'restore', archiveId: 'y' }])
+  })
+
   it('Ctrl+Z after the toast is gone does nothing', () => {
     const t = setup()
     t.undo.undoToast('a', { type: 'restore', archiveId: 'x' })

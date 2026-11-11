@@ -25,7 +25,7 @@ describe('photoUrl by provider', () => {
   it('builds Imgur size suffixes per size', () => {
     expect(photoUrl('https://i.imgur.com/Ab1.jpg', 'thumb')).toBe('https://i.imgur.com/Ab1m.jpg')
     expect(photoUrl('https://i.imgur.com/Ab1.jpg', 'card')).toBe('https://i.imgur.com/Ab1l.jpg')
-    expect(photoUrl('https://i.imgur.com/Ab1.jpg', 'full')).toBe('https://i.imgur.com/Ab1h.jpg')
+    expect(photoUrl('https://i.imgur.com/Ab1.jpg', 'full')).toBe('https://i.imgur.com/Ab1.jpg')
   })
   it('displays photos of every store and still refuses foreign hosts', () => {
     expect(displayablePhotoUrl('https://i.imgur.com/Ab1.jpg', 'thumb')).toBe('https://i.imgur.com/Ab1m.jpg')

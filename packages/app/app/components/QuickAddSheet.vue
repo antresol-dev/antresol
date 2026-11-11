@@ -37,9 +37,17 @@ const open = computed({
 })
 
 // "Receive here": the sheet turns into receiving into that item, with the amount, price and link typed here.
-function receiveInto(into: { itemId: Id; variantId: Id | null; amount: string; price: string; url: string }): void {
+function receiveInto(into: { itemId: Id; variantId: Id | null; amount: string; price: string; url: string; photoDropped: boolean }): void {
+  const { photoDropped, ...target } = into
   close()
-  receive.open(into)
+  receive.open(target)
+  // The photo picked here is not carried over to the receipt.
+  if (photoDropped) toast.info(t('quickAdd.photoDropped'))
+}
+
+function openItem(itemId: Id): void {
+  close()
+  void router.push(`/item/${itemId}`)
 }
 
 function added({ id, name, photoFailed }: { id: Id; name: string; photoFailed: boolean }): void {
@@ -60,6 +68,7 @@ function added({ id, name, photoFailed }: { id: Id; name: string; photoFailed: b
       :url="shown.url"
       @done="added"
       @receive="receiveInto"
+      @open="openItem"
     />
   </AppSheet>
 </template>

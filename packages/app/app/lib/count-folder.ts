@@ -71,6 +71,13 @@ export function countChanges(rows: CountRow[], entries: ReadonlyMap<string, stri
   return changes
 }
 
+/** A row's entry was edited: its next write gets a fresh movementId. A first write that committed but timed out would
+ *  otherwise make the server drop the corrected value as a repeat of the same id while "Saved" shows (stock.set is an
+ *  absolute target, so a new id is always safe). */
+export function renewCountId(ids: Map<string, Id>, key: string): void {
+  ids.delete(key)
+}
+
 /**
  * One stock.set per change, one after another (no batch command yet). Each row's movementId lives in `ids` (by row key)
  * until its write lands, so a retry after a failure sends the same command and a write that did land is not repeated.

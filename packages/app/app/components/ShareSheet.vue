@@ -80,6 +80,8 @@ function openItem(m: MatchRow): void {
   void leaveThen(() => void router.push({ path: `/item/${m.itemId}`, query: m.variantId ? { variant: m.variantId } : {} }))
 }
 function receiveInto(m: MatchRow): void {
+  // An item with variants: receiving "into the item" would go to the stock kept without a variant. Its card asks which.
+  if (m.variantId === null && m.hasVariants) return openItem(m)
   const url = shown.value.url ?? ''
   void leaveThen(() => receive.open({ itemId: m.itemId, variantId: m.variantId, url }))
 }
@@ -150,7 +152,7 @@ function addNew(): void {
                 :disabled="!canWrite"
                 @click="receiveInto(m)"
               >
-                {{ $t('share.receive') }}
+                {{ $t(m.variantId === null && m.hasVariants ? 'share.openCard' : 'share.receive') }}
               </Button>
             </li>
           </ul>

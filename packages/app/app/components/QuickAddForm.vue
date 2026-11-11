@@ -14,7 +14,9 @@ const props = defineProps<{ name: string; folderId: Id | null; url?: string }>()
 const emit = defineEmits<{
   done: [added: { id: Id; name: string; photoFailed: boolean }]
   /** "Receive here" on a match: receive into it instead, with what was typed. */
-  receive: [into: { itemId: Id; variantId: Id | null; amount: string; price: string; url: string }]
+  receive: [into: { itemId: Id; variantId: Id | null; amount: string; price: string; url: string; photoDropped: boolean }]
+  /** "Open" on a match that has variants: no stock bucket to receive into without choosing one. */
+  open: [itemId: Id]
 }>()
 
 const workspace = useWorkspace()
@@ -61,13 +63,18 @@ const canSubmit = computed(() => !busy.value && !state.readOnly && !!snapshot.va
 
 // "You already have it" (spec 4.9): up to three things with this name, a moment after typing stops. Save stays free.
 const typedName = refDebounced(name, 150)
-const matches = computed<MatchRow[]>(() => (snapshot.value ? existingMatches(typedName.value, snapshot.value) : []))
+const matches = computed<MatchRow[]>(() => (snapshot.value ? existingMatches(typedName.value, snapshot.value, 3, { everyWord: true }) : []))
 const matchLine = (m: MatchRow): string =>
   [m.path || snapshot.value?.inventory.name, m.amount].filter((x): x is string => !!x).join(' · ')
 
 function receiveHere(m: MatchRow): void {
   if (busy.value) return
-  emit('receive', { itemId: m.itemId, variantId: m.variantId, amount: amount.value, price: price.value, url: url.value })
+  // The item itself has variants: which one is the person's call, on its card.
+  if (m.variantId === null && m.hasVariants) {
+    emit('open', m.itemId)
+    return
+  }
+  emit('receive', { itemId: m.itemId, variantId: m.variantId, amount: amount.value, price: price.value, url: url.value, photoDropped: photo.value !== null })
 }
 
 function pick(id: Id | null): void {
@@ -79,7 +86,7 @@ async function submit(): Promise<void> {
   const s = snapshot.value
   if (!canSubmit.value || !s) return
   const built = buildQuickAdd(
-    { folderId: folderId.value, name: name.value, unitKey: unitKey.value, amount: amount.value, price: price.value, url: url.value },
+    { folderId: folderId.value, name: name.value, unitKey: unitKey.value, amount: amount.value, price: price.value, url: url.value, prefilledUrl: props.url },
     s,
     { itemId: ids.itemId, movementId: ids.movementId },
   )
@@ -127,7 +134,7 @@ async function submit(): Promise<void> {
               <span class="truncate text-xs text-muted-foreground">{{ matchLine(m) }}</span>
             </span>
             <Button type="button" variant="outline" size="sm" class="h-9 shrink-0 rounded-field bg-surface" :disabled="busy" @click="receiveHere(m)">
-              {{ $t('quickAdd.receiveHere') }}
+              {{ $t(m.variantId === null && m.hasVariants ? 'quickAdd.openMatch' : 'quickAdd.receiveHere') }}
             </Button>
           </li>
         </ul>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { UnitDef } from '@graymatter/core'
+import { amountPreview } from '~/lib/amounts'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
@@ -9,16 +10,21 @@ const props = defineProps<{ units: UnitDef[]; id?: string; invalid?: boolean }>(
 const text = defineModel<string>({ required: true })
 const unitKey = defineModel<string>('unitKey', { required: true })
 
+const preview = computed(() => {
+  const unit = props.units.find((u) => u.key === unitKey.value) ?? props.units[0]
+  return unit ? amountPreview(text.value, unit) : null
+})
 const single = computed(() => (props.units.length === 1 ? props.units[0]! : null))
 </script>
 
 <template>
+  <div class="grid gap-1.5">
   <div class="flex gap-2">
     <div class="relative min-w-0 flex-1">
       <Input
         :id="id"
         v-model="text"
-        inputmode="decimal"
+        inputmode="text"
         autocomplete="off"
         :aria-invalid="invalid ? true : undefined"
         class="h-11"
@@ -39,5 +45,7 @@ const single = computed(() => (props.units.length === 1 ? props.units[0]! : null
         <SelectItem v-for="u in units" :key="u.key" :value="u.key">{{ u.name }}</SelectItem>
       </SelectContent>
     </Select>
+  </div>
+  <ExpressionHint :preview="preview" />
   </div>
 </template>

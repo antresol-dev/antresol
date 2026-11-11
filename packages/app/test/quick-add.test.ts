@@ -57,6 +57,12 @@ describe('buildQuickAdd', () => {
     })
   })
 
+  it('reads expressions in the amount and the price', () => {
+    const r = buildQuickAdd(input({ amount: '5x100', price: '10/4' }), snap, ids)
+    expect('command' in r && r.command.initialReceipt).toMatchObject({ quantity: '500', totalPrice: 250 })
+    expect(buildQuickAdd(input({ amount: '5x' }), snap, ids)).toEqual({ errorKey: 'quickAdd.invalidAmount' })
+  })
+
   it('adds a first receipt with the batch price and link', () => {
     const r = buildQuickAdd(input({ amount: '37', price: '2.30', url: ' https://shop.example/x ' }), snap, ids)
     if (!('command' in r)) throw new Error('expected a command')

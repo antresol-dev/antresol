@@ -42,7 +42,10 @@
     "clear": "Clear",
     "results": "Search results",
     "nothing": "Nothing found for “{q}”",
-    "group": { "items": "Items", "folders": "Folders", "actions": "Actions" },
+    "group": { "nearest": "Nearest values", "items": "Items", "folders": "Folders", "actions": "Actions" },
+    "noValue": "No {wanted} — nearest:",
+    "nearestHit": "{value} ({stock})",
+    "openNearest": "Open {value}",
     "switchTo": "Switch to {name}",
     "addItem": "Add item “{name}”",
     "key": { "move": "↑↓", "open": "↵", "close": "esc" },
@@ -572,7 +575,18 @@
     "received": "Received into “{name}”"
   },
   "list": { "out": "Out", "more": "+{count}", "pinned": "Shown in lists" },
+  "expression": {
+    "result": "= {value}",
+    "syntax": "Can’t read that expression.",
+    "unit": "A unit or prefix doesn’t fit.",
+    "divide_by_zero": "Division by zero.",
+    "negative": "The result is negative."
+  },
   "share": {
+    "nearest": "Nearest values",
+    "noValue": "No {wanted} — nearest:",
+    "nearestHit": "{value} ({stock})",
+    "openNearest": "Open {value}",
     "title": "Already have it?",
     "loading": "Opening the inventory…",
     "noInventory": "Open an inventory to compare with.",

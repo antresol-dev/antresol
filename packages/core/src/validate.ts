@@ -498,7 +498,15 @@ function check(c: Command, s: Snap | null): void {
       activeBucket(s, c.itemId, c.variantId)
       // The new photo already stored as this variant's: a retry. Any other photo with this id is not this command's.
       const existing = s.photos.find((p) => p.id === c.id)
-      if (existing && existing.variantId !== c.variantId) fail('invalid_option')
+      if (existing) {
+        if (existing.variantId !== c.variantId) fail('invalid_option')
+        return
+      }
+      // The photo it replaces is the variant's on this copy: gone (as for photo.remove), or the variant got one it does
+      // not name (as for photo.add).
+      const own = s.photos.filter((p) => p.variantId === c.variantId)
+      if (c.replaces !== null && !own.some((p) => p.id === c.replaces)) fail('not_found')
+      if (c.replaces === null && own.length > 0) fail('invalid_option')
       return
     }
     case 'photo.remove':

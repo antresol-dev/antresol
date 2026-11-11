@@ -250,16 +250,29 @@ describe.skipIf(!url)('Neon conformance', () => {
         // C2: 100n·50V -> 220n·25V next to 220n·50V; then b and c trade their values.
         await step(set([[a, { [cap]: '0.00000022', [volt]: '25' }]]))
         await step(set([[b, { [cap]: '0.00000047', [volt]: '16' }], [c, { [cap]: '0.00000022', [volt]: '50' }]]))
-        // Sent unvalidated, as from a copy that is behind: c would equal b. Skipped whole.
-        await step(set([[a, { [volt]: '35' }], [c, { [cap]: '0.00000047', [volt]: '16' }]]))
+        // Sent unvalidated, as from a copy that is behind: c would equal b. Refused whole (GM004), nothing written.
+        const revBefore = (await storage.listInventories()).rev
+        await expect(
+          storage.apply(set([[a, { [volt]: '35' }], [c, { [cap]: '0.00000047', [volt]: '16' }]]), TEST_ACTOR),
+        ).rejects.toMatchObject({ code: 'conflict' })
+        expect((await storage.listInventories()).rev).toBe(revBefore)
+        expect(normSnapshot(copy)).toEqual(normSnapshot(await storage.loadInventory(inv)))
         expect([values(a), values(b), values(c)]).toEqual([
           { [cap]: '0.00000022', [volt]: '25' },
           { [cap]: '0.00000047', [volt]: '16' },
           { [cap]: '0.00000022', [volt]: '50' },
         ])
         await step({ type: 'photo.add', id: p1, itemId: item, variantId: b, provider: 'imgbb', fileId: 'f1', url: 'https://i.example/f1' })
-        await step({ type: 'photo.replace', variantId: b, id: p2, itemId: item, provider: 'imgbb', fileId: 'f2', url: 'https://i.example/f2' })
+        const replace = (id: string, replaces: string | null): Command => ({
+          type: 'photo.replace', variantId: b, id, itemId: item, replaces, provider: 'imgbb', fileId: id, url: `https://i.example/${id}`,
+        })
+        await step(replace(p2, p1))
         expect(copy.photos.map((p) => [p.id, p.variantId, p.position])).toEqual([[p2, b, 0]])
+        // A newer photo, then the first replace again (a late replay): the newer one stays.
+        const p3 = newId()
+        await step(replace(p3, p2))
+        await step(replace(p2, p1))
+        expect(copy.photos.map((p) => [p.id, p.variantId, p.position])).toEqual([[p3, b, 0]])
         expect(normSnapshot(copy)).toEqual(normSnapshot(await storage.loadInventory(inv)))
 
         // G3: another device moved the database past this app after it opened: the write is refused, nothing written.

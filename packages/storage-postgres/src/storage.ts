@@ -1,5 +1,6 @@
 import { normalizeCommand, StorageError, type InventoryStorage, type SchemaStatus } from '@graymatter/core'
 import { toStatements } from './commands'
+import { isStaleWrite } from './commands/variants'
 import { affectedReads } from './commands/reads'
 import type { PgExecutor } from './executor'
 import { inspectSchema } from './inspect'
@@ -14,8 +15,9 @@ const bumpRev = REV_BUMP
 
 const valueOf = (result: Record<string, unknown>[] | undefined): unknown => result?.[0]?.value
 
-/** Lets StorageError through; a write the schema guard refused (GM003) becomes StorageError('read_only'); anything
- *  else becomes StorageError('failed'), keeping the cause. */
+/** Lets StorageError through; a write the schema guard refused (GM003) becomes StorageError('read_only'), one the
+ *  database refused as stale (GM004) StorageError('conflict'); anything else becomes StorageError('failed'), keeping
+ *  the cause. */
 async function wrapFailure<T>(run: () => Promise<T>): Promise<T> {
   try {
     return await run()
@@ -23,7 +25,9 @@ async function wrapFailure<T>(run: () => Promise<T>): Promise<T> {
     if (cause instanceof StorageError) throw cause
     const error = isNewerSchema(cause)
       ? new StorageError('read_only', 'the database needs a newer GrayMatter to write')
-      : new StorageError('failed', cause instanceof Error ? cause.message : undefined)
+      : isStaleWrite(cause)
+        ? new StorageError('conflict', 'changed on another device')
+        : new StorageError('failed', cause instanceof Error ? cause.message : undefined)
     error.cause = cause
     throw error
   }

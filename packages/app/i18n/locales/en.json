@@ -689,7 +689,8 @@
       "incompatible": "This database isn’t a GrayMatter source.",
       "outdated": "This database was made by a pre-release version of GrayMatter. Reset it to use it here.",
       "failed": "The source reported an error. Try again.",
-      "not_empty": "This source already holds inventories. Restore the backup as new inventories instead."
+      "not_empty": "This source already holds inventories. Restore the backup as new inventories instead.",
+      "conflict": "Changed on another device — values reloaded. Check them and save again."
     },
     "file": {
       "no_store": "Photos aren’t set up for this source. Check the Uploadcare key and photo address in Settings.",

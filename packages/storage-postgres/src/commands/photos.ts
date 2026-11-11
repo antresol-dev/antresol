@@ -15,15 +15,21 @@ export function photoStatements(c: PhotoCommand, actor: Actor): Statement[] {
     case 'photo.replace':
       // One statement, every part seeing the photos as they were: the variant's other photos go and the new one takes
       // the place (position) of the first of them, or the end of the item's photos when it had none. Only for a variant
-      // of the item in the database (a copy that is behind may name one deleted since), and only when the new id is not
-      // some other photo's: otherwise nothing changes. A replay finds the new photo already there: nothing goes, nothing
-      // is added.
+      // of the item in the database (a copy that is behind may name one deleted since), only when the new id is not
+      // some other photo's, and only while the variant still has the photo the command replaces (`replaces`; null: still
+      // none): otherwise nothing changes. So a replay finds nothing to do: right after the write the new photo is
+      // already there (and the one it replaced gone); long after it, a newer photo that replaced this one stays.
       return [
         sql`with v as (
               select id, item_id from variants
               where id = ${c.variantId}::uuid and item_id = ${c.itemId}::uuid
                 and not exists (select 1 from photos
                                 where id = ${c.id}::uuid and variant_id is distinct from ${c.variantId}::uuid)
+                and case when ${c.replaces}::uuid is null
+                         then not exists (select 1 from photos where variant_id = ${c.variantId}::uuid)
+                         else exists (select 1 from photos
+                                      where id = ${c.replaces}::uuid and variant_id = ${c.variantId}::uuid)
+                    end
             ),
             old as (
               select p.id, p.position from photos p join v on p.variant_id = v.id where p.id <> ${c.id}::uuid

@@ -133,19 +133,27 @@ describe('variant.setValues', () => {
     expect(await valuesOf(x)).toEqual({ [ohm]: '1' })
   })
 
-  it('skips the whole write when the database would end with two equal variants (a copy that is behind)', async () => {
-    const { run, valuesOf, item, ohm, volt } = await setup()
+  it('refuses the whole write with conflict when the database would end with two equal variants (a copy that is behind)', async () => {
+    const { storage, run, load, valuesOf, item, ohm, volt } = await setup()
     const [a, b, c] = [newId(), newId(), newId()]
     await run(variantsCreate(item, [[a, { [ohm]: '100', [volt]: '50' }], [b, { [ohm]: '220', [volt]: '50' }], [c, { [ohm]: '330', [volt]: '50' }]]))
+    const before = await load()
+    const rev = (await storage.listInventories()).rev
     // Sent unvalidated: c would equal b; a's change alone would be fine, but the command goes whole or not at all.
-    const r = await run(setValues(item, [[a, { [ohm]: '470' }], [c, { [ohm]: '220' }]]))
-    expect(await valuesOf(a)).toEqual({ [ohm]: '100', [volt]: '50' })
-    expect(await valuesOf(c)).toEqual({ [ohm]: '330', [volt]: '50' })
-    expect(r.patch!.variantAttributeValues).toHaveLength(6)
+    await expect(run(setValues(item, [[a, { [ohm]: '470' }], [c, { [ohm]: '220' }]]))).rejects.toMatchObject({
+      name: 'StorageError',
+      code: 'conflict',
+    })
+    // Nothing written, not even the revision: the app syncs the copy that allowed it.
+    expect(await load()).toEqual(before)
+    expect((await storage.listInventories()).rev).toBe(rev)
     // An erased value equals only an empty one.
     await run(setValues(item, [[a, { [volt]: null }]]))
-    await run(setValues(item, [[b, { [ohm]: '100', [volt]: null }]]))
+    await expect(run(setValues(item, [[b, { [ohm]: '100', [volt]: null }]]))).rejects.toMatchObject({ code: 'conflict' })
     expect(await valuesOf(b)).toEqual({ [ohm]: '220', [volt]: '50' })
+    // The same storage writes on afterwards.
+    await run(setValues(item, [[b, { [ohm]: '150' }]]))
+    expect(await valuesOf(b)).toEqual({ [ohm]: '150', [volt]: '50' })
   })
 })
 

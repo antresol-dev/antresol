@@ -18,6 +18,7 @@ injectHead()?.hooks?.hook('tags:resolve', (ctx) => {
     <NuxtPage />
   </NuxtLayout>
   <UpdatePrompt />
+  <BackupReminder />
   <!-- Bottom centre of the viewport; assets/css/main.css lifts it above the phone dock. -->
   <Toaster position="bottom-center" />
 </template>

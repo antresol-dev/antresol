@@ -5,7 +5,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { defaultDeviceName } from '~/lib/device-name'
-import { downloadBackup } from '~/lib/backup'
 import { errorMessageKey } from '~/lib/errors'
 import type { SourceConfig } from '~/lib/types'
 import type { CheckInterval } from '~/lib/workspace-types'
@@ -38,20 +37,6 @@ const sheetOpen = computed({
 
 // Neutral hover; the text keeps its colour.
 const sourceAction = 'h-11 rounded-field transition-colors duration-150 hover:bg-hover'
-
-const exporting = ref<string | null>(null)
-
-async function exportBackup(config: SourceConfig): Promise<void> {
-  if (exporting.value) return
-  exporting.value = config.id
-  try {
-    downloadBackup(await workspace.exportSource(config.id), new Date())
-  } catch (e) {
-    toast.error(t(errorMessageKey(e)))
-  } finally {
-    exporting.value = null
-  }
-}
 
 const reloading = ref<string | null>(null)
 
@@ -111,14 +96,6 @@ async function confirmRemove(): Promise<void> {
               <Button
                 variant="ghost"
                 :class="[sourceAction, 'text-primary']"
-                :disabled="exporting !== null || (s.status !== 'ready' && s.status !== 'read_only')"
-                @click="exportBackup(s.config)"
-              >
-                {{ exporting === s.config.id ? $t('settings.sources.exporting') : $t('settings.sources.exportBackup') }}
-              </Button>
-              <Button
-                variant="ghost"
-                :class="[sourceAction, 'text-primary']"
                 :disabled="reloading !== null || (s.status !== 'ready' && s.status !== 'read_only')"
                 @click="reload(s.config)"
               >
@@ -128,9 +105,9 @@ async function confirmRemove(): Promise<void> {
                 {{ $t('settings.sources.remove') }}
               </Button>
             </div>
-            <p v-if="s.config.kind === 'neon'" class="text-sm text-subtle-foreground">{{ $t('settings.sources.exportHint') }}</p>
             <p class="text-sm text-subtle-foreground">{{ $t('sync.reloadHint') }}</p>
             <SourceTraffic v-if="s.config.kind === 'neon'" :source-id="s.config.id" />
+            <SourceBackup :source="s" />
           </li>
         </ul>
         <p v-else class="text-subtle-foreground">{{ $t('settings.sources.empty') }}</p>

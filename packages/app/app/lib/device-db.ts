@@ -1,4 +1,4 @@
-import type { Inventory, InventorySnapshot } from '@graymatter/core'
+import { newId, type Inventory, type InventorySnapshot } from '@graymatter/core'
 import { createStore, del, get, getMany, keys, set, setMany, update, type UseStore } from 'idb-keyval'
 import type { AccentName } from './accent'
 import type { InventoryRef, SourceConfig } from './types'
@@ -11,6 +11,14 @@ export interface DeviceSettings {
   checkInterval?: CheckInterval
   /** Absent until chosen: DEFAULT_ACCENT. A value this app does not know (from a newer one) counts as absent. */
   accent?: AccentName
+}
+
+/** This device's backup bookkeeping for one source (the reminder and "Last backup" in settings). */
+export interface BackupInfo {
+  /** When this device last saved or shared a backup of the source; null: never. */
+  lastBackupAt: string | null
+  /** Writes this device made to the source since then. */
+  writesSince: number
 }
 
 export interface CachedSnapshot {
@@ -52,6 +60,14 @@ export interface DeviceDb {
   /** Stored lists by source id. */
   getListings(): Promise<Record<string, Inventory[]>>
   deleteListing(sourceId: string): Promise<void>
+  getBackupInfo(sourceId: string): Promise<BackupInfo>
+  /** A backup of the source was saved or shared `at`: the write count starts again from zero. */
+  noteBackup(sourceId: string, at: string): Promise<void>
+  /** One more write to the source since its last backup. */
+  countWrite(sourceId: string): Promise<void>
+  /** The id of the restore run for a backup file, by the file's SHA-256: made on first use, then always the same, so a
+   *  restore of the same file with new ids gets the same ids every time it is run (nothing is added twice). */
+  restoreRunId(fileSha256: string): Promise<string>
 }
 
 const SOURCES = 'sources'
@@ -61,6 +77,9 @@ const snapshotKey = (ref: InventoryRef): string => `snapshot:${ref.sourceId}:${r
 const snapshotPrefix = (sourceId: string): string => `snapshot:${sourceId}:`
 const revKey = (ref: InventoryRef): string => `snapshotRev:${ref.sourceId}:${ref.inventoryId}`
 const revPrefix = (sourceId: string): string => `snapshotRev:${sourceId}:`
+const backupKey = (sourceId: string): string => `backup:${sourceId}`
+const runKey = (fileSha256: string): string => `restoreRun:${fileSha256}`
+const noBackup = (): BackupInfo => ({ lastBackupAt: null, writesSince: 0 })
 const defaultSettings = (): DeviceSettings => ({ deviceName: null, current: null })
 
 function upsertSource(list: SourceConfig[] | undefined, s: SourceConfig): SourceConfig[] {
@@ -96,6 +115,7 @@ function buildDeviceDb(kv: Kv, persistent: boolean): DeviceDb {
       for (const key of await kv.keys()) {
         if (prefixes.some((p) => key.startsWith(p))) await kv.del(key)
       }
+      await kv.del(backupKey(id))
     },
     async getSettings() {
       return { ...defaultSettings(), ...(await kv.get<Partial<DeviceSettings>>(SETTINGS)) }
@@ -153,6 +173,23 @@ function buildDeviceDb(kv: Kv, persistent: boolean): DeviceDb {
       await kv.update<Record<string, Inventory[]>>(LISTINGS, (all) =>
         Object.fromEntries(Object.entries(all ?? {}).filter(([id]) => id !== sourceId)),
       )
+    },
+    async getBackupInfo(sourceId) {
+      return { ...noBackup(), ...(await kv.get<BackupInfo>(backupKey(sourceId))) }
+    },
+    async noteBackup(sourceId, at) {
+      await kv.set(backupKey(sourceId), { lastBackupAt: at, writesSince: 0 })
+    },
+    async countWrite(sourceId) {
+      await kv.update<BackupInfo>(backupKey(sourceId), (info) => {
+        const base = { ...noBackup(), ...info }
+        return { ...base, writesSince: base.writesSince + 1 }
+      })
+    },
+    async restoreRunId(fileSha256) {
+      // Atomic: two calls for one file agree on the id.
+      await kv.update<string>(runKey(fileSha256), (id) => id ?? newId())
+      return (await kv.get<string>(runKey(fileSha256)))!
     },
   }
 }

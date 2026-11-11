@@ -5,8 +5,10 @@ import { assertTestDatabase, createNeonHttpExecutor, createNeonWsExecutor, inspe
 import { toStatements } from '../src/commands'
 import { ensureSchema, LOCK_REV, REV_BUMP } from '../src/migrator'
 import { sql } from '../src/sql'
+import { uuidV5 } from '../src/restore'
 import { openPostgresStorage } from '../src/storage'
 import { attributeCreate, itemCreate, normSnapshot, TEST_ACTOR, variantsCreate } from './helpers'
+import { renamed, seedRich } from './restore-fixtures'
 
 describe('assertTestDatabase', () => {
   it('rejects a database whose name does not end with _test', () => {
@@ -230,6 +232,29 @@ describe.skipIf(!url)('Neon conformance', () => {
           await other.close()
         }
       })
+
+      it('restores a backup: new ids twice without duplicates, then the same ids after the original is gone', async () => {
+        const { storage } = await openPostgresStorage(exec)
+        const inv = await seedRich(storage, `restore-${name}`)
+        const backup = { inventories: [await storage.exportInventory(inv)] }
+        const journal = (await storage.loadAllMovements(inv)).map(({ seq: _seq, ...m }) => m)
+        const runId = newId()
+        const first = await storage.restore(backup, 'new-ids', runId)
+        // A second run of the same file (after a break, say) adds nothing.
+        expect(await storage.restore(backup, 'new-ids', runId)).toEqual(first)
+        const m = (id: string) => uuidV5(id, runId)
+        expect(first.inventoryIds).toEqual([m(inv)])
+        const copy = await storage.loadInventory(m(inv))
+        expect(normSnapshot(copy)).toEqual(normSnapshot(renamed(backup.inventories[0]!.snapshot, m)))
+        expect((await storage.loadAllMovements(m(inv))).length).toBe(journal.length)
+
+        await storage.apply({ type: 'archive', target: 'inventory', id: inv, archiveId: newId() }, TEST_ACTOR)
+        await storage.apply({ type: 'deletePermanently', target: 'inventory', id: inv }, TEST_ACTOR)
+        await storage.restore(backup, 'same-ids', newId())
+        expect(normSnapshot(await storage.loadInventory(inv))).toEqual(normSnapshot(backup.inventories[0]!.snapshot))
+        expect((await storage.loadAllMovements(inv)).map(({ seq: _seq, ...m }) => m)).toEqual(journal)
+        // Some forty writes to seed it, one round trip each: slow over the websocket.
+      }, 180_000)
 
       it.skipIf(name !== 'http')('loads an inventory snapshot in one fetch', async () => {
         const { storage } = await openPostgresStorage(exec)

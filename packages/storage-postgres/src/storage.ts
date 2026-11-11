@@ -5,6 +5,7 @@ import type { PgExecutor } from './executor'
 import { inspectSchema } from './inspect'
 import { ensureSchema, LOCK_REV, REV_BUMP } from './migrator'
 import * as queries from './queries'
+import { restoreBackup } from './restore'
 
 /** The revision is an opaque unique value, not a counter: a point-in-time restore cannot make a new state repeat a
  *  revision that a device cached. An upsert, so a missing row is recreated rather than leaving the bump a no-op; it
@@ -43,6 +44,10 @@ export async function openPostgresStorage(
     loadMovements: (itemId) => wrapFailure(() => queries.loadMovements(exec, itemId)),
     loadAllMovements: (inventoryId) => wrapFailure(() => queries.loadAllMovements(exec, inventoryId)),
     exportInventory: (id) => wrapFailure(() => queries.exportInventory(exec, id)),
+    async restore(backup, mode, runId, onProgress) {
+      if (readOnly) throw new StorageError('read_only')
+      return wrapFailure(() => restoreBackup(exec, backup, mode, runId, onProgress))
+    },
     async apply(command, actor) {
       if (readOnly) throw new StorageError('read_only')
       return wrapFailure(async () => {

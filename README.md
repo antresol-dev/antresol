@@ -15,7 +15,9 @@ Your data lives in your own free Neon (Postgres) project. There is no GrayMatter
 
 ### Backups
 
-Open Settings, pick your source, and press "Export backup". It saves a JSON file. Neon's free plan keeps only about 6 hours of restore history, so export regularly. Photos are kept as links (URLs) only, not as files, so the backup does not contain the pictures themselves. Importing a backup is not available yet.
+Open Settings, pick your source, and press "Export backup". On a phone it opens the share sheet, so you can send the file to Google Drive or Telegram; on a computer it downloads a JSON file. Neon's free plan keeps only about 6 hours of restore history, so export regularly: the app shows when you last did and reminds you once after 14 days or 200 changes. Photos are kept as links (URLs) only, not as files, so the backup does not contain the pictures themselves.
+
+To restore, press "Restore from backup…" on the source and pick the file. "Into an empty source" keeps every id: use it after losing a database, for example in a new Neon project. "As new inventories" puts copies with new ids next to what the source already holds, with "(restored)" after their names. If a restore stops halfway, run it again with the same file: nothing is added twice. A backup made by a newer version of the app cannot be restored until you update.
 
 ### Photos with Uploadcare (optional)
 

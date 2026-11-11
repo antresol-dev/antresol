@@ -664,7 +664,11 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
    *  more check of its source alone, which lists it and loads the copy in full. */
   async function requireShownCurrent(): Promise<void> {
     let cur = state.current
-    if (!cur) return
+    if (!cur) {
+      // Nothing shown to vouch for: "up to date" needs every configured source to have answered.
+      if (state.sources.some((s) => !isConnected(s.status))) throw new StorageError('unavailable')
+      return
+    }
     requireConnected(cur.sourceId)
     if (shownIsCurrent(cur.sourceId)) return
     await checkSource(cur.sourceId)
@@ -866,7 +870,8 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       sourceRevs.delete(sourceId)
       if (state.current?.sourceId === sourceId) shownRev = null
     } else if ((error instanceof StorageError && error.code === 'failed') || error instanceof DomainError) {
-      await refresh().catch(() => {})
+      // Only the source that refused, and a listing that starts now: a run going may have listed before the refusal.
+      await checkSource(sourceId).catch(() => {})
     }
   }
 

@@ -1876,6 +1876,36 @@ describe('workspace sync and the check interval', () => {
     expect(ws.state.lastRefreshAt).toBe(new Date(h.flags.clock).toISOString())
   })
 
+  it('15b. a rejected write checks only its own source, fresh: a hung source neither delays it nor the next write', async () => {
+    const { h, ws, a } = await twoSources()
+    const hold = h.gate()
+    h.flags.listHold = { connectionString: CS('two'), promise: hold.promise }
+    const [one, two] = [listsOf(h, 'one'), listsOf(h, 'two')]
+    h.flags.applyError = new StorageError('failed', 'constraint')
+    await expect(ws.apply(folderCreate(a, 'X'))).rejects.toMatchObject({ code: 'failed' })
+    h.flags.applyError = null
+    expect([listsOf(h, 'one'), listsOf(h, 'two')]).toEqual([one + 1, two])
+    await ws.apply(folderCreate(a, 'Y'))
+    expect(listsOf(h, 'two')).toBe(two)
+    expect(folderNames(ws)).toEqual(['Y'])
+    hold.open()
+    h.flags.listHold = null
+  })
+
+  it('16b. sync without a current inventory: unavailable when a source failed, unchanged when all are healthy', async () => {
+    const h = setup()
+    h.addDatabase(CS('one'))
+    await h.db.putSource(config('s1', CS('one')))
+    const ws = h.workspace()
+    await ws.start()
+    expect(ws.state.current).toBeNull()
+    expect(await ws.sync()).toBe('unchanged')
+    h.flags.offline = true
+    await expect(ws.sync()).rejects.toMatchObject({ code: 'unavailable' })
+    h.flags.offline = false
+    expect(await ws.sync()).toBe('unchanged')
+  })
+
   it('17. sync never ends unchanged with a copy it left behind: one more check loads it', async () => {
     const { h, ws, inv } = await started('Inv')
     await (await h.direct(CS('one'))).apply(folderCreate(inv, 'Theirs'), { device: 'other' })

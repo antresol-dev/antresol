@@ -25,7 +25,8 @@ export interface ApplyResult {
   prevRev: string | null
   /** Revision after this write. */
   rev: string
-  /** What the command touched, read in the same transaction after the write; null for wide commands (reload). */
+  /** What the command touched, read in the same transaction after the write. Null means
+   *  reload: a wide command, or the command's target no longer exists (a write to a vanished item, a replayed delete). */
   patch: SnapshotPatch | null
 }
 

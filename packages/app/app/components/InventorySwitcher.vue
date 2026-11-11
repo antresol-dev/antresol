@@ -31,7 +31,7 @@ const archiving = ref(false)
 const formBusy = ref(false)
 const syncing = ref(false)
 
-// "Checked … ago" ticks with the clock while the menu is open, so it is not stale when it is read.
+// "Checked … ago" is measured against the time the menu was opened, so it is not stale when it is read.
 const now = ref(new Date())
 watch(menuOpen, (open) => {
   if (open) now.value = new Date()

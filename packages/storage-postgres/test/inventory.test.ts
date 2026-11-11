@@ -53,10 +53,11 @@ describe('inventories', () => {
     })
   })
 
-  it('is read-only when the database schema is newer', async () => {
+  it('is read-only when the database needs a newer app to write', async () => {
     const exec = await makeExecutor()
     await ensureSchema(exec)
-    await exec.batch([sql`update gm_meta set value = ${String(APP_SCHEMA_VERSION + 1)} where key = 'schema_version'`])
+    const next = String(APP_SCHEMA_VERSION + 1)
+    await exec.batch([sql`update gm_meta set value = ${next} where key in ('schema_version', 'min_app_schema')`])
     const { storage, status } = await openPostgresStorage(exec)
     expect(status.state).toBe('newer')
     expect(storage.readOnly).toBe(true)

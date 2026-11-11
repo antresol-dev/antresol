@@ -4,6 +4,7 @@ import {
   customUnitKey,
   duplicateOf,
   itemAxes,
+  MAX_PINNED_ATTRIBUTES,
   newId,
   normalizeCommand,
   patchSnapshot,
@@ -377,6 +378,7 @@ const GENERATORS: Record<Command['type'], Generator> = {
         options: attribute.kind === 'enum' ? p.maybe(() => p.one([['red', 'blue', 'green'], ['blue']])) : undefined,
         unit: attribute.kind === 'number' ? p.maybe(() => p.one(UNITS)) : undefined,
         siPrefixes: attribute.kind === 'number' ? p.maybe(() => p.bool()) : undefined,
+        pinned: p.maybe(() => p.bool()),
       }
     },
   },
@@ -627,6 +629,9 @@ describe('patch property', () => {
           rev = after.rev
 
           checkAxes(copy, `after ${label}`)
+          expect(copy.attributes.filter((a) => a.pinned).length, `${label}: pinned attributes`).toBeLessThanOrEqual(
+            MAX_PINNED_ATTRIBUTES,
+          )
           const removed = removal(c)
           if (removed) {
             // Never makes variants equal; and a removal validated on an up-to-date copy is carried out, not skipped.

@@ -93,6 +93,8 @@ export const attributes = pgTable(
     options: text('options').array().notNull().default(sql`'{}'`),
     unit: text('unit').notNull().default(''),
     siPrefixes: boolean('si_prefixes').notNull().default(false),
+    /** "Show in lists"; at most two per inventory (core MAX_PINNED_ATTRIBUTES, kept by attribute.update's SQL). */
+    pinned: boolean('pinned').notNull().default(false),
     ...audit(),
   },
   (t) => [

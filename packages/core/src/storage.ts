@@ -6,16 +6,22 @@ import type { SnapshotPatch } from './patch'
 export interface Actor {
   device: string
 }
+/** `newer` (read-only) only when the database needs a newer app to write: `minAppSchema > appVersion`. A database
+ *  ahead of the app by additive migrations alone is `ready`. */
 export interface SchemaStatus {
   state: 'ready' | 'newer'
   dbVersion: number
   appVersion: number
+  /** `gm_meta.min_app_schema`: the oldest app schema that may write. Without the row (a database from before soft
+   *  migrations), the database's own version. */
+  minAppSchema: number
 }
 export const STORAGE_ERROR_CODES = ['read_only', 'unavailable', 'not_found', 'incompatible', 'outdated', 'failed'] as const
 export type StorageErrorCode = (typeof STORAGE_ERROR_CODES)[number]
 
 /** What a database holds, read without writing. `older` is upgraded on open; `outdated` (made by a pre-release build)
- *  cannot be: opening it fails with StorageError('outdated') until it is reset. */
+ *  cannot be: opening it fails with StorageError('outdated') until it is reset. `current`: this app writes it as it is,
+ *  at its own version or a newer one whose min_app_schema the app meets; `newer`: this app may only read it. */
 export type SchemaInspection =
   | { state: 'empty' }
   | { state: 'foreign' }

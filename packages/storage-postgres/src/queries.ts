@@ -76,7 +76,7 @@ export const snapshotSql = {
   tags: (inventoryId: Statement) =>
     sql`select id, inventory_id, name, ${raw(AUDIT)} from tags where inventory_id = ${inventoryId} order by name, id`,
   attributes: (inventoryId: Statement) =>
-    sql`select id, inventory_id, name, kind, options, unit, si_prefixes, ${raw(AUDIT)}
+    sql`select id, inventory_id, name, kind, options, unit, si_prefixes, pinned, ${raw(AUDIT)}
           from attributes where inventory_id = ${inventoryId} order by name, id`,
   units: (inventoryId: Statement) =>
     sql`select id, inventory_id, name, symbol, prefix_powers, ${raw(AUDIT)}

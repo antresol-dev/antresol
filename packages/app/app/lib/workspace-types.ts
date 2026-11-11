@@ -57,6 +57,9 @@ export interface WorkspaceDeps {
   prepareImage?: (f: File) => Promise<Blob>
   /** The photo store of a source; defaults to Uploadcare (Neon with a key) or the device store (demo). */
   fileStores?: (config: SourceConfig) => FileStore | null
+  /** Looks for a new version of the app now (the service worker's `registration.update()`); never throws. Called when
+   *  a source turns read-only because its schema needs a newer app. */
+  checkForUpdate?: () => void
 }
 
 export interface Workspace {

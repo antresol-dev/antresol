@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Command } from '../src/commands'
 import type { InventorySnapshot } from '../src/model'
-import { DomainError, normalizeCommand, validateCommand, type DomainErrorCode } from '../src/validate'
+import { DomainError, MAX_PINNED_ATTRIBUTES, normalizeCommand, validateCommand, type DomainErrorCode } from '../src/validate'
 import { attribute, axis, electronics, folder, item, makeSnapshot, shared, stockLine, value, variant } from './fixtures'
 
 const ARCH = { archivedAt: '2026-02-01T00:00:00Z', archiveId: 'arch' }
@@ -498,5 +498,26 @@ describe('attribute dictionary', () => {
     expect(ec({ type: 'attribute.delete', id: 'res' }, onlyArchived)).toBe('attribute_is_axis')
     const noVariants = { ...s, variants: s.variants.filter((x) => x.itemId !== 'R') }
     expect(ec({ type: 'attribute.delete', id: 'res' }, noVariants)).toBeNull()
+  })
+  it('pins at most two attributes of an inventory; unpinning always passes', () => {
+    const pin = (id: string, pinned = true): Command => ({ type: 'attribute.update', id, pinned })
+    const s = electronics()
+    const pinnedAs = (ids: string[]) => ({ ...s, attributes: s.attributes.map((a) => ({ ...a, pinned: ids.includes(a.id) })) })
+    expect(MAX_PINNED_ATTRIBUTES).toBe(2)
+    expect(ec(pin('res'))).toBeNull()
+    expect(ec(pin('pkg'), pinnedAs(['res']))).toBeNull()
+    expect(ec(pin('mark'), pinnedAs(['res', 'pkg']))).toBe('too_many_pinned')
+    expect(ec({ type: 'attribute.update', id: 'mark', name: 'Marking code', pinned: true }, pinnedAs(['res', 'pkg']))).toBe(
+      'too_many_pinned',
+    )
+    // Already pinned: sent again (a retry, or a form saving other fields) it passes.
+    expect(ec(pin('pkg'), pinnedAs(['res', 'pkg']))).toBeNull()
+    // Unpinning passes, even with more pinned than allowed (another device pinned meanwhile).
+    expect(ec(pin('res', false), pinnedAs(['res', 'pkg', 'mark']))).toBeNull()
+    expect(ec(pin('volt', false), pinnedAs(['res', 'pkg', 'mark']))).toBeNull()
+    // Other changes to an attribute leave the pins alone, whatever their number.
+    expect(ec({ type: 'attribute.update', id: 'volt', name: 'U' }, pinnedAs(['res', 'pkg', 'mark']))).toBeNull()
+    // Pins count per inventory: the snapshot holds one.
+    expect(ec(pin('nope'))).toBe('not_found')
   })
 })

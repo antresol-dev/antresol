@@ -37,6 +37,14 @@ export function isConcurrentMigration(e: unknown): boolean {
   return code === CONCURRENT_MIGRATION_SQLSTATE && e.message.includes(CONCURRENT_MIGRATION_MESSAGE)
 }
 
+/** First statement of every write, and of every migration after the advisory lock. Writes run READ COMMITTED, so
+ *  without this lock another write could commit between reading the revision and bumping it, and that change would go
+ *  unnoticed; with it, writes queue on the revision row and the value read is exactly the revision this write follows.
+ *  A migration takes it before touching any table: a write then waits for the whole migration (or the migration for
+ *  the write), instead of each holding what the other waits for (a deadlock Postgres would end by aborting one). No row
+ *  (hand-edited database, or one the initial migration has not filled yet): nothing to lock. */
+export const LOCK_REV: Statement = sql`select value from gm_meta where key = 'rev' for update`
+
 /** Gives `gm_meta.rev` a new unique value (see storage.ts for why it is opaque); creates the row if it is missing.
  *  Returns the new value (`apply` reports it; a migration ignores it). */
 export const REV_BUMP: Statement = {
@@ -46,10 +54,12 @@ export const REV_BUMP: Statement = {
   params: [],
 }
 
-/** Lock, then fail unless schema_version is still `expected`. Plain statements: fits one Neon HTTP transaction. */
+/** Lock (migrations, then the revision row as writes do), then fail unless schema_version is still `expected`. Plain
+ *  statements: fits one Neon HTTP transaction. */
 function migrationPrologue(expected: number): Statement[] {
   return [
     { text: `select pg_advisory_xact_lock(${MIGRATION_LOCK_KEY})`, params: [] },
+    LOCK_REV,
     {
       text: `do $$ begin
   if coalesce((select value from gm_meta where key = 'schema_version'), '0')::int <> ${expected} then
@@ -61,30 +71,54 @@ end $$`,
   ]
 }
 
-async function readVersion(exec: PgExecutor): Promise<number> {
-  const rows = await exec.query<{ value: string }>(sql`select value from gm_meta where key = 'schema_version'`)
-  if (!rows[0]) return 0
-  const version = Number(rows[0].value)
-  if (!Number.isInteger(version) || version < 0) {
-    throw new Error('gm_meta.schema_version is not a non-negative integer')
-  }
-  return version
+function nonNegativeInteger(value: string, key: string): number {
+  const n = Number(value)
+  if (!Number.isInteger(n) || n < 0) throw new Error(`gm_meta.${key} is not a non-negative integer`)
+  return n
 }
 
-export async function ensureSchema(exec: PgExecutor): Promise<SchemaStatus> {
+export interface SchemaMeta {
+  /** 0 when the database has no schema yet. */
+  dbVersion: number
+  /** The oldest app schema that may write (`gm_meta.min_app_schema`). Without the row (a database from before soft
+   *  migrations) the database's own version: until then every schema needed an app at least as new. */
+  minAppSchema: number
+}
+
+/** Both versions in one query; throws on a value that is not a non-negative integer (a hand-edited gm_meta). */
+export async function readSchemaMeta(exec: PgExecutor): Promise<SchemaMeta> {
+  const rows = await exec.query<{ key: string; value: string }>(
+    sql`select key, value from gm_meta where key in ('schema_version', 'min_app_schema')`,
+  )
+  const raw = (key: string) => rows.find((r) => r.key === key)?.value
+  const version = raw('schema_version')
+  const dbVersion = version === undefined ? 0 : nonNegativeInteger(version, 'schema_version')
+  const min = raw('min_app_schema')
+  return { dbVersion, minAppSchema: min === undefined ? dbVersion : nonNegativeInteger(min, 'min_app_schema') }
+}
+
+/**
+ * Creates or upgrades the schema to `appVersion`, one migration per batch, and reports whether this app may write.
+ * Soft migrations: a database ahead of the app is still writable while its `min_app_schema` is at most `appVersion`;
+ * additive migrations leave `min_app_schema` as it is, so older apps keep writing.
+ * `appVersion`: tests stand in for an older build with it (its migrations are the first `appVersion - SCHEMA_BASE`).
+ */
+export async function ensureSchema(exec: PgExecutor, appVersion: number = APP_SCHEMA_VERSION): Promise<SchemaStatus> {
+  if (!Number.isInteger(appVersion) || appVersion <= SCHEMA_BASE || appVersion > APP_SCHEMA_VERSION) {
+    throw new Error(`no migrations for app version ${appVersion}`)
+  }
   // Under the lock, so two devices on a brand-new database cannot race on the create (23505 / 42P07).
   await exec.batch([
     { text: `select pg_advisory_xact_lock(${MIGRATION_LOCK_KEY})`, params: [] },
     sql`create table if not exists gm_meta (key text primary key, value text not null)`,
   ])
   for (;;) {
-    const dbVersion = await readVersion(exec)
-    if (dbVersion > APP_SCHEMA_VERSION) return { state: 'newer', dbVersion, appVersion: APP_SCHEMA_VERSION }
+    const { dbVersion, minAppSchema } = await readSchemaMeta(exec)
     if (dbVersion >= 1 && dbVersion <= SCHEMA_BASE) {
       throw new StorageError('outdated', 'the database was created by a pre-release GrayMatter; reset it')
     }
-    if (dbVersion === APP_SCHEMA_VERSION) {
-      return { state: 'ready', dbVersion: APP_SCHEMA_VERSION, appVersion: APP_SCHEMA_VERSION }
+    if (dbVersion >= appVersion) {
+      return { state: minAppSchema > appVersion ? 'newer' : 'ready', dbVersion, appVersion, minAppSchema }
     }
     const version = Math.max(dbVersion, SCHEMA_BASE) + 1
     try {

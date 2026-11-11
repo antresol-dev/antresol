@@ -26,7 +26,7 @@ export function variant(id: string, itemId: string, over: Partial<Variant> = {})
 }
 
 export function attribute(id: string, name: string, kind: Attribute['kind'] = 'text', over: Partial<Attribute> = {}): Attribute {
-  return { id, inventoryId: 'inv', name, kind, options: [], unit: '', siPrefixes: false, ...audit, ...over }
+  return { id, inventoryId: 'inv', name, kind, options: [], unit: '', siPrefixes: false, pinned: false, ...audit, ...over }
 }
 
 /** The attribute is a variant axis of the item, at this position. */

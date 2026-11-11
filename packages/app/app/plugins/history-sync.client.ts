@@ -25,9 +25,19 @@ export default defineNuxtPlugin((nuxtApp) => {
     toast.error(nuxtApp.$i18n.t(errorMessageKey(e)))
   }
 
+  /** The workspace start failed and that was reported: every later navigation meets the same rejected start. */
+  let startReported = false
+
   async function sync(to: RouteLocationNormalized): Promise<void> {
     // This plugin runs before the workspace plugin (alphabetical order); read it lazily.
-    await nuxtApp.$workspaceReady
+    try {
+      await nuxtApp.$workspaceReady
+    } catch (e) {
+      // Reported once, not again on every navigation after it.
+      if (!startReported) report(e)
+      startReported = true
+      return
+    }
     // A newer navigation landed meanwhile: its own afterEach handles its entry.
     if (router.currentRoute.value.fullPath !== to.fullPath) return
 

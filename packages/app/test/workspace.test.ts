@@ -106,11 +106,17 @@ function harness() {
       if (gate) await gate
       const conn = await inner.connect(cfg)
       const storage = Object.create(conn.storage) as typeof conn.storage
+      let closed = false
+      /** Like a pool after end(): a call that goes out on a closed connection fails. */
+      const open = (): void => {
+        if (closed) throw new StorageError('failed', 'connection closed')
+      }
       const gated = async <T>(id: Id, read: () => Promise<T>): Promise<T> => {
         flags.loadCalls++
         const before = flags.beforeLoad
         flags.beforeLoad = null
         if (before) await before()
+        open()
         if (flags.loadError) throw flags.loadError
         if (flags.loadErrorFor?.id === id) throw flags.loadErrorFor.error
         if (flags.missing.has(id)) throw new StorageError('not_found')
@@ -127,6 +133,7 @@ function harness() {
       storage.loadInventoryWithRev = (id) => gated(id, () => conn.storage.loadInventoryWithRev(id))
       storage.exportInventory = async (id) => {
         flags.exportCalls++
+        open()
         if (flags.loadError) throw flags.loadError
         if (flags.missing.has(id)) throw new StorageError('not_found')
         return conn.storage.exportInventory(id)
@@ -140,6 +147,7 @@ function harness() {
           flags.applyBlocked = true
           await applyGate
         }
+        open()
         if (flags.applyError) throw flags.applyError
         const result = await conn.storage.apply(command, actor)
         const after = flags.afterApply
@@ -149,6 +157,7 @@ function harness() {
       }
       storage.loadMovements = async (itemId) => {
         flags.movementCalls++
+        open()
         if (flags.movementError) throw flags.movementError
         return conn.storage.loadMovements(itemId)
       }
@@ -162,6 +171,7 @@ function harness() {
           flags.listGate = null
           await listGate
         }
+        open()
         const listError = flags.listError
         if (listError) {
           flags.listError = null
@@ -175,9 +185,14 @@ function harness() {
       }
       const close = async (): Promise<void> => {
         flags.closeCalls++
+        closed = true
         await conn.close()
       }
-      return { ...conn, storage, close }
+      const inspect = async (): ReturnType<typeof conn.inspect> => {
+        open()
+        return conn.inspect()
+      }
+      return { ...conn, storage, inspect, close }
     },
   }
 
@@ -222,7 +237,7 @@ function harness() {
   }
 
   /** One-shot: the next call of the device db method waits until `open()`; `held` turns true when it does. */
-  const holdDb = <K extends 'getSnapshot' | 'deleteSnapshot' | 'deleteSource' | 'putSource'>(method: K) => {
+  const holdDb = <K extends 'getSnapshot' | 'deleteSnapshot' | 'deleteSource' | 'deleteListing' | 'putSource'>(method: K) => {
     const { promise, open } = gate()
     const original = db[method] as (...args: unknown[]) => Promise<unknown>
     const hold = { held: false, open }
@@ -392,6 +407,35 @@ describe('workspace', () => {
     await fresh.start()
     expect(fresh.state.sources[0]!.status).toBe('ready')
     expect(checkForUpdate).not.toHaveBeenCalled()
+  })
+
+  it('6c. a write the source refuses for a newer min_app_schema turns it read-only with the update banner, one look for an update', async () => {
+    const h = setup()
+    const id = await h.seed(CS('one'), 'Inv')
+    await h.db.putSource(config('s1', CS('one')))
+    const checkForUpdate = vi.fn()
+    const ws = h.workspace({ checkForUpdate })
+    await ws.start()
+    // Another device's app migrated the source to a schema this app may not write, after this app connected. The write
+    // batch checks it under the revision lock (GM003) and refuses with read_only.
+    const next = APP_SCHEMA_VERSION + 1
+    await h.pgs[0]!.exec(`update gm_meta set value = '${next}' where key in ('schema_version', 'min_app_schema')`)
+    h.flags.applyError = new StorageError('read_only')
+    await expect(ws.apply(folderCreate(id, 'Nope'))).rejects.toMatchObject({ code: 'read_only' })
+    h.flags.applyError = null
+    expect(ws.state.sources[0]!.status).toBe('read_only')
+    expect(ws.state.readOnly).toBe('schema_newer')
+    expect(checkForUpdate).toHaveBeenCalledTimes(1)
+    // The copy stays; the next write is refused on the device.
+    expect(ws.state.snapshot?.inventory.id).toBe(id)
+    const calls = h.flags.applyCalls
+    await expect(ws.apply(folderCreate(id, 'Nope'))).rejects.toMatchObject({ code: 'read_only' })
+    expect(h.flags.applyCalls).toBe(calls)
+    // The next refresh finds the same schema: still read-only, no second look.
+    await ws.refresh()
+    expect(ws.state.sources[0]!.status).toBe('read_only')
+    expect(ws.state.readOnly).toBe('schema_newer')
+    expect(checkForUpdate).toHaveBeenCalledTimes(1)
   })
 
   it('7. validates before writing and keeps the written copy on the device', async () => {
@@ -1283,6 +1327,83 @@ describe('workspace', () => {
       expect(ws.state.snapshot).toBeNull()
       expect(ws.state.current).toBeNull()
     })
+
+    it('an edit saved while the source is being removed does not bring it back', async () => {
+      const { h, ws } = await started('Inv')
+      const finishing = h.holdDb('deleteListing')
+      const removal = ws.removeSource('s1')
+      await vi.waitFor(() => expect(finishing.held).toBe(true))
+      const update = ws.updateSource('s1', { name: 'Renamed' }).then(
+        () => null,
+        (e: unknown) => e,
+      )
+      finishing.open()
+      await removal
+      const refused = await update
+      expect(await h.db.getSources()).toEqual([])
+      expect(await h.db.getListings()).toEqual({})
+      expect(ws.state.sources).toEqual([])
+      expect(ws.state.inventories).toEqual([])
+      // Being removed: nothing to edit.
+      expect(refused).toMatchObject({ code: 'not_found' })
+    })
+
+    it('a failure of the connection an edit replaced does not mark the edited source', async () => {
+      const { h, ws, refs } = await started('Inv')
+      const gate = h.gate()
+      h.flags.applyGate = gate.promise
+      const write = ws.apply(folderCreate(refs[0]!.inventoryId, 'X'))
+      await vi.waitFor(() => expect(h.flags.applyBlocked).toBe(true))
+      // Edited while the write is on its way: the edit opens a new connection, which answers.
+      await ws.updateSource('s1', { name: 'Renamed' })
+      expect(ws.state.sources[0]!.status).toBe('ready')
+      // The old connection's write is lost on the way.
+      h.flags.applyError = new StorageError('unavailable')
+      gate.open()
+      await expect(write).rejects.toMatchObject({ code: 'unavailable' })
+      expect(ws.state.sources.map((s) => [s.config.name, s.status])).toEqual([['Renamed', 'ready']])
+      expect(ws.state.readOnly).toBeNull()
+    })
+
+    it('a write on its way keeps the connection a refresh lets go open until it is done', async () => {
+      const { h, ws, refs } = await started('Inv')
+      const gate = h.gate()
+      h.flags.applyGate = gate.promise
+      const write = ws.apply(folderCreate(refs[0]!.inventoryId, 'Shelf'))
+      await vi.waitFor(() => expect(h.flags.applyBlocked).toBe(true))
+      // The reused connection fails its check: the refresh opens another one and lets the old one go.
+      const connects = h.flags.connectCalls
+      h.flags.listError = new StorageError('unavailable')
+      await ws.refresh()
+      expect(h.flags.connectCalls).toBe(connects + 1)
+      expect(ws.state.sources[0]!.status).toBe('ready')
+      gate.open()
+      await write
+      expect(ws.state.snapshot?.folders.map((f) => f.name)).toEqual(['Shelf'])
+      // Closed once the write is done.
+      await vi.waitFor(() => expect(h.flags.closeCalls).toBe(1))
+    })
+
+    it('a removal that fails midway leaves no saved list without its source; removing again cleans up', async () => {
+      const { h, ws } = await started('Inv')
+      const failOnce = (method: 'deleteSource' | 'deleteListing'): void => {
+        const original = h.db[method]
+        h.db[method] = async () => {
+          h.db[method] = original
+          throw new Error('device storage failed')
+        }
+      }
+      for (const method of ['deleteSource', 'deleteListing'] as const) {
+        failOnce(method)
+        await expect(ws.removeSource('s1')).rejects.toThrow('device storage failed')
+        const sources = (await h.db.getSources()).map((s) => s.id)
+        expect(Object.keys(await h.db.getListings()).filter((id) => !sources.includes(id))).toEqual([])
+      }
+      await ws.removeSource('s1')
+      expect(await h.db.getSources()).toEqual([])
+      expect(await h.db.getListings()).toEqual({})
+      expect(ws.state.sources).toEqual([])
+    })
   })
 })
 
@@ -1649,6 +1770,34 @@ describe('workspace writes patch the local copy', () => {
     expect((await h.db.getSnapshot(a))!.snapshot.folders.map((f) => f.name)).toEqual(['Mine'])
   })
 
+  it("9e. a load that read the write's result keeps the write's rows for a later load that read before it", async () => {
+    const { h, ws, inv } = await started('Inv')
+    await h.bumpRev(CS('one'))
+    // L0 (the refresh) waits before it reads; L1 (selecting the same inventory) reads at once and is held.
+    const first = h.gate()
+    h.flags.beforeLoad = () => first.promise
+    const refresh = ws.refresh()
+    await vi.waitFor(() => expect(h.flags.beforeLoad).toBeNull())
+    const second = h.gate()
+    h.flags.loadGate = second.promise
+    const selecting = ws.selectInventory({ sourceId: 's1', inventoryId: inv })
+    await vi.waitFor(() => expect(h.flags.loadBlocked).toBe(true))
+    // The write commits; L0 reads its result and is shown before the write answers: kept.
+    h.flags.afterApply = async () => {
+      first.open()
+      await refresh
+    }
+    await ws.apply(folderCreate(inv, 'Shelf'))
+    expect(folderNames(ws)).toEqual(['Shelf'])
+    // L1, which read the source before the write, lands now: the write's rows go on top.
+    second.open()
+    await selecting
+    expect(folderNames(ws)).toEqual(['Shelf'])
+    const loads = h.flags.loadCalls
+    expect(await ws.sync()).toBe('unchanged')
+    expect(h.flags.loadCalls).toBe(loads)
+  })
+
   it('10. the cached copy and its revision are saved together', async () => {
     const { h, ws, inv } = await started('Inv')
     const ref = ws.state.current!
@@ -1682,6 +1831,35 @@ describe('workspace writes patch the local copy', () => {
     h.flags.clock += 60_000
     await ws.apply(folderCreate(inv, 'Two'))
     expect(ws.state.lastRefreshAt).toBe(checked)
+  })
+
+  it('12. a listing read before an own write and applied after it keeps the revision the write moved to: nothing loads', async () => {
+    const { h, ws, inv } = await started('Inv')
+    const loads = h.flags.loadCalls
+    // The refresh's listing reads the source; the write lands before that listing is applied.
+    h.flags.afterList = () => ws.apply(folderCreate(inv, 'Shelf'))
+    await ws.refresh()
+    expect(folderNames(ws)).toEqual(['Shelf'])
+    expect(h.flags.loadCalls).toBe(loads)
+    // The next write is still in sync: it counts as a check. Sync then finds nothing to load.
+    h.flags.clock += 60_000
+    await ws.apply(folderCreate(inv, 'Box'))
+    expect(ws.state.lastRefreshAt).toBe(new Date(h.flags.clock).toISOString())
+    expect(await ws.sync()).toBe('unchanged')
+    expect(h.flags.loadCalls).toBe(loads)
+  })
+
+  it('12b. a listing read before an own new inventory and applied after it does not drop that inventory', async () => {
+    const { h, ws } = await started('Inv')
+    let created: InventoryRef | null = null
+    h.flags.afterList = async () => {
+      created = await ws.createInventory({ sourceId: 's1', name: 'New', currency: 'USD' })
+    }
+    await ws.refresh()
+    expect(created).not.toBeNull()
+    expect(ws.state.current).toEqual(created)
+    expect(ws.state.inventories.map((e) => e.inventory.name)).toEqual(['Inv', 'New'])
+    expect(Object.values(await h.db.getListings())[0]!.map((i) => i.name).sort()).toEqual(['Inv', 'New'])
   })
 
   describe('per-bucket lock', () => {

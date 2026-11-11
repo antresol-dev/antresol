@@ -58,6 +58,14 @@ describe('history sync plugin', () => {
     expect(toastError).toHaveBeenCalledWith('t:errors.unknown')
   })
 
+  it('reports a rejected workspace start once, not again on every navigation after it', async () => {
+    const hook = install(() => Promise.reject(new Error('device storage')), null)
+    await hook(folder, folder)
+    await hook(folder, folder)
+    await hook(folder, folder)
+    expect(toastError).toHaveBeenCalledTimes(1)
+  })
+
   it('reports a rejected replace onto the current root instead of an unhandled rejection', async () => {
     const hook = install(() => Promise.resolve(), { sourceId: 's1', inventoryId: 'gone' })
     router.replace.mockRejectedValue(new Error('navigation failed'))

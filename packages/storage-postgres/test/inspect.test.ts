@@ -21,6 +21,19 @@ describe('inspectSchema', () => {
     expect(await inspectSchema(exec)).toEqual({ state: 'older', dbVersion: 0, appVersion: v })
   })
 
+  it('reports a newer database this app may write (min_app_schema at most its version) as current', async () => {
+    const exec = await makeExecutor()
+    await openPostgresStorage(exec)
+    const v = APP_SCHEMA_VERSION
+    await exec.batch([sql`update gm_meta set value = ${String(v + 1)} where key = 'schema_version'`])
+    expect(await inspectSchema(exec)).toEqual({ state: 'current', dbVersion: v + 1, appVersion: v })
+    await exec.batch([sql`update gm_meta set value = ${String(v + 1)} where key = 'min_app_schema'`])
+    expect(await inspectSchema(exec)).toEqual({ state: 'newer', dbVersion: v + 1, appVersion: v })
+    // Without min_app_schema (made before soft migrations) a newer database needs an app of its own version.
+    await exec.batch([sql`delete from gm_meta where key = 'min_app_schema'`])
+    expect(await inspectSchema(exec)).toEqual({ state: 'newer', dbVersion: v + 1, appVersion: v })
+  })
+
   it('reports a pre-release version (1..SCHEMA_BASE) as outdated, which opening refuses', async () => {
     const exec = await makeExecutor()
     await openPostgresStorage(exec)

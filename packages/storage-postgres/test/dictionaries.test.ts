@@ -72,6 +72,46 @@ describe('attributes', () => {
   })
 })
 
+describe('pinned attributes', () => {
+  it('pins and unpins; a pin beyond the second is skipped whatever copy it was validated on', async () => {
+    const { storage, inv } = await setup()
+    const ids = [newId(), newId(), newId()] as const
+    for (const [i, id] of ids.entries()) await storage.apply(attributeCreate(inv, id, `A${i}`), TEST_ACTOR)
+    const load = async () => (await storage.loadInventory(inv)).attributes
+    const pinned = async () => (await load()).filter((a) => a.pinned).map((a) => a.id).sort()
+    const pin = (id: string, value = true) => storage.apply({ type: 'attribute.update', id, pinned: value }, TEST_ACTOR)
+    expect(await pinned()).toEqual([])
+
+    const first = await pin(ids[0])
+    expect(first.patch?.attributes?.find((a) => a.id === ids[0])).toMatchObject({ pinned: true })
+    await pin(ids[1])
+    // A third pin (another device validated it on a copy from before the second): the pin is skipped, the rest applies.
+    const third = await storage.apply({ type: 'attribute.update', id: ids[2], name: 'Third', pinned: true }, TEST_ACTOR)
+    expect(await pinned()).toEqual([ids[0], ids[1]].sort())
+    expect((await load()).find((a) => a.id === ids[2])).toMatchObject({ name: 'Third', pinned: false })
+    expect(third.patch?.attributes?.find((a) => a.id === ids[2])).toMatchObject({ name: 'Third', pinned: false })
+    // Sent again, a pin stays; an update without `pinned` leaves it as it is.
+    await pin(ids[1])
+    await storage.apply({ type: 'attribute.update', id: ids[1], name: 'Second' }, TEST_ACTOR)
+    expect(await pinned()).toEqual([ids[0], ids[1]].sort())
+    // Unpinning always applies, and frees a place.
+    await pin(ids[0], false)
+    expect(await pinned()).toEqual([ids[1]])
+    await pin(ids[2])
+    expect(await pinned()).toEqual([ids[1], ids[2]].sort())
+
+    // Pins count per inventory.
+    const other = newId()
+    await storage.apply({ type: 'inventory.create', id: other, name: 'B', description: null, currency: 'USD' }, TEST_ACTOR)
+    const theirs = [newId(), newId()]
+    for (const id of theirs) {
+      await storage.apply(attributeCreate(other, id, 'X'), TEST_ACTOR)
+      await pin(id)
+    }
+    expect((await storage.loadInventory(other)).attributes.every((a) => a.pinned)).toBe(true)
+  })
+})
+
 describe('custom units', () => {
   it('creates, updates and deletes', async () => {
     const { storage, inv } = await setup()

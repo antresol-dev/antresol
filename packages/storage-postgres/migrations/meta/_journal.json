@@ -8,6 +8,13 @@
       "when": 1794408653248,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794417773204,
+      "tag": "0001_pinned_journal_guard",
+      "breakpoints": true
     }
   ]
 }

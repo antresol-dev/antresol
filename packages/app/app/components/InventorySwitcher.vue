@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { newId } from '@graymatter/core'
 import { createReusableTemplate, useMediaQuery } from '@vueuse/core'
 import { Archive, Check, ChevronsUpDown, Pencil, Plus, RefreshCw } from '@lucide/vue'
 import { toast } from 'vue-sonner'
@@ -103,7 +102,19 @@ async function choose(entry: InventoryEntry): Promise<void> {
   }
 }
 
+// One archive id per opening: a retried Confirm after a timeout sends the same command. The confirmation is about the
+// inventory shown when it opened: if another one becomes current meanwhile (the first attempt landed and a check
+// switched away from it), it closes rather than archive that one under the same id.
+const { ids, renew } = useCommandIds(['archiveId'])
+useCloseOnSwitch(
+  () => state.current,
+  () => {
+    if (dialog.value === 'archive') dialog.value = null
+  },
+  () => archiving.value,
+)
 function openDialog(kind: 'create' | 'rename' | 'archive'): void {
+  renew()
   menuOpen.value = false
   dialog.value = kind
 }
@@ -113,7 +124,7 @@ async function archive(): Promise<void> {
   if (!current) return
   archiving.value = true
   try {
-    await workspace.apply({ type: 'archive', target: 'inventory', id: current.inventoryId, archiveId: newId() })
+    await workspace.apply({ type: 'archive', target: 'inventory', id: current.inventoryId, archiveId: ids.archiveId })
     dialog.value = null
     // force: a new history entry stamped with the inventory that is now current.
     await router.push({ path: '/', force: true })
@@ -124,10 +135,11 @@ async function archive(): Promise<void> {
   }
 }
 
-// Menu items show focus with their highlight; buttons in the sheet get the focus ring.
+// Menu items show focus with their highlight (radius 10 inside the menu's 20 and 6 px padding); the sheet's rows are
+// flat pressable tiles with the base focus outline.
 const itemClass = computed(() => [
-  'flex min-h-11 w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm outline-none transition-colors duration-150 hover:bg-hover disabled:pointer-events-none disabled:opacity-50',
-  desktop.value ? '' : 'focus-visible:ring-2 focus-visible:ring-ring',
+  'flex min-h-11 w-full items-center gap-2 px-2 py-1.5 text-left text-sm disabled:pointer-events-none disabled:opacity-50',
+  desktop.value ? 'rounded-chip' : 'pressable',
 ])
 </script>
 
@@ -136,7 +148,7 @@ const itemClass = computed(() => [
   <DefineTrigger>
     <button
       type="button"
-      class="flex min-h-11 w-full min-w-0 items-center gap-2.5 rounded-field border border-border bg-surface px-2.5 py-2 text-left outline-none transition-colors duration-150 hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring"
+      class="raised pressable flex min-h-11 w-full min-w-0 items-center gap-2.5 px-2.5 py-2 text-left"
     >
       <span class="flex min-w-0 flex-1 flex-col">
         <span class="text-[11px] font-semibold text-subtle-foreground">{{ $t('inventory.label') }}</span>
@@ -165,7 +177,7 @@ const itemClass = computed(() => [
           @click="choose(entry)"
         >
           <span class="min-w-0 flex-1 truncate">{{ entry.inventory.name }}</span>
-          <Check v-if="isCurrent(entry)" class="size-4 shrink-0 text-primary" aria-hidden="true" />
+          <Check v-if="isCurrent(entry)" class="size-4 shrink-0 text-accent-ink" aria-hidden="true" />
         </component>
       </template>
       <component :is="desktop ? DropdownMenuSeparator : 'hr'" class="my-1 border-divider" />
@@ -225,7 +237,7 @@ const itemClass = computed(() => [
     </DropdownMenuTrigger>
     <DropdownMenuContent
       align="start"
-      class="w-72 rounded-thumb bg-surface p-1.5 motion-safe:data-[state=open]:animate-pop-in motion-safe:data-[state=closed]:animate-pop-out"
+      class="w-72 motion-safe:data-[state=open]:animate-pop-in motion-safe:data-[state=closed]:animate-pop-out"
     >
       <ReuseContent />
     </DropdownMenuContent>

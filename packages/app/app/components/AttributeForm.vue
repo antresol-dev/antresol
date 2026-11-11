@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import type { Attribute, AttributeKind, Id } from '@graymatter/core'
-import { formatNumberValue, newId, parseNumberValue } from '@graymatter/core'
+import { formatNumberValue, MAX_PINNED_ATTRIBUTES, parseNumberValue } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
+import { toast } from 'vue-sonner'
 import { captureBaseline, changedFields } from '~/lib/changed-fields'
 import { attributeCreateCommand, attributeFormError, MAX_UNIT_LENGTH } from '~/lib/axes'
 import { errorMessageKey } from '~/lib/errors'
@@ -16,7 +17,9 @@ import { parseNameList } from '~/lib/lists'
 const props = defineProps<{ attribute: Attribute | null }>()
 const emit = defineEmits<{ done: [attributeId: Id] }>()
 
+const { t } = useI18n()
 const workspace = useWorkspace()
+const { ids } = useCommandIds(['attributeId'])
 const { state } = workspace
 
 const name = ref(props.attribute?.name ?? '')
@@ -24,6 +27,13 @@ const kind = ref<AttributeKind>(props.attribute?.kind ?? 'text')
 const unit = ref(props.attribute?.unit ?? '')
 const siPrefixes = ref(props.attribute?.siPrefixes ?? false)
 const options = ref(props.attribute?.options.join('\n') ?? '')
+// "Show in lists" (spec 4.11): at most MAX_PINNED_ATTRIBUTES per inventory.
+const pinned = ref(props.attribute?.pinned ?? false)
+const pinnedFull = computed(
+  () =>
+    !props.attribute?.pinned &&
+    (state.snapshot?.attributes.filter((a) => a.pinned && a.id !== props.attribute?.id).length ?? 0) >= MAX_PINNED_ATTRIBUTES,
+)
 // The sheet around the form locks while this is set.
 const busy = defineModel<boolean>('busy', { default: false })
 const errorKey = ref<string | null>(null)
@@ -34,9 +44,16 @@ const baseline = captureBaseline({
   options: props.attribute?.options.join('\n') ?? '',
   unit: props.attribute?.unit ?? '',
   siPrefixes: props.attribute?.siPrefixes ?? false,
+  pinned: props.attribute?.pinned ?? false,
 })
 const changes = computed(() =>
-  changedFields(baseline, { name: name.value.trim(), options: options.value.trim(), unit: unit.value.trim(), siPrefixes: siPrefixes.value }),
+  changedFields(baseline, {
+    name: name.value.trim(),
+    options: options.value.trim(),
+    unit: unit.value.trim(),
+    siPrefixes: siPrefixes.value,
+    pinned: pinned.value,
+  }),
 )
 
 // The example under the switch: what the unit and prefixes make of "4k7" (or of a plain "4700" without prefixes).
@@ -71,11 +88,17 @@ async function submit(): Promise<void> {
         ...(kind.value === 'enum' && changes.value.options !== undefined ? { options: list } : {}),
         ...(kind.value === 'number' && changes.value.unit !== undefined ? { unit: unit.value.trim() } : {}),
         ...(kind.value === 'number' && changes.value.siPrefixes !== undefined ? { siPrefixes: siPrefixes.value } : {}),
+        ...(changes.value.pinned !== undefined ? { pinned: pinned.value } : {}),
       })
       emit('done', props.attribute.id)
     } else {
-      const id = newId()
+      const id = ids.attributeId
       await workspace.apply(attributeCreateCommand(form, { id, inventoryId: snapshot.inventory.id }))
+      // A create carries no pin: the pin is a second write. The attribute exists either way, so a failed pin is only
+      // reported (it can be turned on in its form) and the form is done.
+      if (pinned.value) {
+        await workspace.apply({ type: 'attribute.update', id, pinned: true }).catch((e) => toast.error(t(errorMessageKey(e))))
+      }
       emit('done', id)
     }
   } catch (e) {
@@ -96,7 +119,7 @@ async function submit(): Promise<void> {
         autocomplete="off"
         :aria-invalid="errorKey ? true : undefined"
         aria-describedby="attribute-form-error"
-        class="h-11 rounded-field bg-surface"
+        class="h-11"
       />
     </div>
     <div class="grid gap-1.5">
@@ -105,12 +128,12 @@ async function submit(): Promise<void> {
         v-model="kind"
         aria-labelledby="attribute-kind-label"
         :disabled="!!attribute"
-        class="grid grid-cols-3 gap-0.5 rounded-field border border-border bg-background p-1"
+        class="grid grid-cols-3 gap-0.5 rounded-field border border-input bg-field p-1"
       >
         <label
           v-for="k in ['text', 'enum', 'number'] as const"
           :key="k"
-          class="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-sm px-2 text-sm transition-colors duration-150 hover:bg-hover"
+          class="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-chip px-2 text-sm transition-colors duration-150 hover:bg-hover"
         >
           <RadioGroupItem :value="k" />
           {{ $t(k === 'text' ? 'attributeForm.text' : k === 'enum' ? 'attributeForm.list' : 'attributeForm.number') }}
@@ -119,13 +142,13 @@ async function submit(): Promise<void> {
     </div>
     <div v-if="kind === 'enum'" class="grid gap-1.5">
       <Label for="attribute-options">{{ $t('attributeForm.options') }}</Label>
-      <Textarea id="attribute-options" v-model="options" rows="3" autocomplete="off" class="rounded-field bg-surface" />
+      <Textarea id="attribute-options" v-model="options" rows="3" autocomplete="off" />
       <p class="text-[13px] text-subtle-foreground">{{ $t('attributeForm.hint') }}</p>
     </div>
     <template v-if="kind === 'number'">
       <div class="grid gap-1.5">
         <Label for="attribute-unit">{{ $t('attributeForm.unit') }}</Label>
-        <Input id="attribute-unit" v-model="unit" autocomplete="off" :maxlength="MAX_UNIT_LENGTH" class="h-11 rounded-field bg-surface" />
+        <Input id="attribute-unit" v-model="unit" autocomplete="off" :maxlength="MAX_UNIT_LENGTH" class="h-11" />
         <p class="text-[13px] text-subtle-foreground">{{ $t('attributeForm.unitHint') }}</p>
       </div>
       <div class="grid gap-1">
@@ -136,6 +159,15 @@ async function submit(): Promise<void> {
         <p v-if="example" class="text-[13px] text-subtle-foreground">{{ $t('attributeForm.siExample', { example }) }}</p>
       </div>
     </template>
+    <div class="grid gap-1">
+      <label class="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm font-semibold" :class="pinnedFull && 'cursor-default'">
+        {{ $t('attributeForm.showInLists') }}
+        <Switch v-model="pinned" :disabled="pinnedFull" aria-describedby="attribute-pinned-hint" />
+      </label>
+      <p id="attribute-pinned-hint" class="text-[13px] text-subtle-foreground">
+        {{ $t(pinnedFull ? 'attributeForm.pinnedFull' : 'attributeForm.showInListsHint') }}
+      </p>
+    </div>
     <p id="attribute-form-error" role="alert" class="text-sm text-destructive">
       <template v-if="errorKey">{{ $t(errorKey) }}</template>
     </p>

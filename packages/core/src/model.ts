@@ -58,6 +58,9 @@ export interface Attribute extends Audited {
   unit: string
   /** Number kind: values are entered and shown with SI prefixes. */
   siPrefixes: boolean
+  /** "Show in lists": the value shows as a chip in list rows, the palette and the item header. At most
+   *  MAX_PINNED_ATTRIBUTES per inventory. */
+  pinned: boolean
 }
 export interface CustomUnit extends Audited {
   id: Id
@@ -112,6 +115,8 @@ export interface StockLine {
   pricedQuantity: Quantity
   pricedTotal: number
   lastPriced: { totalPrice: number; quantity: Quantity; at: string } | null
+  /** Time of the bucket's last `adjustment` (a recount), if any. */
+  lastCountedAt: string | null
 }
 /** Snapshots are immutable: changes build new arrays (patchSnapshot does), because variants.ts caches lookups per array. */
 export interface InventorySnapshot {

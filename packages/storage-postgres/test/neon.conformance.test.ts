@@ -1,9 +1,14 @@
-import { newId, patchSnapshot, type Command, type InventorySnapshot, type Quantity } from '@graymatter/core'
+import { newId, normalizeCommand, patchSnapshot, type Command, type InventorySnapshot, type Quantity } from '@graymatter/core'
 import { neonConfig } from '@neondatabase/serverless'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { assertTestDatabase, createNeonHttpExecutor, createNeonWsExecutor, inspectSchema, type PgExecutor } from '../src'
+import { toStatements } from '../src/commands'
+import { ensureSchema, LOCK_REV, REV_BUMP } from '../src/migrator'
+import { sql } from '../src/sql'
+import { uuidV5 } from '../src/restore'
 import { openPostgresStorage } from '../src/storage'
 import { attributeCreate, itemCreate, normSnapshot, TEST_ACTOR, variantsCreate } from './helpers'
+import { renamed, seedRich } from './restore-fixtures'
 
 describe('assertTestDatabase', () => {
   it('rejects a database whose name does not end with _test', () => {
@@ -159,8 +164,13 @@ describe.skipIf(!url)('Neon conformance', () => {
         // Every variant has 50 V: it becomes the item's value.
         await step({ type: 'item.removeAxis', itemId: capacitor, attributeId: volt })
         await step({ type: 'attribute.update', id: ohm, unit: 'kΩ', siPrefixes: false })
+        await step({ type: 'attribute.update', id: ohm, pinned: true })
+        await step({ type: 'attribute.update', id: cap, pinned: true })
+        // A third pin, sent unvalidated as from a copy that is behind: skipped.
+        await step({ type: 'attribute.update', id: volt, pinned: true })
 
         const fresh = await storage.loadInventory(inv)
+        expect(fresh.attributes.filter((x) => x.pinned).map((x) => x.id).sort()).toEqual([ohm, cap].sort())
         expect(normSnapshot(copy)).toEqual(normSnapshot(fresh))
         expect(fresh.variants.filter((v) => v.itemId === resistor).map((v) => v.id).sort()).toEqual([first, a].sort())
         expect(fresh.variants.filter((v) => v.itemId === capacitor).map((v) => v.id).sort()).toEqual([c1, c2].sort())
@@ -223,6 +233,32 @@ describe.skipIf(!url)('Neon conformance', () => {
         }
       })
 
+      it('restores a backup: new ids twice without duplicates; the same ids refused next to the copy unless resuming', async () => {
+        const { storage } = await openPostgresStorage(exec)
+        const inv = await seedRich(storage, `restore-${name}`)
+        const backup = { inventories: [await storage.exportInventory(inv)] }
+        const journal = (await storage.loadAllMovements(inv)).map(({ seq: _seq, ...m }) => m)
+        const runId = newId()
+        const first = await storage.restore(backup, 'new-ids', runId)
+        expect(first.added.inventories).toBe(1)
+        // A second run of the same file (after a break, say) adds nothing.
+        expect(await storage.restore(backup, 'new-ids', runId)).toEqual({ ...first, added: { inventories: 0, rows: 0 } })
+        const m = (id: string) => uuidV5(id, runId)
+        expect(first.inventoryIds).toEqual([m(inv)])
+        const copy = await storage.loadInventory(m(inv))
+        expect(normSnapshot(copy)).toEqual(normSnapshot(renamed(backup.inventories[0]!.snapshot, m)))
+        expect((await storage.loadAllMovements(m(inv))).length).toBe(journal.length)
+
+        await storage.apply({ type: 'archive', target: 'inventory', id: inv, archiveId: newId() }, TEST_ACTOR)
+        await storage.apply({ type: 'deletePermanently', target: 'inventory', id: inv }, TEST_ACTOR)
+        // The copy is still there: the same ids only as a run that goes on with an earlier one.
+        await expect(storage.restore(backup, 'same-ids', newId())).rejects.toMatchObject({ code: 'not_empty' })
+        await storage.restore(backup, 'same-ids', newId(), { resumeSameIds: true })
+        expect(normSnapshot(await storage.loadInventory(inv))).toEqual(normSnapshot(backup.inventories[0]!.snapshot))
+        expect((await storage.loadAllMovements(inv)).map(({ seq: _seq, ...m }) => m)).toEqual(journal)
+        // Some forty writes to seed it, one round trip each: slow over the websocket.
+      }, 180_000)
+
       it.skipIf(name !== 'http')('loads an inventory snapshot in one fetch', async () => {
         const { storage } = await openPostgresStorage(exec)
         const inv = newId()
@@ -242,4 +278,54 @@ describe.skipIf(!url)('Neon conformance', () => {
       })
     })
   }
+
+  // Plan 6 carry-over: writes and a migration queue on the revision row. Without the migration taking it first, a write
+  // holding the row and waiting for the table the migration altered would deadlock with it.
+  describe('migration from schema 3', () => {
+    beforeAll(resetSchema)
+
+    it('migrates while an app of schema 3 writes; writes queue on the revision row; the journal refuses UPDATE', async () => {
+      const writer = createNeonWsExecutor(url!)
+      const migrator = createNeonWsExecutor(url!)
+      try {
+        expect(await ensureSchema(writer, 3)).toMatchObject({ state: 'ready', dbVersion: 3 })
+        // Schema 3's writes: the revision lock, the command, the bump (its reads back name no new column either).
+        const write = (c: Command) => writer.batch([LOCK_REV, ...toStatements(normalizeCommand(c), TEST_ACTOR), REV_BUMP])
+        const [inv, item] = [newId(), newId()]
+        await write({ type: 'inventory.create', id: inv, name: 'migrate', description: null, currency: 'USD' })
+        await write({
+          ...(itemCreate(inv, item, 'R') as Extract<Command, { type: 'item.create' }>),
+          initialReceipt: { movementId: newId(), quantity: '5' as Quantity, totalPrice: null, sourceUrl: null },
+        })
+        // Inserts into the table the migration alters, sent together with it.
+        const [status, ...writes] = await Promise.all([
+          ensureSchema(migrator),
+          ...[0, 1, 2, 3].map((i) => write(attributeCreate(inv, newId(), `A${i}`))),
+        ])
+        expect(status).toEqual({ state: 'ready', dbVersion: 4, appVersion: 4, minAppSchema: 3 })
+        const prevRevs = writes.map((rows) => rows[0]?.[0]?.value)
+        const revs = writes.map((rows) => rows.at(-1)?.[0]?.value)
+        // All went through (no deadlock), each after a different revision: none ran beside another.
+        expect(new Set(prevRevs).size).toBe(writes.length)
+        expect(new Set(revs).size).toBe(writes.length)
+        // The app of schema 3 still writes: min_app_schema is 3.
+        expect(await ensureSchema(writer, 3)).toEqual({ state: 'ready', dbVersion: 4, appVersion: 3, minAppSchema: 3 })
+
+        const { storage } = await openPostgresStorage(migrator)
+        const snapshot = await storage.loadInventory(inv)
+        expect(snapshot.attributes.map((a) => [a.name, a.pinned]).sort()).toEqual(
+          [['A0', false], ['A1', false], ['A2', false], ['A3', false]],
+        )
+        await expect(migrator.batch([sql`update movements set note = 'edited' where item_id = ${item}`])).rejects.toThrow(
+          /gm_movements_append_only/,
+        )
+        await storage.apply({ type: 'archive', target: 'item', id: item, archiveId: newId() }, TEST_ACTOR)
+        await storage.apply({ type: 'deletePermanently', target: 'item', id: item }, TEST_ACTOR)
+        expect(await migrator.query(sql`select 1 from movements where item_id = ${item}`)).toEqual([])
+      } finally {
+        await writer.close()
+        await migrator.close()
+      }
+    })
+  })
 })

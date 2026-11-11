@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { errorMessageKey } from '~/lib/errors'
-import { canSaveSource, checkConnectionString, createNeonDriver, type SourceProbe } from '~/lib/sources'
-import type { SourceConfig } from '~/lib/types'
+import { canSaveSource, checkConnectionString, createNeonDriver, photoStoreProblem, type SourceProbe } from '~/lib/sources'
+import type { PhotoStore, SourceConfig } from '~/lib/types'
 
 const props = defineProps<{ source?: SourceConfig }>()
 
@@ -17,9 +17,23 @@ const driver = createNeonDriver()
 
 const name = ref(props.source?.name ?? t('sourceForm.defaultName'))
 const connectionString = ref(props.source?.connectionString ?? '')
+const PHOTO_STORES: readonly PhotoStore[] = ['uploadcare', 'cloudinary', 'imgur']
+const KEY_LINKS: Record<PhotoStore, string> = {
+  uploadcare: 'https://app.uploadcare.com/',
+  cloudinary: 'https://console.cloudinary.com/settings/upload/presets',
+  imgur: 'https://api.imgur.com/oauth2/addclient',
+}
+function keyLink(p: PhotoStore): string {
+  return KEY_LINKS[p]
+}
+const photoStore = ref<PhotoStore>(props.source?.photoStore ?? 'uploadcare')
+const cloudinaryCloud = ref(props.source?.cloudinaryCloudName ?? '')
+const cloudinaryPreset = ref(props.source?.cloudinaryUploadPreset ?? '')
+const imgurClientId = ref(props.source?.imgurClientId ?? '')
 const uploadcareKey = ref(props.source?.uploadcarePublicKey ?? '')
 const uploadcareCdn = ref(props.source?.uploadcareCdnBase ?? '')
 const cdnProblem = ref(false)
+const storeProblem = ref<ReturnType<typeof photoStoreProblem>>(null)
 const reveal = ref(false)
 const problem = ref<ReturnType<typeof checkConnectionString>>(null)
 const probe = ref<SourceProbe | null>(null)
@@ -34,6 +48,7 @@ function cdnBase(): string | null {
 }
 
 function cdnValid(): boolean {
+  if (photoStore.value !== 'uploadcare') return true
   const v = cdnBase()
   return v === null || isUploadcareCdnBase(v)
 }
@@ -42,13 +57,27 @@ const draft = (): Omit<SourceConfig, 'id' | 'createdAt'> => ({
   kind: 'neon',
   name: name.value.trim() || t('sourceForm.defaultName'),
   connectionString: connectionString.value.trim(),
+  photoStore: photoStore.value,
   uploadcarePublicKey: uploadcareKey.value.trim() || null,
   uploadcareCdnBase: cdnBase(),
+  cloudinaryCloudName: cloudinaryCloud.value.trim() || null,
+  cloudinaryUploadPreset: cloudinaryPreset.value.trim() || null,
+  imgurClientId: imgurClientId.value.trim() || null,
 })
 
 watch(uploadcareCdn, () => {
   cdnProblem.value = false
 })
+watch([photoStore, cloudinaryCloud, cloudinaryPreset], () => {
+  storeProblem.value = null
+})
+
+/** Both checks of the photo settings; true when they pass. */
+function photoSettingsOk(): boolean {
+  cdnProblem.value = !cdnValid()
+  storeProblem.value = photoStoreProblem(draft())
+  return !cdnProblem.value && storeProblem.value === null
+}
 
 watch(connectionString, () => {
   probe.value = null
@@ -58,8 +87,7 @@ watch(connectionString, () => {
 })
 
 async function check(): Promise<void> {
-  cdnProblem.value = !cdnValid()
-  if (cdnProblem.value) return
+  if (!photoSettingsOk()) return
   problem.value = checkConnectionString(connectionString.value)
   probe.value = null
   checkError.value = null
@@ -86,8 +114,7 @@ const saveKey = computed(() =>
 )
 
 async function save(): Promise<void> {
-  cdnProblem.value = !cdnValid()
-  if (cdnProblem.value) return
+  if (!photoSettingsOk()) return
   saving.value = true
   saveError.value = null
   try {
@@ -106,7 +133,7 @@ async function save(): Promise<void> {
   <form class="grid gap-3.5" novalidate @submit.prevent="check">
     <div class="grid gap-1.5">
       <Label for="source-name">{{ $t('sourceForm.name') }}</Label>
-      <Input id="source-name" v-model="name" autocomplete="off" class="h-11 rounded-field bg-surface" />
+      <Input id="source-name" v-model="name" autocomplete="off" class="h-11" />
     </div>
 
     <div class="grid gap-1.5">
@@ -121,13 +148,13 @@ async function save(): Promise<void> {
           spellcheck="false"
           :aria-invalid="problem ? true : undefined"
           aria-describedby="source-cs-hint source-cs-problem"
-          class="h-11 rounded-field bg-surface"
+          class="h-11"
         />
         <Button
           type="button"
           variant="outline"
           size="icon"
-          class="size-11 shrink-0 rounded-field bg-surface"
+          class="size-11 shrink-0"
           :aria-label="$t(reveal ? 'sourceForm.hide' : 'sourceForm.show')"
           :aria-pressed="reveal"
           @click="reveal = !reveal"
@@ -142,16 +169,34 @@ async function save(): Promise<void> {
       </p>
     </div>
 
+    <fieldset class="grid gap-1.5">
+      <legend class="mb-1.5 text-sm font-medium">{{ $t('sourceForm.photoStore') }}</legend>
+      <div class="flex gap-2" role="group" :aria-label="$t('sourceForm.photoStore')">
+        <Button
+          v-for="p in PHOTO_STORES"
+          :key="p"
+          type="button"
+          size="sm"
+          :variant="photoStore === p ? 'default' : 'outline'"
+          :aria-pressed="photoStore === p"
+          class="h-9 flex-1 rounded-field"
+          @click="photoStore = p"
+        >{{ $t(`sourceForm.store.${p}`) }}</Button>
+      </div>
+      <p class="text-sm text-subtle-foreground">{{ $t('sourceForm.photoStoreHint') }}</p>
+    </fieldset>
+
+    <template v-if="photoStore === 'uploadcare'">
     <div class="grid gap-1.5">
       <Label for="source-key">
         {{ $t('sourceForm.uploadcareKey') }}
         <span class="font-normal text-subtle-foreground">· {{ $t('sourceForm.optional') }}</span>
       </Label>
-      <Input id="source-key" v-model="uploadcareKey" autocomplete="off" class="h-11 rounded-field bg-surface" />
+      <Input id="source-key" v-model="uploadcareKey" autocomplete="off" class="h-11" />
       <p class="text-sm text-subtle-foreground">
         {{ $t('sourceForm.uploadcareKeyHint') }}
         <a
-          href="https://app.uploadcare.com/"
+          :href="keyLink('uploadcare')"
           target="_blank"
           rel="noopener noreferrer"
           class="underline underline-offset-2"
@@ -174,7 +219,7 @@ async function save(): Promise<void> {
         placeholder="https://abc123.ucarecd.net"
         :aria-invalid="cdnProblem ? true : undefined"
         aria-describedby="source-cdn-problem"
-        class="h-11 rounded-field bg-surface"
+        class="h-11"
       />
       <p class="text-sm text-subtle-foreground">{{ $t('sourceForm.uploadcareCdnHint') }}</p>
       <p id="source-cdn-problem" role="alert" class="text-sm text-destructive">
@@ -182,7 +227,80 @@ async function save(): Promise<void> {
       </p>
     </div>
 
-    <Button type="submit" variant="outline" class="h-11 rounded-field bg-surface" :disabled="checking || saving">
+    </template>
+
+    <template v-else-if="photoStore === 'cloudinary'">
+      <div class="grid gap-1.5">
+        <Label for="source-cloud">
+          {{ $t('sourceForm.cloudinaryCloud') }}
+          <span class="font-normal text-subtle-foreground">· {{ $t('sourceForm.optional') }}</span>
+        </Label>
+        <Input
+          id="source-cloud"
+          v-model="cloudinaryCloud"
+          autocomplete="off"
+          autocapitalize="off"
+          spellcheck="false"
+          :aria-invalid="storeProblem === 'cloudinaryCloud' || storeProblem === 'cloudinaryCloudFormat' ? true : undefined"
+          aria-describedby="source-store-problem"
+          class="h-11"
+        />
+      </div>
+      <div class="grid gap-1.5">
+        <Label for="source-preset">
+          {{ $t('sourceForm.cloudinaryPreset') }}
+          <span class="font-normal text-subtle-foreground">· {{ $t('sourceForm.optional') }}</span>
+        </Label>
+        <Input
+          id="source-preset"
+          v-model="cloudinaryPreset"
+          autocomplete="off"
+          autocapitalize="off"
+          spellcheck="false"
+          :aria-invalid="storeProblem === 'cloudinaryPreset' ? true : undefined"
+          aria-describedby="source-store-problem"
+          class="h-11"
+        />
+        <p id="source-store-problem" role="alert" class="text-sm text-destructive">
+          <template v-if="storeProblem">{{ $t(`sourceForm.problem.${storeProblem}`) }}</template>
+        </p>
+        <p class="text-sm text-subtle-foreground">
+          {{ $t('sourceForm.cloudinaryHint') }}
+          <a
+            :href="keyLink('cloudinary')"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="underline underline-offset-2"
+          >{{ $t('sourceForm.cloudinaryLink') }}</a>
+        </p>
+      </div>
+    </template>
+
+    <div v-else class="grid gap-1.5">
+      <Label for="source-imgur">
+        {{ $t('sourceForm.imgurClientId') }}
+        <span class="font-normal text-subtle-foreground">· {{ $t('sourceForm.optional') }}</span>
+      </Label>
+      <Input
+        id="source-imgur"
+        v-model="imgurClientId"
+        autocomplete="off"
+        autocapitalize="off"
+        spellcheck="false"
+        class="h-11"
+      />
+      <p class="text-sm text-subtle-foreground">
+        {{ $t('sourceForm.imgurHint') }}
+        <a
+          :href="keyLink('imgur')"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="underline underline-offset-2"
+        >{{ $t('sourceForm.imgurLink') }}</a>
+      </p>
+    </div>
+
+    <Button type="submit" variant="outline" class="h-11" :disabled="checking || saving">
       {{ $t(checking ? 'sourceForm.checking' : 'sourceForm.check') }}
     </Button>
 

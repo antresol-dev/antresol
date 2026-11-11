@@ -9,8 +9,9 @@ const arrows = computed(() => [
   { key: 'forward', label: 'nav.forward', icon: ChevronRight, enabled: canForward.value, go: forward },
 ])
 
-const button =
-  'grid size-11 shrink-0 place-items-center rounded-field text-icon outline-none transition-[background-color,color,opacity] duration-150 enabled:hover:bg-hover enabled:hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-35'
+// Flat like browser arrows (the screen's own actions are the raised ones); 32 px wide below 1024 px to leave the top bar
+// room for them.
+const button = 'pressable grid h-11 w-8 shrink-0 place-items-center rounded-chip text-icon enabled:hover:text-accent-ink disabled:opacity-35 lg:w-11'
 </script>
 
 <template>

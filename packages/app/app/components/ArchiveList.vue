@@ -21,7 +21,7 @@ const icons: Record<ArchiveRow['kind'], Component> = { folder: Folder, item: Pac
 </script>
 
 <template>
-  <ul class="rounded-card border border-border bg-surface py-1">
+  <ul>
     <li
       v-for="row in rows"
       :key="row.key"
@@ -44,7 +44,7 @@ const icons: Record<ArchiveRow['kind'], Component> = { folder: Folder, item: Pac
         </span>
         <Button
           variant="outline"
-          class="h-11 shrink-0 rounded-field bg-surface transition-colors duration-150 hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring"
+          class="h-11 shrink-0"
           :disabled="row.locked || row.busy"
           @click="$emit('restore', row.key)"
         >
@@ -53,7 +53,7 @@ const icons: Record<ArchiveRow['kind'], Component> = { folder: Folder, item: Pac
         <Button
           variant="ghost"
           size="icon"
-          class="size-11 shrink-0 rounded-field text-icon transition-colors duration-150 hover:bg-hover hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
+          class="size-11 shrink-0 text-icon hover:text-destructive"
           :aria-label="$t('archive.delete')"
           :disabled="row.locked || row.busy"
           @click="$emit('remove', row.key)"

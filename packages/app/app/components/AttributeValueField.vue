@@ -65,7 +65,7 @@ function onSelect(value: unknown): void {
 <template>
   <div class="grid gap-1.5">
     <Select v-if="attribute.kind === 'enum'" :model-value="modelValue ?? NONE" :disabled="disabled" @update:model-value="onSelect">
-      <SelectTrigger :id="id" class="h-11 w-full rounded-field bg-surface">
+      <SelectTrigger :id="id" class="h-11 w-full">
         <!-- The dash reads as "em dash": screen readers get "No value" instead. -->
         <SelectValue v-slot="{ selectedLabel, modelValue: shown }">
           <template v-if="shown === NONE">
@@ -92,7 +92,7 @@ function onSelect(value: unknown): void {
         :autocorrect="attribute.kind === 'number' ? 'off' : undefined"
         :spellcheck="attribute.kind === 'number' ? false : undefined"
         :disabled="disabled"
-        class="h-11 rounded-field bg-surface"
+        class="h-11"
         @update:model-value="onInput"
       />
       <p v-if="hint !== null" class="text-xs text-muted-foreground">{{ $t('item.numberHint', { value: hint }) }}</p>

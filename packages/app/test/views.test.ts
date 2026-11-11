@@ -19,7 +19,8 @@ import {
   folderTree,
   folderView,
   indexStats,
-  inventoryItemCount,
+  inventoryPieces,
+  piecesLabel,
   moveTargets,
   searchRows,
   type Crumb,
@@ -57,12 +58,12 @@ const byValue = (s: InventorySnapshot, itemId: string, value: string) =>
   s.variants.find((v) => v.itemId === itemId && variantLabel(s, v).replace(/\s/g, '').toLowerCase().startsWith(value))!
 
 describe('folderView', () => {
-  it('lists root folders by name with subtree item counts', () => {
+  it('lists root folders by name with subtree piece sums', () => {
     const v = folderView(snap, null)!
     expect(v.folder).toBeNull()
     expect(v.crumbs).toEqual([])
     expect(names(v.folders)).toEqual(['ICs', 'Passive components', expect.stringContaining('Очень длинное')])
-    expect(v.folders.map((f) => f.itemCount)).toEqual([3, 2, 0])
+    expect(v.folders.map((f) => f.pieces)).toEqual(['43', '100', null])
   })
 
   it('builds crumbs and item rows', () => {
@@ -70,7 +71,7 @@ describe('folderView', () => {
     expect(names(v.crumbs)).toEqual(['ICs', 'Op-amps'])
     const tl = v.items.find((i) => i.name === 'TL072')!
     expect(tl.number).toBe('37')
-    expect(tl.unit).toBe('pcs')
+    expect(tl.unit).toBe('')
     expect(tl.outOfStock).toBe(false)
     expect(tl.coverUrl).toBeNull()
   })
@@ -132,21 +133,76 @@ describe('folderTree', () => {
     expect(names(tree[0]!.children)).toEqual(['Op-amps'])
   })
 
-  it('counts active items in each subtree, like the folder list', () => {
+  it('sums pieces in each subtree, like the folder list', () => {
     const tree = folderTree(snap)
-    expect(tree.map((n) => n.itemCount)).toEqual([3, 2, 0])
-    expect(tree[0]!.children.map((n) => n.itemCount)).toEqual([1])
-    expect(tree[1]!.children.map((n) => [n.name, n.itemCount])).toEqual([['Resistors', 1]])
-    expect(tree.map((n) => n.itemCount)).toEqual(folderView(snap, null)!.folders.map((f) => f.itemCount))
+    expect(tree.map((n) => n.pieces)).toEqual(folderView(snap, null)!.folders.map((f) => f.pieces))
+    expect(tree[0]!.children.map((n) => n.pieces)).toEqual(folderView(snap, idOf(snap, 'ICs'))!.folders.map((f) => f.pieces))
   })
 })
 
-describe('inventoryItemCount', () => {
-  it('counts active items in the whole inventory', () => {
-    expect(inventoryItemCount(snap)).toBe(5)
+describe('piece sums', () => {
+  const at = '2026-11-10T00:00:00Z'
+  const folder = (s: InventorySnapshot, id: string, parentId: string | null = null) =>
+    s.folders.push({ id, inventoryId: s.inventory.id, parentId, name: id, description: null, archivedAt: null, archiveId: null } as never)
+  const item = (s: InventorySnapshot, id: string, folderId: string | null, unitKey: string, quantity: string, extra: { archived?: boolean } = {}) => {
+    s.items.push({ id, inventoryId: s.inventory.id, folderId, name: id, unitKey, description: null, tagIds: [], archivedAt: extra.archived ? at : null, archiveId: null } as never)
+    s.stock.push({ itemId: id, variantId: null, quantity, pricedQuantity: '0', pricedTotal: 0, lastPriced: null } as never)
+  }
+  const fresh = (): InventorySnapshot => {
     const s = structuredClone(snap)
-    s.items.find((i) => i.name === 'TL072')!.archivedAt = '2026-11-10T00:00:00Z'
-    expect(inventoryItemCount(s)).toBe(4)
+    s.folders = []
+    s.items = []
+    s.stock = []
+    s.variants = []
+    return s
+  }
+
+  it('adds up pcs items over the subtree and leaves out other units and archived items', () => {
+    const s = fresh()
+    folder(s, 'A')
+    folder(s, 'B', 'A')
+    folder(s, 'Wire')
+    folder(s, 'Zero')
+    item(s, 'resistors', 'A', 'pcs', '10')
+    item(s, 'caps', 'B', 'pcs', '5')
+    item(s, 'cable', 'A', 'm', '100')
+    item(s, 'old', 'A', 'pcs', '7', { archived: true })
+    item(s, 'cable2', 'Wire', 'm', '50')
+    item(s, 'zero', 'Zero', 'pcs', '0')
+    const [a, wire, zero] = folderView(s, null)!.folders
+    expect(a!.pieces).toBe('15')
+    expect(folderView(s, 'A')!.folders[0]!.pieces).toBe('5')
+    expect(wire!.pieces).toBeNull() // only metres: no number
+    expect(zero!.pieces).toBe('0') // pieces, none in stock: still a number
+    expect(inventoryPieces(s)).toBe('15')
+    expect(folderTree(s).map((n) => n.pieces)).toEqual(['15', null, '0'])
+  })
+
+  it('has no number when no item counts in pieces, and skips archived variants', () => {
+    expect(inventoryPieces(fresh())).toBeNull()
+    const s = fresh()
+    folder(s, 'A')
+    item(s, 'x', 'A', 'pcs', '4')
+    s.variants.push({ id: 'v1', itemId: 'x', archivedAt: at } as never)
+    s.stock.push({ itemId: 'x', variantId: 'v1', quantity: '9', pricedQuantity: '0', pricedTotal: 0, lastPriced: null } as never)
+    expect(inventoryPieces(s)).toBe('4')
+  })
+
+  it('shows k and M prefixes as a bare prefix', () => {
+    expect(piecesLabel('5')).toBe('5')
+    expect(piecesLabel('1200')).toBe('1.2k')
+    expect(piecesLabel('2000000')).toBe('2M')
+  })
+
+  it('keeps at most three significant digits of a big sum', () => {
+    expect(piecesLabel('999')).toBe('999')
+    expect(piecesLabel('1653')).toBe('1.65k')
+    expect(piecesLabel('12345')).toBe('12.3k')
+    expect(piecesLabel('123456')).toBe('123k')
+    expect(piecesLabel('1200000')).toBe('1.2M')
+    expect(piecesLabel('1000')).toBe('1k')
+    expect(piecesLabel('999900')).toBe('1M')
+    expect(piecesLabel('100000')).toBe('100k')
   })
 })
 
@@ -195,7 +251,8 @@ describe('index and edge cases', () => {
       for (const row of folderView(s, f)?.items ?? []) {
         const stock = itemStock(s, row.id)
         const unit = resolveUnit(s.items.find((i) => i.id === row.id)!.unitKey, s.units)!
-        expect([row.number, row.unit]).toEqual(Object.values(formatAmountParts(stock.quantity, unit)))
+        const parts = formatAmountParts(stock.quantity, unit)
+        expect([row.number, row.unit]).toEqual([parts.number, unit.key === 'pcs' && parts.unit === 'pcs' ? '' : parts.unit])
         expect(row.outOfStock).toBe(isOutOfStock(stock))
         seen.push(`${row.name} ${row.number}`)
       }
@@ -246,7 +303,7 @@ describe('index and edge cases', () => {
     const s = clone()
     s.items.find((i) => i.name === 'TL072')!.unitKey = 'custom:gone'
     const row = folderView(s, idOf(s, 'Op-amps'))!.items[0]!
-    expect(row.unit).toBe('pcs')
+    expect(row.unit).toBe('')
     expect(row.number).toBe('37')
   })
 
@@ -306,5 +363,104 @@ describe('folderChoices', () => {
   it('marks the root when nothing is selected', () => {
     const c = folderChoices(snap, null)
     expect(c.filter((t) => t.current).map((t) => t.id)).toEqual([null])
+  })
+})
+
+describe('list rows', () => {
+  const clone = (): InventorySnapshot => structuredClone(snap)
+  const itemOf = (s: InventorySnapshot, name: string) => s.items.find((i) => i.name === name)!
+  const rowOf = (s: InventorySnapshot, name: string) => {
+    const item = itemOf(s, name)
+    return folderView(s, item.folderId)!.items.find((i) => i.id === item.id)!
+  }
+  const line = (row: { buckets: { label: string | null; number: string; empty: boolean }[]; moreBuckets: number }) =>
+    [...row.buckets.map((b) => `${b.label ?? 'none'} ${b.empty ? '—' : b.number}`), ...(row.moreBuckets ? [`+${row.moreBuckets}`] : [])].join(' · ')
+
+  it('shows a resistor by its buckets, in variant order', () => {
+    const row = rowOf(snap, 'Резистор 0,25 Вт')
+    expect(line(row)).toBe('1 kΩ — · 10 kΩ 100 · 100 kΩ —')
+    expect(row.buckets[0]).toEqual({ label: '1 kΩ', number: '0', empty: true })
+    expect(row.moreBuckets).toBe(0)
+  })
+
+  it('shows four buckets at most and counts the rest; the no-variant bucket only when it is not zero', async () => {
+    const own = (await driver.connect({ ...cfg, id: 'rows' })).storage
+    const inv = (await own.listInventories()).inventories.find((i) => i.name === 'Electronics')!.id
+    let s = await own.loadInventory(inv)
+    const resistor = itemOf(s, 'Резистор 0,25 Вт').id
+    const resistance = s.attributes.find((a) => a.name === 'Resistance')!.id
+    await own.apply(
+      {
+        type: 'variant.createMany',
+        itemId: resistor,
+        variants: ['2200', '4700', '47000'].map((value) => ({ id: newId(), values: [{ attributeId: resistance, value }] })),
+      },
+      { device: 'Test' },
+    )
+    s = await own.loadInventory(inv)
+    expect(line(rowOf(s, 'Резистор 0,25 Вт'))).toBe('1 kΩ — · 2.2 kΩ — · 4.7 kΩ — · 10 kΩ 100 · +2')
+    const loose = structuredClone(s)
+    loose.stock.push({ itemId: resistor, variantId: null, quantity: '5', pricedQuantity: '0', pricedTotal: 0, lastPriced: null, lastCountedAt: null } as never)
+    expect(line(rowOf(loose, 'Резистор 0,25 Вт'))).toBe('none 5 · 1 kΩ — · 2.2 kΩ — · 4.7 kΩ — · +3')
+  })
+
+  it('joins the axes of a bucket by a slash, leaving the dot between buckets', () => {
+    const row = rowOf(snap, 'Конденсатор керамический')
+    expect(line(row)).toBe('10 nF / 50 V — · 100 nF / 16 V — · 100 nF / 50 V —')
+  })
+
+  it('has no buckets for an item without variants', () => {
+    const row = rowOf(snap, 'TL072')
+    expect(row.buckets).toEqual([])
+    expect(row.moreBuckets).toBe(0)
+  })
+
+  it('writes the unit as a suffix: none for pieces, a prefix for many pieces, the symbol otherwise', () => {
+    const s = clone()
+    const tl = itemOf(s, 'TL072')
+    s.stock.find((l) => l.itemId === tl.id)!.quantity = '1500'
+    const lm = itemOf(s, 'LM13700')
+    lm.unitKey = 'm'
+    s.stock.find((l) => l.itemId === lm.id)!.quantity = '3'
+    expect([rowOf(s, 'TL072').number, rowOf(s, 'TL072').unit]).toEqual(['1.5', 'k'])
+    expect([rowOf(s, 'LM13700').number, rowOf(s, 'LM13700').unit]).toEqual(['3', 'm'])
+    expect([rowOf(snap, 'TL072').number, rowOf(snap, 'TL072').unit]).toEqual(['37', ''])
+  })
+
+  it('writes the bucket amounts the same way', () => {
+    const s = clone()
+    const resistor = itemOf(s, 'Резистор 0,25 Вт')
+    s.stock.find((l) => l.itemId === resistor.id && l.variantId !== null)!.quantity = '2000'
+    expect(rowOf(s, 'Резистор 0,25 Вт').buckets.find((b) => !b.empty)!.number).toBe('2k')
+    resistor.unitKey = 'm'
+    const metres = structuredClone(s)
+    expect(rowOf(metres, 'Резистор 0,25 Вт').buckets.find((b) => !b.empty)!.number).toBe('2 km')
+  })
+
+  it('shows the values of pinned attributes, by attribute name, numbers in their format', () => {
+    const s = clone()
+    const at = '2026-11-10T00:00:00Z'
+    const attr = (id: string, name: string, kind: 'text' | 'enum' | 'number', pinned: boolean, extra: object = {}) =>
+      s.attributes.push({ id, inventoryId: s.inventory.id, name, kind, options: [], unit: '', siPrefixes: false, pinned, createdAt: at, updatedAt: at, createdBy: 'T', updatedBy: 'T', ...extra })
+    attr('a-place', 'Place', 'text', true)
+    attr('a-pkg', 'Package', 'enum', true, { options: ['DIP-8'] })
+    attr('a-note', 'Note', 'text', false)
+    const tl = itemOf(s, 'TL072').id
+    const lm = itemOf(s, 'LM13700').id
+    const voltage = s.attributes.find((a) => a.name === 'Voltage')!
+    voltage.pinned = true
+    s.itemAttributes.push(
+      { itemId: tl, attributeId: 'a-place', value: 'B4', axisPosition: null },
+      { itemId: tl, attributeId: 'a-pkg', value: 'DIP-8', axisPosition: null },
+      { itemId: tl, attributeId: 'a-note', value: 'spare', axisPosition: null },
+      { itemId: lm, attributeId: 'a-place', value: '  ', axisPosition: null },
+      { itemId: lm, attributeId: voltage.id, value: '0.5', axisPosition: null },
+    )
+    expect(rowOf(s, 'TL072').pinned).toEqual(['DIP-8', 'B4'])
+    expect(rowOf(s, 'LM13700').pinned).toEqual(['500 mV'])
+    expect(rowOf(s, 'NE555').pinned).toEqual([])
+    // Search rows carry the same chips, a variant hit its item's.
+    const [row] = searchRows(s, [{ itemId: tl, variantId: null }])
+    expect(row!.pinned).toEqual(['DIP-8', 'B4'])
   })
 })

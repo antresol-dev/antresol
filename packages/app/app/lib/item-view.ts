@@ -118,6 +118,35 @@ export function attributeChoices(s: InventorySnapshot, itemId: Id): Attribute[] 
   return s.attributes.filter((a) => !attached.has(a.id)).sort(byName)
 }
 
+/** The item's shared attributes (axes excluded), by name. */
+function sharedAttributes(s: InventorySnapshot, itemId: Id): AttributeRow[] {
+  const definitions = new Map(s.attributes.map((a) => [a.id, a] as const))
+  return s.itemAttributes
+    .filter((a) => a.itemId === itemId && a.axisPosition === null)
+    .flatMap((a) => {
+      const def = definitions.get(a.attributeId)
+      if (!def) return []
+      const value = valueOf(a.value)
+      const display = value === null ? null : formatAttributeValue(def, value)
+      return [{ attributeId: def.id, name: def.name, kind: def.kind, options: def.options, unit: def.unit, siPrefixes: def.siPrefixes, value, display }]
+    })
+    .sort((a, b) => byName(a, b) || compareIds(a.attributeId, b.attributeId))
+}
+
+/** One line about a bucket for the top of its sheets: the variant's label, the item's name, then the item's shared
+ *  attribute values as they show on the card (at most three, empty ones skipped): "10 kΩ · Resistor 0.25 W · 5 %".
+ *  `variantId` null (or unknown) is the item itself. Empty when the item is missing. */
+export function bucketDescription(s: InventorySnapshot, itemId: Id, variantId: Id | null): string {
+  const ix = snapshotIndex(s)
+  const item = ix.items.get(itemId)
+  if (!item) return ''
+  const label = variantId === null ? null : (ix.variants.get(variantId)?.name ?? null)
+  const values = sharedAttributes(s, itemId)
+    .flatMap((a) => (a.display === null ? [] : [a.display]))
+    .slice(0, 3)
+  return [label, item.name, ...values].filter((part): part is string => !!part).join(' · ')
+}
+
 /** null when the item is missing, archived, or its folder chain is archived or missing. */
 export function itemView(s: InventorySnapshot, itemId: Id): ItemView | null {
   const ix = snapshotIndex(s)
@@ -143,17 +172,7 @@ export function itemView(s: InventorySnapshot, itemId: Id): ItemView | null {
     siPrefixes: a.siPrefixes,
   }))
 
-  const definitions = new Map(s.attributes.map((a) => [a.id, a] as const))
-  const attributes: AttributeRow[] = s.itemAttributes
-    .filter((a) => a.itemId === itemId && a.axisPosition === null)
-    .flatMap((a) => {
-      const def = definitions.get(a.attributeId)
-      if (!def) return []
-      const value = valueOf(a.value)
-      const display = value === null ? null : formatAttributeValue(def, value)
-      return [{ attributeId: def.id, name: def.name, kind: def.kind, options: def.options, unit: def.unit, siPrefixes: def.siPrefixes, value, display }]
-    })
-    .sort((a, b) => byName(a, b) || compareIds(a.attributeId, b.attributeId))
+  const attributes = sharedAttributes(s, itemId)
 
   const variantValues = new Map<Id, Map<Id, string | null>>()
   const activeIds = new Set(variants.map((v) => v.id))
@@ -259,6 +278,10 @@ export interface JournalRow {
   /** `sourceUrl` as a link target, only when it parses as an http(s) URL; null otherwise (never link it). */
   sourceHref: string | null
   note: string | null
+  /** The bucket's quantity after this movement, as shown ("→ 45"); null for a transfer (two buckets). */
+  balance: { number: string; unit: string } | null
+  /** A recount that matched: an adjustment of zero ("Counted: 37 ✓"; spec 4.14). */
+  counted: boolean
 }
 
 /** Core refuses other schemes on write, but a source can be written by other clients: check again before linking. */
@@ -281,6 +304,20 @@ export function journalRows(s: InventorySnapshot, itemId: Id, movements: Movemen
   const unit = unitOf(s, ix.items.get(itemId))
   // Archived variants keep their labels in the index, so old movements still name them.
   const nameOf = (variantId: Id | null): string | null => (variantId === null ? null : (ix.variants.get(variantId)?.name ?? null))
+
+  // Running balance of each bucket, oldest first (the journal is the whole history of the item).
+  const after = new Map<Id, Quantity>()
+  const buckets = new Map<Id | null, Quantity>()
+  for (let i = movements.length - 1; i >= 0; i--) {
+    const m = movements[i]!
+    const quantity = addQ(buckets.get(m.variantId) ?? '0', m.quantity)
+    buckets.set(m.variantId, quantity)
+    after.set(m.id, quantity)
+  }
+  const balanceOf = (m: Movement): JournalRow['balance'] => {
+    const quantity = after.get(m.id)
+    return quantity === undefined ? null : formatAmountParts(quantity, unit)
+  }
 
   const rows: JournalRow[] = []
   const transfers = new Map<Id, NonNullable<JournalRow['transfer']>>()
@@ -307,12 +344,47 @@ export function journalRows(s: InventorySnapshot, itemId: Id, movements: Movemen
       }
       const transfer = { from: null, to: null, [side]: nameOf(m.variantId) }
       transfers.set(m.transferId, transfer)
-      rows.push({ ...base, id: m.transferId, kind: 'transfer', number: parts.number, variantName: null, transfer })
+      rows.push({ ...base, id: m.transferId, kind: 'transfer', number: parts.number, variantName: null, transfer, balance: null, counted: false })
       continue
     }
 
     const prefix = parts.number === '0' ? '' : sign > 0 ? '+' : sign < 0 ? MINUS : ''
-    rows.push({ ...base, id: m.id, kind: m.kind, number: `${prefix}${parts.number}`, variantName: nameOf(m.variantId), transfer: null })
+    rows.push({
+      ...base,
+      id: m.id,
+      kind: m.kind,
+      number: `${prefix}${parts.number}`,
+      variantName: nameOf(m.variantId),
+      transfer: null,
+      balance: balanceOf(m),
+      counted: m.kind === 'adjustment' && sign === 0,
+    })
   }
   return rows
+}
+
+export interface JournalDay {
+  /** The local calendar day, YYYY-MM-DD. */
+  day: string
+  /** Relative to now: show "Today" or "Yesterday"; null: show the date. */
+  relative: 'today' | 'yesterday' | null
+  /** Newest first, as given. */
+  rows: JournalRow[]
+}
+
+const localDay = (d: Date): string =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+/** Rows (newest first) grouped by the device's local calendar day (spec 4.14). */
+export function journalDays(rows: JournalRow[], now: Date): JournalDay[] {
+  const today = localDay(now)
+  const yesterday = localDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1))
+  const days: JournalDay[] = []
+  for (const row of rows) {
+    const day = localDay(new Date(row.at))
+    const last = days.at(-1)
+    if (last?.day === day) last.rows.push(row)
+    else days.push({ day, relative: day === today ? 'today' : day === yesterday ? 'yesterday' : null, rows: [row] })
+  }
+  return days
 }

@@ -91,7 +91,7 @@ async function save(): Promise<void> {
       <div v-if="adding" class="grid gap-1.5">
         <Label for="attribute-choice">{{ $t('attributeSheet.attribute') }}</Label>
         <Select v-model="choice" :disabled="locked">
-          <SelectTrigger id="attribute-choice" class="h-11 w-full rounded-field bg-surface">
+          <SelectTrigger id="attribute-choice" class="h-11 w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -120,7 +120,7 @@ async function save(): Promise<void> {
       </template>
     </div>
     <template v-if="!creating" #footer>
-      <Button type="button" class="h-11 rounded-field" :disabled="!canSave" @click="save">
+      <Button type="button" data-primary class="h-11 rounded-field" :disabled="!canSave" @click="save">
         {{ $t(saving ? 'status.saving' : 'attributeSheet.save') }}
       </Button>
     </template>

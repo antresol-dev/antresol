@@ -26,7 +26,7 @@ export function variant(id: string, itemId: string, over: Partial<Variant> = {})
 }
 
 export function attribute(id: string, name: string, kind: Attribute['kind'] = 'text', over: Partial<Attribute> = {}): Attribute {
-  return { id, inventoryId: 'inv', name, kind, options: [], unit: '', siPrefixes: false, ...audit, ...over }
+  return { id, inventoryId: 'inv', name, kind, options: [], unit: '', siPrefixes: false, pinned: false, ...audit, ...over }
 }
 
 /** The attribute is a variant axis of the item, at this position. */
@@ -44,7 +44,7 @@ export function value(variantId: string, attributeId: string, v: string | null):
 }
 
 export function stockLine(itemId: string, variantId: string | null, quantity: string, over: Partial<StockLine> = {}): StockLine {
-  return { itemId, variantId, quantity, pricedQuantity: '0', pricedTotal: 0, lastPriced: null, ...over }
+  return { itemId, variantId, quantity, pricedQuantity: '0', pricedTotal: 0, lastPriced: null, lastCountedAt: null, ...over }
 }
 
 export function makeSnapshot(parts: Partial<InventorySnapshot> = {}): InventorySnapshot {

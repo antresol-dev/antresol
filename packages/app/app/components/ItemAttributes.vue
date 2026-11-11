@@ -20,11 +20,12 @@ const actions = computed(() => [
 <template>
   <section class="grid min-w-0 grid-cols-1 gap-2">
     <h2 class="px-1 text-[13px] font-semibold text-subtle-foreground">{{ $t('item.attributes') }}</h2>
-    <dl v-if="attributes.length > 0" class="rounded-card border border-border bg-surface py-1">
+    <!-- A flat list on the page, rows divided by lines. -->
+    <dl v-if="attributes.length > 0">
       <div
         v-for="a in attributes"
         :key="a.attributeId"
-        class="relative flex min-h-11 items-center justify-between gap-2 py-1 pr-1 pl-3.5 not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-3.5 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
+        class="relative flex min-h-12 items-center justify-between gap-2 py-0.5 pl-3.5 not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-3.5 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
       >
         <dt class="min-w-0 text-[15px] text-muted-foreground wrap-anywhere">{{ a.name }}</dt>
         <dd class="ml-auto min-w-0 text-right text-[15px] wrap-anywhere">
@@ -35,14 +36,14 @@ const actions = computed(() => [
           <template v-else><span class="font-semibold">{{ a.display }}</span></template>
         </dd>
         <RowMenu
-          class="size-11"
+          class="h-11 w-10"
           :label="a.name"
           :actions="actions"
           @select="(key) => (key === 'edit' ? emit('edit', a.attributeId) : key === 'axis' ? emit('axis', a.attributeId) : emit('remove', a.attributeId))"
         />
       </div>
     </dl>
-    <Button variant="outline" class="h-11 justify-self-start rounded-field bg-surface px-4 font-bold" :disabled="locked" @click="emit('add')">
+    <Button variant="outline" class="mt-1 h-11 justify-self-start px-4.5 font-bold" :disabled="locked" @click="emit('add')">
       <Plus class="size-5" aria-hidden="true" />
       {{ $t('item.addAttribute') }}
     </Button>

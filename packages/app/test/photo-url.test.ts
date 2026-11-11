@@ -15,6 +15,25 @@ describe('photoUrl', () => {
   })
 })
 
+describe('photoUrl by provider', () => {
+  it('builds Cloudinary transformations per size', () => {
+    const u = 'https://res.cloudinary.com/demo/image/upload/v1/abc.jpg'
+    expect(photoUrl(u, 'thumb')).toBe('https://res.cloudinary.com/demo/image/upload/w_400,c_limit,f_auto,q_auto/v1/abc.jpg')
+    expect(photoUrl(u, 'card')).toContain('/upload/w_800,c_limit')
+    expect(photoUrl(u, 'full')).toContain('/upload/w_2048,c_limit')
+  })
+  it('builds Imgur size suffixes per size', () => {
+    expect(photoUrl('https://i.imgur.com/Ab1.jpg', 'thumb')).toBe('https://i.imgur.com/Ab1m.jpg')
+    expect(photoUrl('https://i.imgur.com/Ab1.jpg', 'card')).toBe('https://i.imgur.com/Ab1l.jpg')
+    expect(photoUrl('https://i.imgur.com/Ab1.jpg', 'full')).toBe('https://i.imgur.com/Ab1.jpg')
+  })
+  it('displays photos of every store and still refuses foreign hosts', () => {
+    expect(displayablePhotoUrl('https://i.imgur.com/Ab1.jpg', 'thumb')).toBe('https://i.imgur.com/Ab1m.jpg')
+    expect(displayablePhotoUrl('https://res.cloudinary.com/d/image/upload/a.jpg', 'thumb')).toContain('w_400')
+    expect(displayablePhotoUrl('https://res.cloudinary.com.evil.com/d/image/upload/a.jpg', 'thumb')).toBeNull()
+  })
+})
+
 describe('displayablePhotoUrl', () => {
   it('allows Uploadcare and device urls only', () => {
     expect(displayablePhotoUrl('https://ucarecdn.com/abc/', 'card')).toContain('/-/preview/800x800/')

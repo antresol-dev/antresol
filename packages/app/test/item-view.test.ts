@@ -1,7 +1,7 @@
 import { itemStock, newId, type Command, type InventorySnapshot, type InventoryStorage, type Movement } from '@graymatter/core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
-import { attributeChoices, itemView, journalRows, looseTransferOffer } from '../app/lib/item-view'
+import { attributeChoices, bucketDescription, itemView, journalDays, journalRows, looseTransferOffer, type JournalRow } from '../app/lib/item-view'
 import type { SourceConfig } from '../app/lib/types'
 
 const cfg: SourceConfig = {
@@ -293,6 +293,103 @@ describe('journalRows', () => {
     const rows = journalRows(s, item.id, await storage.loadMovements(item.id))
     expect(rows.map((r) => [r.kind, r.number])).toEqual([['adjustment', '−5'], ['adjustment', '+3'], ['receipt', '+37']])
   })
+
+  it('carries the running balance of the bucket; a recount that matched reads as counted', async () => {
+    const item = await newItem({ receipt: '5' })
+    await run({ type: 'stock.use', movementId: newId(), itemId: item.id, variantId: null, quantity: '2', note: null })
+    await run({ type: 'stock.set', movementId: newId(), itemId: item.id, variantId: null, target: '10', note: null })
+    await run({ type: 'stock.set', movementId: newId(), itemId: item.id, variantId: null, target: '10', note: null })
+    const rows = journalRows(s, item.id, await storage.loadMovements(item.id))
+    expect(rows.map((r) => [r.kind, r.number, r.balance?.number, r.counted])).toEqual([
+      ['adjustment', '0', '10', true],
+      ['adjustment', '+7', '10', false],
+      ['usage', '−2', '3', false],
+      ['receipt', '+5', '5', false],
+    ])
+    // The balance in the newest row is the stock shown at the top.
+    expect(rows[0]!.balance).toEqual({ number: itemView(s, item.id)!.total.number, unit: 'pcs' })
+  })
+
+  it('counts an empty bucket confirmed at zero as counted', async () => {
+    const item = await newItem()
+    await run({ type: 'stock.set', movementId: newId(), itemId: item.id, variantId: null, target: '0', note: null })
+    const rows = journalRows(s, item.id, await storage.loadMovements(item.id))
+    expect(rows.map((r) => [r.kind, r.number, r.balance?.number, r.counted])).toEqual([['adjustment', '0', '0', true]])
+  })
+
+  it('keeps a balance per bucket; a transfer row has none', async () => {
+    const r = await newItem({ variants: ['1k', '10k'] })
+    await receive(r.id, r.v['1k']!, '100')
+    await receive(r.id, r.v['10k']!, '7')
+    await transfer(r.id, r.v['1k']!, r.v['10k']!, '30')
+    await run({ type: 'stock.use', movementId: newId(), itemId: r.id, variantId: r.v['10k']!, quantity: '5', note: null })
+    const rows = journalRows(s, r.id, await storage.loadMovements(r.id))
+    expect(rows.map((x) => [x.kind, x.variantName, x.number, x.balance?.number ?? null])).toEqual([
+      ['usage', '10k', '−5', '32'],
+      ['transfer', null, '30', null],
+      ['receipt', '10k', '+7', '7'],
+      ['receipt', '1k', '+100', '100'],
+    ])
+  })
+
+  it('formats the balance with the unit and its prefixes', async () => {
+    const wire = await newItem({ unitKey: 'm', receipt: '2' })
+    await run({ type: 'stock.use', movementId: newId(), itemId: wire.id, variantId: null, quantity: '1.75', note: null })
+    const rows = journalRows(s, wire.id, await storage.loadMovements(wire.id))
+    expect(rows.map((r) => r.balance)).toEqual([
+      { number: '25', unit: 'cm' },
+      { number: '2', unit: 'm' },
+    ])
+  })
+})
+
+describe('journalDays', () => {
+  // Local times: the day boundaries are the device's own.
+  const now = new Date(2026, 10, 11, 15, 30)
+  const at = (day: number, hour: number, minute = 0): string => new Date(2026, 10, day, hour, minute).toISOString()
+  const row = (id: string, iso: string): JournalRow => ({
+    id,
+    kind: 'receipt',
+    at: iso,
+    by: 'Test',
+    number: '+1',
+    unit: 'pcs',
+    variantName: null,
+    transfer: null,
+    totalPrice: null,
+    sourceUrl: null,
+    sourceHref: null,
+    note: null,
+    balance: null,
+    counted: false,
+  })
+
+  it('groups rows by local day, newest first: today, yesterday, then dates', () => {
+    const rows = [
+      row('a', at(11, 14, 5)),
+      row('b', at(11, 0, 1)),
+      row('c', at(10, 23, 59)),
+      row('d', at(10, 8)),
+      row('e', at(8, 12)),
+      row('f', new Date(2025, 10, 11, 9).toISOString()),
+    ]
+    const days = journalDays(rows, now)
+    expect(days.map((d) => [d.relative, d.day, d.rows.map((r) => r.id)])).toEqual([
+      ['today', '2026-11-11', ['a', 'b']],
+      ['yesterday', '2026-11-10', ['c', 'd']],
+      [null, '2026-11-08', ['e']],
+      [null, '2025-11-11', ['f']],
+    ])
+  })
+
+  it('has no groups without rows', () => {
+    expect(journalDays([], now)).toEqual([])
+  })
+
+  it('counts yesterday by the calendar across a month boundary', () => {
+    const days = journalDays([row('a', new Date(2026, 9, 31, 22).toISOString())], new Date(2026, 10, 1, 1))
+    expect(days.map((d) => [d.relative, d.day])).toEqual([['yesterday', '2026-10-31']])
+  })
 })
 
 describe('looseTransferOffer', () => {
@@ -353,5 +450,37 @@ describe('itemView photos', () => {
     expect(view.buckets.find((b) => b.variantId === it1.v['A'])!.photo?.fileId).toBe('varA')
     expect(view.buckets.find((b) => b.variantId === it1.v['B'])!.photo).toBeNull()
     expect(view.photos).toEqual([])
+  })
+})
+
+describe('bucketDescription', () => {
+  it('names the variant, the item and its shared attributes: 10 kΩ · Резистор 0,25 Вт · 5 %', async () => {
+    const tolerance = newId()
+    await run({ type: 'attribute.create', id: tolerance, inventoryId, name: 'Tolerance', kind: 'number', options: [], unit: '%', siPrefixes: false })
+    await run({ type: 'item.setAttribute', itemId: resistor, attributeId: tolerance, value: '5' })
+    const v = s.variants.find((x) => x.itemId === resistor && itemView(s, resistor)!.buckets.find((b) => b.variantId === x.id)?.name?.replace(/\s/g, '').toLowerCase().startsWith('10k'))!
+    expect(bucketDescription(s, resistor, v.id)).toBe('10 kΩ · Резистор 0,25 Вт · 5 %')
+  })
+
+  it('is the item name and its attributes for the item itself, three attributes at most', async () => {
+    const item = await newItem()
+    const names = ['A', 'B', 'C', 'D']
+    for (const n of names) {
+      const id = newId()
+      await run({ type: 'attribute.create', id, inventoryId, name: `${n}${made}`, kind: 'text', options: [], unit: '', siPrefixes: false })
+      await run({ type: 'item.setAttribute', itemId: item.id, attributeId: id, value: `v${n}` })
+    }
+    const name = s.items.find((i) => i.id === item.id)!.name
+    expect(bucketDescription(s, item.id, null)).toBe(`${name} · vA · vB · vC`)
+  })
+
+  it('leaves out empty attributes and gives an empty line for a missing item', async () => {
+    const item = await newItem({ variants: ['Red'] })
+    const attr = newId()
+    await run({ type: 'attribute.create', id: attr, inventoryId, name: `Note${made}`, kind: 'text', options: [], unit: '', siPrefixes: false })
+    await run({ type: 'item.setAttribute', itemId: item.id, attributeId: attr, value: '  ' })
+    const name = s.items.find((i) => i.id === item.id)!.name
+    expect(bucketDescription(s, item.id, item.v.Red!)).toBe(`Red · ${name}`)
+    expect(bucketDescription(s, newId(), null)).toBe('')
   })
 })

@@ -1,17 +1,19 @@
 <script setup lang="ts">
-import { newId, SI_PREFIXES, type CustomUnit } from '@graymatter/core'
+import { SI_PREFIXES, type CustomUnit } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { captureBaseline, changedFields } from '~/lib/changed-fields'
 import { errorMessageKey } from '~/lib/errors'
+import { prefixNote } from '~/lib/prefixes'
 
 // Creates a custom unit or edits one: name, symbol and the SI prefixes quantities may show with.
 const props = defineProps<{ unit: CustomUnit | null }>()
 const emit = defineEmits<{ done: [] }>()
 
 const workspace = useWorkspace()
+const { ids } = useCommandIds(['unitId'])
 const { state } = workspace
 
 /** Largest power first. */
@@ -63,7 +65,7 @@ async function submit(): Promise<void> {
     } else {
       await workspace.apply({
         type: 'unit.create',
-        id: newId(),
+        id: ids.unitId,
         inventoryId: snapshot.inventory.id,
         name: name.value.trim(),
         symbol: symbol.value.trim(),
@@ -89,23 +91,23 @@ async function submit(): Promise<void> {
         autocomplete="off"
         :aria-invalid="errorKey ? true : undefined"
         aria-describedby="unit-form-error"
-        class="h-11 rounded-field bg-surface"
+        class="h-11"
       />
     </div>
     <div class="grid gap-1.5">
       <Label for="unit-symbol">{{ $t('unitForm.symbol') }}</Label>
-      <Input id="unit-symbol" v-model="symbol" autocomplete="off" class="h-11 rounded-field bg-surface" />
+      <Input id="unit-symbol" v-model="symbol" autocomplete="off" class="h-11" />
     </div>
     <fieldset class="grid gap-1.5">
       <legend class="mb-1.5 text-sm font-medium">{{ $t('unitForm.prefixes') }}</legend>
-      <div class="grid max-h-56 grid-cols-2 gap-0.5 overflow-y-auto rounded-field border border-border bg-background p-1">
+      <div class="grid max-h-56 grid-cols-2 gap-0.5 overflow-y-auto rounded-field border border-input bg-field p-1">
         <label
           v-for="p in prefixes"
           :key="p.power"
-          class="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-sm px-2 text-sm transition-colors duration-150 hover:bg-hover"
+          class="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-chip px-2 text-sm transition-colors duration-150 hover:bg-hover"
         >
           <Checkbox :model-value="powers.includes(p.power)" @update:model-value="toggle(p.power, $event === true)" />
-          {{ p.symbol }} · {{ p.name }}
+          {{ prefixNote(p.power) }}
         </label>
       </div>
     </fieldset>

@@ -2,12 +2,13 @@ import { PGlite } from '@electric-sql/pglite'
 import { DomainError, FileError, newId, StorageError, variantLabel, type Command, type FileStore, type Id } from '@graymatter/core'
 import { APP_SCHEMA_VERSION, createPgliteExecutor, type PgExecutor } from '@graymatter/storage-postgres'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { isReactive } from 'vue'
+import { computed, isReactive } from 'vue'
 import { createMemoryDeviceDb, type DeviceDb } from '../app/lib/device-db'
 import { defaultDeviceName } from '../app/lib/device-name'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import { createNeonDriver, type SourceDriver } from '../app/lib/sources'
 import type { InventoryRef, SourceConfig } from '../app/lib/types'
+import type { WorkspaceDeps } from '../app/lib/workspace-types'
 import { createWorkspace, defaultFileStore, FAILED_RETRY_MS, SNAPSHOT_FORMAT } from '../app/lib/workspace'
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Safari/605.1.15'
@@ -56,6 +57,8 @@ function harness() {
     exportCalls: 0,
     applyError: null as Error | null,
     applyCalls: 0,
+    /** Command types the source was asked to apply, in order. */
+    applied: [] as string[],
     /** One-shot: the next apply writes, then runs this before answering; a throw loses the answer of a committed write. */
     afterApply: null as (() => Promise<void>) | null,
     /** loadInventory fails with this after listInventories succeeded. */
@@ -130,6 +133,7 @@ function harness() {
       }
       storage.apply = async (command, actor) => {
         flags.applyCalls++
+        flags.applied.push(command.type)
         const applyGate = flags.applyGate
         if (applyGate) {
           flags.applyGate = null
@@ -184,8 +188,8 @@ function harness() {
     provider: 'fake',
     upload: async (_blob, name) => ({ provider: 'fake', fileId: name, url: `https://cdn.test/${name}` }),
   }
-  const workspace = () =>
-    createWorkspace({ db, drivers: { neon: driver }, userAgent: UA, now, fileStores: () => fileStore, prepareImage: async (f) => f })
+  const workspace = (extra: Partial<WorkspaceDeps> = {}) =>
+    createWorkspace({ db, drivers: { neon: driver }, userAgent: UA, now, fileStores: () => fileStore, prepareImage: async (f) => f, ...extra })
 
   /** Creates a database for the connection string with one inventory, directly through storage. */
   const seed = async (connectionString: string, inventoryName: string): Promise<Id> => {
@@ -330,32 +334,64 @@ describe('workspace', () => {
     expect(await h.db.getSnapshot(old)).toBeNull()
   })
 
-  it('6. a newer schema makes the source read-only', async () => {
+  it('6. a schema that needs a newer app makes the source read-only and looks for an update', async () => {
     const h = setup()
     const id = await h.seed(CS('one'), 'Inv')
     await h.db.putSource(config('s1', CS('one')))
-    const ws = h.workspace()
+    const checkForUpdate = vi.fn()
+    const ws = h.workspace({ checkForUpdate })
     await ws.start()
-    await h.pgs[0]!.exec(`update gm_meta set value = '${APP_SCHEMA_VERSION + 1}' where key = 'schema_version'`)
+    const next = APP_SCHEMA_VERSION + 1
+    await h.pgs[0]!.exec(`update gm_meta set value = '${next}' where key in ('schema_version', 'min_app_schema')`)
     // The refresh reuses the open connection, yet checks the schema through it.
     await ws.refresh()
     expect(ws.state.sources[0]!.status).toBe('read_only')
+    // The banner "Update to keep editing" shows for exactly this reason.
     expect(ws.state.readOnly).toBe('schema_newer')
+    expect(checkForUpdate).toHaveBeenCalledTimes(1)
     const calls = h.flags.applyCalls
     await expect(ws.apply(folderCreate(id, 'Nope'))).rejects.toMatchObject({ code: 'read_only' })
     expect(h.flags.applyCalls).toBe(calls)
-    // A workspace started on the newer schema is read-only too.
-    const fresh = h.workspace()
+    // Still read-only: no second look.
+    await ws.refresh()
+    expect(checkForUpdate).toHaveBeenCalledTimes(1)
+    // A workspace started on the newer schema is read-only too, and looks once.
+    const freshCheck = vi.fn()
+    const fresh = h.workspace({ checkForUpdate: freshCheck })
     await fresh.start()
     expect(fresh.state.sources[0]!.status).toBe('read_only')
     expect(fresh.state.readOnly).toBe('schema_newer')
+    expect(freshCheck).toHaveBeenCalledTimes(1)
     // Back to this app's version: the next refresh makes the source writable again.
-    await h.pgs[0]!.exec(`update gm_meta set value = '${APP_SCHEMA_VERSION}' where key = 'schema_version'`)
+    await h.pgs[0]!.exec(`update gm_meta set value = '${APP_SCHEMA_VERSION}' where key in ('schema_version', 'min_app_schema')`)
     await ws.refresh()
     expect(ws.state.sources[0]!.status).toBe('ready')
     expect(ws.state.readOnly).toBeNull()
     await ws.apply(folderCreate(id, 'Shelf'))
     expect(ws.state.snapshot?.folders.map((f) => f.name)).toEqual(['Shelf'])
+  })
+
+  it('6b. a newer schema whose min_app_schema this app meets stays writable, no update check', async () => {
+    const h = setup()
+    const id = await h.seed(CS('one'), 'Inv')
+    await h.db.putSource(config('s1', CS('one')))
+    const checkForUpdate = vi.fn()
+    const ws = h.workspace({ checkForUpdate })
+    await ws.start()
+    // Another device's app migrated the source to the next schema, an additive one: min_app_schema stays.
+    await h.pgs[0]!.exec(`update gm_meta set value = '${APP_SCHEMA_VERSION + 1}' where key = 'schema_version'`)
+    const connects = h.flags.connectCalls
+    await ws.refresh()
+    expect(ws.state.sources[0]!.status).toBe('ready')
+    expect(ws.state.readOnly).toBeNull()
+    // The open connection stays: its schema is still one this app writes.
+    expect(h.flags.connectCalls).toBe(connects)
+    await ws.apply(folderCreate(id, 'Shelf'))
+    expect(ws.state.snapshot?.folders.map((f) => f.name)).toEqual(['Shelf'])
+    const fresh = h.workspace({ checkForUpdate })
+    await fresh.start()
+    expect(fresh.state.sources[0]!.status).toBe('ready')
+    expect(checkForUpdate).not.toHaveBeenCalled()
   })
 
   it('7. validates before writing and keeps the written copy on the device', async () => {
@@ -1348,6 +1384,69 @@ describe('workspace writes patch the local copy', () => {
     expect(folderNames(ws)).toEqual(['Shelf'])
   })
 
+  it('4b. a stepper delta flushed by a switch is checked against the copy it was pressed in and kept with it: no load', async () => {
+    const { h, ws, refs } = await started('A', 'B')
+    const [a, b] = refs as [InventoryRef, InventoryRef]
+    await ws.selectInventory(b)
+    await ws.selectInventory(a)
+    const [one, two] = [newId(), newId()]
+    await ws.apply(createItem(a.inventoryId, one, 'One'))
+    await ws.apply(createItem(a.inventoryId, two, 'Two'))
+    // Two steppers with a pending delta each, flushed by the switch (before-write hooks).
+    const sent: Promise<void>[] = []
+    let pending = true
+    const stop = ws.onBeforeWrite(() => {
+      if (!pending) return
+      pending = false
+      sent.push(ws.applyTo(a, receive(one, '3')), ws.applyTo(a, receive(two, '4')))
+    })
+    const gate = h.gate()
+    h.flags.applyGate = gate.promise
+    const loads = h.flags.loadCalls
+    await ws.selectInventory(b)
+    stop()
+    expect(sent).toHaveLength(2)
+    expect(ws.state.snapshot?.inventory.id).toBe(b.inventoryId)
+    gate.open()
+    await Promise.all(sent)
+    expect(h.flags.loadCalls).toBe(loads)
+    expect(h.flags.applied.slice(-2)).toEqual(['stock.receive', 'stock.receive'])
+    // Both rows are in A's copy on the device, at the source's revision: opening A again loads nothing.
+    expect((await h.db.getSnapshot(a))!.rev).toBe(await cachedRevOfSource(h))
+    await ws.selectInventory(a)
+    expect(h.flags.loadCalls).toBe(loads)
+    const stock = (id: Id) => ws.state.snapshot!.stock.find((l) => l.itemId === id && l.variantId === null)?.quantity
+    expect([stock(one), stock(two)]).toEqual(['3', '4'])
+    await ws.sync()
+    expect(h.flags.loadCalls).toBe(loads)
+  })
+
+  it('4c. a carried copy takes no rows it cannot be sure of: another device wrote first, so it is marked stale', async () => {
+    const { h, ws, refs } = await started('A', 'B')
+    const [a, b] = refs as [InventoryRef, InventoryRef]
+    await ws.selectInventory(b)
+    await ws.selectInventory(a)
+    const itemId = newId()
+    await ws.apply(createItem(a.inventoryId, itemId))
+    await (await h.direct(CS('one'))).apply(folderCreate(a.inventoryId, 'Theirs'), { device: 'other' })
+    let sent: Promise<void> | null = null
+    let pending = true
+    const stop = ws.onBeforeWrite(() => {
+      if (!pending) return
+      pending = false
+      sent = ws.applyTo(a, receive(itemId, '3'))
+    })
+    await ws.selectInventory(b)
+    stop()
+    await sent
+    expect((await h.db.getSnapshot(a))!.rev).toBeNull()
+    const loads = h.flags.loadCalls
+    await ws.selectInventory(a)
+    expect(h.flags.loadCalls).toBe(loads + 1)
+    expect(folderNames(ws)).toEqual(['Theirs'])
+    expect(ws.state.snapshot!.stock.find((l) => l.itemId === itemId)?.quantity).toBe('3')
+  })
+
   it('5. a write to a non-current inventory marks its cached copy stale', async () => {
     const { h, ws, refs } = await started('A', 'B')
     const [a, b] = refs as [InventoryRef, InventoryRef]
@@ -1583,6 +1682,96 @@ describe('workspace writes patch the local copy', () => {
     h.flags.clock += 60_000
     await ws.apply(folderCreate(inv, 'Two'))
     expect(ws.state.lastRefreshAt).toBe(checked)
+  })
+
+  describe('per-bucket lock', () => {
+    it('a stock write locks only its bucket: other buckets and forms stay free, a form write waits for its own', async () => {
+      const { h, ws, inv } = await started('Inv')
+      const [a, b] = [newId(), newId()]
+      await ws.apply(createItem(inv, a, 'A'))
+      await ws.apply(createItem(inv, b, 'B'))
+      const lockedA = computed(() => ws.isBucketSaving(a, null))
+      expect(lockedA.value).toBe(false)
+
+      const gate = h.gate()
+      h.flags.applyGate = gate.promise
+      const writing = ws.apply(receive(a, '3'))
+      expect(lockedA.value).toBe(true)
+      expect(ws.isBucketSaving(b, null)).toBe(false)
+      expect(ws.isBucketSaving(a, newId())).toBe(false)
+      expect(ws.state.saving).toBe(false)
+
+      const form = ws.apply(folderCreate(inv, 'Box'))
+      expect(ws.state.saving).toBe(true)
+      expect(ws.isBucketSaving(b, null)).toBe(false)
+
+      gate.open()
+      await Promise.all([writing, form])
+      expect(lockedA.value).toBe(false)
+      expect(ws.state.saving).toBe(false)
+    })
+
+    it('a transfer locks both of its buckets; a failed write releases its bucket', async () => {
+      const { h, ws, inv } = await started('Inv')
+      const itemId = newId()
+      await ws.apply(createItem(inv, itemId))
+      await ws.apply(receive(itemId, '5'))
+      const axis = newId()
+      const variant = newId()
+      await ws.apply({ type: 'attribute.create', id: axis, inventoryId: inv, name: 'Value', kind: 'text', options: [], unit: '', siPrefixes: false })
+      await ws.apply({ type: 'item.addAxis', itemId, attributeId: axis, firstVariantId: variant })
+      await ws.apply({ type: 'variant.createMany', itemId, variants: [{ id: variant, values: [{ attributeId: axis, value: '1k' }] }] })
+      const gate = h.gate()
+      h.flags.applyGate = gate.promise
+      const moving = ws.apply({
+        type: 'stock.transfer',
+        transferId: newId(),
+        outMovementId: newId(),
+        inMovementId: newId(),
+        itemId,
+        fromVariantId: null,
+        toVariantId: variant,
+        quantity: '2',
+      })
+      expect(ws.isBucketSaving(itemId, null)).toBe(true)
+      expect(ws.isBucketSaving(itemId, variant)).toBe(true)
+      gate.open()
+      await moving
+      expect(ws.isBucketSaving(itemId, null)).toBe(false)
+      expect(ws.isBucketSaving(itemId, variant)).toBe(false)
+
+      h.flags.applyError = new StorageError('failed')
+      const failing = ws.apply(receive(itemId, '1'))
+      expect(ws.isBucketSaving(itemId, null)).toBe(true)
+      await expect(failing).rejects.toThrow()
+      expect(ws.isBucketSaving(itemId, null)).toBe(false)
+    })
+
+    it('before any write, the before-write hooks run; a write a hook makes goes first', async () => {
+      const { h, ws, inv } = await started('Inv')
+      const itemId = newId()
+      await ws.apply(createItem(inv, itemId))
+      let waiting = true
+      let sent: Promise<void> | null = null
+      const stop = ws.onBeforeWrite(() => {
+        // Like a stepper flushing its pending delta: its own write calls the hooks again, and they must not loop.
+        if (!waiting) return
+        waiting = false
+        sent = ws.apply(receive(itemId, '2'))
+      })
+      const failing = ws.onBeforeWrite(() => {
+        throw new Error('a broken hook does not stop the write')
+      })
+      const before = h.flags.applied.length
+      await ws.apply(folderCreate(inv, 'Box'))
+      await sent
+      expect(h.flags.applied.slice(before)).toEqual(['stock.receive', 'folder.create'])
+      stop()
+      failing()
+      waiting = true
+      await ws.apply(folderCreate(inv, 'Bin'))
+      expect(h.flags.applied.slice(before)).toEqual(['stock.receive', 'folder.create', 'folder.create'])
+    })
   })
 })
 
@@ -2156,6 +2345,15 @@ describe('workspace photos', () => {
     const stored = await store.upload(new Blob(['x']), 'x.jpg')
     expect(stored.url).toBe('https://abc.ucarecd.net/uuid-1/')
     expect(seen).toHaveLength(1)
+  })
+
+  it('defaultFileStore picks the chosen photo store when its keys are set', () => {
+    const base = config('n4', CS('w'))
+    expect(defaultFileStore({ ...base, photoStore: 'cloudinary', cloudinaryCloudName: 'c', cloudinaryUploadPreset: 'p' })?.provider).toBe('cloudinary')
+    expect(defaultFileStore({ ...base, photoStore: 'cloudinary', cloudinaryCloudName: 'c' })).toBeNull()
+    expect(defaultFileStore({ ...base, photoStore: 'imgur', imgurClientId: 'id' })?.provider).toBe('imgur')
+    expect(defaultFileStore({ ...base, photoStore: 'imgur', uploadcarePublicKey: 'pub' })).toBeNull()
+    expect(defaultFileStore({ ...base, uploadcarePublicKey: 'pub' })?.provider).toBe('uploadcare')
   })
 
   it('fileStoreFor: demo is the device store, Neon without a key is null', async () => {

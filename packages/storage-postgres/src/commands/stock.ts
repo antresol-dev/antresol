@@ -38,7 +38,6 @@ export function stockStatements(c: StockCommand, actor: Actor): Statement[] {
             left join movements m on m.item_id = i.id and m.variant_id is not distinct from ${c.variantId}::uuid
             where i.id = ${c.itemId}::uuid
             group by i.id, i.inventory_id
-            having ${c.target}::numeric - COALESCE(SUM(m.quantity), 0) <> 0
             on conflict (id) do nothing`,
       ]
     case 'stock.transfer': {

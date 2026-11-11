@@ -1,4 +1,4 @@
-import type { Id, InventorySnapshot } from '@graymatter/core'
+import type { Id, InventorySnapshot, Quantity } from '@graymatter/core'
 import { folderTree, folderView, type TreeNode } from './views'
 
 /** Folder ids the user has open. Absent = closed: folders start collapsed. */
@@ -7,13 +7,19 @@ export type TreeOpen = Record<Id, true>
 export interface TreeRow {
   id: Id
   name: string
-  /** Active items in the subtree, the same number as in the folder list. */
-  itemCount: number
+  /** Pieces in the subtree (pcs items only), the same number as in the folder list; null = none to count. */
+  pieces: Quantity | null
   hasChildren: boolean
   open: boolean
   current: boolean
   /** Rows of the children; empty while closed. */
   children: TreeRow[]
+}
+
+/** A click on a folder row: on the folder that is not open yet it selects (goes there, the branch stays as it is);
+ *  on the folder whose own screen is open it opens or closes the branch. */
+export function rowClickAction(isPage: boolean): 'select' | 'toggle' {
+  return isPage ? 'toggle' : 'select'
 }
 
 export function treeRows(s: InventorySnapshot, open: TreeOpen, current: Id | 'root' | null): TreeRow[] {
@@ -24,7 +30,7 @@ export function treeRows(s: InventorySnapshot, open: TreeOpen, current: Id | 'ro
       return {
         id: n.id,
         name: n.name,
-        itemCount: n.itemCount,
+        pieces: n.pieces,
         hasChildren,
         open: isOpen,
         current: n.id === current,

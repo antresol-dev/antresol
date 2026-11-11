@@ -22,6 +22,20 @@ describe('nuxt config', () => {
     ])
   })
 
+  it('is a share target: GET to the share route, relative to the base path, with title, text and url', () => {
+    const manifest = config.pwa?.manifest
+    expect(manifest && 'share_target' in manifest ? manifest.share_target : undefined).toEqual({
+      action: './share',
+      method: 'GET',
+      params: { title: 'title', text: 'text', url: 'url' },
+    })
+  })
+
+  it('paints the splash and title bar in the Hybrid v2 background', () => {
+    const manifest = config.pwa?.manifest
+    expect(manifest && [manifest.background_color, manifest.theme_color]).toEqual(['#EDEFF3', '#EDEFF3'])
+  })
+
   it('loads Manrope 800 (font-extrabold)', () => {
     expect(config.fonts?.families?.[0]).toMatchObject({ name: 'Manrope', weights: [400, 500, 600, 700, 800] })
   })

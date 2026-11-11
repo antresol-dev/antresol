@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Command } from '../src/commands'
 import type { InventorySnapshot } from '../src/model'
-import { DomainError, normalizeCommand, validateCommand, type DomainErrorCode } from '../src/validate'
+import { DomainError, MAX_PINNED_ATTRIBUTES, normalizeCommand, validateCommand, type DomainErrorCode } from '../src/validate'
 import { attribute, axis, electronics, folder, item, makeSnapshot, shared, stockLine, value, variant } from './fixtures'
 
 const ARCH = { archivedAt: '2026-02-01T00:00:00Z', archiveId: 'arch' }
@@ -156,6 +156,11 @@ describe('validateCommand', () => {
     expect(code({ type: 'tag.rename', id: 't1', name: 'analog' })).toBeNull()
   })
 
+  it('tag.create sent again after it landed is a retry, not a duplicate', () => {
+    expect(code({ type: 'tag.create', id: 't1', inventoryId: 'inv', name: 'Analog' })).toBeNull()
+    expect(code({ type: 'tag.create', id: 't1', inventoryId: 'inv', name: ' analog ' })).toBeNull()
+  })
+
   it('unit.delete refuses used units, including archived items', () => {
     expect(code({ type: 'unit.delete', id: 'u1' })).toBe('unit_in_use')
     const s = snap()
@@ -193,6 +198,20 @@ describe('final review fixes', () => {
     expect(code({ type: 'archive', target: 'folder', id: 'AC', archiveId: 'n' })).toBe('archived')
     expect(code({ type: 'archive', target: 'variant', id: 'v2', archiveId: 'n' })).toBe('archived')
     expect(code({ type: 'archive', target: 'item', id: 'i1', archiveId: 'n' })).toBeNull()
+  })
+
+  it('an archive sent again after it landed (same archiveId) is a retry, not a refusal', () => {
+    expect(code({ type: 'archive', target: 'item', id: 'i2', archiveId: 'arch' })).toBeNull()
+    expect(code({ type: 'archive', target: 'folder', id: 'AF', archiveId: 'arch' })).toBeNull()
+    expect(code({ type: 'archive', target: 'folder', id: 'AC', archiveId: 'arch' })).toBeNull()
+    expect(code({ type: 'archive', target: 'variant', id: 'v2', archiveId: 'arch' })).toBeNull()
+    // Archived with it through its folder, not by this command: the item carries no archiveId of its own.
+    expect(code({ type: 'archive', target: 'item', id: 'i3', archiveId: 'arch' })).toBe('archived')
+    const s = snap()
+    s.inventory = { ...s.inventory, ...ARCH }
+    expect(code({ type: 'archive', target: 'inventory', id: 'inv', archiveId: 'arch' }, s)).toBeNull()
+    expect(code({ type: 'archive', target: 'inventory', id: 'inv', archiveId: 'n' }, s)).toBe('archived')
+    expect(code({ type: 'archive', target: 'item', id: 'i1', archiveId: 'arch' }, s)).toBe('archived')
   })
 
   it('quantities and prices must fit the columns', () => {
@@ -303,6 +322,14 @@ describe('variants by axes', () => {
     const mark = (v: string): Values => [{ attributeId: 'mark', value: v }]
     expect(ec(createMany('M', mark('Red'), mark(' red ')), s)).toBe('duplicate_variant')
     expect(ec(createMany('M', mark('Red'), mark('Blue')), s)).toBeNull()
+  })
+  it('createMany treats an existing id with the same item and axis values as a retry', () => {
+    const s = electronics()
+    const retry = (id: string, itemId: string, values: Values) => ({ type: 'variant.createMany', itemId, variants: [{ id, values }] }) as Command
+    expect(ec(retry('r1k', 'R', res('1000')), s)).toBeNull()
+    expect(ec(retry('r1k', 'R', res('1001')), s)).toBe('invalid_option')
+    expect(ec(retry('c50', 'R', res('1000')), s)).toBe('invalid_option')
+    expect(ec({ type: 'variant.createMany', itemId: 'R', variants: [{ id: 'r1k', values: res('1000') }, { id: U('100'), values: res('2200') }] } as Command, s)).toBeNull()
   })
   it('createMany refuses duplicate ids in the batch and ids of existing variants', () => {
     const dup: Command = {
@@ -490,5 +517,26 @@ describe('attribute dictionary', () => {
     expect(ec({ type: 'attribute.delete', id: 'res' }, onlyArchived)).toBe('attribute_is_axis')
     const noVariants = { ...s, variants: s.variants.filter((x) => x.itemId !== 'R') }
     expect(ec({ type: 'attribute.delete', id: 'res' }, noVariants)).toBeNull()
+  })
+  it('pins at most two attributes of an inventory; unpinning always passes', () => {
+    const pin = (id: string, pinned = true): Command => ({ type: 'attribute.update', id, pinned })
+    const s = electronics()
+    const pinnedAs = (ids: string[]) => ({ ...s, attributes: s.attributes.map((a) => ({ ...a, pinned: ids.includes(a.id) })) })
+    expect(MAX_PINNED_ATTRIBUTES).toBe(2)
+    expect(ec(pin('res'))).toBeNull()
+    expect(ec(pin('pkg'), pinnedAs(['res']))).toBeNull()
+    expect(ec(pin('mark'), pinnedAs(['res', 'pkg']))).toBe('too_many_pinned')
+    expect(ec({ type: 'attribute.update', id: 'mark', name: 'Marking code', pinned: true }, pinnedAs(['res', 'pkg']))).toBe(
+      'too_many_pinned',
+    )
+    // Already pinned: sent again (a retry, or a form saving other fields) it passes.
+    expect(ec(pin('pkg'), pinnedAs(['res', 'pkg']))).toBeNull()
+    // Unpinning passes, even with more pinned than allowed (another device pinned meanwhile).
+    expect(ec(pin('res', false), pinnedAs(['res', 'pkg', 'mark']))).toBeNull()
+    expect(ec(pin('volt', false), pinnedAs(['res', 'pkg', 'mark']))).toBeNull()
+    // Other changes to an attribute leave the pins alone, whatever their number.
+    expect(ec({ type: 'attribute.update', id: 'volt', name: 'U' }, pinnedAs(['res', 'pkg', 'mark']))).toBeNull()
+    // Pins count per inventory: the snapshot holds one.
+    expect(ec(pin('nope'))).toBe('not_found')
   })
 })

@@ -29,6 +29,21 @@ export function checkConnectionString(input: string): ConnectionStringProblem | 
   return null
 }
 
+/** A Cloudinary store takes two fields and is useless with one: the store would silently be none. Both empty is fine
+ *  (photos are optional); otherwise both are required and the cloud name has the shape of one (it goes into an address).
+ *  The `sourceForm.problem.*` key of what to fix, or null. The other stores have one field and nothing to cross-check. */
+export function photoStoreProblem(
+  c: Pick<SourceConfig, 'photoStore' | 'cloudinaryCloudName' | 'cloudinaryUploadPreset'>,
+): 'cloudinaryCloud' | 'cloudinaryCloudFormat' | 'cloudinaryPreset' | null {
+  if (c.photoStore !== 'cloudinary') return null
+  const cloud = c.cloudinaryCloudName?.trim() ?? ''
+  const preset = c.cloudinaryUploadPreset?.trim() ?? ''
+  if (cloud === '' && preset === '') return null
+  if (cloud === '') return 'cloudinaryCloud'
+  if (!/^[A-Za-z0-9_-]+$/.test(cloud)) return 'cloudinaryCloudFormat'
+  return preset === '' ? 'cloudinaryPreset' : null
+}
+
 export const PROBE_FAILURES = ['unreachable', 'auth', 'no_database', 'failed'] as const
 export type ProbeFailure = (typeof PROBE_FAILURES)[number]
 export type SourceProbe =
@@ -140,14 +155,18 @@ function sourceFailure(error: unknown, config: SourceConfig): StorageError {
 }
 
 export function createNeonDriver(
-  makeExecutor: (connectionString: string) => PgExecutor = createNeonHttpExecutor,
+  makeExecutor: (connectionString: string, options?: { onTraffic?: (bytes: number) => void }) => PgExecutor = createNeonHttpExecutor,
+  hooks?: { onTraffic?: (sourceId: string, bytes: number) => void },
 ): SourceDriver {
   return {
     probe: (config) => probeWithExecutor(() => makeExecutor(config.connectionString), config),
     async connect(config) {
       let exec: PgExecutor | null = null
       try {
-        exec = makeExecutor(config.connectionString)
+        exec = makeExecutor(
+          config.connectionString,
+          hooks?.onTraffic ? { onTraffic: (bytes) => hooks.onTraffic?.(config.id, bytes) } : undefined,
+        )
         const { storage, status } = await openPostgresStorage(exec)
         const opened = exec
         const inspect = async (): Promise<SchemaInspection> => {

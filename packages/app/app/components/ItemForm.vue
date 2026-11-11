@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { newId, type Id, type Item } from '@graymatter/core'
+import type { Id, Item } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -14,6 +14,7 @@ const props = defineProps<{ item: Item }>()
 const emit = defineEmits<{ done: [] }>()
 
 const workspace = useWorkspace()
+const { ids, renew } = useCommandIds(['tagId'])
 const { state } = workspace
 
 const name = ref(props.item.name)
@@ -48,9 +49,10 @@ async function createTag(tagName: string): Promise<void> {
   busy.value = true
   errorKey.value = null
   try {
-    const id = newId()
+    const id = ids.tagId
     await workspace.apply({ type: 'tag.create', id, inventoryId: s.inventory.id, name: tagName })
     tagIds.value = [...tagIds.value, id]
+    renew()
   } catch (e) {
     errorKey.value = errorMessageKey(e)
   } finally {
@@ -81,19 +83,19 @@ async function submit(): Promise<void> {
   <form class="grid gap-3.5" novalidate @submit.prevent="submit">
     <div class="grid gap-1.5">
       <Label for="item-name">{{ $t('form.name') }}</Label>
-      <Input id="item-name" v-model="name" autocomplete="off" :aria-invalid="errorKey ? true : undefined" aria-describedby="item-form-error" class="h-11 rounded-field bg-surface" />
+      <Input id="item-name" v-model="name" autocomplete="off" :aria-invalid="errorKey ? true : undefined" aria-describedby="item-form-error" class="h-11" />
     </div>
     <div class="grid gap-1.5">
       <Label for="item-description">
         {{ $t('form.description') }}
         <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
       </Label>
-      <Textarea id="item-description" v-model="description" rows="3" class="min-h-20 rounded-field bg-surface" />
+      <Textarea id="item-description" v-model="description" rows="3" class="min-h-20" />
     </div>
     <div class="grid gap-1.5">
       <Label for="item-unit">{{ $t('itemForm.unit') }}</Label>
       <Select v-model="unitKey">
-        <SelectTrigger id="item-unit" class="h-11 w-full rounded-field bg-surface">
+        <SelectTrigger id="item-unit" class="h-11 w-full">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

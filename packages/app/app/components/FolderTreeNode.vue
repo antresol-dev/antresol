@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { Archive, Boxes, ChevronRight, Folder, FolderInput, FolderPlus, Pencil, Plus } from '@lucide/vue'
 import { treeAriaCurrent } from '~/lib/shell'
-import type { TreeRow } from '~/lib/tree-state'
+import { rowClickAction, type TreeRow } from '~/lib/tree-state'
+import { piecesLabel } from '~/lib/views'
 import type RowMenu from './RowMenu.vue'
 
 const props = defineProps<{
@@ -25,12 +26,22 @@ const ariaCurrent = computed(() =>
   treeAriaCurrent(props.root ? 'root' : props.row.id, props.row.current, typeof route.name === 'string' ? route.name : null, route.params),
 )
 
+// The second click on the folder whose screen is open opens or closes it; the first one only goes there.
+function click(e: MouseEvent): void {
+  // A long press already opened the menu (its capture handler prevented this click): no toggle on top of it.
+  if (e.defaultPrevented || props.root || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+  if (rowClickAction(ariaCurrent.value === 'page') !== 'toggle') return
+  e.preventDefault()
+  if (props.row.hasChildren) emit('toggle', props.row.id)
+}
+
 const indents = computed(() => (props.level ?? 0) < MAX_INDENT)
 const panel = computed(() => props.variant === 'panel')
 const to = computed(() => (props.root ? '/' : `/folder/${props.row.id}`))
 // Drawer rows are touch targets: 44 px tall with a 44 px chevron; the guide line runs under the parent's chevron.
-const chevronSize = computed(() => (panel.value ? 'size-[18px]' : 'size-11'))
-const actionSize = computed(() => (panel.value ? 'size-[22px] rounded-md' : 'size-8 rounded-lg'))
+// Radii follow the row's 14: the chevron sits at its edge in the drawer (14) and 4 px in on the panel (10).
+const chevronSize = computed(() => (panel.value ? 'size-[18px] rounded-chip' : 'size-11 rounded-field'))
+const actionSize = computed(() => (panel.value ? 'size-[22px] rounded-chip' : 'size-8 rounded-chip'))
 
 const locked = computed(() => !!state.readOnly || state.saving)
 const actions = computed(() => [
@@ -69,9 +80,9 @@ const pressHandlers = computed(() =>
     <!-- `group`: the row reveals its "+" and "⋯" (.row-action) on hover and focus. The count keeps its colour. -->
     <div
       :class="[
-        'group relative flex items-center gap-1.5 rounded-icon pr-2 text-sm font-semibold transition-colors duration-150',
+        'group relative flex items-center gap-1.5 rounded-field pr-2 text-sm font-semibold transition-colors duration-150',
         panel ? 'h-8 pl-1' : 'min-h-11',
-        row.current ? 'bg-accent-soft text-accent-soft-foreground' : 'text-icon hover:bg-hover hover:text-foreground',
+        row.current ? 'row-selected' : 'text-icon hover:bg-hover hover:text-foreground',
       ]"
     >
       <button
@@ -79,7 +90,7 @@ const pressHandlers = computed(() =>
         type="button"
         :class="[
           chevronSize,
-          'relative z-10 grid shrink-0 place-items-center rounded-md text-muted-foreground outline-none transition-colors duration-150 hover:bg-chip hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
+          'pressable relative z-10 grid shrink-0 place-items-center text-muted-foreground hover:text-accent-ink',
         ]"
         :aria-expanded="row.open"
         :aria-label="$t(row.open ? 'tree.collapse' : 'tree.expand', { name: row.name })"
@@ -96,13 +107,14 @@ const pressHandlers = computed(() =>
         :to="to"
         :aria-current="ariaCurrent"
         :class="[
-          'flex min-w-0 flex-1 items-center gap-1.5 self-stretch outline-none after:absolute after:inset-0 after:rounded-icon focus-visible:after:ring-2 focus-visible:after:ring-ring',
+          'flex min-w-0 flex-1 items-center gap-1.5 self-stretch outline-none after:absolute after:inset-0 after:rounded-field focus-visible:after:ring-2 focus-visible:after:ring-ring',
           root ? '' : 'select-none [-webkit-touch-callout:none]',
         ]"
         v-on="pressHandlers"
+        @click="click"
       >
         <Boxes v-if="root" class="size-4 shrink-0" aria-hidden="true" />
-        <Folder v-else :class="['size-4 shrink-0', row.current ? '' : 'text-primary']" aria-hidden="true" />
+        <Folder v-else :class="['size-4 shrink-0', row.current ? '' : 'text-accent-ink']" aria-hidden="true" />
         <span class="min-w-0 flex-1 truncate">{{ row.name }}</span>
       </NuxtLink>
       <template v-if="!root">
@@ -111,7 +123,7 @@ const pressHandlers = computed(() =>
             type="button"
             :class="[
               actionSize,
-              'grid place-items-center text-icon outline-none transition-colors duration-150 hover:bg-chip hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50',
+              'pressable grid place-items-center disabled:pointer-events-none disabled:opacity-50',
             ]"
             :aria-label="$t('folderMenu.newIn', { name: row.name })"
             :disabled="locked"
@@ -123,9 +135,10 @@ const pressHandlers = computed(() =>
         </span>
       </template>
       <span
-        :class="['shrink-0 text-xs font-bold tabular-nums', row.current ? 'text-accent-soft-foreground' : 'text-subtle-foreground']"
+        v-if="row.pieces !== null"
+        class="shrink-0 text-xs font-bold text-subtle-foreground tabular-nums"
       >
-        {{ row.itemCount }}
+        {{ piecesLabel(row.pieces) }}
       </span>
     </div>
     <ul

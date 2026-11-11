@@ -10,7 +10,7 @@ export interface UnitDef {
 }
 
 export const BUILTIN_UNITS: Record<'pcs' | 'm' | 'g' | 'l', UnitDef> = {
-  pcs: { key: 'pcs', name: 'Pieces', symbol: 'pcs', prefixPowers: [] },
+  pcs: { key: 'pcs', name: 'Pieces', symbol: 'pcs', prefixPowers: [3, 6] },
   m: { key: 'm', name: 'Meters', symbol: 'm', prefixPowers: [-3, -2, 3] },
   g: { key: 'g', name: 'Grams', symbol: 'g', prefixPowers: [-3, 3] },
   l: { key: 'l', name: 'Liters', symbol: 'l', prefixPowers: [-3] },
@@ -74,12 +74,13 @@ export function formatAmountParts(q: Quantity, unit: UnitDef): { number: string;
   const frac = (thousandths % 1000n).toString().padStart(3, '0').replace(/0+$/, '')
   const number = `${sign}${int}${frac ? `.${frac}` : ''}`
   const prefix = p === 0 ? '' : (SI_PREFIXES[p]?.symbol ?? '')
-  return { number, unit: `${prefix}${unit.symbol}` }
+  // Pieces show a bare prefix ("1.5k"), not "kpcs".
+  return { number, unit: unit.key === 'pcs' ? prefix || unit.symbol : `${prefix}${unit.symbol}` }
 }
 
 export function formatAmount(q: Quantity, unit: UnitDef): string {
   const { number, unit: symbol } = formatAmountParts(q, unit)
-  return `${number} ${symbol}`
+  return unit.key === 'pcs' && symbol !== unit.symbol ? `${number}${symbol}` : `${number} ${symbol}`
 }
 
 export function parseAmount(input: string, unit: UnitDef): Quantity | null {

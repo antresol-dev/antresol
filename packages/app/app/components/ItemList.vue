@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Id } from '@graymatter/core'
-import { Archive, Cpu, FolderInput, Pencil } from '@lucide/vue'
+import { Archive, FolderInput, Pencil } from '@lucide/vue'
 import type { ComponentPublicInstance } from 'vue'
 import type { ItemRow } from '~/lib/views'
 import type RowMenu from './RowMenu.vue'
@@ -36,16 +36,13 @@ function pointerdown(id: Id, e: PointerEvent): void {
   press.onPointerdown(e)
 }
 
+// The line under the name: the buckets of an item with variants ("1 kΩ 3 · 10 kΩ 100 · 100 kΩ — · +2"), else its description.
 const rows = computed(() =>
   props.items.map((item) => ({
     ...item,
-    sub: [
-      item.outOfStock ? t('item.outOfStock') : null,
-      item.description,
-      item.variantCount > 0 ? t('item.variants', item.variantCount) : null,
-    ]
-      .filter((x): x is string => !!x)
-      .join(' · '),
+    sub: item.buckets.length > 0 ? null : item.description,
+    // Many pieces carry a bare prefix that sticks to the number ("1.5k"); a unit symbol stands apart ("3 m").
+    unitGap: !/^[kM]$/.test(item.unit),
   })),
 )
 </script>
@@ -53,15 +50,16 @@ const rows = computed(() =>
 <template>
   <section class="grid gap-2">
     <h2 class="px-1 text-[13px] font-semibold text-subtle-foreground">{{ $t('folder.items', { count: items.length }) }}</h2>
-    <ul class="overflow-hidden rounded-card border border-border bg-surface py-1">
+    <!-- A flat list on the page: rows divided by lines, a row tile tinted under the pointer. -->
+    <ul>
       <li
         v-for="item in rows"
         :key="item.id"
-        class="group relative flex items-center transition-colors duration-150 hover:bg-hover not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-[68px] not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
+        class="group relative flex items-center rounded-field transition-colors duration-150 hover:bg-hover not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-[68px] not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
       >
         <NuxtLink
           :to="`/item/${item.id}`"
-          class="flex h-[62px] min-w-0 flex-1 items-center gap-3 px-3.5 outline-none select-none [-webkit-touch-callout:none] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+          class="flex h-[62px] min-w-0 flex-1 items-center gap-3 rounded-field px-3.5 select-none [-webkit-touch-callout:none]"
           @pointerdown="pointerdown(item.id, $event)"
           @pointermove="press.onPointermove"
           @pointerup="press.onPointerup"
@@ -69,20 +67,29 @@ const rows = computed(() =>
           @contextmenu="press.onContextmenu"
           @click.capture="press.onClickCapture"
         >
-          <span class="flex size-[42px] shrink-0 items-center justify-center overflow-hidden rounded-thumb bg-thumb text-thumb-foreground">
-            <PhotoImg v-if="item.coverUrl" :url="item.coverUrl" size="thumb" alt="" class="size-full object-cover" />
-            <Cpu v-else class="size-5" stroke-width="1.75" aria-hidden="true" />
-          </span>
+          <ItemThumb :name="item.name" :cover-url="item.coverUrl" class="size-[42px] rounded-thumb text-[15px]" />
           <span class="flex min-w-0 grow flex-col gap-0.5">
-            <span class="truncate text-[15px] font-bold" :class="item.outOfStock && 'text-dimmed-foreground'">{{ item.name }}</span>
-            <span v-if="item.sub" class="truncate text-[13px] text-muted-foreground">{{ item.sub }}</span>
+            <span class="flex min-w-0 items-center gap-1.5">
+              <span class="min-w-[min(7.5rem,100%)] truncate text-[15px] font-bold" :class="item.outOfStock && 'text-dimmed-foreground'">{{ item.name }}</span>
+              <span
+                v-for="(value, i) in item.pinned"
+                :key="i"
+                class="max-w-32 min-w-0 shrink truncate rounded-chip bg-chip px-1.5 py-px text-xs font-semibold text-subtle-foreground"
+              >{{ value }}</span>
+            </span>
+            <span v-if="item.buckets.length > 0" class="truncate text-[13px] text-muted-foreground">
+              <template v-for="(b, i) in item.buckets" :key="i"><template v-if="i > 0"> · </template>{{ b.label ?? $t('item.noVariant') }}
+                <span class="font-semibold tabular-nums" :class="b.empty ? '' : 'text-foreground'">{{ b.empty ? '—' : b.number }}</span></template>
+              <template v-if="item.moreBuckets > 0"> · {{ $t('list.more', { count: item.moreBuckets }) }}</template>
+            </span>
+            <span v-else-if="item.sub" class="truncate text-[13px] text-muted-foreground">{{ item.sub }}</span>
           </span>
           <span
-            class="shrink-0 text-base font-bold tabular-nums"
-            :class="item.outOfStock && 'text-muted-foreground'"
-          >
-            {{ item.number }}
-            <span class="text-xs font-semibold text-muted-foreground">{{ item.unit }}</span>
+            v-if="item.outOfStock"
+            class="shrink-0 rounded-chip bg-chip px-2 py-0.5 text-xs font-bold text-subtle-foreground"
+          >{{ $t('list.out') }}</span>
+          <span v-else class="shrink-0 text-base font-bold tabular-nums">
+            {{ item.number }}<span v-if="item.unit" class="text-xs font-semibold text-muted-foreground" :class="item.unitGap && 'ml-0.5'">{{ item.unit }}</span>
           </span>
         </NuxtLink>
         <!-- Always in the layout where it can show (hidden only on touch below 1024 px), so the number never moves. -->

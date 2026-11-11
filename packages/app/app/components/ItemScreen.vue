@@ -1,13 +1,17 @@
 <script setup lang="ts">
-import { newId, variantLabel, type Id } from '@graymatter/core'
+import { variantLabel, type Id } from '@graymatter/core'
 import { Plus } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { toast } from 'vue-sonner'
 import type { StockTarget } from '~/components/StockSheet.vue'
 import type { LooseOffer, VariantsAdded } from '~/components/VariantsForm.vue'
+import { lastCounted } from '~/lib/counted'
 import { errorMessageKey } from '~/lib/errors'
-import { itemView } from '~/lib/item-view'
-import { quickStep, type StockMode } from '~/lib/stock-forms'
+import { bucketDescription, itemView } from '~/lib/item-view'
+import { archiveNow } from '~/lib/undo'
+import { shopLinks } from '~/lib/share'
+import type { StockMode } from '~/lib/stock-forms'
+import { pinnedValues } from '~/lib/views'
 
 const props = defineProps<{ itemId: string; variantId: string | null }>()
 
@@ -47,18 +51,16 @@ function retry(): void {
   void workspace.refresh().catch(() => {})
 }
 
-// Stock movements: "−" and "+" write at once, the other actions open the sheet.
+// Stock movements: "−" and "+" add up in each bucket's deferred stepper (one movement 2 s after the last press); the
+// other actions open the sheet. Count starts from the quantity the bucket shows, the pending delta included.
+const steppers = useItemSteppers(() => props.itemId)
 const stockTarget = ref<StockTarget | null>(null)
 const openStock = (mode: StockMode, variantId: string | null): void => {
-  stockTarget.value = { mode, variantId }
+  stockTarget.value = { mode, variantId, amount: mode === 'set' ? steppers.of(variantId).projected.value : undefined }
 }
-async function step(kind: 'plus' | 'minus', variantId: string | null): Promise<void> {
-  try {
-    await workspace.apply(quickStep(kind, { itemId: props.itemId, variantId }))
-  } catch (e) {
-    toast.error(t(errorMessageKey(e)))
-  }
-}
+const countedAt = computed(() =>
+  snapshot.value && view.value ? lastCounted(snapshot.value, props.itemId, view.value.buckets.map((b) => b.variantId)) : null,
+)
 
 // Variants: add in bulk (and offer the loose stock to the first of them), rename, archive.
 const locked = computed(() => !!state.readOnly || state.saving)
@@ -72,9 +74,8 @@ function added(a: VariantsAdded): void {
   if (a.offer) looseOffer.value = { offer: a.offer, variants: created }
 }
 const renameId = ref<Id | null>(null)
-const archiveId = ref<Id | null>(null)
-// The variant the open sheet is about, kept while the sheet animates out.
-const sheetVariant = shallowRef<{ id: Id; name: string } | null>(null)
+// The line at the top of a variant's sheets (see bucketDescription).
+const describe = (variantId: Id | null): string => (snapshot.value ? bucketDescription(snapshot.value, props.itemId, variantId) : '')
 const variantOf = (id: Id) => snapshot.value?.variants.find((v) => v.id === id) ?? null
 const renaming = computed(() => (renameId.value ? variantOf(renameId.value) : null))
 const renameOpen = computed({
@@ -83,31 +84,11 @@ const renameOpen = computed({
     if (!open) renameId.value = null
   },
 })
-const archiveOpen = computed({
-  get: () => archiveId.value !== null,
-  set: (open: boolean) => {
-    if (!open) archiveId.value = null
-  },
-})
-const archiveBusy = ref(false)
 function askArchive(id: Id): void {
   const v = variantOf(id)
-  if (!v) return
-  sheetVariant.value = { id, name: variantLabel(snapshot.value!, v) }
-  archiveId.value = id
-}
-async function archiveVariant(): Promise<void> {
-  const id = archiveId.value
-  if (!id || archiveBusy.value) return
-  archiveBusy.value = true
-  try {
-    await workspace.apply({ type: 'archive', target: 'variant', id, archiveId: newId() })
-    archiveId.value = null
-  } catch (e) {
-    toast.error(t(errorMessageKey(e)))
-  } finally {
-    archiveBusy.value = false
-  }
+  if (!v || locked.value) return
+  // No question: the toast offers Undo.
+  void archiveNow('variant', id, variantLabel(snapshot.value!, v)).catch((e) => toast.error(t(errorMessageKey(e))))
 }
 
 // Variant photo: one per variant, uploaded and swapped in by setVariantPhoto.
@@ -211,9 +192,13 @@ async function removeAttribute(): Promise<void> {
   }
 }
 
+// The values shown in lists ("Show in lists") at the top of the card, and shop searches by the name (spec 4.10, 4.11).
+const pinned = computed(() => (snapshot.value && view.value ? pinnedValues(snapshot.value, props.itemId) : []))
+const shops = computed(() => (view.value ? shopLinks(view.value.item.name) : []))
+
 const highlight = computed(() => (view.value?.hasVariants ? props.variantId : null))
 const linkClass =
-  'min-h-11 content-center rounded-md text-sm font-semibold text-primary underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring'
+  'min-h-11 content-center rounded-chip text-sm font-semibold text-accent-ink underline-offset-4 hover:underline'
 </script>
 
 <template>
@@ -225,6 +210,11 @@ const linkClass =
   <ScreenBody>
     <template v-if="view && snapshot">
       <StockSheet :view="view" :target="stockTarget" @close="stockTarget = null" />
+      <ul v-if="pinned.length > 0" class="-mt-1 flex min-w-0 flex-wrap gap-1.5" :aria-label="$t('list.pinned')">
+        <li v-for="(value, i) in pinned" :key="i" class="max-w-full truncate rounded-chip bg-chip px-2 py-0.5 text-[13px] font-semibold text-subtle-foreground">
+          {{ value }}
+        </li>
+      </ul>
       <ItemGallery :item-id="itemId" :photos="view.photos" />
       <div v-if="view.item.description || view.tags.length > 0" class="grid min-w-0 gap-2.5">
         <p v-if="view.item.description" class="text-[15px] whitespace-pre-line text-muted-foreground wrap-anywhere">
@@ -242,11 +232,12 @@ const linkClass =
       </div>
       <StockCard
         :total="view.total"
-        :unit-symbol="view.unit.symbol"
+        :unit="view.unit"
         :currency="view.currency"
-        :controls="!view.hasVariants"
-        @step="(kind) => step(kind, null)"
+        :stepper="view.hasVariants ? null : steppers.of(null)"
+        :counted-at="countedAt"
         @open="(mode) => openStock(mode, null)"
+        @count="openStock('set', null)"
       />
       <div v-if="view.hasVariants || view.axes.length > 0" class="grid min-w-0 grid-cols-1">
       <ItemAxes :view="view" />
@@ -254,7 +245,8 @@ const linkClass =
         v-if="view.hasVariants"
         :buckets="view.buckets"
         :highlight="highlight"
-        @step="step"
+        :stepper-of="steppers.of"
+        :unit="view.unit"
         @open="openStock"
         @rename="(id) => (renameId = id)"
         @attributes="(id) => (valuesId = id)"
@@ -262,7 +254,7 @@ const linkClass =
         @archive="askArchive"
       />
       </div>
-      <Button variant="outline" class="h-11 justify-self-start rounded-field bg-surface px-4 font-bold" :disabled="locked" @click="addOpen = true">
+      <Button variant="outline" class="h-11 justify-self-start px-4.5 font-bold" :disabled="locked" @click="addOpen = true">
         <Plus class="size-5" aria-hidden="true" />
         {{ $t('variantsForm.open') }}
       </Button>
@@ -275,13 +267,20 @@ const linkClass =
         :variants="looseOffer?.variants ?? []"
         @close="looseOffer = null"
       />
-      <AppSheet v-model:open="renameOpen" :title="$t('item.editVariant')" :locked="renameBusy" initial-focus="#variant-name">
+      <AppSheet
+        v-model:open="renameOpen"
+        :title="$t('item.editVariant')"
+        :summary="describe(renameId)"
+        :locked="renameBusy"
+        initial-focus="#variant-name"
+      >
         <VariantForm v-if="renaming" :key="renaming.id" v-model:busy="renameBusy" :variant="renaming" @done="renameId = null" />
       </AppSheet>
       <AppSheet
         v-model:open="photoOpen"
         :title="$t('photos.variantTitle', { name: photoVariant?.name ?? '' })"
         :description="$t('photos.variantHint')"
+        :summary="describe(photoVariant?.id ?? null)"
         :locked="photoBusy"
       >
         <div v-if="!hasStore" class="grid py-2">
@@ -296,15 +295,6 @@ const linkClass =
         </div>
         <PhotoPicker v-else class="py-3" :disabled="photoBusy || locked" @pick="pickVariantPhoto" />
       </AppSheet>
-      <ConfirmSheet
-        v-model:open="archiveOpen"
-        :title="$t('variantMenu.archiveTitle')"
-        :description="$t('variantMenu.archiveConfirm', { name: sheetVariant?.name ?? '' })"
-        :confirm-label="$t(archiveBusy ? 'status.saving' : 'variantMenu.archive')"
-        :busy="archiveBusy"
-        destructive
-        @confirm="archiveVariant"
-      />
       <ItemAttributes
         :attributes="view.attributes"
         @add="openAttribute(null)"
@@ -332,6 +322,12 @@ const linkClass =
       />
       <AttributeValueSheet :view="view" :open="attributeOpen" :attribute-id="attributeId" @close="attributeOpen = false" />
       <VariantValuesSheet :view="view" :variant-id="valuesId" @close="valuesId = null" />
+      <nav class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5" :aria-label="$t('shops.title')">
+        <span class="text-sm font-semibold text-subtle-foreground">{{ $t('shops.title') }}</span>
+        <a v-for="shop in shops" :key="shop.name" :href="shop.url" target="_blank" rel="noopener noreferrer" :class="linkClass">
+          {{ shop.name }}
+        </a>
+      </nav>
       <JournalList :item-id="itemId" />
     </template>
     <EmptyState v-else-if="snapshot || blocker?.kind === 'gone'" :text="$t('empty.itemGone')">
@@ -340,7 +336,7 @@ const linkClass =
       </NuxtLink>
     </EmptyState>
     <EmptyState v-else-if="blocker?.kind === 'offline'" :text="$t('empty.offlineNoCopy')">
-      <Button variant="outline" class="h-11 rounded-field bg-surface" @click="retry">{{ $t('status.retry') }}</Button>
+      <Button variant="outline" class="h-11" @click="retry">{{ $t('status.retry') }}</Button>
     </EmptyState>
     <EmptyState
       v-else-if="blocker?.kind === 'error'"

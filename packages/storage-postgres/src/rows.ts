@@ -112,6 +112,7 @@ export const toAttribute = (r: Row): Attribute => ({
   options: (r.options as string[] | null) ?? [],
   unit: (r.unit as string | null) ?? '',
   siPrefixes: r.si_prefixes === true,
+  pinned: r.pinned === true,
   ...audited(r),
 })
 
@@ -178,4 +179,5 @@ export const toStockLine = (r: Row): StockLine => ({
           quantity: toQuantity(r.last_quantity),
           at: toIso(r.last_at),
         },
+  lastCountedAt: r.last_counted_at === null || r.last_counted_at === undefined ? null : toIso(r.last_counted_at),
 })

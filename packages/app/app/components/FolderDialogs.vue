@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { newId, type Folder } from '@graymatter/core'
+import type { Folder } from '@graymatter/core'
 import { toast } from 'vue-sonner'
 import type { FolderDialog } from '~/composables/useDialogs'
 import { errorMessageKey } from '~/lib/errors'
 import { showsInside } from '~/lib/shell'
+import { archiveNow, focusHeadingIfLost } from '~/lib/undo'
 import { folderView } from '~/lib/views'
 
 // The folder sheets for the whole app: header buttons, row menus and the tree open them through useFolderDialog().
@@ -32,6 +33,8 @@ watch(
     folder.value = (s && folderView(s, d.folderId)?.folder) ?? null
     // Gone meanwhile (archived on another device): nothing to act on.
     if (!folder.value) close()
+    // Archiving needs no question: it runs at once and the toast offers Undo.
+    else if (d.kind === 'archive') void archive()
   },
   { immediate: true },
 )
@@ -45,7 +48,6 @@ const openWhen = (kinds: FolderDialog['kind'][]) =>
   })
 const formOpen = openWhen(['create', 'rename'])
 const moveOpen = openWhen(['move'])
-const archiveOpen = openWhen(['archive'])
 
 const renaming = computed(() => shown.value?.kind === 'rename')
 const parentId = computed(() => (shown.value?.kind === 'create' ? shown.value.parentId : null))
@@ -65,15 +67,15 @@ useCloseOnSwitch(() => state.current, close, () => formBusy.value || archiving.v
 
 async function archive(): Promise<void> {
   const target = folder.value
+  close()
   if (!target || archiving.value) return
   // Decided on the snapshot before the archive: afterwards the folder and its subtree are gone from it.
   const leave = showsInside(state.snapshot, typeof route.name === 'string' ? route.name : null, route.params, target.id)
   archiving.value = true
   let archived = false
   try {
-    await workspace.apply({ type: 'archive', target: 'folder', id: target.id, archiveId: newId() })
+    await archiveNow('folder', target.id, target.name)
     archived = true
-    close()
   } catch (e) {
     toast.error(t(errorMessageKey(e)))
   } finally {
@@ -81,6 +83,7 @@ async function archive(): Promise<void> {
   }
   // The open screen showed the folder, something inside it or an item in it: go to its parent.
   if (archived && leave) await router.push(target.parentId === null ? '/' : `/folder/${target.parentId}`)
+  if (archived) focusHeadingIfLost()
 }
 </script>
 
@@ -102,13 +105,4 @@ async function archive(): Promise<void> {
     />
   </AppSheet>
   <MoveFolderSheet v-if="folder && shown?.kind === 'move'" v-model:open="moveOpen" v-model:busy="moving" :folder-id="folder.id" />
-  <ConfirmSheet
-    v-model:open="archiveOpen"
-    :title="$t('folderMenu.archiveTitle')"
-    :description="$t('folderMenu.archiveConfirm', { name: folder?.name ?? '' })"
-    :confirm-label="$t(archiving ? 'status.saving' : 'folderMenu.archive')"
-    :busy="archiving"
-    destructive
-    @confirm="archive"
-  />
 </template>

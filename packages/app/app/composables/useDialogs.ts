@@ -38,12 +38,14 @@ export function useItemDialog(): { dialog: Ref<ItemDialog | null>; open(d: ItemD
 export interface QuickAddState {
   name: string
   folderId: Id | null
+  /** "Where bought", filled in from a shared link. */
+  url: string
 }
 
 /** Opens the quick add sheet; the folder defaults to the screen's folder (treeCurrent; 'root' and null → the root). */
 export function useQuickAdd(): {
   state: Ref<QuickAddState | null>
-  open(prefill?: { name?: string; folderId?: Id | null }): void
+  open(prefill?: { name?: string; folderId?: Id | null; url?: string }): void
   close(): void
 } {
   const state = useState<QuickAddState | null>('quick-add', () => null)
@@ -56,6 +58,7 @@ export function useQuickAdd(): {
       state.value = {
         name: prefill.name ?? '',
         folderId: prefill.folderId !== undefined ? prefill.folderId : current === 'root' || current === null ? null : current,
+        url: prefill.url ?? '',
       }
     },
     close: () => {

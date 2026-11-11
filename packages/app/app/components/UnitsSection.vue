@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { SI_PREFIXES, type CustomUnit, type UnitDef } from '@graymatter/core'
+import type { CustomUnit, UnitDef } from '@graymatter/core'
 import { Pencil, Plus, Trash2 } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
 import { errorMessageKey } from '~/lib/errors'
+import { prefixList } from '~/lib/prefixes'
 
 type Row = { unit: UnitDef; custom: CustomUnit | null; itemCount: number }
 defineProps<{ rows: Row[] }>()
@@ -42,13 +43,6 @@ function select(row: Row, key: string): void {
   if (!row.custom) return
   open(key === 'edit' ? { kind: 'form', unit: row.custom } : { kind: 'delete', unit: row.custom })
 }
-/** "mm, cm, km": the unit's symbol with each prefix, in ascending power. */
-const prefixList = (u: UnitDef): string =>
-  [...u.prefixPowers]
-    .sort((a, b) => a - b)
-    .map((p) => `${SI_PREFIXES[p]?.symbol ?? ''}${u.symbol}`)
-    .join(', ')
-
 async function remove(): Promise<void> {
   const cur = target.value
   if (locked.value || !cur || cur.kind !== 'delete') return
@@ -70,12 +64,12 @@ async function remove(): Promise<void> {
   <section class="grid min-w-0 gap-2" aria-labelledby="dictionaries-units">
     <div class="flex min-h-11 items-center justify-between gap-2 px-1">
       <h2 id="dictionaries-units" class="text-[13px] font-semibold text-subtle-foreground">{{ $t('dictionaries.units') }}</h2>
-      <Button variant="outline" class="h-11 rounded-field bg-surface" :disabled="locked" @click="open({ kind: 'form', unit: null })">
+      <Button variant="outline" class="h-11" :disabled="locked" @click="open({ kind: 'form', unit: null })">
         <Plus class="size-4" aria-hidden="true" />
         {{ $t('dictionaries.addUnit') }}
       </Button>
     </div>
-    <ul class="rounded-card border border-border bg-surface py-1">
+    <ul>
       <li
         v-for="row in rows"
         :key="row.unit.key"

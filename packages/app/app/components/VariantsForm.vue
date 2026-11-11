@@ -29,6 +29,14 @@ const emit = defineEmits<{ done: [added: VariantsAdded] }>()
 const workspace = useWorkspace()
 const { state } = workspace
 const { add: addAxisTo } = useAddAxis()
+const { ids, renew } = useCommandIds(['attributeId', 'firstVariantId'])
+// One id per new variant line, kept across retries; dropped after a success.
+const lineIds = new Map<string, Id>()
+const lineId = (key: string): Id => {
+  let id = lineIds.get(key)
+  if (!id) lineIds.set(key, (id = newId()))
+  return id
+}
 
 // The sheet around the form locks while this is set.
 const busy = defineModel<boolean>('busy', { default: false })
@@ -65,7 +73,7 @@ async function addAxis(): Promise<void> {
   errorKey.value = null
   try {
     if (showCreate.value) {
-      attributeId = newId()
+      attributeId = ids.attributeId
       await workspace.apply({
         type: 'attribute.create',
         id: attributeId,
@@ -80,7 +88,8 @@ async function addAxis(): Promise<void> {
     if (attributeId === null) return
     // The new axis shows the values step by itself once the snapshot has it. A shared value that became the first variant,
     // on an item with stock outside variants, ends here instead: the stock offer goes with it.
-    const first = await addAxisTo(props.itemId, attributeId)
+    const first = await addAxisTo(props.itemId, attributeId, ids.firstVariantId)
+    renew()
     if (first) emit('done', { created: first.variants.map((v) => ({ id: v.id, label: v.name })), offer: first.offer })
   } catch (e) {
     errorKey.value = errorMessageKey(e)
@@ -102,7 +111,7 @@ async function submit(): Promise<void> {
   if (!canSubmit.value || !snapshot) return
   // Decided before the write: afterwards the item has variants and no offer.
   const offer = looseTransferOffer(snapshot, props.itemId)
-  const created = fresh.value.map((l) => ({ id: newId(), label: l.label ?? '', values: l.values ?? [] }))
+  const created = fresh.value.map((l) => ({ id: lineId(JSON.stringify(l.values ?? [])), label: l.label ?? '', values: l.values ?? [] }))
   busy.value = true
   errorKey.value = null
   try {
@@ -111,6 +120,7 @@ async function submit(): Promise<void> {
       itemId: props.itemId,
       variants: created.map((c) => ({ id: c.id, values: c.values })),
     })
+    lineIds.clear()
     emit('done', { created: created.map((c) => ({ id: c.id, label: c.label })), offer })
   } catch (e) {
     errorKey.value = errorMessageKey(e)
@@ -139,7 +149,7 @@ async function restore(archiveId: Id): Promise<void> {
     <div v-if="!showCreate" class="grid gap-1.5">
       <Label for="variants-axis">{{ $t('variantsForm.axis') }}</Label>
       <Select v-model="picked" :disabled="busy">
-        <SelectTrigger id="variants-axis" class="h-11 w-full rounded-field bg-surface">
+        <SelectTrigger id="variants-axis" class="h-11 w-full">
           <SelectValue :placeholder="$t('variantsForm.axisPlaceholder')" />
         </SelectTrigger>
         <SelectContent>
@@ -153,19 +163,19 @@ async function restore(archiveId: Id): Promise<void> {
     <template v-else>
       <div class="grid gap-1.5">
         <Label for="variants-axis-name">{{ $t('form.name') }}</Label>
-        <Input id="variants-axis-name" v-model="newName" autocomplete="off" class="h-11 rounded-field bg-surface" />
+        <Input id="variants-axis-name" v-model="newName" autocomplete="off" class="h-11" />
       </div>
       <div class="grid gap-1.5">
         <Label id="variants-axis-kind">{{ $t('attributeForm.type') }}</Label>
         <RadioGroup
           v-model="newKind"
           aria-labelledby="variants-axis-kind"
-          class="grid grid-cols-3 gap-0.5 rounded-field border border-border bg-background p-1"
+          class="grid grid-cols-3 gap-0.5 rounded-field border border-input bg-field p-1"
         >
           <label
             v-for="k in kinds"
             :key="k"
-            class="flex min-h-11 cursor-pointer items-center gap-2 rounded-sm px-2 text-sm transition-colors duration-150 hover:bg-hover"
+            class="flex min-h-11 cursor-pointer items-center gap-2 rounded-chip px-2 text-sm transition-colors duration-150 hover:bg-hover"
           >
             <RadioGroupItem :value="k" />
             {{ $t(kindLabel[k]) }}
@@ -174,7 +184,7 @@ async function restore(archiveId: Id): Promise<void> {
       </div>
       <div v-if="newKind === 'enum'" class="grid gap-1.5">
         <Label for="variants-axis-options">{{ $t('attributeForm.options') }}</Label>
-        <Textarea id="variants-axis-options" v-model="newOptions" rows="3" autocomplete="off" class="rounded-field bg-surface" />
+        <Textarea id="variants-axis-options" v-model="newOptions" rows="3" autocomplete="off" />
         <p class="text-[13px] text-subtle-foreground">{{ $t('attributeForm.hint') }}</p>
       </div>
       <template v-if="newKind === 'number'">
@@ -183,7 +193,7 @@ async function restore(archiveId: Id): Promise<void> {
             {{ $t('variantsForm.unit') }}
             <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
           </Label>
-          <Input id="variants-axis-unit" v-model="newUnit" autocomplete="off" class="h-11 rounded-field bg-surface" />
+          <Input id="variants-axis-unit" v-model="newUnit" autocomplete="off" class="h-11" />
         </div>
         <label class="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm font-semibold">
           {{ $t('variantsForm.siPrefixes') }}
@@ -216,7 +226,6 @@ async function restore(archiveId: Id): Promise<void> {
         :placeholder="placeholder"
         :aria-invalid="hasError || errorKey ? true : undefined"
         aria-describedby="variants-hint variants-preview variants-error"
-        class="rounded-field bg-surface"
       />
       <p id="variants-hint" class="text-[13px] text-subtle-foreground">
         {{ axes.length > 1 ? $t('variantsForm.hintMany', { axes: axes.map((a) => a.name).join('; ') }) : $t('variantsForm.hintOne', { axis: axes[0]?.name ?? '' }) }}

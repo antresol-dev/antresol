@@ -31,7 +31,11 @@
     "confirmInventory": "Inventory “{name}” and everything in it will be deleted for good. This can’t be undone."
   },
   "update": { "available": "New version available", "reload": "Reload", "offlineReady": "Ready to work offline" },
-  "tree": { "expand": "Expand {name}", "collapse": "Collapse {name}" },
+  "updateBanner": {
+    "title": "Update to keep editing",
+    "text": "A newer GrayMatter updated this source. Changes are off until this app updates."
+  },
+  "tree": { "expand": "Expand {name}", "collapse": "Collapse {name}", "resize": "Resize the folder tree" },
   "search": {
     "label": "Search",
     "field": "Search {name}",
@@ -59,8 +63,6 @@
     "variants": "{count} variant | {count} variants",
     "tags": "Tags",
     "stock": "Stock",
-    "avgPrice": "avg {price} / {unit}",
-    "lastPrice": "last {price} / {unit}",
     "variantsTitle": "Variants",
     "noVariant": "No variant",
     "attributes": "Attributes",
@@ -100,7 +102,10 @@
     "hint": "One per line or separated by commas: DIP-8, SOIC-8",
     "optionsRequired": "Add at least one option.",
     "create": "Create",
-    "save": "Save"
+    "save": "Save",
+    "showInLists": "Show in lists",
+    "showInListsHint": "Its value shows next to item names in lists, search and on the item card.",
+    "pinnedFull": "Two attributes already show in lists. Turn one off to show this one."
   },
   "axes": {
     "by": "by {axes}",
@@ -141,12 +146,16 @@
     },
     "moved": "Moved from {from} to {to}",
     "whereBought": "Where bought",
-    "newTab": "(opens in a new tab)"
+    "newTab": "(opens in a new tab)",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "counted": "Counted",
+    "balance": "→ {amount}"
   },
   "form": { "name": "Name", "description": "Description", "optional": "Optional" },
   "stockForm": {
-    "title": { "receive": "Receive", "use": "Use", "set": "Set quantity", "transfer": "Move stock" },
-    "submit": { "receive": "Receive", "use": "Use", "set": "Set quantity", "transfer": "Move" },
+    "title": { "receive": "Receive", "use": "Use", "set": "Count", "transfer": "Move stock" },
+    "submit": { "receive": "Receive", "use": "Use", "set": "Save count", "transfer": "Move" },
     "amount": "Amount",
     "actual": "Actual quantity",
     "moveTo": "Move to",
@@ -204,7 +213,7 @@
     "busy": "Wait for the current change to finish, then retry.",
     "uploading": "Uploading photo {n} of {total}",
     "progress": "{n} / {total}",
-    "noStore": "Add an Uploadcare public key in this source’s settings to attach photos",
+    "noStore": "Set up a photo store in this source’s settings to attach photos",
     "noStoreLink": "Open source settings",
     "viewer": "Photos",
     "counter": "{n} / {total}",
@@ -218,14 +227,16 @@
     "variantTitle": "Photo for {name}",
     "variantHint": "One photo per variant. A new photo replaces the current one."
   },
+  "undo": {
+    "action": "Undo",
+    "archived": "“{name}” archived"
+  },
   "variantMenu": {
     "rename": "Rename",
     "attributes": "Attribute values",
     "archive": "Archive variant",
     "photo": "Photo…",
-    "renameTitle": "Rename variant",
-    "archiveTitle": "Archive variant?",
-    "archiveConfirm": "Variant “{name}” moves to the archive with its stock and history."
+    "renameTitle": "Rename variant"
   },
   "looseTransfer": {
     "title": "Move {number} {unit} without a variant into a variant?",
@@ -240,9 +251,49 @@
     "addOneOf": "Add one of {name}",
     "receive": "Receive",
     "use": "Use",
-    "setQuantity": "Set quantity",
-    "moveTo": "Move to…",
-    "moreFor": "More stock actions"
+    "moveTo": "Move to…"
+  },
+  "stock": {
+    "count": "Count",
+    "countAmount": "{amount}, count",
+    "counted": "Counted {when}",
+    "avgEach": "avg {price} ea",
+    "avgPer": "avg {price} / {unit}",
+    "last": "last {price}",
+    "undo": "Undo",
+    "retry": "Retry",
+    "discard": "Discard",
+    "pending": "{delta} → {total}",
+    "notSaved": "Not saved:",
+    "notSavedFor": "{delta} for {name} was not saved",
+    "notConfirmed": "Not confirmed:",
+    "notConfirmedFor": "{delta} for {name} was not confirmed",
+    "retrySafe": "The source didn’t answer, so it may be saved already. Retry won’t add it twice."
+  },
+  "countFolder": {
+    "menu": "Count this folder",
+    "title": "Count {name}",
+    "hint": "Type what you count; Enter goes to the next row. Changed rows are marked and saved with Apply.",
+    "empty": "No items in this folder to count.",
+    "back": "Back to the folder",
+    "gone": "This folder is not here any more.",
+    "field": "Count of {name}",
+    "was": "was {amount}",
+    "invalid": "Enter a number, like 37 or 1.5k.",
+    "notSaved": "Not saved: {reason}",
+    "notConfirmed": "Not confirmed: {reason} Applying again is safe.",
+    "apply": "Apply | Apply {count} change | Apply {count} changes",
+    "saving": "Saving {done} of {total}…",
+    "stopped": "Stopped: {count} change is not saved yet. | Stopped: {count} changes are not saved yet.",
+    "fixFirst": "Fix {count} entry first. | Fix {count} entries first.",
+    "saved": "Saved {count} count | Saved {count} counts",
+    "leave": "Leave without saving your counts?"
+  },
+  "unconfirmed": {
+    "hint": "Not confirmed: the source didn’t answer, so this may be saved already. Retry is safe: it won’t be saved twice.",
+    "retry": "Retry",
+    "close": "Close",
+    "probablySaved": "The first attempt was probably saved — check the numbers."
   },
   "empty": {
     "noInventories": "Create your first inventory",
@@ -260,7 +311,6 @@
     "offline": "Offline. Showing the copy from {time}. Changes are off.",
     "offlineNoCopy": "Offline. Changes are off.",
     "retry": "Retry",
-    "schemaNewer": "Updated by a newer GrayMatter. Update the app to make changes.",
     "sourceError": "Can’t open {source}: {reason}",
     "fix": "Fix",
     "notPersistent": "This browser won’t keep your sources after it closes.",
@@ -325,8 +375,74 @@
       "title": "Appearance",
       "system": "System",
       "light": "Light",
-      "dark": "Dark"
+      "dark": "Dark",
+      "accent": "Accent",
+      "accents": {
+        "indigo": "Indigo",
+        "violet": "Violet",
+        "blue": "Blue",
+        "sky": "Sky",
+        "teal": "Teal",
+        "green": "Green",
+        "orange": "Orange",
+        "rose": "Rose",
+        "pink": "Pink",
+        "slate": "Slate"
+      }
     }
+  },
+  "backup": {
+    "title": "Backup",
+    "lastNever": "No backup yet",
+    "lastJustNow": "Last backup: just now",
+    "lastHours": "Last backup: {count} h ago",
+    "lastDays": "Last backup: {count} day ago | Last backup: {count} days ago",
+    "restore": "Restore from backup…",
+    "restoreTitle": "Restore from backup",
+    "restoreDescription": "Writes a backup file into “{name}”. Nothing already there is changed or deleted.",
+    "chooseFile": "Choose file…",
+    "chooseOther": "Choose another file…",
+    "inventories": "{count} inventory | {count} inventories",
+    "items": "{count} item | {count} items",
+    "movements": "{count} movement | {count} movements",
+    "exported": "Exported {date} from “{name}”",
+    "problem": {
+      "format": "This file is not a GrayMatter backup, or it is damaged.",
+      "version": "This version of GrayMatter can’t read this backup file.",
+      "newer_schema": "This backup was made by a newer GrayMatter. Update the app to restore it.",
+      "prerelease": "This backup was made by a pre-release version of GrayMatter and can’t be restored."
+    },
+    "mode": "How to restore",
+    "sameIds": "With the same ids",
+    "sameIdsHint": "Into this empty source, as before the data was lost: everything keeps its ids.",
+    "sameIdsBlocked": "Only into an empty source: this one holds inventories.",
+    "sameIdsResume": "Goes on with the restore of this file that didn’t finish.",
+    "newIds": "As new inventories",
+    "newIdsHint": "Next to what the source holds, with new ids and “(restored)” after their names.",
+    "start": "Restore",
+    "restoring": "Restoring…",
+    "running": "{done} of {total} records",
+    "unfinished": "This restore didn’t finish — run it again to complete it.",
+    "restoredBefore": "This file was restored here before: restoring it again adds another copy.",
+    "again": "Run it again to finish: nothing is added twice.",
+    "restored": "Restored {count} inventory | Restored {count} inventories",
+    "restoredRows": "Restore finished: {count} record added | Restore finished: {count} records added",
+    "restoredNothing": "Nothing to add: everything in this file is already here.",
+    "restoredName": "{name} (restored)",
+    "open": "Open",
+    "remind": "Time to back up “{name}”",
+    "remindAction": "Back up"
+  },
+  "diagnostics": {
+    "title": "Diagnostics",
+    "hint": "The last errors this device saw. Connection strings and keys are never kept here.",
+    "empty": "No errors.",
+    "copy": "Copy",
+    "share": "Share",
+    "clear": "Clear",
+    "copied": "Copied",
+    "copyFailed": "Could not copy",
+    "traffic": "~{used} of {limit} this month (this device)"
   },
   "sourceForm": {
     "newTitle": "Add source",
@@ -337,6 +453,16 @@
     "connectionStringHint": "Paste it from the Neon console: Connect → connection string",
     "show": "Show connection string",
     "hide": "Hide connection string",
+    "photoStore": "Photo store",
+    "photoStoreHint": "Where new photos are uploaded. Photos already uploaded stay with their own store. Keys stay on this device.",
+    "store": { "uploadcare": "Uploadcare", "cloudinary": "Cloudinary", "imgur": "Imgur" },
+    "cloudinaryCloud": "Cloudinary cloud name",
+    "cloudinaryPreset": "Unsigned upload preset",
+    "cloudinaryHint": "Create an unsigned upload preset in your Cloudinary settings; the cloud name is on the dashboard.",
+    "cloudinaryLink": "Open the Cloudinary upload presets",
+    "imgurClientId": "Imgur Client-ID",
+    "imgurHint": "Register an application (anonymous usage, no callback needed) and paste its Client-ID.",
+    "imgurLink": "Register an Imgur application",
     "uploadcareKey": "Uploadcare public key",
     "uploadcareKeyHint": "Public key from your Uploadcare project. Turn signed uploads off; files are stored permanently.",
     "uploadcareKeyLink": "Open the Uploadcare dashboard",
@@ -351,6 +477,9 @@
       "not_postgres_url": "This isn’t a Postgres connection string. It should start with postgresql://",
       "missing_password": "The connection string has a missing password.",
       "missing_database": "The connection string has a missing database name.",
+      "cloudinaryCloud": "Enter the Cloudinary cloud name, or clear the preset too.",
+      "cloudinaryCloudFormat": "A cloud name has only letters, digits, hyphens and underscores (no https://, no dots).",
+      "cloudinaryPreset": "Enter the unsigned upload preset, or clear the cloud name too.",
       "cdn": "Use the https://….ucarecd.net address from Dashboard → Delivery (or https://ucarecdn.com). Custom domains are not supported."
     },
     "result": {
@@ -396,9 +525,7 @@
     "archive": "Archive",
     "editTitle": "Edit item",
     "moveTitle": "Move item",
-    "moveHint": "Choose the folder for this item.",
-    "archiveTitle": "Archive item?",
-    "archiveConfirm": "“{name}” moves to the archive with its variants and history. You can restore it from the archive."
+    "moveHint": "Choose the folder for this item."
   },
   "itemForm": {
     "unit": "Unit",
@@ -417,9 +544,7 @@
     "move": "Move",
     "moveTitle": "Move folder",
     "moveHint": "Choose where this folder goes.",
-    "archive": "Archive",
-    "archiveTitle": "Archive folder",
-    "archiveConfirm": "Archive “{name}” and everything in it? You can restore it from the Archive."
+    "archive": "Archive"
   },
   "quickAdd": {
     "title": "Add item",
@@ -438,8 +563,35 @@
     "invalidAmount": "Enter a valid amount, like 10 or 50 cm.",
     "invalidPrice": "Enter a valid price.",
     "needsAmount": "Enter the amount to add a price or a link.",
-    "chooseFolder": "Choose a folder"
+    "chooseFolder": "Choose a folder",
+    "existing": "Already in this inventory",
+    "receiveHere": "Receive here",
+    "openMatch": "Open",
+    "photoDropped": "The photo was not added to the receipt. Add it on the item card.",
+    "received": "Received into “{name}”"
   },
+  "list": { "out": "Out", "more": "+{count}", "pinned": "Shown in lists" },
+  "share": {
+    "title": "Already have it?",
+    "loading": "Opening the inventory…",
+    "noInventory": "Open an inventory to compare with.",
+    "values": "Values in the title",
+    "valueIn": "{value}: {number} in stock",
+    "valueInMixed": "{value}: in stock",
+    "chipIn": "✓ {number}",
+    "valueOut": "{value}: known, none in stock",
+    "valueNone": "{value}: not in this inventory",
+    "no": "no",
+    "boughtBefore": "Bought before",
+    "bought": "Bought on {date}: {amount} · {left} left",
+    "matches": "In this inventory",
+    "nothing": "Nothing like it here yet.",
+    "open": "Open {name}",
+    "receive": "Receive…",
+    "openCard": "Open",
+    "quickAdd": "Quick add"
+  },
+  "shops": { "title": "Find in shops" },
   "dictionaries": {
     "title": "Tags & fields",
     "tags": "Tags",
@@ -479,7 +631,7 @@
     "create": "Create",
     "save": "Save"
   },
-  "folderForm": { "create": "Create", "save": "Save" },
+  "folderForm": { "create": "Create", "save": "Save", "parent": "Parent folder", "chooseParent": "Choose the parent folder" },
   "errors": {
     "unknown": "Something went wrong. Try again.",
     "domain": {
@@ -503,7 +655,8 @@
       "attribute_is_axis": "Variants differ by this attribute. Change that on the item first.",
       "not_an_axis": "Variants don’t differ by this attribute.",
       "option_in_use": "This value is still in use. Change it where it’s used first.",
-      "invalid_number": "Not a number this attribute understands."
+      "invalid_number": "Not a number this attribute understands.",
+      "too_many_pinned": "Only two attributes can show in lists. Turn one off first."
     },
     "storage": {
       "read_only": "This source is read-only right now.",
@@ -511,7 +664,8 @@
       "not_found": "That item no longer exists.",
       "incompatible": "This database isn’t a GrayMatter source.",
       "outdated": "This database was made by a pre-release version of GrayMatter. Reset it to use it here.",
-      "failed": "The source reported an error. Try again."
+      "failed": "The source reported an error. Try again.",
+      "not_empty": "This source already holds inventories. Restore the backup as new inventories instead."
     },
     "file": {
       "no_store": "Photos aren’t set up for this source. Check the Uploadcare key and photo address in Settings.",

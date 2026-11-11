@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { StorageError, type Movement } from '@graymatter/core'
-import { ExternalLink } from '@lucide/vue'
+import { Check, ExternalLink } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { errorMessageKey } from '~/lib/errors'
-import { formatDateTime, formatMoney } from '~/lib/format'
-import { journalRows, type JournalRow } from '~/lib/item-view'
+import { formatMoney } from '~/lib/format'
+import { journalDays, journalRows, type JournalDay, type JournalRow } from '~/lib/item-view'
 
 const props = defineProps<{ itemId: string }>()
 
@@ -74,13 +74,33 @@ const failureText = computed(() => {
 const currency = computed(() => state.snapshot?.inventory.currency ?? null)
 
 type Part = { kind: 'text'; text: string } | { kind: 'link'; href: string }
-const entries = computed(() => {
+// Grouped by day (Today, Yesterday, Nov 10); a row shows its time only, and the device when it is another one.
+const days = computed(() => {
   const s = state.snapshot
   if (!s || !movements.value) return []
-  return journalRows(s, props.itemId, movements.value).map((row) => ({ row, title: titleOf(row), parts: partsOf(row) }))
+  return journalDays(journalRows(s, props.itemId, movements.value), new Date()).map((day) => ({
+    key: day.day,
+    label: dayLabel(day),
+    entries: day.rows.map((row) => ({ row, title: titleOf(row), parts: partsOf(row), meta: metaOf(row) })),
+  }))
 })
 
+const timeFormat = new Intl.DateTimeFormat('en', { timeStyle: 'short' })
+const dayFormat = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' })
+const yearDayFormat = new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' })
+function dayLabel(day: JournalDay): string {
+  if (day.relative) return t(`journal.${day.relative}`)
+  const [y, m, d] = day.day.split('-').map(Number) as [number, number, number]
+  const date = new Date(y, m - 1, d)
+  return (y === new Date().getFullYear() ? dayFormat : yearDayFormat).format(date)
+}
+function metaOf(row: JournalRow): string {
+  const time = timeFormat.format(new Date(row.at))
+  return row.by === state.deviceName ? time : `${time} · ${row.by}`
+}
+
 function titleOf(row: JournalRow): string {
+  if (row.counted) return t('journal.counted')
   if (!row.transfer) return t(`journal.kind.${row.kind}`)
   const name = (n: string | null): string => n ?? t('item.noVariant')
   return t('journal.moved', { from: name(row.transfer.from), to: name(row.transfer.to) })
@@ -101,7 +121,7 @@ function partsOf(row: JournalRow): Part[] {
   <section class="grid min-w-0 grid-cols-1 gap-2">
     <h2 class="px-1 text-[13px] font-semibold text-subtle-foreground">{{ $t('journal.title') }}</h2>
 
-    <div v-if="waiting" role="status" class="grid gap-5 rounded-card border border-border bg-surface px-3.5 py-4">
+    <div v-if="waiting" role="status" class="grid gap-5 px-3.5 py-4">
       <span class="sr-only">{{ $t('journal.loading') }}</span>
       <div v-for="n in 3" :key="n" class="grid gap-2" aria-hidden="true">
         <div class="flex justify-between gap-6">
@@ -115,7 +135,7 @@ function partsOf(row: JournalRow): Part[] {
     <EmptyState v-else-if="failureText" :text="failureText">
       <Button
         variant="outline"
-        class="h-11 rounded-field bg-surface transition-colors duration-150 hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring"
+        class="h-11"
         :disabled="busy || state.refreshing"
         @click="retry"
       >
@@ -123,40 +143,57 @@ function partsOf(row: JournalRow): Part[] {
       </Button>
     </EmptyState>
 
-    <EmptyState v-else-if="entries.length === 0" :text="$t('journal.empty')" />
+    <EmptyState v-else-if="days.length === 0" :text="$t('journal.empty')" />
 
-    <ul v-else class="rounded-card border border-border bg-surface py-1">
-      <li
-        v-for="{ row, title, parts } in entries"
-        :key="row.id"
-        class="relative grid gap-0.5 px-3.5 py-2.5 not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-3.5 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
-      >
-        <div class="flex min-w-0 items-baseline gap-3">
-          <span class="min-w-0 grow text-[15px] font-bold wrap-anywhere">{{ title }}</span>
-          <span class="shrink-0 text-base font-bold tabular-nums">
-            {{ row.number }}
-            <span class="text-xs font-semibold text-muted-foreground">{{ row.unit }}</span>
-          </span>
-        </div>
-        <p v-if="parts.length > 0" class="min-w-0 text-[13px] text-muted-foreground wrap-anywhere">
-          <template v-for="(part, i) in parts" :key="i">
-            <template v-if="i > 0"> · </template>
-            <a
-              v-if="part.kind === 'link'"
-              :href="part.href"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="relative inline-flex items-center gap-1 rounded-sm font-semibold text-foreground underline decoration-border underline-offset-2 outline-none transition-colors duration-150 after:absolute after:-inset-x-1 after:-inset-y-3.5 after:content-[''] hover:decoration-foreground focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {{ $t('journal.whereBought') }}
-              <ExternalLink class="size-3" aria-hidden="true" />
-              <span class="sr-only">{{ $t('journal.newTab') }}</span>
-            </a>
-            <template v-else>{{ part.text }}</template>
-          </template>
-        </p>
-        <p class="text-xs text-subtle-foreground">{{ formatDateTime(row.at) }} · {{ row.by }}</p>
-      </li>
-    </ul>
+    <template v-else>
+      <section v-for="day in days" :key="day.key" class="grid min-w-0 gap-1.5" :aria-label="day.label">
+        <h3 class="px-1 pt-1 text-[13px] font-semibold text-muted-foreground">{{ day.label }}</h3>
+        <!-- A flat list on the page, rows divided by lines. -->
+        <ul>
+          <li
+            v-for="{ row, title, parts, meta } in day.entries"
+            :key="row.id"
+            class="relative grid gap-0.5 px-3.5 py-2.5 not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-3.5 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
+          >
+            <div class="flex min-w-0 items-baseline gap-3">
+              <span class="min-w-0 grow text-[15px] font-bold wrap-anywhere">{{ title }}</span>
+              <!-- A recount that matched shows the quantity it confirmed: "Counted 37 pcs ✓". -->
+              <span v-if="row.counted && row.balance" class="flex shrink-0 items-baseline gap-1 text-base font-bold tabular-nums">
+                {{ row.balance.number }}
+                <span class="text-xs font-semibold text-muted-foreground">{{ row.balance.unit }}</span>
+                <Check class="size-4 self-center" aria-hidden="true" />
+              </span>
+              <span v-else class="shrink-0 text-base font-bold tabular-nums">
+                {{ row.number }}
+                <span class="text-xs font-semibold text-muted-foreground">{{ row.unit }}</span>
+              </span>
+            </div>
+            <p v-if="parts.length > 0" class="min-w-0 text-[13px] text-muted-foreground wrap-anywhere">
+              <template v-for="(part, i) in parts" :key="i">
+                <template v-if="i > 0"> · </template>
+                <a
+                  v-if="part.kind === 'link'"
+                  :href="part.href"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="relative inline-flex items-center gap-1 rounded-chip font-semibold text-foreground underline decoration-border underline-offset-2 outline-none transition-colors duration-150 after:absolute after:-inset-x-1 after:-inset-y-3.5 after:content-[''] hover:decoration-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {{ $t('journal.whereBought') }}
+                  <ExternalLink class="size-3" aria-hidden="true" />
+                  <span class="sr-only">{{ $t('journal.newTab') }}</span>
+                </a>
+                <template v-else>{{ part.text }}</template>
+              </template>
+            </p>
+            <p class="flex min-w-0 items-baseline justify-between gap-3 text-xs text-subtle-foreground">
+              <span class="min-w-0 truncate">{{ meta }}</span>
+              <span v-if="row.balance && !row.counted" class="shrink-0 tabular-nums">
+                {{ $t('journal.balance', { amount: `${row.balance.number} ${row.balance.unit}` }) }}
+              </span>
+            </p>
+          </li>
+        </ul>
+      </section>
+    </template>
   </section>
 </template>

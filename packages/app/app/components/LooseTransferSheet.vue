@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { newId, type Id } from '@graymatter/core'
+import type { Id } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { errorMessageKey } from '~/lib/errors'
+import { bucketDescription } from '~/lib/item-view'
 import type { LooseOffer } from '~/components/VariantsForm.vue'
 
 // Offered right after the first variants are added: move the stock kept without a variant into one of them.
@@ -10,7 +11,9 @@ const props = defineProps<{ itemId: Id; offer: LooseOffer | null; variants: { id
 const emit = defineEmits<{ close: [] }>()
 
 const workspace = useWorkspace()
+const { ids, renew } = useCommandIds(['transferId', 'outMovementId', 'inMovementId'])
 const { state } = workspace
+const summary = computed(() => (state.snapshot ? bucketDescription(state.snapshot, props.itemId, null) : ''))
 
 // What the sheet shows while it animates out.
 const shown = shallowRef<{ offer: LooseOffer; variants: { id: Id; name: string }[] } | null>(null)
@@ -24,6 +27,7 @@ watch(
     if (!offer) return
     shown.value = { offer, variants: props.variants }
     toId.value = props.variants[0]?.id ?? ''
+    renew()
     busy.value = false
     errorKey.value = null
   },
@@ -45,9 +49,7 @@ async function move(): Promise<void> {
   try {
     await workspace.apply({
       type: 'stock.transfer',
-      transferId: newId(),
-      outMovementId: newId(),
-      inMovementId: newId(),
+      ...ids,
       itemId: props.itemId,
       fromVariantId: null,
       toVariantId: toId.value,
@@ -66,18 +68,19 @@ async function move(): Promise<void> {
   <AppSheet
     v-model:open="open"
     :locked="busy"
+    :summary="summary"
     :title="$t('looseTransfer.title', { number: shown?.offer.number ?? '', unit: shown?.offer.unit ?? '' })"
   >
     <div class="mt-3.5 grid gap-3.5">
       <RadioGroup
         v-model="toId"
         :aria-label="$t('looseTransfer.choose')"
-        class="grid max-h-[30dvh] gap-0.5 overflow-y-auto rounded-field border border-border bg-background p-1"
+        class="grid max-h-[30dvh] gap-0.5 overflow-y-auto rounded-field border border-input bg-field p-1"
       >
         <label
           v-for="v in shown?.variants ?? []"
           :key="v.id"
-          class="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-sm px-2 text-sm transition-colors duration-150 hover:bg-hover"
+          class="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-chip px-2 text-sm transition-colors duration-150 hover:bg-hover"
         >
           <RadioGroupItem :value="v.id" />
           <span class="min-w-0 flex-1 truncate">{{ v.name }}</span>
@@ -88,10 +91,10 @@ async function move(): Promise<void> {
       </p>
     </div>
     <template #footer>
-      <Button type="button" class="h-11 rounded-field" :disabled="busy || !!state.readOnly" @click="move">
+      <Button type="button" data-primary class="h-11 rounded-field" :disabled="busy || !!state.readOnly" @click="move">
         {{ $t(busy ? 'status.saving' : 'looseTransfer.move') }}
       </Button>
-      <Button type="button" variant="outline" class="h-11 rounded-field bg-surface" :disabled="busy" @click="open = false">
+      <Button type="button" variant="outline" class="h-11" :disabled="busy" @click="open = false">
         {{ $t('looseTransfer.keep') }}
       </Button>
     </template>

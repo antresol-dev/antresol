@@ -8,6 +8,7 @@ const m = BUILTIN_UNITS.m
 
 describe('parseAmountText', () => {
   it('reads plain numbers with either decimal mark', () => {
+    expect(parseAmountText('10k', pcs)).toBe('10000')
     expect(parseAmountText('1,5', pcs)).toBe('1.5')
     expect(parseAmountText('  10 ', pcs)).toBe('10')
   })
@@ -19,7 +20,7 @@ describe('parseAmountText', () => {
   })
 
   it('refuses empty, invalid, negative, too precise and foreign-prefix text', () => {
-    for (const bad of ['', 'abc', '-1', '0.0000001', '10k']) expect(parseAmountText(bad, pcs)).toBeNull()
+    for (const bad of ['', 'abc', '-1', '0.0000001', '10x']) expect(parseAmountText(bad, pcs)).toBeNull()
     expect(parseAmountText('0.5 um', m)).toBeNull()
   })
 })

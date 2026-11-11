@@ -13,12 +13,18 @@ import {
   type Inventory,
   type InventorySnapshot,
   type Movement,
+  type RestoreMode,
+  type RestoreResult,
   type SnapshotPatch,
+  type SourceReceipt,
 } from '@graymatter/core'
+import { createCloudinaryStore } from '@graymatter/files-cloudinary'
+import { createImgurStore } from '@graymatter/files-imgur'
 import { createUploadcareStore } from '@graymatter/files-uploadcare'
 import { APP_SCHEMA_VERSION } from '@graymatter/storage-postgres'
 import { markRaw, reactive } from 'vue'
 import { buildBackup, type BackupFile } from './backup'
+import { logError, secretsOf, setSecretSource } from './diagnostics'
 import { createDeviceFileStore, releaseDeviceUrls } from './device-files'
 import { prepareImage as defaultPrepareImage } from './images'
 import type { CachedSnapshot } from './device-db'
@@ -113,6 +119,17 @@ function catchUp(
   return { snapshot, rev: label }
 }
 
+/** The copy of an inventory as it was shown when another one was selected. Writes queued while it was shown (`selection`)
+ *  that run after the switch are checked against it, and their rows go into it and onto the device (see carriedFor).
+ *  `rev`: the revision it is exactly at; null once a write could not be put on top. */
+interface Carried {
+  ref: InventoryRef
+  snapshot: InventorySnapshot
+  rev: string | null
+  selection: number
+  generation: number
+}
+
 type Outcome =
   /** `fresh`: opened by this attempt rather than the source's open connection. */
   | { ok: true; conn: SourceConnection; inventories: Inventory[]; rev: string; fresh: boolean }
@@ -135,16 +152,40 @@ function isRelistCommand(c: Command): boolean {
     (c.type === 'deletePermanently' && c.target === 'inventory')
 }
 
-/** Demo source: the device store. Neon with a public key: Uploadcare. Anything else: none. */
+/** One stock bucket of an item: the stock kept under a variant, or without one (variantId null). */
+export const bucketKey = (itemId: Id, variantId: Id | null): string => `${itemId}:${variantId ?? ''}`
+
+/** The stock buckets a command writes to; empty for every other command. */
+function bucketsOf(c: Command): string[] {
+  switch (c.type) {
+    case 'stock.receive':
+    case 'stock.use':
+    case 'stock.return':
+    case 'stock.set':
+      return [bucketKey(c.itemId, c.variantId)]
+    case 'stock.transfer':
+      return [bucketKey(c.itemId, c.fromVariantId), bucketKey(c.itemId, c.toVariantId)]
+    default:
+      return []
+  }
+}
+
+/** Demo source: the device store. Neon: the chosen photo store (Uploadcare by default) when its keys are set. Anything else: none. */
 export function defaultFileStore(config: SourceConfig, fetchImpl?: typeof fetch): FileStore | null {
   if (config.kind === 'dev-pglite') return createDeviceFileStore()
-  const key = config.uploadcarePublicKey?.trim()
-  if (config.kind === 'neon' && key) {
-    return createUploadcareStore({ publicKey: key, cdnBase: config.uploadcareCdnBase ?? undefined,
-      ...(fetchImpl ? { fetch: fetchImpl } : {}),
-    })
+  if (config.kind !== 'neon') return null
+  const opts = fetchImpl ? { fetch: fetchImpl } : {}
+  if (config.photoStore === 'cloudinary') {
+    const cloudName = config.cloudinaryCloudName?.trim()
+    const uploadPreset = config.cloudinaryUploadPreset?.trim()
+    return cloudName && uploadPreset ? createCloudinaryStore({ cloudName, uploadPreset, ...opts }) : null
   }
-  return null
+  if (config.photoStore === 'imgur') {
+    const clientId = config.imgurClientId?.trim()
+    return clientId ? createImgurStore({ clientId, ...opts }) : null
+  }
+  const key = config.uploadcarePublicKey?.trim()
+  return key ? createUploadcareStore({ publicKey: key, cdnBase: config.uploadcareCdnBase ?? undefined, ...opts }) : null
 }
 
 export function createWorkspace(deps: WorkspaceDeps): Workspace {
@@ -167,8 +208,20 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     checkInterval: DEFAULT_CHECK_INTERVAL,
     refreshing: false,
     saving: false,
+    writeCount: 0,
     readOnly: null,
   })
+
+  // The error log never holds the secrets of the sources' settings.
+  setSecretSource(() => state.sources.flatMap((s) => secretsOf(s.config)))
+
+  /** When each source last answered a request, in ms: the warm-up (see warmUp) looks at it. */
+  const answeredAt = new Map<string, number>()
+  const noteAnswer = (sourceId: string): void => {
+    answeredAt.set(sourceId, now().getTime())
+  }
+  /** The warm-up's request while it runs; writes wait for it. */
+  let warming: Promise<void> | null = null
 
   /** Open connections; refreshes reuse them until one fails. */
   const conns = new Map<string, SourceConnection>()
@@ -185,6 +238,9 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   let shownRev: string | null = null
   let queue: Promise<void> = Promise.resolve()
   let pendingWrites = 0
+  /** Queued or running writes per stock bucket (bucketKey); reactive, read by isBucketSaving. */
+  const savingBuckets = reactive(new Map<string, number>())
+  const beforeWrite = new Set<() => void>()
   let refreshing: Promise<void> | null = null
   let refreshEpoch = 0
   let refreshingEpoch = -1
@@ -197,6 +253,10 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   /** Full loads still running, and the own rows put into the shown copy meanwhile (see catchUp). */
   let loadsRunning = 0
   let ownRows: OwnRows[] = []
+  /** Writes applyTo queued while their target was shown, by the selection they were queued under, until they end. */
+  const shownWrites = new Map<number, number>()
+  /** The copy shown until the last switch, while writes queued under it still run (see carriedFor). */
+  let carried: Carried | null = null
   /** The shown copy has rows a write put into it that are not saved on the device yet. */
   let unsaved: { ref: InventoryRef; generation: number } | null = null
   let saveTimer: ReturnType<typeof setTimeout> | undefined
@@ -244,6 +304,17 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     if (!sameRef(state.current, ref)) {
       // Written rows of the copy shown so far go to the device first: opening it again then loads nothing.
       void saveShown()
+      const left = state.current
+      carried =
+        left && state.snapshot?.inventory.id === left.inventoryId && (shownWrites.get(selection) ?? 0) > 0
+          ? {
+              ref: { sourceId: left.sourceId, inventoryId: left.inventoryId },
+              snapshot: state.snapshot,
+              rev: shownRev,
+              selection,
+              generation: generationOf(left.sourceId),
+            }
+          : null
       selection++
       state.snapshot = null
       state.snapshotOrigin = null
@@ -285,6 +356,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   /** Deletes the device copy of an inventory that is gone; its unsaved rows are never saved after this. */
   async function dropCopy(ref: InventoryRef): Promise<void> {
     if (unsaved && sameRef(unsaved.ref, ref)) unsaved = null
+    if (carried && sameRef(carried.ref, ref)) carried = null
     await db.deleteSnapshot(ref)
   }
 
@@ -325,8 +397,10 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       conn = await driver.connect(config)
       openedWith.set(conn, config.connectionString)
       const { inventories, rev } = await conn.storage.listInventories()
+      noteAnswer(config.id)
       return { ok: true, conn, inventories, rev, fresh: true }
     } catch (error) {
+      logError('connect', error)
       await conn?.close().catch(() => {})
       return { ok: false, error }
     }
@@ -366,7 +440,13 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       const old = conns.get(config.id)
       conns.set(config.id, outcome.conn)
       sourceRevs.set(config.id, outcome.rev)
-      setSource(config, outcome.conn.status.state === 'newer' ? 'read_only' : 'ready', null, null)
+      // Read-only only when the schema needs a newer app to write (min_app_schema above this app's version): a newer
+      // schema that keeps older apps writing is `ready` (soft migrations). Turning read-only, a new version of the app
+      // may be out already: look for it now rather than at the next periodic check ("Update to keep editing").
+      const status: SourceStatus = outcome.conn.status.state === 'newer' ? 'read_only' : 'ready'
+      const wasReadOnly = statusOf(config.id) === 'read_only'
+      setSource(config, status, null, null)
+      if (status === 'read_only' && !wasReadOnly) deps.checkForUpdate?.()
       const saving = storeListing(config.id, outcome.inventories)
       if (old && old !== outcome.conn) await old.close().catch(() => {})
       await saving
@@ -382,6 +462,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     const config = state.sources.find((s) => s.config.id === sourceId)?.config
     if (!config) return
     const { status, error: text, reason } = failureStatus(error, connectionString)
+    logError('source', error)
     setSource(config, status, text, reason)
   }
 
@@ -400,6 +481,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     // Edited or removed meanwhile: the list is no longer this connection's to set.
     if (generationOf(sourceId) !== generation) return
     sourceRevs.set(sourceId, rev)
+    noteAnswer(sourceId)
     const saving = storeListing(sourceId, inventories)
     rebuildInventories()
     await saving
@@ -520,6 +602,9 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   }
 
   async function selectInventory(ref: InventoryRef): Promise<void> {
+    // A stepper's pending delta goes out now, while its inventory is still the shown one: it is checked against that
+    // copy and its rows go into it (carriedFor), so the switch loads nothing for it.
+    if (!sameRef(state.current, ref)) runBeforeWrite()
     setCurrent(ref)
     // A plain copy: refs taken from reactive state are proxies, which IndexedDB cannot clone.
     await db.putSettings({ current: { sourceId: ref.sourceId, inventoryId: ref.inventoryId } })
@@ -731,19 +816,42 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     if (isConnected(statusOf(sourceId)) && checkDue(now().getTime())) await checkSource(sourceId)
   }
 
-  /** Runs `job` after all earlier writes; a failed job does not block later ones. */
-  function enqueue<T>(job: () => Promise<T>): Promise<T> {
-    pendingWrites++
-    state.saving = true
+  /** Runs `job` after all earlier writes; a failed job does not block later ones. A write to stock buckets marks only
+   *  those buckets as saving (spec 4.12): the rest of the app is not locked by it; any other write sets `saving`. */
+  function enqueue<T>(job: () => Promise<T>, buckets: string[] = []): Promise<T> {
+    if (buckets.length > 0) for (const key of buckets) savingBuckets.set(key, (savingBuckets.get(key) ?? 0) + 1)
+    else {
+      pendingWrites++
+      state.saving = true
+    }
     const run = queue.then(job)
     queue = run.then(
       () => {},
       () => {},
     )
     return run.finally(() => {
-      pendingWrites--
-      state.saving = pendingWrites > 0
+      if (buckets.length > 0) {
+        for (const key of buckets) {
+          const left = (savingBuckets.get(key) ?? 1) - 1
+          if (left > 0) savingBuckets.set(key, left)
+          else savingBuckets.delete(key)
+        }
+      } else {
+        pendingWrites--
+        state.saving = pendingWrites > 0
+      }
     })
+  }
+
+  /** Called before any write is queued, so what they write goes first (a stepper's pending delta, spec 4.12). */
+  function runBeforeWrite(): void {
+    for (const hook of [...beforeWrite]) {
+      try {
+        hook()
+      } catch {
+        // A hook never stops the write it runs before.
+      }
+    }
   }
 
   /**
@@ -755,11 +863,15 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     target: InventoryRef,
     command: Command,
     snapshotFor: (conn: SourceConnection) => Promise<InventorySnapshot | null>,
+    queuedUnder: number | null = null,
   ): Promise<void> {
     const { sourceId } = target
+    runBeforeWrite()
     return enqueue(async () => {
       // First refresh still connecting: wait for it rather than failing with a misleading "can't reach".
       if (!conns.has(sourceId) && refreshing) await refreshing.catch(() => {})
+      // A warm-up's listing answering between this write and its rows would move the source's revision under them.
+      if (warming) await warming
       // A check of the target's source that is due goes first: a copy it loads is the one the command is validated
       // against. No deadlock: a check never waits for the queue. A failing source is refused below without one.
       await checkIfDue(sourceId).catch(() => {})
@@ -768,7 +880,8 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       const conn = conns.get(sourceId)
       if (!conn) throw new StorageError('unavailable')
       const normalized = normalizeCommand(command)
-      const snapshot = await guarded(sourceId, conn, () => snapshotFor(conn))
+      // Mostly the shown copy: no answer of the source (snapshotFor notes one when it reads the source).
+      const snapshot = await guarded(sourceId, conn, () => snapshotFor(conn), false)
       const invalid = validateCommand(normalized, snapshot)
       if (invalid) throw invalid
       const generation = generationOf(sourceId)
@@ -780,12 +893,23 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
         await writeFailed(sourceId, error)
         throw error
       }
+      // For the backup reminder, which looks again once the count is stored; a lost count only delays it.
+      void db
+        .countWrite(sourceId)
+        .catch(() => {})
+        .then(() => {
+          state.writeCount++
+        })
       let reload: boolean
       if (generationOf(sourceId) === generation) {
         const settled = settleWrite(target, result, seq)
         reload = settled.reload
+        // Queued while the target was shown and another inventory selected since: into its carried copy, if they fit.
+        // Not a change of the list of inventories (archive, delete…): those are read again below.
+        const kept = settled.markStale && !isRelistCommand(command) ? carriedFor(target, queuedUnder) : null
+        const carriedOn = kept ? await carryRows(kept, result) : false
         // The device copies' revisions; a failure leaves an older revision there, which only costs a load.
-        if (settled.markStale) await db.markSnapshotStale(target).catch(() => {})
+        if (settled.markStale && !carriedOn) await db.markSnapshotStale(target).catch(() => {})
         if (settled.advance) {
           const [from, to] = settled.advance
           await db.advanceSnapshotRevs(sourceId, from, to, target.inventoryId).catch(() => {})
@@ -803,7 +927,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       } else if (reload) {
         await loadCurrent()
       }
-    })
+    }, bucketsOf(command))
   }
 
   /**
@@ -881,14 +1005,71 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   }
 
   async function applyTo(ref: InventoryRef, command: Command): Promise<void> {
-    // Read when the job runs: earlier queued writes have put their rows into the snapshot by then. Only this
-    // inventory's own snapshot counts; until selectInventory shows it, the target is read from the source.
-    await write(ref, command, async (conn) => {
-      const shown = state.snapshot
-      return sameRef(state.current, ref) && shown?.inventory.id === ref.inventoryId
-        ? shown
-        : conn.storage.loadInventory(ref.inventoryId)
-    })
+    const isShown = (): boolean => sameRef(state.current, ref) && state.snapshot?.inventory.id === ref.inventoryId
+    // Queued while the target is shown: should another inventory be selected before it runs, its copy is carried.
+    const queuedUnder = isShown() ? selection : null
+    if (queuedUnder !== null) shownWrites.set(queuedUnder, (shownWrites.get(queuedUnder) ?? 0) + 1)
+    try {
+      // Read when the job runs: earlier queued writes have put their rows into the snapshot by then. Only this
+      // inventory's own snapshot counts; until selectInventory shows it, the target is read from the source.
+      await write(
+        ref,
+        command,
+        async (conn) => {
+          if (isShown()) return state.snapshot
+          const kept = carriedFor(ref, queuedUnder)
+          if (kept) return kept.snapshot
+          const loaded = await conn.storage.loadInventory(ref.inventoryId)
+          noteAnswer(ref.sourceId)
+          return loaded
+        },
+        queuedUnder,
+      )
+    } finally {
+      if (queuedUnder !== null) {
+        const left = (shownWrites.get(queuedUnder) ?? 1) - 1
+        if (left > 0) shownWrites.set(queuedUnder, left)
+        else {
+          shownWrites.delete(queuedUnder)
+          // The last write that could use the carried copy is done: it is not kept in memory.
+          if (carried?.selection === queuedUnder) carried = null
+        }
+      }
+    }
+  }
+
+  /** The carried copy of `ref` for a write queued under selection `queuedUnder` (while `ref` was shown), when that is
+   *  the copy left at the latest switch and its source was not edited since; otherwise null. A stepper's pending delta
+   *  flushed by the switch is checked against it instead of a load of the inventory. */
+  function carriedFor(ref: InventoryRef, queuedUnder: number | null): Carried | null {
+    const kept = carried
+    return kept && queuedUnder !== null && kept.selection === queuedUnder && sameRef(kept.ref, ref) &&
+      kept.generation === generationOf(ref.sourceId)
+      ? kept
+      : null
+  }
+
+  /** A write's rows on top of the carried copy, saved on the device at the write's revision (after the save of the
+   *  switch): opening the inventory again then loads nothing. Only on the exact revision it started from (as rule 2 of
+   *  settleWrite); otherwise, or without rows, false, and the copy takes no more rows. */
+  async function carryRows(kept: Carried, { prevRev, rev, patch }: ApplyResult): Promise<boolean> {
+    if (kept.rev === null || kept.rev !== prevRev || !patch || patch.inventoryId !== kept.ref.inventoryId) {
+      kept.rev = null
+      return false
+    }
+    kept.snapshot = patchSnapshot(kept.snapshot, patch)
+    kept.rev = rev
+    const value = { snapshot: kept.snapshot, savedAt: nowIso(), rev: cacheRev(rev), format: FORMAT_MARK }
+    await lastSave
+    // Dropped (the inventory is gone) or left behind by another switch meanwhile: the device copy is not this one's.
+    if (carried !== kept) return false
+    try {
+      await db.putSnapshot(kept.ref, value)
+      return true
+    } catch {
+      kept.rev = null
+      return false
+    }
   }
 
   async function apply(command: Command): Promise<void> {
@@ -910,7 +1091,15 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
         return null
       }
     }
-    const key = `${config.kind}|${config.uploadcarePublicKey ?? ''}|${config.uploadcareCdnBase ?? ''}`
+    const key = [
+      config.kind,
+      config.photoStore ?? '',
+      config.uploadcarePublicKey ?? '',
+      config.uploadcareCdnBase ?? '',
+      config.cloudinaryCloudName ?? '',
+      config.cloudinaryUploadPreset ?? '',
+      config.imgurClientId ?? '',
+    ].join('|')
     const known = stores.get(sourceId)
     if (known?.key === key) return known.store
     let store: FileStore | null
@@ -1002,6 +1191,13 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     return guarded(sourceId, conn, () => conn.storage.loadMovements(itemId))
   }
 
+  /** Earlier receipts of a shop lot in the current inventory (spec 4.10); rejects like loadMovements while offline. */
+  async function findReceiptsBySource(key: string): Promise<SourceReceipt[]> {
+    const { sourceId, conn } = journalSource()
+    const inventoryId = state.current!.inventoryId
+    return guarded(sourceId, conn, () => conn.storage.findReceiptsBySource(inventoryId, key))
+  }
+
   async function exportSource(sourceId: string): Promise<BackupFile> {
     const entry = state.sources.find((s) => s.config.id === sourceId)
     const conn = conns.get(sourceId)
@@ -1031,21 +1227,92 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     })
   }
 
+  /**
+   * A wide write: the backup's rows go into the source in batches (InventoryStorage.restore), after the writes queued
+   * before it and before those queued after. Then, as "Reload everything", no copy of the source is trusted (a run that
+   * failed midway may have written some batches too), and the first restored active inventory is shown.
+   *
+   * The device keeps the run of each file (DeviceDb.beginRestoreRun): a run that did not finish into this source in this
+   * mode goes on with the same run id, so new ids come out the same and nothing is added twice; with the same ids it may
+   * write into the source that run left non-empty. Anything else is a new run: the storage refuses the same ids into a
+   * source that holds inventories. The run is recorded only once the source is ready, and forgotten when refused that way
+   * (it wrote nothing), so a refused run is never gone on with.
+   */
+  async function restoreSource(
+    sourceId: string,
+    backup: BackupFile,
+    mode: RestoreMode,
+    fileSha256: string,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<RestoreResult> {
+    if (!state.sources.some((s) => s.config.id === sourceId)) throw new StorageError('not_found')
+    /** Set when the run is recorded, right before the storage is called. */
+    const started: { runId?: string } = {}
+    let result: RestoreResult
+    try {
+      result = await enqueue(async () => {
+        const status = statusOf(sourceId)
+        if (status === 'read_only') throw new StorageError('read_only')
+        const conn = conns.get(sourceId)
+        if (status !== 'ready' || !conn) throw new StorageError('unavailable')
+        const { run, resumed } = await db.beginRestoreRun(fileSha256, sourceId, mode)
+        started.runId = run.runId
+        const options = { onProgress, resumeSameIds: resumed && mode === 'same-ids' }
+        return guarded(sourceId, conn, () => conn.storage.restore(backup, mode, run.runId, options))
+      })
+    } catch (error) {
+      if (started.runId === undefined) throw error
+      if (error instanceof StorageError && error.code === 'not_empty') {
+        await db.dropRestoreRun(fileSha256, started.runId).catch(() => {})
+      }
+      await reloadSource(sourceId).catch(() => {})
+      throw error
+    }
+    // Lost (the device database failed), the next run of this file into this source would count as going on with this
+    // one: new ids add nothing, but the same ids would be let in next to what the source holds by then. Rare enough.
+    if (started.runId !== undefined) await db.finishRestoreRun(fileSha256, started.runId).catch(() => {})
+    await reloadSource(sourceId).catch(() => {})
+    const first = state.inventories.find((e) => e.ref.sourceId === sourceId && result.inventoryIds.includes(e.inventory.id))
+    if (first) await selectInventory(first.ref)
+    return result
+  }
+
   /** Runs a storage call on `conn`: an `unavailable` failure marks the source, any failure is redacted with the
-   *  connection string `conn` was opened with, even if the source was edited or removed since. */
-  async function guarded<T>(sourceId: string, conn: SourceConnection, call: () => Promise<T>): Promise<T> {
+   *  connection string `conn` was opened with, even if the source was edited or removed since. `network`: the call
+   *  always reads the source, so its success is an answer (for the warm-up); a call that may stay on the device notes
+   *  its own. */
+  async function guarded<T>(sourceId: string, conn: SourceConnection, call: () => Promise<T>, network = true): Promise<T> {
     const connectionString = connectionStringOf(conn)
     try {
-      return await call()
+      const result = await call()
+      if (network) noteAnswer(sourceId)
+      return result
     } catch (error) {
       if (error instanceof StorageError && error.code === 'unavailable') markFailure(sourceId, error, connectionString)
+      else logError('storage', error)
       if (error instanceof DomainError) throw new DomainError(error.code, redactSecret(error.message, connectionString))
       throw sanitize(error, connectionString)
     }
   }
 
+  /** Neon's compute sleeps after minutes of quiet: the first request after that is slow. Before a form that is about to
+   *  write, one light request wakes it, only when the source has been silent for longer than this. */
+  const WARM_AFTER_MS = 4 * 60_000
+  function warmUp(): Promise<void> {
+    const sourceId = state.current?.sourceId
+    if (!sourceId || !isConnected(statusOf(sourceId))) return Promise.resolve()
+    // A write on its way wakes the source by itself, and a listing answering amid it would move the revision under it.
+    if (pendingWrites > 0 || savingBuckets.size > 0) return Promise.resolve()
+    const last = answeredAt.get(sourceId)
+    if (last !== undefined && now().getTime() - last <= WARM_AFTER_MS) return Promise.resolve()
+    return (warming ??= relist(sourceId).catch(() => {}).finally(() => {
+      warming = null
+    }))
+  }
+
   return {
     state,
+    warmUp,
     startFromCache,
     refresh,
     sync,
@@ -1059,15 +1326,27 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     selectInventory,
     apply,
     applyTo,
+    isBucketSaving: (itemId, variantId) => savingBuckets.has(bucketKey(itemId, variantId)),
+    onBeforeWrite(hook) {
+      beforeWrite.add(hook)
+      return () => {
+        beforeWrite.delete(hook)
+      }
+    },
     loadMovements,
+    findReceiptsBySource,
     exportSource,
+    restoreSource,
+    restoreRun: (fileSha256) => db.getRestoreRun(fileSha256),
+    backupInfo: (sourceId) => db.getBackupInfo(sourceId),
+    noteBackup: (sourceId) => db.noteBackup(sourceId, nowIso()),
     fileStoreFor,
     addPhotos,
     setVariantPhoto,
     removePhoto,
     makeCover,
-    async createInventory({ sourceId, name, currency }) {
-      const id = newId()
+    async createInventory({ sourceId, name, currency, id: given }) {
+      const id = given ?? newId()
       const ref = { sourceId, inventoryId: id }
       await write(ref, { type: 'inventory.create', id, name, description: null, currency }, async () => null)
       await selectInventory(ref)

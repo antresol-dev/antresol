@@ -1,7 +1,7 @@
 import type { Command } from './commands'
 import type { Id } from './ids'
 import { CURRENCIES } from './money'
-import type { Attribute, AttributeKind, Folder, InventorySnapshot, Item, ItemAttribute, Variant } from './model'
+import type { Archivable, Attribute, AttributeKind, Folder, InventorySnapshot, Item, ItemAttribute, Variant } from './model'
 import { isCanonicalNumber } from './numbers'
 import { bucketStock } from './stock'
 import { cmpQ, parseQuantity, type Quantity } from './quantity'
@@ -31,6 +31,7 @@ export const DOMAIN_ERROR_CODES = [
   'not_an_axis',
   'option_in_use',
   'invalid_number',
+  'too_many_pinned',
 ] as const
 export type DomainErrorCode = (typeof DOMAIN_ERROR_CODES)[number]
 
@@ -42,6 +43,9 @@ export class DomainError extends Error {
     this.code = code
   }
 }
+
+/** Attributes of one inventory shown in lists ("Show in lists"). */
+export const MAX_PINNED_ATTRIBUTES = 2
 
 const MAX_NAME = 200
 const MAX_UNIT = 16
@@ -219,8 +223,10 @@ function checkNewVariants(s: Snap, itemId: Id, variants: { id: Id; values: { att
   const batch: Map<Id, string | null>[] = []
   const ids = new Set<Id>()
   for (const v of variants) {
-    if (ids.has(v.id) || s.variants.some((x) => x.id === v.id)) fail('invalid_option')
+    if (ids.has(v.id)) fail('invalid_option')
     ids.add(v.id)
+    const existing = s.variants.find((x) => x.id === v.id)
+    if (existing && existing.itemId !== itemId) fail('invalid_option')
     const values = new Map<Id, string | null>()
     for (const { attributeId, value } of v.values) {
       needAttribute(s, attributeId)
@@ -233,7 +239,11 @@ function checkNewVariants(s: Snap, itemId: Id, variants: { id: Id; values: { att
       if (value === null || value.trim() === '') fail('axis_value_required')
       checkValue(a, value)
     }
-    if (duplicateOf(s, itemId, values, v.id)) fail('duplicate_variant')
+    if (existing) {
+      // A retried batch: the id is already this item's variant with these axis values; storage writes nothing new.
+      const stored = new Map(s.variantAttributeValues.filter((r) => r.variantId === v.id).map((r) => [r.attributeId, r.value]))
+      if (!axes.every((a) => sameAxisValue(a, stored.get(a.id) ?? null, values.get(a.id) ?? null))) fail('invalid_option')
+    } else if (duplicateOf(s, itemId, values, v.id)) fail('duplicate_variant')
     if (batch.some((other) => axes.every((a) => sameAxisValue(a, other.get(a.id) ?? null, values.get(a.id) ?? null)))) {
       fail('duplicate_variant')
     }
@@ -257,8 +267,10 @@ function check(c: Command, s: Snap | null): void {
     return
   }
   if (s === null) return fail('not_found')
-  // An archived inventory is read-only; only restore and permanent deletion may touch it.
-  if (c.type !== 'restore' && c.type !== 'deletePermanently' && s.inventory.archivedAt !== null) fail('archived')
+  // An archived inventory is read-only; only restore and permanent deletion may touch it, and a retried archive of it.
+  if (c.type !== 'restore' && c.type !== 'deletePermanently' && s.inventory.archivedAt !== null && !isOwnArchive(s, c)) {
+    fail('archived')
+  }
 
   switch (c.type) {
     case 'inventory.update':
@@ -358,7 +370,8 @@ function check(c: Command, s: Snap | null): void {
     case 'tag.create':
       needInventory(s, c.inventoryId)
       checkName(c.name)
-      if (s.tags.some((t) => same(t.name, c.name))) fail('duplicate_name')
+      // The tag this very command created (a retry after an unknown outcome, spec 4.7) is no duplicate of it.
+      if (s.tags.some((t) => t.id !== c.id && same(t.name, c.name))) fail('duplicate_name')
       return
     case 'tag.rename':
       if (!s.tags.some((t) => t.id === c.id)) fail('not_found')
@@ -380,6 +393,10 @@ function check(c: Command, s: Snap | null): void {
       checkUnit(c.unit)
       if (a.kind !== 'number' && ((c.unit !== undefined && c.unit.trim() !== '') || c.siPrefixes === true)) fail('invalid_option')
       checkDroppedOptions(s, a, c.options)
+      // Only a new pin counts: unpinning, or keeping a pin, always passes.
+      if (c.pinned === true && !a.pinned && s.attributes.filter((x) => x.pinned).length >= MAX_PINNED_ATTRIBUTES) {
+        fail('too_many_pinned')
+      }
       return
     }
     case 'attribute.delete': {
@@ -452,7 +469,7 @@ function check(c: Command, s: Snap | null): void {
       return
     case 'archive':
       targetOf(s, c.target, c.id)
-      if (isArchived(s, c.target, c.id)) fail('archived')
+      if (isArchived(s, c.target, c.id) && !isOwnArchive(s, c)) fail('archived')
       return
     case 'restore': {
       const id = c.archiveId
@@ -494,6 +511,23 @@ function hasActiveInSubtree(s: Snap, folderId: Id): boolean {
     s.folders.some((f) => ids.has(f.id) && f.archivedAt === null) ||
     s.items.some((i) => i.folderId !== null && ids.has(i.folderId) && i.archivedAt === null)
   )
+}
+
+/** An archive whose target already carries its archiveId: this very command landed before (a retry after an unknown
+ *  outcome, spec 4.7). The source skips it (it only archives rows not archived yet). */
+function isOwnArchive(s: Snap, c: Command): boolean {
+  if (c.type !== 'archive') return false
+  const row: Archivable | undefined =
+    c.target === 'inventory'
+      ? s.inventory.id === c.id
+        ? s.inventory
+        : undefined
+      : c.target === 'folder'
+        ? s.folders.find((f) => f.id === c.id)
+        : c.target === 'item'
+          ? s.items.find((i) => i.id === c.id)
+          : s.variants.find((v) => v.id === c.id)
+  return !!row && row.archivedAt !== null && row.archiveId === c.archiveId
 }
 
 function targetOf(s: Snap, target: 'inventory' | 'folder' | 'item' | 'variant', id: Id): { archivedAt: string | null } {

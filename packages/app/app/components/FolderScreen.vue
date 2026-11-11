@@ -82,19 +82,19 @@ function retry(): void {
       <NuxtLink
         v-if="state.archivedInventories.length > 0"
         to="/archive"
-        class="min-h-11 content-center rounded-md text-sm font-semibold text-primary underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+        class="min-h-11 content-center rounded-chip text-sm font-semibold text-accent-ink underline-offset-4 hover:underline"
       >
         {{ $t('archive.open') }}
       </NuxtLink>
     </EmptyState>
     <EmptyState v-else-if="blocker?.kind === 'offline'" :text="$t('empty.offlineNoCopy')">
-      <Button variant="outline" class="h-11 rounded-field bg-surface" @click="retry">{{ $t('status.retry') }}</Button>
+      <Button variant="outline" class="h-11" @click="retry">{{ $t('status.retry') }}</Button>
     </EmptyState>
     <EmptyState
       v-else-if="blocker?.kind === 'error'"
       :text="$t('empty.sourceFailed', { source: blocker.source.config.name, reason: $t(`errors.probe.${blocker.source.reason ?? 'failed'}`) })"
     >
-      <NuxtLink :to="fixTo" class="min-h-11 content-center text-sm font-semibold text-primary underline-offset-4 hover:underline">
+      <NuxtLink :to="fixTo" class="min-h-11 content-center text-sm font-semibold text-accent-ink underline-offset-4 hover:underline">
         {{ $t('status.fix') }}
       </NuxtLink>
     </EmptyState>
@@ -103,7 +103,7 @@ function retry(): void {
     </div>
     <template v-else>
       <EmptyState v-if="!view" :text="$t('empty.folderGone')">
-        <NuxtLink to="/" class="min-h-11 content-center text-sm font-semibold text-primary underline-offset-4 hover:underline">
+        <NuxtLink to="/" class="min-h-11 content-center text-sm font-semibold text-accent-ink underline-offset-4 hover:underline">
           {{ $t('empty.backTo', { name: snapshot.inventory.name }) }}
         </NuxtLink>
       </EmptyState>

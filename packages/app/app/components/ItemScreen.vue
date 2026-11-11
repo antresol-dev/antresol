@@ -68,8 +68,7 @@ const renameBusy = ref(false)
 const looseOffer = ref<{ offer: LooseOffer; variants: { id: Id; name: string }[] } | null>(null)
 function added(a: VariantsAdded): void {
   addOpen.value = false
-  // Task 8 renamed the created variants' `name` to `label`; both shapes are read until the branches meet.
-  const created = (a.created as { id: Id; label?: string; name?: string }[]).map((c) => ({ id: c.id, name: c.label ?? c.name ?? '' }))
+  const created = a.created.map((c) => ({ id: c.id, name: c.label }))
   if (a.offer) looseOffer.value = { offer: a.offer, variants: created }
 }
 const renameId = ref<Id | null>(null)

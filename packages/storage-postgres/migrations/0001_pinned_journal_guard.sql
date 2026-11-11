@@ -1,7 +1,8 @@
 ALTER TABLE "attributes" ADD COLUMN "pinned" boolean DEFAULT false NOT NULL;--> statement-breakpoint
 -- Journal protection: a movement is never changed. DELETE stays allowed: deleting an item, a variant or an inventory
 -- takes its movements by cascade.
-CREATE FUNCTION "gm_movements_append_only"() RETURNS trigger LANGUAGE plpgsql AS $$
+-- A later migration that backfills movements must disable this trigger around its UPDATE.
+CREATE OR REPLACE FUNCTION "gm_movements_append_only"() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   RAISE EXCEPTION 'gm_movements_append_only: a movement is never changed' USING ERRCODE = 'GM002';
 END

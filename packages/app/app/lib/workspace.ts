@@ -1142,30 +1142,12 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     }
   }
 
-  /** Two writes, because core allows one photo per variant and a storage apply takes one command: a failure between
-   *  them leaves the variant without a photo. A failed add rejects with its own error and is not retried. */
+  /** One `photo.replace`: the new photo takes the old one's place in one transaction (the variant has at most one). */
   async function setVariantPhoto(itemId: Id, variantId: Id, file: File): Promise<void> {
     const { cur, store } = photoTarget()
     // Upload first: a failed upload leaves the old photo in place.
     const stored = await uploadOne(cur.sourceId, store, file)
-    // Looked up only now, after the upload and the writes queued before this one, in the freshest snapshot of the target.
-    await queueIdle()
-    const snapshot = await snapshotOf(cur)
-    const old = snapshot?.photos.find((p) => p.variantId === variantId)
-    if (old) await applyTo(cur, { type: 'photo.remove', id: old.id })
-    await applyTo(cur, { type: 'photo.add', id: newId(), itemId, variantId, ...stored })
-  }
-
-  /** Resolves when the writes queued so far are done (their rows in the snapshot included). */
-  const queueIdle = (): Promise<void> => queue
-
-  /** The shown snapshot when it is the target's, otherwise the target read from its source. */
-  async function snapshotOf(ref: InventoryRef): Promise<InventorySnapshot | null> {
-    const shown = state.snapshot
-    if (sameRef(state.current, ref) && shown?.inventory.id === ref.inventoryId) return shown
-    const conn = conns.get(ref.sourceId)
-    if (!conn) return null
-    return guarded(ref.sourceId, conn, () => conn.storage.loadInventory(ref.inventoryId))
+    await applyTo(cur, { type: 'photo.replace', id: newId(), itemId, variantId, ...stored })
   }
 
   async function removePhoto(photoId: Id): Promise<void> {

@@ -2264,7 +2264,7 @@ describe('workspace photos', () => {
     await expect(ws.addPhotos(newId(), [file('a')])).rejects.toMatchObject({ code: 'not_found' })
   })
 
-  it('setVariantPhoto removes the old photo, then adds the new one', async () => {
+  it('setVariantPhoto replaces the old photo with one photo.replace', async () => {
     const { ws, uploads, commands } = await photoHarness()
     const snap = ws.state.snapshot!
     const resistorId = snap.items.find((i) => i.name === 'Резистор 0,25 Вт')!.id
@@ -2278,10 +2278,8 @@ describe('workspace photos', () => {
     expect(now[0]!.fileId).toBe('f-2')
     expect(uploads).toEqual(['one.jpg', 'two.jpg'])
     const photoCommands = commands.filter((c) => c.type.startsWith('photo.')).map((c) => c.type)
-    expect(photoCommands).toEqual(['photo.add', 'photo.remove', 'photo.add'])
-    const removeAt = commands.findIndex((c) => c.type === 'photo.remove')
-    expect(commands[removeAt]).toMatchObject({ id: first.id })
-    expect(commands[removeAt + 1]).toMatchObject({ type: 'photo.add', variantId: variant.id })
+    expect(photoCommands).toEqual(['photo.replace', 'photo.replace'])
+    expect(commands.filter((c) => c.type === 'photo.replace')[1]).toMatchObject({ itemId: variant.itemId, variantId: variant.id, fileId: 'f-2' })
   })
 
   it('removePhoto removes one photo', async () => {

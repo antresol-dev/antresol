@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import type { Id } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
-import { variantClash, type VariantClash } from '~/lib/axes'
 import { errorMessageKey } from '~/lib/errors'
+import { rowClashes, setValuesCommand, type ValuesRow } from '~/lib/variant-commands'
 import { bucketDescription, type AxisRow, type ItemView } from '~/lib/item-view'
 
 // Variants by axes in one table, to fill in the empty values quickly. `variantId` opens the sheet (and marks its row).
@@ -53,19 +53,23 @@ const open = computed({
 
 const changed = computed(() => Object.keys(values.value).filter((k) => (values.value[k] ?? null) !== (baseline.value[k] ?? null)))
 const hasFieldError = computed(() => Object.values(fieldErrors.value).some((e) => e))
-// Rows whose edited values would equal another variant's (an archived one can be restored instead, §4.7).
+// The edited cells by row.
+const edits = computed<ValuesRow[]>(() => {
+  const byRow = new Map<Id, Record<Id, string | null>>()
+  for (const k of changed.value) {
+    const [variantId, attributeId] = k.split(':') as [Id, Id]
+    byRow.set(variantId, { ...byRow.get(variantId), [attributeId]: values.value[k] ?? null })
+  }
+  return [...byRow].map(([variantId, v]) => ({ variantId, values: v }))
+})
+// Rows whose values, with all the edits applied at once, equal another variant's (an archived one can be restored instead, §4.7).
 const clashes = computed(() => {
   const s = state.snapshot
-  const found: { row: { id: Id; label: string }; clash: VariantClash }[] = []
-  if (!s || hasFieldError.value) return found
-  const edited = new Set(changed.value.map((k) => k.split(':')[0]))
-  for (const row of rows.value) {
-    if (!edited.has(row.id)) continue
-    const final = Object.fromEntries(axes.value.map((a) => [a.attributeId, values.value[key(row.id, a.attributeId)] ?? null]))
-    const clash = variantClash(s, props.view.item.id, final, row.id)
-    if (clash) found.push({ row, clash })
-  }
-  return found
+  if (!s || hasFieldError.value) return []
+  return rowClashes(s, props.view.item.id, edits.value).flatMap((c) => {
+    const row = rows.value.find((r) => r.id === c.variantId)
+    return row ? [{ row, clash: c }] : []
+  })
 })
 const canSave = computed(() => !saving.value && !state.readOnly && changed.value.length > 0 && !hasFieldError.value && clashes.value.length === 0)
 
@@ -87,12 +91,8 @@ async function save(): Promise<void> {
   saving.value = true
   errorKey.value = null
   try {
-    for (const k of changed.value) {
-      const [variantId, attributeId] = k.split(':') as [Id, Id]
-      await workspace.apply({ type: 'variant.setAttribute', variantId, attributeId, value: values.value[k] ?? null })
-      // Written: this cell is no longer pending, so a failure further on does not resend it.
-      baseline.value = { ...baseline.value, [k]: values.value[k] ?? null }
-    }
+    const command = setValuesCommand(props.view.item.id, edits.value)
+    if (command) await workspace.apply(command)
     emit('close')
   } catch (e) {
     errorKey.value = errorMessageKey(e)

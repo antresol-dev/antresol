@@ -30,7 +30,7 @@ const workspace = useWorkspace()
 const { state } = workspace
 const { add: addAxisTo } = useAddAxis()
 const { ids, renew } = useCommandIds(['attributeId', 'firstVariantId'])
-// One id per new variant line, kept across retries; dropped after a success.
+// One id per new variant line (and per its receipt), kept across retries; dropped after a success.
 const lineIds = new Map<string, Id>()
 const lineId = (key: string): Id => {
   let id = lineIds.get(key)
@@ -111,14 +111,17 @@ async function submit(): Promise<void> {
   if (!canSubmit.value || !snapshot) return
   // Decided before the write: afterwards the item has variants and no offer.
   const offer = looseTransferOffer(snapshot, props.itemId)
-  const created = fresh.value.map((l) => ({ id: lineId(JSON.stringify(l.values ?? [])), label: l.label ?? '', values: l.values ?? [] }))
+  const created = fresh.value.map((l) => {
+    const key = JSON.stringify(l.values ?? [])
+    return { id: lineId(key), label: l.label ?? '', values: l.values ?? [], receipt: l.quantity === null ? undefined : { movementId: lineId(`m:${key}`), quantity: l.quantity } }
+  })
   busy.value = true
   errorKey.value = null
   try {
     await workspace.apply({
       type: 'variant.createMany',
       itemId: props.itemId,
-      variants: created.map((c) => ({ id: c.id, values: c.values })),
+      variants: created.map((c) => ({ id: c.id, values: c.values, ...(c.receipt ? { initialReceipt: c.receipt } : {}) })),
     })
     lineIds.clear()
     emit('done', { created: created.map((c) => ({ id: c.id, label: c.label })), offer })
@@ -239,7 +242,7 @@ async function restore(archiveId: Id): Promise<void> {
         :class="l.error ? 'border-destructive' : ''"
       >
         <span class="min-w-0 truncate" :class="l.error || l.duplicate || l.repeat ? 'text-muted-foreground' : 'font-semibold'">
-          {{ l.label ?? l.raw }}
+          {{ l.label ?? l.raw }}<template v-if="l.quantityLabel"> — {{ l.quantityLabel }}</template>
         </span>
         <span v-if="l.error" class="text-[13px] text-destructive">{{ $t(l.error) }}</span>
         <span v-else-if="l.duplicate" class="flex items-center gap-2 text-[13px] text-subtle-foreground">

@@ -214,24 +214,55 @@ describe.skipIf(!url)('Neon conformance', () => {
       })
 
       it('concurrent applies are serialized on the revision row', async () => {
-        const other = make()
-        try {
-          const { storage: a } = await openPostgresStorage(exec)
-          const { storage: b } = await openPostgresStorage(other)
-          const inv = newId()
-          await a.apply({ type: 'inventory.create', id: inv, name: `race-${name}`, description: null, currency: 'USD' }, TEST_ACTOR)
-          const folder = (id: string) =>
-            ({ type: 'folder.create', id, inventoryId: inv, parentId: null, name: id, description: null }) as const
-          for (let round = 0; round < 3; round++) {
-            const [ra, rb] = await Promise.all([a.apply(folder(newId()), TEST_ACTOR), b.apply(folder(newId()), TEST_ACTOR)])
-            // Whichever committed second read, under the lock, exactly the revision the first one wrote.
-            const revs = JSON.stringify([ra.prevRev, ra.rev, rb.prevRev, rb.rev])
-            expect(ra.prevRev === rb.rev || rb.prevRev === ra.rev, revs).toBe(true)
-          }
-        } finally {
-          await other.close()
+        // Deterministic: one transaction holds the revision row (pg_sleep under LOCK_REV); an apply is sent only once
+        // that hold is seen running, and the hold ends only after the apply is seen waiting for the row's lock.
+        const holder = make()
+        const writer = make()
+        const watcher = make()
+        const tag = `gm_race_${newId().replace(/-/g, '')}`
+        /** Sessions other than the watcher's own whose current statement matches `pattern` (and `where`). */
+        const sessions = async (pattern: string, where = 'true'): Promise<number> => {
+          const [row] = await watcher.query<{ n: number }>({
+            text: `select count(*)::int as n from pg_stat_activity
+                    where pid <> pg_backend_pid() and state = 'active' and query like $1 and ${where}`,
+            params: [pattern],
+          })
+          return row?.n ?? 0
         }
-      })
+        const until = async (what: string, seen: () => Promise<boolean>): Promise<void> => {
+          for (let tries = 0; tries < 200; tries++) {
+            if (await seen()) return
+            await new Promise((resolve) => setTimeout(resolve, 50))
+          }
+          throw new Error(`never saw ${what}`)
+        }
+        try {
+          const { storage } = await openPostgresStorage(writer)
+          const inv = newId()
+          await storage.apply({ type: 'inventory.create', id: inv, name: `race-${name}`, description: null, currency: 'USD' }, TEST_ACTOR)
+          // The other writer: the revision lock, a sleep long enough to see the apply wait behind it, the bump.
+          const holding = holder.batch([LOCK_REV, { text: `select pg_sleep(6) as ${tag}`, params: [] }, REV_BUMP])
+          // Awaited below; a failure while still waiting to see it must not surface as an unhandled rejection.
+          holding.catch(() => {})
+          await until('the hold of the revision row', async () => (await sessions(`%${tag}%`)) > 0)
+          const applying = storage.apply(
+            { type: 'folder.create', id: newId(), inventoryId: inv, parentId: null, name: 'queued', description: null },
+            TEST_ACTOR,
+          )
+          applying.catch(() => {})
+          await until('the apply wait for the revision row', async () =>
+            (await sessions('%gm_meta%for update%', `wait_event_type = 'Lock'`)) > 0,
+          )
+          const [held, applied] = await Promise.all([holding, applying])
+          const heldRev = held.at(-1)?.[0]?.value
+          expect(typeof heldRev).toBe('string')
+          // The apply read the revision only once the hold committed: exactly the one it wrote.
+          expect(applied.prevRev).toBe(heldRev)
+          expect(applied.rev).not.toBe(heldRev)
+        } finally {
+          await Promise.all([holder.close(), writer.close(), watcher.close()])
+        }
+      }, 60_000)
 
       it('restores a backup: new ids twice without duplicates; the same ids refused next to the copy unless resuming', async () => {
         const { storage } = await openPostgresStorage(exec)

@@ -118,6 +118,35 @@ export function attributeChoices(s: InventorySnapshot, itemId: Id): Attribute[] 
   return s.attributes.filter((a) => !attached.has(a.id)).sort(byName)
 }
 
+/** The item's shared attributes (axes excluded), by name. */
+function sharedAttributes(s: InventorySnapshot, itemId: Id): AttributeRow[] {
+  const definitions = new Map(s.attributes.map((a) => [a.id, a] as const))
+  return s.itemAttributes
+    .filter((a) => a.itemId === itemId && a.axisPosition === null)
+    .flatMap((a) => {
+      const def = definitions.get(a.attributeId)
+      if (!def) return []
+      const value = valueOf(a.value)
+      const display = value === null ? null : formatAttributeValue(def, value)
+      return [{ attributeId: def.id, name: def.name, kind: def.kind, options: def.options, unit: def.unit, siPrefixes: def.siPrefixes, value, display }]
+    })
+    .sort((a, b) => byName(a, b) || compareIds(a.attributeId, b.attributeId))
+}
+
+/** One line about a bucket for the top of its sheets: the variant's label, the item's name, then the item's shared
+ *  attribute values as they show on the card (at most three, empty ones skipped): "10 kΩ · Resistor 0.25 W · 5 %".
+ *  `variantId` null (or unknown) is the item itself. Empty when the item is missing. */
+export function bucketDescription(s: InventorySnapshot, itemId: Id, variantId: Id | null): string {
+  const ix = snapshotIndex(s)
+  const item = ix.items.get(itemId)
+  if (!item) return ''
+  const label = variantId === null ? null : (ix.variants.get(variantId)?.name ?? null)
+  const values = sharedAttributes(s, itemId)
+    .flatMap((a) => (a.display === null ? [] : [a.display]))
+    .slice(0, 3)
+  return [label, item.name, ...values].filter((part): part is string => !!part).join(' · ')
+}
+
 /** null when the item is missing, archived, or its folder chain is archived or missing. */
 export function itemView(s: InventorySnapshot, itemId: Id): ItemView | null {
   const ix = snapshotIndex(s)
@@ -143,17 +172,7 @@ export function itemView(s: InventorySnapshot, itemId: Id): ItemView | null {
     siPrefixes: a.siPrefixes,
   }))
 
-  const definitions = new Map(s.attributes.map((a) => [a.id, a] as const))
-  const attributes: AttributeRow[] = s.itemAttributes
-    .filter((a) => a.itemId === itemId && a.axisPosition === null)
-    .flatMap((a) => {
-      const def = definitions.get(a.attributeId)
-      if (!def) return []
-      const value = valueOf(a.value)
-      const display = value === null ? null : formatAttributeValue(def, value)
-      return [{ attributeId: def.id, name: def.name, kind: def.kind, options: def.options, unit: def.unit, siPrefixes: def.siPrefixes, value, display }]
-    })
-    .sort((a, b) => byName(a, b) || compareIds(a.attributeId, b.attributeId))
+  const attributes = sharedAttributes(s, itemId)
 
   const variantValues = new Map<Id, Map<Id, string | null>>()
   const activeIds = new Set(variants.map((v) => v.id))

@@ -31,7 +31,7 @@
     "confirmInventory": "Inventory “{name}” and everything in it will be deleted for good. This can’t be undone."
   },
   "update": { "available": "New version available", "reload": "Reload", "offlineReady": "Ready to work offline" },
-  "tree": { "expand": "Expand {name}", "collapse": "Collapse {name}" },
+  "tree": { "expand": "Expand {name}", "collapse": "Collapse {name}", "resize": "Resize the folder tree" },
   "search": {
     "label": "Search",
     "field": "Search {name}",
@@ -479,7 +479,7 @@
     "create": "Create",
     "save": "Save"
   },
-  "folderForm": { "create": "Create", "save": "Save" },
+  "folderForm": { "create": "Create", "save": "Save", "parent": "Parent folder", "chooseParent": "Choose the parent folder" },
   "errors": {
     "unknown": "Something went wrong. Try again.",
     "domain": {

@@ -185,7 +185,7 @@ function select(key: string): void {
         </p>
       </div>
       <template v-if="!creating" #footer>
-        <Button type="button" class="h-11 rounded-field" :disabled="addLocked || !!state.readOnly || !choice" @click="submitAdd">
+        <Button type="button" data-primary class="h-11 rounded-field" :disabled="addLocked || !!state.readOnly || !choice" @click="submitAdd">
           {{ $t(busy ? 'status.saving' : 'axes.addConfirm') }}
         </Button>
       </template>
@@ -265,6 +265,7 @@ function select(key: string): void {
       <template #footer>
         <Button
           type="button"
+          data-primary
           :variant="shown?.mode === 'remove' ? 'destructive' : 'default'"
           class="h-11 rounded-field"
           :disabled="busy || shown?.notice.kind === 'blocked'"

@@ -6,7 +6,7 @@ import { toast } from 'vue-sonner'
 import type { StockTarget } from '~/components/StockSheet.vue'
 import type { LooseOffer, VariantsAdded } from '~/components/VariantsForm.vue'
 import { errorMessageKey } from '~/lib/errors'
-import { itemView } from '~/lib/item-view'
+import { bucketDescription, itemView } from '~/lib/item-view'
 import { quickStep, type StockMode } from '~/lib/stock-forms'
 
 const props = defineProps<{ itemId: string; variantId: string | null }>()
@@ -72,6 +72,8 @@ function added(a: VariantsAdded): void {
   if (a.offer) looseOffer.value = { offer: a.offer, variants: created }
 }
 const renameId = ref<Id | null>(null)
+// The line at the top of a variant's sheets (see bucketDescription).
+const describe = (variantId: Id | null): string => (snapshot.value ? bucketDescription(snapshot.value, props.itemId, variantId) : '')
 const archiveId = ref<Id | null>(null)
 // The variant the open sheet is about, kept while the sheet animates out.
 const sheetVariant = shallowRef<{ id: Id; name: string } | null>(null)
@@ -275,13 +277,20 @@ const linkClass =
         :variants="looseOffer?.variants ?? []"
         @close="looseOffer = null"
       />
-      <AppSheet v-model:open="renameOpen" :title="$t('item.editVariant')" :locked="renameBusy" initial-focus="#variant-name">
+      <AppSheet
+        v-model:open="renameOpen"
+        :title="$t('item.editVariant')"
+        :summary="describe(renameId)"
+        :locked="renameBusy"
+        initial-focus="#variant-name"
+      >
         <VariantForm v-if="renaming" :key="renaming.id" v-model:busy="renameBusy" :variant="renaming" @done="renameId = null" />
       </AppSheet>
       <AppSheet
         v-model:open="photoOpen"
         :title="$t('photos.variantTitle', { name: photoVariant?.name ?? '' })"
         :description="$t('photos.variantHint')"
+        :summary="describe(photoVariant?.id ?? null)"
         :locked="photoBusy"
       >
         <div v-if="!hasStore" class="grid py-2">
@@ -300,6 +309,7 @@ const linkClass =
         v-model:open="archiveOpen"
         :title="$t('variantMenu.archiveTitle')"
         :description="$t('variantMenu.archiveConfirm', { name: sheetVariant?.name ?? '' })"
+        :summary="describe(sheetVariant?.id ?? null)"
         :confirm-label="$t(archiveBusy ? 'status.saving' : 'variantMenu.archive')"
         :busy="archiveBusy"
         destructive

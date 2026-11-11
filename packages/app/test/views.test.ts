@@ -19,7 +19,8 @@ import {
   folderTree,
   folderView,
   indexStats,
-  inventoryItemCount,
+  inventoryPieces,
+  piecesLabel,
   moveTargets,
   searchRows,
   type Crumb,
@@ -57,12 +58,12 @@ const byValue = (s: InventorySnapshot, itemId: string, value: string) =>
   s.variants.find((v) => v.itemId === itemId && variantLabel(s, v).replace(/\s/g, '').toLowerCase().startsWith(value))!
 
 describe('folderView', () => {
-  it('lists root folders by name with subtree item counts', () => {
+  it('lists root folders by name with subtree piece sums', () => {
     const v = folderView(snap, null)!
     expect(v.folder).toBeNull()
     expect(v.crumbs).toEqual([])
     expect(names(v.folders)).toEqual(['ICs', 'Passive components', expect.stringContaining('Очень длинное')])
-    expect(v.folders.map((f) => f.itemCount)).toEqual([3, 2, 0])
+    expect(v.folders.map((f) => f.pieces)).toEqual(['43', '100', null])
   })
 
   it('builds crumbs and item rows', () => {
@@ -132,21 +133,65 @@ describe('folderTree', () => {
     expect(names(tree[0]!.children)).toEqual(['Op-amps'])
   })
 
-  it('counts active items in each subtree, like the folder list', () => {
+  it('sums pieces in each subtree, like the folder list', () => {
     const tree = folderTree(snap)
-    expect(tree.map((n) => n.itemCount)).toEqual([3, 2, 0])
-    expect(tree[0]!.children.map((n) => n.itemCount)).toEqual([1])
-    expect(tree[1]!.children.map((n) => [n.name, n.itemCount])).toEqual([['Resistors', 1]])
-    expect(tree.map((n) => n.itemCount)).toEqual(folderView(snap, null)!.folders.map((f) => f.itemCount))
+    expect(tree.map((n) => n.pieces)).toEqual(folderView(snap, null)!.folders.map((f) => f.pieces))
+    expect(tree[0]!.children.map((n) => n.pieces)).toEqual(folderView(snap, idOf(snap, 'ICs'))!.folders.map((f) => f.pieces))
   })
 })
 
-describe('inventoryItemCount', () => {
-  it('counts active items in the whole inventory', () => {
-    expect(inventoryItemCount(snap)).toBe(5)
+describe('piece sums', () => {
+  const at = '2026-11-10T00:00:00Z'
+  const folder = (s: InventorySnapshot, id: string, parentId: string | null = null) =>
+    s.folders.push({ id, inventoryId: s.inventory.id, parentId, name: id, description: null, archivedAt: null, archiveId: null } as never)
+  const item = (s: InventorySnapshot, id: string, folderId: string | null, unitKey: string, quantity: string, extra: { archived?: boolean } = {}) => {
+    s.items.push({ id, inventoryId: s.inventory.id, folderId, name: id, unitKey, description: null, tagIds: [], archivedAt: extra.archived ? at : null, archiveId: null } as never)
+    s.stock.push({ itemId: id, variantId: null, quantity, pricedQuantity: '0', pricedTotal: 0, lastPriced: null } as never)
+  }
+  const fresh = (): InventorySnapshot => {
     const s = structuredClone(snap)
-    s.items.find((i) => i.name === 'TL072')!.archivedAt = '2026-11-10T00:00:00Z'
-    expect(inventoryItemCount(s)).toBe(4)
+    s.folders = []
+    s.items = []
+    s.stock = []
+    s.variants = []
+    return s
+  }
+
+  it('adds up pcs items over the subtree and leaves out other units and archived items', () => {
+    const s = fresh()
+    folder(s, 'A')
+    folder(s, 'B', 'A')
+    folder(s, 'Wire')
+    folder(s, 'Zero')
+    item(s, 'resistors', 'A', 'pcs', '10')
+    item(s, 'caps', 'B', 'pcs', '5')
+    item(s, 'cable', 'A', 'm', '100')
+    item(s, 'old', 'A', 'pcs', '7', { archived: true })
+    item(s, 'cable2', 'Wire', 'm', '50')
+    item(s, 'zero', 'Zero', 'pcs', '0')
+    const [a, wire, zero] = folderView(s, null)!.folders
+    expect(a!.pieces).toBe('15')
+    expect(folderView(s, 'A')!.folders[0]!.pieces).toBe('5')
+    expect(wire!.pieces).toBeNull() // only metres: no number
+    expect(zero!.pieces).toBe('0') // pieces, none in stock: still a number
+    expect(inventoryPieces(s)).toBe('15')
+    expect(folderTree(s).map((n) => n.pieces)).toEqual(['15', null, '0'])
+  })
+
+  it('has no number when no item counts in pieces, and skips archived variants', () => {
+    expect(inventoryPieces(fresh())).toBeNull()
+    const s = fresh()
+    folder(s, 'A')
+    item(s, 'x', 'A', 'pcs', '4')
+    s.variants.push({ id: 'v1', itemId: 'x', archivedAt: at } as never)
+    s.stock.push({ itemId: 'x', variantId: 'v1', quantity: '9', pricedQuantity: '0', pricedTotal: 0, lastPriced: null } as never)
+    expect(inventoryPieces(s)).toBe('4')
+  })
+
+  it('shows k and M prefixes as a bare prefix', () => {
+    expect(piecesLabel('5')).toBe('5')
+    expect(piecesLabel('1200')).toBe('1.2k')
+    expect(piecesLabel('2000000')).toBe('2M')
   })
 })
 

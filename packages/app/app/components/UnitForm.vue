@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { captureBaseline, changedFields } from '~/lib/changed-fields'
 import { errorMessageKey } from '~/lib/errors'
+import { prefixNote } from '~/lib/prefixes'
 
 // Creates a custom unit or edits one: name, symbol and the SI prefixes quantities may show with.
 const props = defineProps<{ unit: CustomUnit | null }>()
@@ -105,7 +106,7 @@ async function submit(): Promise<void> {
           class="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-sm px-2 text-sm transition-colors duration-150 hover:bg-hover"
         >
           <Checkbox :model-value="powers.includes(p.power)" @update:model-value="toggle(p.power, $event === true)" />
-          {{ p.symbol }} · {{ p.name }}
+          {{ prefixNote(p.power) }}
         </label>
       </div>
     </fieldset>

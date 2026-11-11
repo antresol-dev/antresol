@@ -120,7 +120,7 @@ async function save(): Promise<void> {
       </template>
     </div>
     <template v-if="!creating" #footer>
-      <Button type="button" class="h-11 rounded-field" :disabled="!canSave" @click="save">
+      <Button type="button" data-primary class="h-11 rounded-field" :disabled="!canSave" @click="save">
         {{ $t(saving ? 'status.saving' : 'attributeSheet.save') }}
       </Button>
     </template>

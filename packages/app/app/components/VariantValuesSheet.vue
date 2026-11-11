@@ -3,7 +3,7 @@ import type { Id } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
 import { variantClash, type VariantClash } from '~/lib/axes'
 import { errorMessageKey } from '~/lib/errors'
-import type { AxisRow, ItemView } from '~/lib/item-view'
+import { bucketDescription, type AxisRow, type ItemView } from '~/lib/item-view'
 
 // Variants by axes in one table, to fill in the empty values quickly. `variantId` opens the sheet (and marks its row).
 const props = defineProps<{ view: ItemView; variantId: Id | null }>()
@@ -11,6 +11,7 @@ const emit = defineEmits<{ close: [] }>()
 
 const workspace = useWorkspace()
 const { state } = workspace
+const summary = computed(() => (state.snapshot ? bucketDescription(state.snapshot, props.view.item.id, null) : ''))
 
 type Cells = Record<string, string | null>
 const key = (variantId: Id, attributeId: Id): string => `${variantId}:${attributeId}`
@@ -102,7 +103,7 @@ async function save(): Promise<void> {
 </script>
 
 <template>
-  <AppSheet v-model:open="open" :title="$t('variantValues.title')" :locked="saving">
+  <AppSheet v-model:open="open" :title="$t('variantValues.title')" :summary="summary" :locked="saving">
     <div class="mt-3.5 grid gap-3.5">
       <p v-if="axes.length === 0" class="text-sm text-muted-foreground">{{ $t('variantValues.empty') }}</p>
       <div v-else class="overflow-x-auto">
@@ -155,7 +156,7 @@ async function save(): Promise<void> {
       </p>
     </div>
     <template #footer>
-      <Button type="button" class="h-11 rounded-field" :disabled="!canSave" @click="save">
+      <Button type="button" data-primary class="h-11 rounded-field" :disabled="!canSave" @click="save">
         {{ $t(saving ? 'status.saving' : 'variantValues.save') }}
       </Button>
     </template>

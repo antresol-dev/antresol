@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { errorMessageKey } from '~/lib/errors'
-import type { ItemView } from '~/lib/item-view'
+import { bucketDescription, type ItemView } from '~/lib/item-view'
 import { buildStockCommand, type StockMode } from '~/lib/stock-forms'
 
 export interface StockTarget {
@@ -35,7 +35,6 @@ const NONE = '__none__'
 const keyOf = (id: Id | null): string => id ?? NONE
 const idOf = (key: string): Id | null => (key === NONE ? null : key)
 
-const source = computed(() => props.view.buckets.find((b) => b.variantId === shown.value.variantId) ?? null)
 // Where stock can go: every bucket but the source, the no-variant one included.
 const destinations = computed(() => {
   const rows = props.view.buckets
@@ -71,6 +70,7 @@ const open = computed({
 })
 
 const mode = computed(() => shown.value.mode)
+const summary = computed(() => (state.snapshot ? bucketDescription(state.snapshot, props.view.item.id, shown.value.variantId) : ''))
 // The item has one unit: AmountField shows its symbol and no select.
 const unitKey = computed(() => props.view.unit.key)
 const units = computed(() => [props.view.unit])
@@ -105,7 +105,7 @@ async function submit(): Promise<void> {
   <AppSheet
     v-model:open="open"
     :title="$t(`stockForm.title.${mode}`)"
-    :description="source?.name ?? undefined"
+    :summary="summary"
     initial-focus="#stock-amount"
     :locked="busy"
   >

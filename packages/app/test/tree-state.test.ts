@@ -1,7 +1,7 @@
 import { newId, type InventorySnapshot, type InventoryStorage } from '@graymatter/core'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
-import { loadTreeOpen, openPath, saveTreeOpen, toggleOpen, treeRows } from '../app/lib/tree-state'
+import { loadTreeOpen, openPath, rowClickAction, saveTreeOpen, toggleOpen, treeRows } from '../app/lib/tree-state'
 import type { SourceConfig } from '../app/lib/types'
 
 const cfg: SourceConfig = {
@@ -55,10 +55,17 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+describe('rowClickAction', () => {
+  it('selects a folder that is not open, toggles the one whose screen is open', () => {
+    expect(rowClickAction(false)).toBe('select')
+    expect(rowClickAction(true)).toBe('toggle')
+  })
+})
+
 describe('treeRows', () => {
-  it('starts collapsed with subtree counts', () => {
-    expect(treeRows(snap, {}, 'root').map((r) => [r.name, r.itemCount, r.hasChildren, r.open, r.children.length]))
-      .toEqual([['ICs', 3, true, false, 0], ['Passive components', 2, true, false, 0], [expect.stringContaining('Очень длинное'), 0, false, false, 0]])
+  it('starts collapsed with subtree piece sums', () => {
+    expect(treeRows(snap, {}, 'root').map((r) => [r.name, r.pieces, r.hasChildren, r.open, r.children.length]))
+      .toEqual([['ICs', '43', true, false, 0], ['Passive components', '100', true, false, 0], [expect.stringContaining('Очень длинное'), null, false, false, 0]])
     expect(treeRows(snap, {}, 'root').some((r) => r.current)).toBe(false)
   })
 

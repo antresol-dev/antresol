@@ -8,9 +8,13 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 
+import { isSubmitChord, pressPrimary } from '~/lib/sheet-keys'
+
 const props = defineProps<{
   title: string
   description?: string
+  /** What the sheet is about, a line under the title: "10 kΩ · Resistor 0.25 W · 5 %" (see bucketDescription). */
+  summary?: string
   initialFocus?: string
   /** A write is running: Esc, a click outside and the back gesture leave the sheet open. */
   locked?: boolean
@@ -49,6 +53,12 @@ function focusInitial(event: Event): void {
   target.focus()
 }
 
+// Ctrl+Enter / ⌘+Enter presses the sheet's main button when it is available (once here, not in every sheet).
+function submitChord(event: KeyboardEvent): void {
+  if (!isSubmitChord(event) || event.defaultPrevented || !(event.currentTarget instanceof HTMLElement)) return
+  if (pressPrimary(event.currentTarget)) event.preventDefault()
+}
+
 function refuseWhileLocked(event: Event): void {
   if (props.locked) event.preventDefault()
 }
@@ -78,6 +88,7 @@ function returnFocus(event: Event): void {
       @interact-outside="refuseWhileLocked"
       @open-auto-focus="focusInitial"
       @close-auto-focus="returnFocus"
+      @keydown="submitChord"
     >
       <DialogHeader class="text-left">
         <DialogTitle class="text-lg font-bold tracking-[-0.02em]">{{ title }}</DialogTitle>
@@ -85,6 +96,7 @@ function returnFocus(event: Event): void {
           {{ description ?? title }}
         </DialogDescription>
       </DialogHeader>
+      <p v-if="summary" class="-mt-1 text-sm font-semibold break-words">{{ summary }}</p>
       <slot />
       <DialogFooter v-if="$slots.footer" class="gap-2">
         <slot name="footer" />

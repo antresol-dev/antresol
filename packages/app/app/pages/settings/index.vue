@@ -180,6 +180,7 @@ async function confirmRemove(): Promise<void> {
           <Button variant="outline" class="h-11 rounded-field bg-surface" @click="removing = null">{{ $t('ui.cancel') }}</Button>
           <Button
             variant="destructive"
+            data-primary
             class="h-11 rounded-field bg-destructive text-primary-foreground hover:bg-destructive/90 dark:bg-destructive dark:hover:bg-destructive/90"
             @click="confirmRemove"
           >

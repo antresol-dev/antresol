@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { Archive, Boxes, ChevronRight, Folder, FolderInput, FolderPlus, Pencil, Plus } from '@lucide/vue'
 import { treeAriaCurrent } from '~/lib/shell'
-import type { TreeRow } from '~/lib/tree-state'
+import { rowClickAction, type TreeRow } from '~/lib/tree-state'
+import { piecesLabel } from '~/lib/views'
 import type RowMenu from './RowMenu.vue'
 
 const props = defineProps<{
@@ -24,6 +25,14 @@ const route = useRoute()
 const ariaCurrent = computed(() =>
   treeAriaCurrent(props.root ? 'root' : props.row.id, props.row.current, typeof route.name === 'string' ? route.name : null, route.params),
 )
+
+// The second click on the folder whose screen is open opens or closes it; the first one only goes there.
+function click(e: MouseEvent): void {
+  if (props.root || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+  if (rowClickAction(ariaCurrent.value === 'page') !== 'toggle') return
+  e.preventDefault()
+  if (props.row.hasChildren) emit('toggle', props.row.id)
+}
 
 const indents = computed(() => (props.level ?? 0) < MAX_INDENT)
 const panel = computed(() => props.variant === 'panel')
@@ -100,6 +109,7 @@ const pressHandlers = computed(() =>
           root ? '' : 'select-none [-webkit-touch-callout:none]',
         ]"
         v-on="pressHandlers"
+        @click="click"
       >
         <Boxes v-if="root" class="size-4 shrink-0" aria-hidden="true" />
         <Folder v-else :class="['size-4 shrink-0', row.current ? '' : 'text-primary']" aria-hidden="true" />
@@ -123,9 +133,10 @@ const pressHandlers = computed(() =>
         </span>
       </template>
       <span
+        v-if="row.pieces !== null"
         :class="['shrink-0 text-xs font-bold tabular-nums', row.current ? 'text-accent-soft-foreground' : 'text-subtle-foreground']"
       >
-        {{ row.itemCount }}
+        {{ piecesLabel(row.pieces) }}
       </span>
     </div>
     <ul

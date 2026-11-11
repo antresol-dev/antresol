@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { treeCurrent } from '~/lib/shell'
 import { loadTreeOpen, openPath, saveTreeOpen, toggleOpen, treeRows, type TreeOpen, type TreeRow } from '~/lib/tree-state'
-import { inventoryItemCount } from '~/lib/views'
+import { inventoryPieces } from '~/lib/views'
 
 defineProps<{ variant: 'panel' | 'drawer' }>()
 
@@ -46,7 +46,7 @@ const root = computed<TreeRow | null>(() =>
     ? {
         id: snapshot.value.inventory.id,
         name: snapshot.value.inventory.name,
-        itemCount: inventoryItemCount(snapshot.value),
+        pieces: inventoryPieces(snapshot.value),
         hasChildren: false,
         open: false,
         current: current.value === 'root',

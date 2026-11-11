@@ -71,31 +71,34 @@ export function countChanges(rows: CountRow[], entries: ReadonlyMap<string, stri
   return changes
 }
 
-/** A row's entry was edited: its next write gets a fresh movementId. A first write that committed but timed out would
- *  otherwise make the server drop the corrected value as a repeat of the same id while "Saved" shows (stock.set is an
- *  absolute target, so a new id is always safe). */
-export function renewCountId(ids: Map<string, Id>, key: string): void {
+/** The movementId of each row's count by row key, with the target it was minted for, until that count lands. */
+export type CountIds = Map<string, { target: Quantity; movementId: Id }>
+
+/** A row's entry was edited: its next write gets a fresh movementId. applyCounts already mints a new id for another
+ *  target, so this only matters for an edit back to the number already sent; stock.set is an absolute target, so a new
+ *  id is always safe (a repeat of a count that landed unseen only adds a zero adjustment). */
+export function renewCountId(ids: CountIds, key: string): void {
   ids.delete(key)
 }
 
 /**
  * One stock.set per change, one after another (no batch command yet). Each row's movementId lives in `ids` (by row key)
  * until its write lands, so a retry after a failure sends the same command and a write that did land is not repeated.
+ * The id follows the target: a row counted again with another number after a failure gets a new id, so its count is
+ * written even when the first one landed unseen (an unknown outcome); stock.set is absolute, so that is always safe.
  * Stops at the first failure: what landed stays. `onProgress(done)` after each landed write.
  */
 export async function applyCounts(
   changes: { row: CountRow; target: Quantity }[],
-  ids: Map<string, Id>,
+  ids: CountIds,
   apply: (command: Command) => Promise<void>,
   onProgress?: (done: number) => void,
 ): Promise<{ done: number; failed: { key: string; error: unknown } | null }> {
   let done = 0
   for (const { row, target } of changes) {
-    let movementId = ids.get(row.key)
-    if (!movementId) {
-      movementId = newId()
-      ids.set(row.key, movementId)
-    }
+    const kept = ids.get(row.key)
+    const movementId = kept && cmpQ(kept.target, target) === 0 ? kept.movementId : newId()
+    ids.set(row.key, { target, movementId })
     try {
       await apply({ type: 'stock.set', movementId, itemId: row.itemId, variantId: row.variantId, target, note: null })
     } catch (error) {

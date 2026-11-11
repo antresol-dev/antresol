@@ -156,6 +156,11 @@ describe('validateCommand', () => {
     expect(code({ type: 'tag.rename', id: 't1', name: 'analog' })).toBeNull()
   })
 
+  it('tag.create sent again after it landed is a retry, not a duplicate', () => {
+    expect(code({ type: 'tag.create', id: 't1', inventoryId: 'inv', name: 'Analog' })).toBeNull()
+    expect(code({ type: 'tag.create', id: 't1', inventoryId: 'inv', name: ' analog ' })).toBeNull()
+  })
+
   it('unit.delete refuses used units, including archived items', () => {
     expect(code({ type: 'unit.delete', id: 'u1' })).toBe('unit_in_use')
     const s = snap()
@@ -193,6 +198,20 @@ describe('final review fixes', () => {
     expect(code({ type: 'archive', target: 'folder', id: 'AC', archiveId: 'n' })).toBe('archived')
     expect(code({ type: 'archive', target: 'variant', id: 'v2', archiveId: 'n' })).toBe('archived')
     expect(code({ type: 'archive', target: 'item', id: 'i1', archiveId: 'n' })).toBeNull()
+  })
+
+  it('an archive sent again after it landed (same archiveId) is a retry, not a refusal', () => {
+    expect(code({ type: 'archive', target: 'item', id: 'i2', archiveId: 'arch' })).toBeNull()
+    expect(code({ type: 'archive', target: 'folder', id: 'AF', archiveId: 'arch' })).toBeNull()
+    expect(code({ type: 'archive', target: 'folder', id: 'AC', archiveId: 'arch' })).toBeNull()
+    expect(code({ type: 'archive', target: 'variant', id: 'v2', archiveId: 'arch' })).toBeNull()
+    // Archived with it through its folder, not by this command: the item carries no archiveId of its own.
+    expect(code({ type: 'archive', target: 'item', id: 'i3', archiveId: 'arch' })).toBe('archived')
+    const s = snap()
+    s.inventory = { ...s.inventory, ...ARCH }
+    expect(code({ type: 'archive', target: 'inventory', id: 'inv', archiveId: 'arch' }, s)).toBeNull()
+    expect(code({ type: 'archive', target: 'inventory', id: 'inv', archiveId: 'n' }, s)).toBe('archived')
+    expect(code({ type: 'archive', target: 'item', id: 'i1', archiveId: 'arch' }, s)).toBe('archived')
   })
 
   it('quantities and prices must fit the columns', () => {

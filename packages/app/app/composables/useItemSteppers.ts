@@ -2,6 +2,7 @@ import { BUILTIN_UNITS, cmpQ, formatAmountParts, negQ, resolveUnit, StorageError
 import { toast } from 'vue-sonner'
 import { errorMessageKey } from '~/lib/errors'
 import { createStepper, flushWhenHidden, stepCommand, type Stepper } from '~/lib/stepper'
+import { isUnknownOutcome, landedBefore } from '~/lib/unconfirmed'
 import { bucketKey } from '~/lib/workspace'
 
 /** Spec 4.12: one movement goes out 2 s after the last press. */
@@ -29,6 +30,8 @@ export function signedAmount(delta: Quantity, unit: UnitDef): { number: string; 
  * - when the page is hidden or goes away;
  * - when the screen lets go of the item (another item, unmount). A send that fails after that cannot show its chip any
  *   more: a toast says what was not saved and offers a retry (with the same movementId).
+ * After an unknown outcome the delta is unconfirmed (it may have landed): a retry tries the source again first, and a
+ * retried "−" refused for missing stock is taken as landed ("probably saved") instead of failing (spec 4.7).
  */
 export function useItemSteppers(itemId: () => Id): { of(variantId: Id | null): BucketStepper } {
   const workspace = useWorkspace()
@@ -51,13 +54,16 @@ export function useItemSteppers(itemId: () => Id): { of(variantId: Id | null): B
   function create(id: Id, variantId: Id | null): BucketStepper {
     const target = state.current ? { ...state.current } : null
     const label = nameOf(id, variantId)
-    const stepper = createStepper({
+    const stepper: Stepper = createStepper({
       delayMs: STEP_DELAY_MS,
       available: () => confirmed(id, variantId),
+      unknownOutcome: isUnknownOutcome,
       send: async (delta, movementId) => {
         const command = stepCommand(delta, { itemId: id, variantId }, movementId)
         if (!command) return
         if (!target) throw new StorageError('not_found')
+        // A retry after an unknown outcome: the first send may have landed.
+        const retrying = stepper.unconfirmed.value
         let write: Promise<void>
         ownWrite = true
         try {
@@ -66,10 +72,25 @@ export function useItemSteppers(itemId: () => Id): { of(variantId: Id | null): B
         } finally {
           ownWrite = false
         }
-        await write
+        try {
+          await write
+        } catch (e) {
+          if (!retrying || !landedBefore(command, e)) throw e
+          toast(t('unconfirmed.probablySaved'))
+        }
       },
     })
-    return Object.assign(stepper, { itemId: id, variantId, label })
+    const retry = stepper.retry
+    return Object.assign(stepper, {
+      itemId: id,
+      variantId,
+      label,
+      // An unknown outcome left the source marked unreachable: a retry tries it again first (as the return to the app does).
+      async retry() {
+        if (stepper.state.value === 'failed' && state.readOnly === 'offline') await workspace.syncIfDue().catch(() => {})
+        return retry()
+      },
+    })
   }
 
   function nameOf(id: Id, variantId: Id | null): string {
@@ -82,8 +103,9 @@ export function useItemSteppers(itemId: () => Id): { of(variantId: Id | null): B
   function reportFailed(s: BucketStepper): void {
     if (s.state.value !== 'failed') return
     const delta = signedAmount(s.pending.value, unitOf(s.itemId))
-    toast.error(t('stock.notSavedFor', { delta: `${delta.number} ${delta.unit}`, name: s.label }), {
-      description: t(errorMessageKey(s.error.value)),
+    const unconfirmed = s.unconfirmed.value
+    toast.error(t(unconfirmed ? 'stock.notConfirmedFor' : 'stock.notSavedFor', { delta: `${delta.number} ${delta.unit}`, name: s.label }), {
+      description: unconfirmed ? t('stock.retrySafe') : t(errorMessageKey(s.error.value)),
       duration: 20_000,
       action: { label: t('stock.retry'), onClick: () => void s.retry().then(() => reportFailed(s)) },
     })

@@ -69,6 +69,7 @@ function added({ id, name, photoFailed }: { id: Id; name: string; photoFailed: b
       @done="added"
       @receive="receiveInto"
       @open="openItem"
+      @close="close"
     />
   </AppSheet>
 </template>

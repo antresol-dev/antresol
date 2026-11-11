@@ -102,8 +102,17 @@ async function choose(entry: InventoryEntry): Promise<void> {
   }
 }
 
-// One archive id per opening: a retried Confirm after a timeout sends the same command.
+// One archive id per opening: a retried Confirm after a timeout sends the same command. The confirmation is about the
+// inventory shown when it opened: if another one becomes current meanwhile (the first attempt landed and a check
+// switched away from it), it closes rather than archive that one under the same id.
 const { ids, renew } = useCommandIds(['archiveId'])
+useCloseOnSwitch(
+  () => state.current,
+  () => {
+    if (dialog.value === 'archive') dialog.value = null
+  },
+  () => archiving.value,
+)
 function openDialog(kind: 'create' | 'rename' | 'archive'): void {
   renew()
   menuOpen.value = false

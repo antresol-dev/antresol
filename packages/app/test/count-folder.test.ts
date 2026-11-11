@@ -1,6 +1,6 @@
 import { BUILTIN_UNITS, DomainError, newId, StorageError, type Command, type Id, type InventorySnapshot, type InventoryStorage } from '@graymatter/core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { applyCounts, countChanges, countRows, renewCountId, type CountRow } from '../app/lib/count-folder'
+import { applyCounts, countChanges, countRows, renewCountId, type CountIds, type CountRow } from '../app/lib/count-folder'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import type { SourceConfig } from '../app/lib/types'
 
@@ -143,7 +143,7 @@ describe('applyCounts', () => {
 
   it('sends one stock.set per change in order, each with its own id, and renews the ids that landed', async () => {
     const sent: Command[] = []
-    const ids = new Map<string, Id>()
+    const ids: CountIds = new Map()
     const progress: number[] = []
     const result = await applyCounts(
       [{ row: row('a'), target: '3' }, { row: row('v'), target: '0' }],
@@ -165,7 +165,7 @@ describe('applyCounts', () => {
 
   it('stops at a failure: what landed stays, the failed row keeps its id, and a retry sends it again with it', async () => {
     const sent: Command[] = []
-    const ids = new Map<string, Id>()
+    const ids: CountIds = new Map()
     const failure = new StorageError('unavailable')
     let failOn: string | null = 'item-b'
     const apply = async (c: Command): Promise<void> => {
@@ -177,7 +177,7 @@ describe('applyCounts', () => {
     expect(first).toEqual({ done: 1, failed: { key: 'b', error: failure } })
     expect(sent.map((c) => (c as { itemId: Id }).itemId)).toEqual(['item-a', 'item-b'])
     const failedId = (sent[1] as { movementId: Id }).movementId
-    expect(ids.get('b')).toBe(failedId)
+    expect(ids.get('b')).toEqual({ target: '2', movementId: failedId })
 
     failOn = null
     const again = await applyCounts(changes.slice(1), ids, apply)
@@ -188,19 +188,45 @@ describe('applyCounts', () => {
 
   it('gives an edited row a fresh id, so a corrected value is not dropped as a repeat of a write that timed out', async () => {
     const sent: Command[] = []
-    const ids = new Map<string, Id>()
+    const ids: CountIds = new Map()
     let fail = true
     const apply = async (c: Command): Promise<void> => {
       sent.push(c)
       if (fail) throw new StorageError('unavailable')
     }
     await applyCounts([{ row: row('a'), target: '2' }], ids, apply)
+    // Edited back to the number already sent: still a fresh id (the target alone would keep it).
+    renewCountId(ids, 'a')
+    await applyCounts([{ row: row('a'), target: '2' }], ids, apply)
     renewCountId(ids, 'a')
     fail = false
     await applyCounts([{ row: row('a'), target: '5' }], ids, apply)
-    const [first, second] = sent as Extract<Command, { type: 'stock.set' }>[]
+    const [first, again, second] = sent as Extract<Command, { type: 'stock.set' }>[]
+    expect(again!.movementId).not.toBe(first!.movementId)
     expect(second!.target).toBe('5')
     expect(second!.movementId).not.toBe(first!.movementId)
+  })
+
+  it('the id follows the target: a row counted again with another number after a failure is a new command', async () => {
+    const sent: Command[] = []
+    const ids: CountIds = new Map()
+    const failure = new StorageError('unavailable')
+    let failing = true
+    const apply = async (c: Command): Promise<void> => {
+      sent.push(c)
+      if (failing) throw failure
+    }
+    const idOf = (c: Command | undefined) => (c as { movementId: Id }).movementId
+    await applyCounts([{ row: row('a'), target: '5' }], ids, apply)
+    // The same number again: the same command (if the first one landed unseen, the source skips it).
+    await applyCounts([{ row: row('a'), target: '5.0' }], ids, apply)
+    expect(idOf(sent[1])).toBe(idOf(sent[0]))
+    // Another number: a new id, so it is written even if the first count landed (stock.set is absolute).
+    failing = false
+    expect(await applyCounts([{ row: row('a'), target: '6' }], ids, apply)).toEqual({ done: 1, failed: null })
+    expect(idOf(sent[2])).not.toBe(idOf(sent[0]))
+    expect(sent[2]).toMatchObject({ type: 'stock.set', target: '6' })
+    expect(ids.size).toBe(0)
   })
 
   it('reports a refusal of the source like any other failure', async () => {

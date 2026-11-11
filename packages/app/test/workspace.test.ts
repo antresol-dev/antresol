@@ -1384,6 +1384,69 @@ describe('workspace writes patch the local copy', () => {
     expect(folderNames(ws)).toEqual(['Shelf'])
   })
 
+  it('4b. a stepper delta flushed by a switch is checked against the copy it was pressed in and kept with it: no load', async () => {
+    const { h, ws, refs } = await started('A', 'B')
+    const [a, b] = refs as [InventoryRef, InventoryRef]
+    await ws.selectInventory(b)
+    await ws.selectInventory(a)
+    const [one, two] = [newId(), newId()]
+    await ws.apply(createItem(a.inventoryId, one, 'One'))
+    await ws.apply(createItem(a.inventoryId, two, 'Two'))
+    // Two steppers with a pending delta each, flushed by the switch (before-write hooks).
+    const sent: Promise<void>[] = []
+    let pending = true
+    const stop = ws.onBeforeWrite(() => {
+      if (!pending) return
+      pending = false
+      sent.push(ws.applyTo(a, receive(one, '3')), ws.applyTo(a, receive(two, '4')))
+    })
+    const gate = h.gate()
+    h.flags.applyGate = gate.promise
+    const loads = h.flags.loadCalls
+    await ws.selectInventory(b)
+    stop()
+    expect(sent).toHaveLength(2)
+    expect(ws.state.snapshot?.inventory.id).toBe(b.inventoryId)
+    gate.open()
+    await Promise.all(sent)
+    expect(h.flags.loadCalls).toBe(loads)
+    expect(h.flags.applied.slice(-2)).toEqual(['stock.receive', 'stock.receive'])
+    // Both rows are in A's copy on the device, at the source's revision: opening A again loads nothing.
+    expect((await h.db.getSnapshot(a))!.rev).toBe(await cachedRevOfSource(h))
+    await ws.selectInventory(a)
+    expect(h.flags.loadCalls).toBe(loads)
+    const stock = (id: Id) => ws.state.snapshot!.stock.find((l) => l.itemId === id && l.variantId === null)?.quantity
+    expect([stock(one), stock(two)]).toEqual(['3', '4'])
+    await ws.sync()
+    expect(h.flags.loadCalls).toBe(loads)
+  })
+
+  it('4c. a carried copy takes no rows it cannot be sure of: another device wrote first, so it is marked stale', async () => {
+    const { h, ws, refs } = await started('A', 'B')
+    const [a, b] = refs as [InventoryRef, InventoryRef]
+    await ws.selectInventory(b)
+    await ws.selectInventory(a)
+    const itemId = newId()
+    await ws.apply(createItem(a.inventoryId, itemId))
+    await (await h.direct(CS('one'))).apply(folderCreate(a.inventoryId, 'Theirs'), { device: 'other' })
+    let sent: Promise<void> | null = null
+    let pending = true
+    const stop = ws.onBeforeWrite(() => {
+      if (!pending) return
+      pending = false
+      sent = ws.applyTo(a, receive(itemId, '3'))
+    })
+    await ws.selectInventory(b)
+    stop()
+    await sent
+    expect((await h.db.getSnapshot(a))!.rev).toBeNull()
+    const loads = h.flags.loadCalls
+    await ws.selectInventory(a)
+    expect(h.flags.loadCalls).toBe(loads + 1)
+    expect(folderNames(ws)).toEqual(['Theirs'])
+    expect(ws.state.snapshot!.stock.find((l) => l.itemId === itemId)?.quantity).toBe('3')
+  })
+
   it('5. a write to a non-current inventory marks its cached copy stale', async () => {
     const { h, ws, refs } = await started('A', 'B')
     const [a, b] = refs as [InventoryRef, InventoryRef]

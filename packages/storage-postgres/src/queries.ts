@@ -175,6 +175,9 @@ function movementsStatement(inventoryId: Id) {
 
 /** Receipts a link search returns at most. */
 const RECEIPTS_BY_SOURCE_LIMIT = 20
+/** Newest candidate rows the whole-part check looks at: a key that sits inside many longer lot ids ("123" in
+ *  "/item/41234.html") cannot pull a whole inventory's receipts. */
+export const RECEIPTS_BY_SOURCE_SCAN = 200
 const ALNUM = /[\p{L}\p{N}]/u
 
 /** `key` occurs in `url` (both lowercased) with no letter or digit right before or after it: lot "123" is not in
@@ -196,7 +199,8 @@ export async function findReceiptsBySource(exec: PgExecutor, inventoryId: Id, ke
     sql`select item_id, variant_id, quantity::text as quantity, source_url, created_at
         from movements m
         where inventory_id = ${inventoryId} and kind = 'receipt' and strpos(lower(source_url), ${k}) > 0
-        order by m.seq desc`,
+        order by m.seq desc
+        limit ${raw(String(RECEIPTS_BY_SOURCE_SCAN))}`,
   )
   return result
     .filter((r) => holdsKey(String(r.source_url).toLowerCase(), k))

@@ -99,14 +99,18 @@ export interface Workspace {
   /** Kept on the device. */
   setCheckInterval(value: CheckInterval): Promise<void>
   /** When the current source has not answered for over 4 minutes, one light request (listInventories) before a form that
-   *  is about to write; otherwise nothing. Never called by a timer. */
+   *  is about to write; otherwise nothing, nor while a write is queued or running (it wakes the source itself). A write
+   *  waits for a warm-up on its way. Only network answers count; a write refused on the device is none. Never called
+   *  by a timer. */
   warmUp(): Promise<void>
   /** startFromCache() then refresh(). */
   start(): Promise<void>
   /** Saves the shown copy on the device now if a write changed it since it was last saved (otherwise that happens
    *  within CACHE_PUT_DELAY_MS); resolves when it is saved. */
   flushCache(): Promise<void>
-  /** Cached copy first, then live. */
+  /** Cached copy first, then live. Switching runs the before-write hooks first: a pending stepper delta goes to the
+   *  inventory it was pressed in, checked against the copy shown then, and its rows go into that copy on the device (no
+   *  load of it now or when it is opened again, if no other write came in between). */
   selectInventory(ref: InventoryRef): Promise<void>
   /** Throws DomainError | StorageError; calls run one after another in call order. When the interval has passed, the
    *  target's source alone is checked first (never another source), so the command is validated against the copy
@@ -117,8 +121,8 @@ export interface Workspace {
   applyTo(ref: InventoryRef, command: Command): Promise<void>
   /** A stock write to this bucket is queued or running (reactive). Steppers lock on this, not on `state.saving`. */
   isBucketSaving(itemId: Id, variantId: Id | null): boolean
-  /** `hook` runs synchronously before every write is queued, so a write it starts goes first (a stepper flushing its
-   *  pending delta). Returns the unregister function. */
+  /** `hook` runs synchronously before every write is queued, and before another inventory is selected, so a write it
+   *  starts goes first (a stepper flushing its pending delta). Returns the unregister function. */
   onBeforeWrite(hook: () => void): () => void
   /** Journal of an item of the current inventory, newest first, after a check of its source when the interval has
    *  passed (as apply). Rejects without a network call while the source is unreachable. */

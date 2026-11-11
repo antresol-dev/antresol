@@ -1,7 +1,7 @@
 import type { Command } from './commands'
 import type { Id } from './ids'
 import { CURRENCIES } from './money'
-import type { Attribute, AttributeKind, Folder, InventorySnapshot, Item, ItemAttribute, Variant } from './model'
+import type { Archivable, Attribute, AttributeKind, Folder, InventorySnapshot, Item, ItemAttribute, Variant } from './model'
 import { isCanonicalNumber } from './numbers'
 import { bucketStock } from './stock'
 import { cmpQ, parseQuantity, type Quantity } from './quantity'
@@ -267,8 +267,10 @@ function check(c: Command, s: Snap | null): void {
     return
   }
   if (s === null) return fail('not_found')
-  // An archived inventory is read-only; only restore and permanent deletion may touch it.
-  if (c.type !== 'restore' && c.type !== 'deletePermanently' && s.inventory.archivedAt !== null) fail('archived')
+  // An archived inventory is read-only; only restore and permanent deletion may touch it, and a retried archive of it.
+  if (c.type !== 'restore' && c.type !== 'deletePermanently' && s.inventory.archivedAt !== null && !isOwnArchive(s, c)) {
+    fail('archived')
+  }
 
   switch (c.type) {
     case 'inventory.update':
@@ -368,7 +370,8 @@ function check(c: Command, s: Snap | null): void {
     case 'tag.create':
       needInventory(s, c.inventoryId)
       checkName(c.name)
-      if (s.tags.some((t) => same(t.name, c.name))) fail('duplicate_name')
+      // The tag this very command created (a retry after an unknown outcome, spec 4.7) is no duplicate of it.
+      if (s.tags.some((t) => t.id !== c.id && same(t.name, c.name))) fail('duplicate_name')
       return
     case 'tag.rename':
       if (!s.tags.some((t) => t.id === c.id)) fail('not_found')
@@ -466,7 +469,7 @@ function check(c: Command, s: Snap | null): void {
       return
     case 'archive':
       targetOf(s, c.target, c.id)
-      if (isArchived(s, c.target, c.id)) fail('archived')
+      if (isArchived(s, c.target, c.id) && !isOwnArchive(s, c)) fail('archived')
       return
     case 'restore': {
       const id = c.archiveId
@@ -508,6 +511,23 @@ function hasActiveInSubtree(s: Snap, folderId: Id): boolean {
     s.folders.some((f) => ids.has(f.id) && f.archivedAt === null) ||
     s.items.some((i) => i.folderId !== null && ids.has(i.folderId) && i.archivedAt === null)
   )
+}
+
+/** An archive whose target already carries its archiveId: this very command landed before (a retry after an unknown
+ *  outcome, spec 4.7). The source skips it (it only archives rows not archived yet). */
+function isOwnArchive(s: Snap, c: Command): boolean {
+  if (c.type !== 'archive') return false
+  const row: Archivable | undefined =
+    c.target === 'inventory'
+      ? s.inventory.id === c.id
+        ? s.inventory
+        : undefined
+      : c.target === 'folder'
+        ? s.folders.find((f) => f.id === c.id)
+        : c.target === 'item'
+          ? s.items.find((i) => i.id === c.id)
+          : s.variants.find((v) => v.id === c.id)
+  return !!row && row.archivedAt !== null && row.archiveId === c.archiveId
 }
 
 function targetOf(s: Snap, target: 'inventory' | 'folder' | 'item' | 'variant', id: Id): { archivedAt: string | null } {

@@ -41,16 +41,16 @@ function pointerdown(id: Id, e: PointerEvent): void {
 </script>
 
 <template>
-  <!-- overflow-hidden keeps the hover background inside the rounded card; the focus ring is inset for the same reason. -->
-  <ul class="overflow-hidden rounded-card border border-border bg-surface py-1">
+  <!-- A flat list on the page: rows divided by lines, a row tile tinted under the pointer. -->
+  <ul>
     <li
       v-for="f in folders"
       :key="f.id"
-      class="group relative flex items-center transition-colors duration-150 not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-[58px] not-first:before:h-px not-first:before:bg-divider not-first:before:content-[''] hover:bg-hover"
+      class="group relative flex items-center rounded-field transition-colors duration-150 not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-[58px] not-first:before:h-px not-first:before:bg-divider not-first:before:content-[''] hover:bg-hover"
     >
       <NuxtLink
         :to="`/folder/${f.id}`"
-        class="flex h-[50px] min-w-0 flex-1 items-center gap-3 px-3.5 outline-none select-none [-webkit-touch-callout:none] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        class="flex h-[50px] min-w-0 flex-1 items-center gap-3 rounded-field px-3.5 select-none [-webkit-touch-callout:none]"
         @pointerdown="pointerdown(f.id, $event)"
         @pointermove="press.onPointermove"
         @pointerup="press.onPointerup"

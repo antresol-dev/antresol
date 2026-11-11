@@ -43,13 +43,13 @@ function retry(): void {
   <UpdateToEditBanner />
   <p v-if="line" role="status" class="text-sm text-subtle-foreground">
     {{ line.text }}
-    <NuxtLink v-if="line.fixTo" :to="line.fixTo" class="font-semibold text-primary underline-offset-4 hover:underline">
+    <NuxtLink v-if="line.fixTo" :to="line.fixTo" class="rounded-chip font-semibold text-accent-ink underline-offset-4 hover:underline">
       {{ $t('status.fix') }}
     </NuxtLink>
     <Button
       v-if="line.retry"
       variant="ghost"
-      class="h-11 px-2 font-semibold text-primary"
+      class="h-11 px-2 font-semibold text-accent-ink"
       :disabled="state.refreshing"
       @click="retry"
     >

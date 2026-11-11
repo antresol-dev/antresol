@@ -120,7 +120,7 @@ async function submit(): Promise<void> {
         autocomplete="off"
         :aria-invalid="errorKey ? true : undefined"
         aria-describedby="inventory-form-error"
-        class="h-11 rounded-field bg-surface"
+        class="h-11"
       />
     </div>
 
@@ -131,13 +131,13 @@ async function submit(): Promise<void> {
           <ComboboxTrigger
             id="inventory-currency"
             :aria-label="$t('inventoryForm.currency')"
-            class="flex h-11 w-full items-center justify-between gap-2 rounded-field border bg-surface px-3 text-left text-sm"
+            class="flex h-11 w-full items-center justify-between gap-2 rounded-field border border-input bg-field px-3 text-left text-sm"
           >
             <span class="truncate">{{ selected ? `${selected.code} · ${selected.name}` : currency }}</span>
             <ChevronDown class="size-4 shrink-0 text-subtle-foreground" aria-hidden="true" />
           </ComboboxTrigger>
         </ComboboxAnchor>
-        <ComboboxList class="w-(--reka-combobox-trigger-width) bg-surface">
+        <ComboboxList class="w-(--reka-combobox-trigger-width)">
           <ComboboxInput
             :placeholder="$t('inventoryForm.currencySearch')"
             class="h-11"
@@ -158,7 +158,7 @@ async function submit(): Promise<void> {
     <div v-if="mode === 'create' && sources.length > 1" class="grid gap-1.5">
       <Label for="inventory-source">{{ $t('inventoryForm.source') }}</Label>
       <Select v-model="sourceId">
-        <SelectTrigger id="inventory-source" class="h-11 w-full rounded-field bg-surface data-[size=default]:h-11">
+        <SelectTrigger id="inventory-source" class="h-11 w-full data-[size=default]:h-11">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -174,14 +174,14 @@ async function submit(): Promise<void> {
         {{ $t('form.description') }}
         <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
       </Label>
-      <Input id="inventory-description" v-model="description" autocomplete="off" class="h-11 rounded-field bg-surface" />
+      <Input id="inventory-description" v-model="description" autocomplete="off" class="h-11" />
     </div>
 
     <p id="inventory-form-error" role="alert" class="text-sm text-destructive">
       <template v-if="errorKey">{{ $t(errorKey) }}</template>
     </p>
 
-    <Button v-if="mode === 'create' && !sources.length" as-child variant="outline" class="h-11 rounded-field bg-surface">
+    <Button v-if="mode === 'create' && !sources.length" as-child variant="outline" class="h-11">
       <NuxtLink to="/settings" @click="emit('done')">{{ $t('inventoryForm.connectSource') }}</NuxtLink>
     </Button>
     <Button v-else type="submit" class="h-11 rounded-field" :disabled="!canSubmit">

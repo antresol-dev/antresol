@@ -91,20 +91,20 @@ async function submit(): Promise<void> {
         autocomplete="off"
         :aria-invalid="errorKey ? true : undefined"
         aria-describedby="unit-form-error"
-        class="h-11 rounded-field bg-surface"
+        class="h-11"
       />
     </div>
     <div class="grid gap-1.5">
       <Label for="unit-symbol">{{ $t('unitForm.symbol') }}</Label>
-      <Input id="unit-symbol" v-model="symbol" autocomplete="off" class="h-11 rounded-field bg-surface" />
+      <Input id="unit-symbol" v-model="symbol" autocomplete="off" class="h-11" />
     </div>
     <fieldset class="grid gap-1.5">
       <legend class="mb-1.5 text-sm font-medium">{{ $t('unitForm.prefixes') }}</legend>
-      <div class="grid max-h-56 grid-cols-2 gap-0.5 overflow-y-auto rounded-field border border-border bg-background p-1">
+      <div class="grid max-h-56 grid-cols-2 gap-0.5 overflow-y-auto rounded-field border border-input bg-field p-1">
         <label
           v-for="p in prefixes"
           :key="p.power"
-          class="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-sm px-2 text-sm transition-colors duration-150 hover:bg-hover"
+          class="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-chip px-2 text-sm transition-colors duration-150 hover:bg-hover"
         >
           <Checkbox :model-value="powers.includes(p.power)" @update:model-value="toggle(p.power, $event === true)" />
           {{ prefixNote(p.power) }}

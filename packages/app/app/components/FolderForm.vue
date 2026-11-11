@@ -94,7 +94,7 @@ async function submit(): Promise<void> {
         autocomplete="off"
         :aria-invalid="errorKey ? true : undefined"
         aria-describedby="folder-form-error"
-        class="h-11 rounded-field bg-surface"
+        class="h-11"
       />
     </div>
     <div v-if="mode === 'create'" class="grid gap-1.5">
@@ -103,7 +103,7 @@ async function submit(): Promise<void> {
         id="folder-parent"
         type="button"
         :aria-expanded="picking"
-        class="flex h-11 w-full min-w-0 items-center gap-2 rounded-field border border-input bg-surface px-3 text-left text-sm outline-none transition-colors duration-150 hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring"
+        class="flex h-11 w-full min-w-0 items-center gap-2 rounded-field border border-input bg-field px-3 text-left text-sm transition-colors duration-150 hover:bg-hover"
         @click="picking = !picking"
       >
         <span class="min-w-0 flex-1 truncate">{{ parentPath }}</span>
@@ -116,7 +116,7 @@ async function submit(): Promise<void> {
         {{ $t('form.description') }}
         <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
       </Label>
-      <Input id="folder-description" v-model="description" autocomplete="off" class="h-11 rounded-field bg-surface" />
+      <Input id="folder-description" v-model="description" autocomplete="off" class="h-11" />
     </div>
     <p id="folder-form-error" role="alert" class="text-sm text-destructive">
       <template v-if="errorKey">{{ $t(errorKey) }}</template>

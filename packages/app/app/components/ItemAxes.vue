@@ -170,7 +170,7 @@ function select(key: string): void {
         <div class="grid gap-1.5">
           <Label for="axis-choice">{{ $t('attributeSheet.attribute') }}</Label>
           <Select v-model="choice" :disabled="addLocked">
-            <SelectTrigger id="axis-choice" class="h-11 w-full rounded-field bg-surface">
+            <SelectTrigger id="axis-choice" class="h-11 w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -202,14 +202,14 @@ function select(key: string): void {
     />
 
     <AppSheet v-model:open="reorderOpen" :title="$t('axes.reorderTitle')" :locked="busy">
-      <ol class="mt-3.5 grid gap-1">
-        <li v-for="(a, n) in view.axes" :key="a.attributeId" class="flex min-h-11 items-center justify-between gap-2 rounded-field bg-surface pl-3.5">
+      <ol class="mt-3.5 grid divide-y divide-divider">
+        <li v-for="(a, n) in view.axes" :key="a.attributeId" class="flex min-h-12 items-center justify-between gap-2 pl-1">
           <span class="min-w-0 text-[15px] font-semibold wrap-anywhere">{{ a.name }}</span>
           <span class="flex shrink-0">
             <Button
               variant="ghost"
               size="icon"
-              class="size-11 rounded-field"
+              class="size-11"
               :aria-label="$t('axes.moveUp', { name: a.name })"
               :disabled="locked || n === 0"
               @click="move(a.attributeId, 'up')"
@@ -219,7 +219,7 @@ function select(key: string): void {
             <Button
               variant="ghost"
               size="icon"
-              class="size-11 rounded-field"
+              class="size-11"
               :aria-label="$t('axes.moveDown', { name: a.name })"
               :disabled="locked || n === view.axes.length - 1"
               @click="move(a.attributeId, 'down')"
@@ -245,7 +245,7 @@ function select(key: string): void {
           <template v-if="shown.notice.groups.length > 0">
             <p class="text-muted-foreground">{{ $t('axes.collisions') }}</p>
             <ul class="grid gap-1">
-              <li v-for="g in shown.notice.groups" :key="g" class="rounded-field bg-surface px-3 py-2 wrap-anywhere">{{ g }}</li>
+              <li v-for="g in shown.notice.groups" :key="g" class="rounded-field bg-chip px-3 py-2 wrap-anywhere">{{ g }}</li>
             </ul>
           </template>
         </template>
@@ -258,7 +258,7 @@ function select(key: string): void {
             }}
           </p>
           <ul class="grid gap-1">
-            <li v-for="v in shown.notice.values" :key="v.variantId" class="rounded-field bg-surface px-3 py-2 wrap-anywhere">{{ v.label }}</li>
+            <li v-for="v in shown.notice.values" :key="v.variantId" class="rounded-field bg-chip px-3 py-2 wrap-anywhere">{{ v.label }}</li>
           </ul>
         </template>
       </div>
@@ -273,7 +273,7 @@ function select(key: string): void {
         >
           {{ $t(busy ? 'status.saving' : shown?.mode === 'share' ? 'axes.shareConfirm' : 'axes.removeConfirm') }}
         </Button>
-        <Button type="button" variant="outline" class="h-11 rounded-field bg-surface" :disabled="busy" @click="pendingOpen = false">
+        <Button type="button" variant="outline" class="h-11" :disabled="busy" @click="pendingOpen = false">
           {{ $t('ui.cancel') }}
         </Button>
       </template>

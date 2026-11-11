@@ -64,12 +64,12 @@ async function remove(): Promise<void> {
   <section class="grid min-w-0 gap-2" aria-labelledby="dictionaries-units">
     <div class="flex min-h-11 items-center justify-between gap-2 px-1">
       <h2 id="dictionaries-units" class="text-[13px] font-semibold text-subtle-foreground">{{ $t('dictionaries.units') }}</h2>
-      <Button variant="outline" class="h-11 rounded-field bg-surface" :disabled="locked" @click="open({ kind: 'form', unit: null })">
+      <Button variant="outline" class="h-11" :disabled="locked" @click="open({ kind: 'form', unit: null })">
         <Plus class="size-4" aria-hidden="true" />
         {{ $t('dictionaries.addUnit') }}
       </Button>
     </div>
-    <ul class="rounded-card border border-border bg-surface py-1">
+    <ul>
       <li
         v-for="row in rows"
         :key="row.unit.key"

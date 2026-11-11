@@ -15,18 +15,16 @@ const current = (key: Section, to: string): 'page' | 'true' | undefined =>
 const icons: Record<Exclude<Section, 'settings'>, Component> = { items: Boxes, dictionaries: Tags, archive: Archive }
 
 // The rail grows and its column scrolls; in the drawer the tree card takes the free height and scrolls itself.
-// Rows hover with a foreground tint: bg-hover is almost the rail's own colour.
-const link =
-  'flex min-h-11 items-center gap-2.5 rounded-icon px-2.5 text-sm font-semibold outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring'
-const linkState = (key: Section): string =>
-  section.value === key ? 'bg-surface text-primary' : 'text-icon hover:bg-foreground/5 hover:text-foreground'
+// Rows are flat (pressable: the accent tint under the pointer); the current section is a selected row.
+const link = 'pressable flex min-h-11 items-center gap-2.5 px-2.5 text-sm font-semibold'
+const linkState = (key: Section): string => (section.value === key ? 'row-selected' : '')
 </script>
 
 <template>
   <div :class="['flex flex-col gap-3.5 px-2.5 py-3.5', props.variant === 'drawer' ? 'h-full min-h-0' : 'min-h-full']">
     <NuxtLink
       to="/"
-      class="flex min-h-11 shrink-0 items-center gap-2 self-start rounded-icon px-1.5 text-base font-bold tracking-[-0.02em] outline-none transition-colors duration-150 hover:bg-foreground/5 focus-visible:ring-2 focus-visible:ring-ring"
+      class="pressable flex min-h-11 shrink-0 items-center gap-2 self-start px-1.5 text-base font-bold tracking-[-0.02em]"
     >
       <img src="/favicon.svg" alt="" class="size-6.5 rounded-icon" >
       {{ $t('app.name') }}
@@ -47,7 +45,7 @@ const linkState = (key: Section): string =>
       </ul>
     </nav>
 
-    <div v-if="props.variant === 'drawer' && state.snapshot" class="min-h-0 flex-1 overflow-y-auto rounded-field bg-surface p-1.5">
+    <div v-if="props.variant === 'drawer' && state.snapshot" class="raised-card min-h-0 flex-1 overflow-y-auto p-1.5">
       <FolderTree variant="drawer" />
     </div>
 

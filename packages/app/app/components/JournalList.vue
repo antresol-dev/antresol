@@ -121,7 +121,7 @@ function partsOf(row: JournalRow): Part[] {
   <section class="grid min-w-0 grid-cols-1 gap-2">
     <h2 class="px-1 text-[13px] font-semibold text-subtle-foreground">{{ $t('journal.title') }}</h2>
 
-    <div v-if="waiting" role="status" class="grid gap-5 rounded-card border border-border bg-surface px-3.5 py-4">
+    <div v-if="waiting" role="status" class="grid gap-5 px-3.5 py-4">
       <span class="sr-only">{{ $t('journal.loading') }}</span>
       <div v-for="n in 3" :key="n" class="grid gap-2" aria-hidden="true">
         <div class="flex justify-between gap-6">
@@ -135,7 +135,7 @@ function partsOf(row: JournalRow): Part[] {
     <EmptyState v-else-if="failureText" :text="failureText">
       <Button
         variant="outline"
-        class="h-11 rounded-field bg-surface transition-colors duration-150 hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring"
+        class="h-11"
         :disabled="busy || state.refreshing"
         @click="retry"
       >
@@ -148,7 +148,8 @@ function partsOf(row: JournalRow): Part[] {
     <template v-else>
       <section v-for="day in days" :key="day.key" class="grid min-w-0 gap-1.5" :aria-label="day.label">
         <h3 class="px-1 pt-1 text-[13px] font-semibold text-muted-foreground">{{ day.label }}</h3>
-        <ul class="rounded-card border border-border bg-surface py-1">
+        <!-- A flat list on the page, rows divided by lines. -->
+        <ul>
           <li
             v-for="{ row, title, parts, meta } in day.entries"
             :key="row.id"
@@ -175,7 +176,7 @@ function partsOf(row: JournalRow): Part[] {
                   :href="part.href"
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="relative inline-flex items-center gap-1 rounded-sm font-semibold text-foreground underline decoration-border underline-offset-2 outline-none transition-colors duration-150 after:absolute after:-inset-x-1 after:-inset-y-3.5 after:content-[''] hover:decoration-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                  class="relative inline-flex items-center gap-1 rounded-chip font-semibold text-foreground underline decoration-border underline-offset-2 outline-none transition-colors duration-150 after:absolute after:-inset-x-1 after:-inset-y-3.5 after:content-[''] hover:decoration-foreground focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {{ $t('journal.whereBought') }}
                   <ExternalLink class="size-3" aria-hidden="true" />

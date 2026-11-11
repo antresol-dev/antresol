@@ -26,7 +26,7 @@ const open = defineModel<boolean>('open', { required: true })
       >
         {{ confirmLabel }}
       </Button>
-      <Button type="button" variant="outline" class="h-11 rounded-field bg-surface" :disabled="busy" @click="open = false">
+      <Button type="button" variant="outline" class="h-11" :disabled="busy" @click="open = false">
         {{ $t('ui.cancel') }}
       </Button>
     </template>

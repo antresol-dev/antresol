@@ -102,7 +102,7 @@ function addNew(): void {
             :key="c.text"
             :aria-label="chipLabel(c)"
             :class="[
-              'rounded-md px-2 py-1 text-[13px] font-semibold tabular-nums',
+              'rounded-chip px-2 py-1 text-[13px] font-semibold tabular-nums',
               c.inStock ? 'bg-chip text-foreground' : 'border border-border text-subtle-foreground',
             ]"
           >
@@ -130,7 +130,7 @@ function addNew(): void {
             <li v-for="m in matches" :key="`${m.itemId}:${m.variantId ?? ''}`" class="flex min-w-0 items-center gap-1.5">
               <button
                 type="button"
-                class="flex min-h-11 min-w-0 flex-1 items-center gap-2.5 rounded-field px-1.5 py-1 text-left outline-none transition-colors duration-150 hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring"
+                class="pressable flex min-h-11 min-w-0 flex-1 items-center gap-2.5 px-1 py-1 text-left"
                 :aria-label="$t('share.open', { name: m.variantName ? `${m.name} · ${m.variantName}` : m.name })"
                 @click="openItem(m)"
               >
@@ -146,7 +146,7 @@ function addNew(): void {
                 type="button"
                 variant="outline"
                 size="sm"
-                class="h-9 shrink-0 rounded-field bg-surface"
+                class="h-9 shrink-0"
                 :disabled="!canWrite"
                 @click="receiveInto(m)"
               >

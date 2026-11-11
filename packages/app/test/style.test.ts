@@ -1,4 +1,8 @@
+import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { join, relative } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import { parse } from 'vue/compiler-sfc'
 import css from '../app/assets/css/main.css?raw'
 import { ACCENTS, type AccentName } from '../app/lib/accent'
 import { contrast, cssVars, parseColor, resolveColor, type Vars } from './fixtures/color'
@@ -226,5 +230,170 @@ describe('base styles and utilities', () => {
     expect(css).toMatch(/--radius-card:\s*20px/)
     expect(css).toMatch(/--radius-field:\s*14px/)
     expect(css).toMatch(/--radius-chip:\s*10px/)
+  })
+})
+
+/*
+ * Every component and page (spec 4.2, acceptance 3): whatever has a click handler is something the pointer rule in
+ * main.css covers, so it shows cursor: pointer. The design-system controls keep their shadow, animation and focus
+ * outline, and every radius is on the 20 / 14 / 10 / circle scale.
+ */
+describe('components and pages', () => {
+  const appDir = fileURLToPath(new URL('../app', import.meta.url))
+  function* vueFiles(dir: string): Generator<string> {
+    for (const name of readdirSync(dir)) {
+      const path = join(dir, name)
+      if (statSync(path).isDirectory()) yield* vueFiles(path)
+      else if (name.endsWith('.vue')) yield path
+    }
+  }
+  const files = [...['components', 'pages', 'layouts'].flatMap((d) => [...vueFiles(join(appDir, d))]), join(appDir, 'app.vue')].map(
+    (path) => {
+      const source = readFileSync(path, 'utf8')
+      return { name: relative(appDir, path), source, ast: parse(source).descriptor.template?.ast }
+    },
+  )
+  // The copied shadcn-vue primitives are styled by Task 1 in their own terms (cn() merging, data-state variants).
+  // Comments are blanked out (line numbers kept) for the text checks: prose may say "rounded".
+  const blank = (m: string): string => m.replace(/[^\n]/g, ' ')
+  const appFiles = files
+    .filter((f) => !f.name.startsWith('components/ui/'))
+    .map((f) => ({ ...f, code: f.source.replace(/<!--[\s\S]*?-->|\/\*[\s\S]*?\*\/|^\s*\/\/.*$/gm, blank) }))
+
+  /** Template nodes as far as the checks need them (@vue/compiler-core: 1 element, 6 attribute, 7 directive). */
+  interface Prop {
+    type: number
+    name: string
+    value?: { content: string }
+    arg?: { content: string }
+    exp?: { content: string }
+  }
+  interface Node {
+    type: number
+    tag: string
+    props: Prop[]
+    children?: Node[]
+    loc: { start: { line: number } }
+  }
+  function* elements(node: Node | undefined): Generator<Node> {
+    if (!node) return
+    if (node.type === 1) yield node
+    for (const child of node.children ?? []) yield* elements(child)
+  }
+  const attr = (n: Node, name: string): string | undefined => n.props.find((p) => p.type === 6 && p.name === name)?.value?.content
+  const has = (n: Node, name: string): boolean =>
+    n.props.some((p) => (p.type === 6 && p.name === name) || (p.type === 7 && p.name === 'bind' && p.arg?.content === name))
+  const onClick = (n: Node): boolean => n.props.some((p) => p.type === 7 && p.name === 'on' && p.arg?.content === 'click')
+  /** Static class plus the :class expression text. */
+  const classText = (n: Node): string =>
+    n.props
+      .filter((p) => (p.type === 6 && p.name === 'class') || (p.type === 7 && p.name === 'bind' && p.arg?.content === 'class'))
+      .map((p) => p.value?.content ?? p.exp?.content ?? '')
+      .join(' ')
+
+  // What the base pointer rule covers: tags, `a[href]`, `label[for]` and roles.
+  const pointerRule = css.match(/:where\(([^{]*)\)\s*\{\s*cursor:\s*pointer/)?.[1] ?? ''
+  const pointerRoles = new Set([...pointerRule.matchAll(/\[role=['"]?([a-z]+)/g)].map((m) => m[1]!))
+  // Components that render one of those: Button → <button>, links → a[href], menu items → role="menuitem…".
+  const pointerComponents = new Set([
+    'Button',
+    'NuxtLink',
+    'RouterLink',
+    'DropdownMenuItem',
+    'DropdownMenuCheckboxItem',
+    'DropdownMenuRadioItem',
+    'SelectItem',
+    'ComboboxItem',
+  ])
+
+  /** Why a clickable element would show no pointer, or null when the pointer rule covers it. */
+  function pointerProblem(n: Node, tag: string, template: Node): string | null {
+    if (/(^|[\s'"`])cursor-(default|auto|text|none)\b/.test(classText(n))) return 'a cursor-* utility overrides the pointer'
+    if (pointerComponents.has(tag)) return tag === 'Button' && attr(n, 'as') && attr(n, 'as') !== 'button' ? `Button as="${attr(n, 'as')}"` : null
+    // createReusableTemplate: <ReuseX> renders the first element inside <DefineX>; attributes and @click fall through.
+    const reused = /^Reuse(\w+)$/.exec(tag)
+    if (reused) {
+      const define = [...elements(template)].find((e) => e.tag === `Define${reused[1]}`)
+      const inner = define?.children?.find((c) => c.type === 1)
+      return inner ? pointerProblem({ ...inner, props: [...inner.props, ...n.props] }, inner.tag, template) : `<${tag}> without <Define${reused[1]}>`
+    }
+    if (tag === 'button' || tag === 'summary' || tag === 'select') return null
+    if (tag === 'a') return has(n, 'href') ? null : '<a> without href'
+    if (tag === 'label') return has(n, 'for') ? null : '<label> without for'
+    const role = attr(n, 'role')
+    if (!role || !pointerRoles.has(role)) return `<${tag}> without a pointer role`
+    if (role === 'button' && !has(n, 'tabindex')) return 'role="button" without tabindex'
+    return null
+  }
+
+  it('the pointer rule lists roles', () => {
+    expect([...pointerRoles]).toEqual(expect.arrayContaining(['button', 'menuitem', 'option']))
+  })
+
+  it('every clickable element shows the pointer (spec 4.2)', () => {
+    const problems: string[] = []
+    for (const f of files) {
+      for (const n of elements(f.ast as Node | undefined)) {
+        if (!onClick(n)) continue
+        // <component :is="a ? X : 'y'">: every tag it can become.
+        const is = n.tag === 'component' ? n.props.find((p) => p.type === 7 && p.arg?.content === 'is')?.exp?.content ?? '' : null
+        const tags = is === null ? [n.tag] : [...is.matchAll(/'([\w-]+)'|\b([A-Z]\w*)\b/g)].map((m) => m[1] ?? m[2]!)
+        for (const tag of tags) {
+          const problem = pointerProblem(n, tag, f.ast as Node)
+          if (problem) problems.push(`${f.name}:${n.loc.start.line} ${problem}`)
+        }
+      }
+    }
+    expect(problems).toEqual([])
+  })
+
+  it('design-system controls keep their shadow, animation and focus outline', () => {
+    // Raised and painted controls (a Button other than ghost and link is one): focus rings (box-shadow) replace their
+    // shadow, outline-none removes the base focus outline, transitions replace their own, hover:bg-* is dead (the
+    // states win). Flat pressable controls (ghost): no transitions or hover:bg-* either; an inset ring in a scroll box
+    // is fine.
+    const raisedClass = /(^|[\s'"`])(raised|raised-sm|painted|pill-step)($|[\s'"`])/
+    const pressableClass = /(^|[\s'"`])pressable($|[\s'"`])/
+    const raisedClash = /(^|[\s'"`])(focus-visible:ring[\w-]*|transition(-[\w[\],-]+)?|outline-none|hover:bg-[\w-/]+)($|[\s'"`])/
+    const flatClash = /(^|[\s'"`])(transition(-[\w[\],-]+)?|hover:bg-[\w-/]+)($|[\s'"`])/
+    const problems: string[] = []
+    for (const f of appFiles) {
+      // String constants in the script, by name, so a :class that names one is checked too.
+      const consts = new Map(
+        [...f.code.matchAll(/const (\w+)\s*=\s*\n?\s*(['`])([^'`]*)\2/g)].map((m) => [m[1]!, m[3]!]),
+      )
+      for (const n of elements(f.ast as Node | undefined)) {
+        let text = classText(n)
+        for (const [name, value] of consts) if (new RegExp(`\\b${name}\\b`).test(text)) text += ` ${value}`
+        const variant = attr(n, 'variant') ?? (has(n, 'variant') ? 'dynamic' : 'default')
+        const button = n.tag === 'Button' && variant !== 'link'
+        const raised = (button && variant !== 'ghost') || raisedClass.test(text)
+        const m = raised ? raisedClash.exec(text) : button || pressableClass.test(text) ? flatClash.exec(text) : null
+        if (m) problems.push(`${f.name}:${n.loc.start.line} <${n.tag}> ${m[2]}`)
+      }
+    }
+    expect(problems).toEqual([])
+  })
+
+  it('accent-coloured text is text-accent-ink: text-primary fails contrast with some accents', () => {
+    const problems = appFiles.flatMap((f) =>
+      [...f.code.matchAll(/(^|[\s'"`:])text-primary(?!-)/gm)].map((m) => `${f.name}:${f.code.slice(0, m.index).split('\n').length}`),
+    )
+    expect(problems).toEqual([])
+  })
+
+  it('radii are on the scale: card 20, field 14, chip 10, circle (spec 4.2)', () => {
+    const scale = new Set(['card', 'field', 'chip', 'full', 'none', 'thumb', 'icon', 'fab'])
+    const sides = new Set(['t', 'b', 'l', 'r', 's', 'e', 'tl', 'tr', 'bl', 'br', 'ss', 'se', 'es', 'ee'])
+    const onScale = (value: string): boolean => {
+      const parts = value.split('-')
+      return parts.length === 1 ? scale.has(parts[0]!) : parts.length === 2 && sides.has(parts[0]!) && scale.has(parts[1]!)
+    }
+    const problems = appFiles.flatMap((f) =>
+      [...f.code.matchAll(/(?<=^|[\s'"`:])rounded(?:-([\w[\].-]+))?(?=$|[\s'"`])/gm)]
+        .filter((m) => !m[1] || !onScale(m[1]))
+        .map((m) => `${f.name}:${f.code.slice(0, m.index).split('\n').length} ${m[0]}`),
+    )
+    expect(problems).toEqual([])
   })
 })

@@ -68,6 +68,8 @@ const rows = computed(() =>
     sub: b.description ?? '',
   })),
 )
+/** The marked variant's row: a selected row (spec 4.1). */
+const isHighlight = (variantId: Id | null | undefined): boolean => variantId != null && variantId === props.highlight
 
 const list = useTemplateRef<HTMLElement>('list')
 const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
@@ -85,16 +87,20 @@ watch(() => props.highlight, reveal)
 
 <template>
   <section class="grid min-w-0 grid-cols-1" :aria-label="$t('item.variantsTitle')">
-    <ul ref="list" class="overflow-hidden rounded-card border border-border bg-surface py-1">
+    <!-- A flat list on the page (rows divided by lines); the current variant is a selected row, 2 px off its
+         neighbours, and the lines next to it give way. -->
+    <ul ref="list">
       <li
-        v-for="row in rows"
+        v-for="(row, i) in rows"
         :key="row.key"
         :data-variant="row.variantId ?? undefined"
         :aria-current="row.variantId !== null && row.variantId === highlight ? 'true' : undefined"
         :class="[
-          'relative grid min-w-0 px-3.5 py-2',
-          'not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-3.5 not-first:before:h-px not-first:before:bg-divider not-first:before:content-[\'\']',
-          row.variantId !== null && row.variantId === highlight && 'bg-accent-soft',
+          'relative grid min-w-0 py-2 pr-1.5 pl-3.5',
+          isHighlight(row.variantId)
+            ? 'row-selected my-0.5'
+            : !isHighlight(rows[i - 1]?.variantId) &&
+              'not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-3.5 not-first:before:h-px not-first:before:bg-divider not-first:before:content-[\'\']',
         ]"
       >
         <div class="flex min-h-[46px] min-w-0 items-center gap-2.5">
@@ -106,7 +112,7 @@ watch(() => props.highlight, reveal)
             class="size-10 shrink-0 rounded-icon object-cover"
           />
           <span class="flex min-w-0 grow flex-col gap-0.5">
-            <span class="line-clamp-2 text-[15px] font-bold wrap-anywhere" :class="row.outOfStock && 'text-dimmed-foreground'">
+            <span class="line-clamp-2 text-[15px] font-bold wrap-anywhere" :class="row.outOfStock && !isHighlight(row.variantId) && 'text-dimmed-foreground'">
               {{ row.name ?? $t('item.noVariant') }}
             </span>
             <span v-if="row.sub" class="truncate text-[13px] text-muted-foreground">{{ row.sub }}</span>
@@ -118,7 +124,7 @@ watch(() => props.highlight, reveal)
             @count="emit('open', 'set', row.variantId)"
           />
           <RowMenu
-            class="-mr-1.5 size-11"
+            class="h-11 w-9"
             :label="row.name ?? $t('item.noVariant')"
             :actions="actionsOf(row)"
             @select="(key) => choose(key, row)"

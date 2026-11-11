@@ -32,11 +32,12 @@ function press(step: 1 | -1): void {
   buzz()
   props.stepper.press(step)
 }
-const zone = 'size-11 shrink-0 rounded-full'
+// The pill (R(3,8), radius 14) and its halves: each sinks as its own rectangle, rounded on the pill's outer side only.
+const zone = 'pill-step size-11 shrink-0'
 </script>
 
 <template>
-  <div class="flex shrink-0 items-center rounded-full border border-border bg-surface" :aria-busy="busy || undefined">
+  <div class="pill shrink-0 items-center" :aria-busy="busy || undefined">
     <Tooltip>
       <TooltipTrigger as-child>
         <Button
@@ -55,7 +56,7 @@ const zone = 'size-11 shrink-0 rounded-full'
     <button
       v-if="amount"
       type="button"
-      class="flex min-h-11 min-w-14 items-center justify-center rounded-md px-1 text-[15px] font-bold tabular-nums outline-none transition-colors duration-150 enabled:cursor-pointer enabled:hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+      class="pill-step pressable flex min-h-11 min-w-14 items-center justify-center rounded-none px-1 text-[15px] font-bold tabular-nums disabled:opacity-60"
       :aria-label="$t('stock.countAmount', { amount: `${amount.number} ${amount.unit}` })"
       :disabled="!!workspace.state.readOnly"
       @click="emit('count')"
@@ -65,7 +66,6 @@ const zone = 'size-11 shrink-0 rounded-full'
         <span class="text-xs font-semibold text-muted-foreground">{{ amount.unit }}</span>
       </span>
     </button>
-    <span v-else class="h-6 w-px shrink-0 bg-divider" aria-hidden="true" />
     <Tooltip>
       <TooltipTrigger as-child>
         <Button variant="ghost" size="icon" :class="zone" :aria-label="plusLabel" :disabled="locked" @click="press(1)">

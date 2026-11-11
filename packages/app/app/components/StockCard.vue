@@ -46,30 +46,33 @@ const counted = computed(() => {
   return t('stock.counted', { when: relative.format(-ago.value, ago.unit) })
 })
 
+const amountClass = 'flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-1 text-left'
 const numberClass = 'text-[32px] leading-none font-bold tracking-[-0.02em] tabular-nums wrap-anywhere'
-const action = 'h-11 min-w-0 rounded-field bg-surface px-2 font-bold'
+const action = 'h-11 min-w-0 px-2 font-bold'
 </script>
 
 <template>
-  <section class="grid min-w-0 gap-3 rounded-card border border-border bg-surface p-4" :aria-label="$t('item.stock')">
+  <section class="raised-card grid min-w-0 gap-3 p-4.5" :aria-label="$t('item.stock')">
     <div class="flex min-w-0 items-start justify-between gap-3">
       <div class="grid min-w-0 gap-1.5">
-        <component
-          :is="stepper ? 'button' : 'p'"
-          :type="stepper ? 'button' : undefined"
-          :class="[
-            'flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-1 text-left',
-            stepper &&
-              '-mx-1.5 -my-1 justify-self-start rounded-md px-1.5 py-1 outline-none transition-colors duration-150 enabled:cursor-pointer enabled:hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring',
-          ]"
-          :aria-label="stepper ? $t('stock.countAmount', { amount: `${total.number} ${total.unit}` }) : undefined"
-          :disabled="stepper ? readOnly : undefined"
-          @click="stepper && emit('count')"
+        <!-- With a stepper the number is a flat button that opens Count. -->
+        <button
+          v-if="stepper"
+          type="button"
+          :class="[amountClass, 'pressable -mx-1.5 -my-1 justify-self-start rounded-chip px-1.5 py-1']"
+          :aria-label="$t('stock.countAmount', { amount: `${total.number} ${total.unit}` })"
+          :disabled="readOnly"
+          @click="emit('count')"
         >
           <span :class="[numberClass, total.outOfStock && 'text-muted-foreground']">{{ total.number }}</span>
           <span class="text-sm font-semibold text-muted-foreground">{{ total.unit }}</span>
           <span v-if="total.outOfStock" class="ml-1.5 text-sm font-semibold text-muted-foreground">{{ $t('item.outOfStock') }}</span>
-        </component>
+        </button>
+        <p v-else :class="amountClass">
+          <span :class="[numberClass, total.outOfStock && 'text-muted-foreground']">{{ total.number }}</span>
+          <span class="text-sm font-semibold text-muted-foreground">{{ total.unit }}</span>
+          <span v-if="total.outOfStock" class="ml-1.5 text-sm font-semibold text-muted-foreground">{{ $t('item.outOfStock') }}</span>
+        </p>
         <p v-if="prices" class="text-[13px] text-muted-foreground tabular-nums">{{ prices }}</p>
         <p v-if="counted" class="text-[13px] text-muted-foreground">{{ counted }}</p>
       </div>

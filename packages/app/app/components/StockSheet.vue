@@ -142,12 +142,12 @@ async function submit(): Promise<void> {
         <RadioGroup
           v-model="toKey"
           aria-labelledby="stock-to-label"
-          class="grid max-h-[30dvh] gap-0.5 overflow-y-auto rounded-field border border-border bg-background p-1"
+          class="grid max-h-[30dvh] gap-0.5 overflow-y-auto rounded-field border border-input bg-field p-1"
         >
           <label
             v-for="d in destinations"
             :key="d.key"
-            class="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-sm px-2 text-sm transition-colors duration-150 hover:bg-hover"
+            class="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-chip px-2 text-sm transition-colors duration-150 hover:bg-hover"
           >
             <RadioGroupItem :value="d.key" />
             <span class="min-w-0 flex-1 truncate">{{ d.name || $t('item.noVariant') }}</span>
@@ -165,7 +165,7 @@ async function submit(): Promise<void> {
             <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm font-semibold text-muted-foreground">
               {{ currencySymbol }}
             </span>
-            <Input id="stock-price" v-model="price" inputmode="decimal" autocomplete="off" class="h-11 rounded-field bg-surface pl-10" />
+            <Input id="stock-price" v-model="price" inputmode="decimal" autocomplete="off" class="h-11 pl-10" />
           </div>
         </div>
         <div class="grid gap-1.5">
@@ -173,7 +173,7 @@ async function submit(): Promise<void> {
             {{ $t('stockForm.url') }}
             <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
           </Label>
-          <Input id="stock-url" v-model="url" type="url" autocomplete="off" class="h-11 rounded-field bg-surface" />
+          <Input id="stock-url" v-model="url" type="url" autocomplete="off" class="h-11" />
         </div>
       </template>
 
@@ -182,7 +182,7 @@ async function submit(): Promise<void> {
           {{ $t('stockForm.note') }}
           <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
         </Label>
-        <Input id="stock-note" v-model="note" autocomplete="off" class="h-11 rounded-field bg-surface" />
+        <Input id="stock-note" v-model="note" autocomplete="off" class="h-11" />
       </div>
 
       <p role="alert" class="text-sm text-destructive">

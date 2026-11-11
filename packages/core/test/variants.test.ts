@@ -158,6 +158,17 @@ describe('duplicateOf', () => {
     expect(duplicateOf(s, 'C', new Map([['cap', '0.0000001'], ['volt', '50']]))?.id).toBe('c50')
     expect(duplicateOf(s, 'C', new Map([['cap', '0.0000001']]))).toBeNull()
   })
+  it('prefers the active variant over an archived one, then the lower id', () => {
+    const e = electronics()
+    const mk = (rows: [string, Partial<Variant>?][]): InventorySnapshot => ({
+      ...e,
+      variants: [...e.variants, ...rows.map(([id, o]) => variant(id, 'R', o))],
+      variantAttributeValues: [...e.variantAttributeValues, ...rows.map(([id]) => value(id, 'res', '330'))],
+    })
+    expect(duplicateOf(mk([['a0', ARCHIVED], ['z9']]), 'R', new Map([['res', '330']]))?.id).toBe('z9')
+    expect(duplicateOf(mk([['z9'], ['b1']]), 'R', new Map([['res', '330']]))?.id).toBe('b1')
+    expect(duplicateOf(mk([['z9', ARCHIVED], ['b1', ARCHIVED]]), 'R', new Map([['res', '330']]))?.id).toBe('b1')
+  })
   it('skips the variant being changed', () => {
     const s = electronics()
     expect(duplicateOf(s, 'R', new Map([['res', '10000']]), 'r10k')).toBeNull()
@@ -205,6 +216,22 @@ describe('axisRemovalPreview', () => {
       ['c2', '0.0000001', '16', ARCHIVED],
     ])
     expect(axisRemovalPreview(s, 'C', 'volt').blocked).toBe('duplicate_variant')
+  })
+  it('stale duplicates on the other axes block removing an unrelated axis', () => {
+    const e = electronics()
+    const s: InventorySnapshot = {
+      ...e,
+      attributes: [...e.attributes, attribute('c', 'Extra', 'text')],
+      itemAttributes: [...e.itemAttributes, axis('C', 'c', 2)],
+      variants: [...e.variants, variant('d1', 'C'), variant('d2', 'C')],
+      variantAttributeValues: [
+        ...e.variantAttributeValues,
+        ...['d1', 'd2'].flatMap((id) => [value(id, 'cap', '0.001'), value(id, 'volt', '5'), value(id, 'c', id)]),
+      ],
+    }
+    const r = axisRemovalPreview(s, 'C', 'c')
+    expect(r.blocked).toBe('duplicate_variant')
+    expect(r.collisions.map((g) => g.map((x) => x.id))).toEqual([['d1', 'd2']])
   })
   it('refuses to remove the last axis of an item that has variants, archived ones included', () => {
     const s = electronics()

@@ -70,6 +70,11 @@ export function normalizeCommand(c: Command): Command {
     set('options', c.options?.map((o) => o.trim()))
     set('unit', trimmed(c.unit))
   }
+  // Units are for numbers only: a text or enum attribute never carries one.
+  if (c.type === 'attribute.create' && c.kind !== 'number') {
+    out.unit = ''
+    out.siPrefixes = false
+  }
   if (c.type === 'item.setAttribute' || c.type === 'variant.setAttribute') out.value = desc(c.value)
   const canon = (q: Quantity) => parseQuantity(q) ?? q
   if ('quantity' in c && typeof c.quantity === 'string') out.quantity = canon(c.quantity)
@@ -81,7 +86,7 @@ export function normalizeCommand(c: Command): Command {
     set('tagIds', c.tagIds && [...new Set(c.tagIds)])
   }
   if (c.type === 'variant.createMany') {
-    out.variants = c.variants.map((v) => ({ ...v, values: v.values.map((x) => ({ ...x, value: x.value.trim() })) }))
+    out.variants = c.variants.map((v) => ({ ...v, values: v.values.map((x) => ({ ...x, value: typeof x.value === 'string' ? x.value.trim() : x.value })) }))
   }
   return out as Command
 }
@@ -212,7 +217,10 @@ function checkNewVariants(s: Snap, itemId: Id, variants: { id: Id; values: { att
   const axes = itemAxes(s, itemId)
   if (axes.length === 0) fail('axis_required')
   const batch: Map<Id, string | null>[] = []
+  const ids = new Set<Id>()
   for (const v of variants) {
+    if (ids.has(v.id) || s.variants.some((x) => x.id === v.id)) fail('invalid_option')
+    ids.add(v.id)
     const values = new Map<Id, string | null>()
     for (const { attributeId, value } of v.values) {
       needAttribute(s, attributeId)
@@ -311,6 +319,9 @@ function check(c: Command, s: Snap | null): void {
       return
     case 'item.addAxis':
       // Already an axis: the command changes nothing. A new axis never makes variants equal (§4.7).
+      // First-variant rule (applied by storage, never rejected here): `firstVariantId` becomes a variant only when the
+      // item has no variants, the attribute was shared with a non-empty value, AND the item has no other axis. With
+      // another axis already present, only the role changes and the shared value is dropped.
       activeItem(s, c.itemId)
       needAttribute(s, c.attributeId)
       return
@@ -367,6 +378,7 @@ function check(c: Command, s: Snap | null): void {
       const a = needAttribute(s, c.id)
       checkName(c.name)
       checkUnit(c.unit)
+      if (a.kind !== 'number' && ((c.unit !== undefined && c.unit.trim() !== '') || c.siPrefixes === true)) fail('invalid_option')
       checkDroppedOptions(s, a, c.options)
       return
     }

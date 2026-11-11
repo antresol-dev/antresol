@@ -117,6 +117,8 @@ useEventListener(
       <FolderDialogs />
       <ItemDialogs />
       <QuickAddSheet />
+      <ReceiveSheet />
+      <ShareSheet />
       <SearchPalette />
     </div>
   </TooltipProvider>

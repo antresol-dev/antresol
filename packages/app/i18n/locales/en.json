@@ -102,7 +102,10 @@
     "hint": "One per line or separated by commas: DIP-8, SOIC-8",
     "optionsRequired": "Add at least one option.",
     "create": "Create",
-    "save": "Save"
+    "save": "Save",
+    "showInLists": "Show in lists",
+    "showInListsHint": "Its value shows next to item names in lists, search and on the item card.",
+    "pinnedFull": "Two attributes already show in lists. Turn one off to show this one."
   },
   "axes": {
     "by": "by {axes}",
@@ -541,8 +544,32 @@
     "invalidAmount": "Enter a valid amount, like 10 or 50 cm.",
     "invalidPrice": "Enter a valid price.",
     "needsAmount": "Enter the amount to add a price or a link.",
-    "chooseFolder": "Choose a folder"
+    "chooseFolder": "Choose a folder",
+    "existing": "Already in this inventory",
+    "receiveHere": "Receive here",
+    "received": "Received into “{name}”"
   },
+  "list": { "out": "Out", "more": "+{count}", "pinned": "Shown in lists" },
+  "share": {
+    "title": "Already have it?",
+    "loading": "Opening the inventory…",
+    "noInventory": "Open an inventory to compare with.",
+    "values": "Values in the title",
+    "valueIn": "{value}: {number} in stock",
+    "valueInMixed": "{value}: in stock",
+    "chipIn": "✓ {number}",
+    "valueOut": "{value}: known, none in stock",
+    "valueNone": "{value}: not in this inventory",
+    "no": "no",
+    "boughtBefore": "Bought before",
+    "bought": "Bought on {date}: {amount} · {left} left",
+    "matches": "In this inventory",
+    "nothing": "Nothing like it here yet.",
+    "open": "Open {name}",
+    "receive": "Receive…",
+    "quickAdd": "Quick add"
+  },
+  "shops": { "title": "Find in shops" },
   "dictionaries": {
     "title": "Tags & fields",
     "tags": "Tags",

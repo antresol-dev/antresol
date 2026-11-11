@@ -2,7 +2,12 @@ import {
   addQ,
   BUILTIN_UNITS,
   cmpQ,
+  compareVariants,
+  createSearch,
+  formatAmount,
   formatAmountParts,
+  formatAttributeValue,
+  itemAxes,
   resolveUnit,
   variantLabel,
   type Folder,
@@ -12,6 +17,8 @@ import {
   type Quantity,
   type SearchHit,
   type StockLine,
+  type UnitDef,
+  type Variant,
 } from '@graymatter/core'
 
 export interface Crumb {
@@ -25,15 +32,31 @@ export interface FolderRow {
   /** Pieces in stock over the active subtree (items counted in pcs only); null when no such item is in it. */
   pieces: Quantity | null
 }
+/** One bucket of an item with variants as its list row shows it: "10 kΩ 100". */
+export interface ListBucket {
+  /** The variant's label; null for the stock kept without a variant. */
+  label: string | null
+  /** The amount with its unit as a suffix: "100", "1.5k" (pieces), "3 m". */
+  number: string
+  /** Nothing in it (shown as "—"). */
+  empty: boolean
+}
 export interface ItemRow {
   id: Id
   name: string
   description: string | null
   variantCount: number
   number: string
+  /** The unit after the number, smaller (spec 4.3): '' for plain pieces, the prefix for many ("k"), else the symbol ("m"). */
   unit: string
   outOfStock: boolean
   coverUrl: string | null
+  /** At most LIST_BUCKETS buckets, in variant order; the no-variant one first and only when it is not zero. [] without variants. */
+  buckets: ListBucket[]
+  /** Buckets left out after the first LIST_BUCKETS: "+2". */
+  moreBuckets: number
+  /** Values of the pinned attributes ("Show in lists"), by attribute name: "DIP-8", "B4". */
+  pinned: string[]
 }
 export interface FolderView {
   folder: Folder | null
@@ -68,6 +91,12 @@ export interface Index {
   /** Lowest-position photo of each variant. */
   variantCovers: Map<Id, string>
   paths: Map<Id, Folder[]>
+  /** Active variants of each item in variant order (core compareVariants). */
+  itemVariants: Map<Id, Variant[]>
+  /** Each item's non-empty values of the pinned attributes, formatted, by attribute name. */
+  pinned: Map<Id, string[]>
+  /** Each variant's non-empty axis values by attribute. */
+  variantValues: Map<Id, Map<Id, string>>
 }
 
 /** Test hook: counts how many times an index was built. */
@@ -103,10 +132,32 @@ function buildIndex(s: InventorySnapshot): Index {
 
   const variants = new Map<Id, { name: string; archived: boolean }>()
   const activeVariantCount = new Map<Id, number>()
+  const itemVariants = new Map<Id, Variant[]>()
   for (const v of s.variants) {
     variants.set(v.id, { name: variantLabel(s, v), archived: v.archivedAt !== null })
-    if (v.archivedAt === null) activeVariantCount.set(v.itemId, (activeVariantCount.get(v.itemId) ?? 0) + 1)
+    if (v.archivedAt === null) {
+      activeVariantCount.set(v.itemId, (activeVariantCount.get(v.itemId) ?? 0) + 1)
+      push(itemVariants, v.itemId, v)
+    }
   }
+  for (const list of itemVariants.values()) list.sort((a, b) => compareVariants(s, a, b))
+  const variantValues = new Map<Id, Map<Id, string>>()
+  for (const v of s.variantAttributeValues) {
+    if (v.value === null || v.value.trim() === '') continue
+    const own = variantValues.get(v.variantId) ?? new Map<Id, string>()
+    own.set(v.attributeId, v.value)
+    variantValues.set(v.variantId, own)
+  }
+
+  const pinnedAttributes = new Map(s.attributes.filter((a) => a.pinned).map((a) => [a.id, a] as const))
+  const pinnedValues = new Map<Id, { name: string; id: Id; value: string }[]>()
+  for (const a of s.itemAttributes) {
+    const def = pinnedAttributes.get(a.attributeId)
+    if (!def || a.axisPosition !== null || a.value === null || a.value.trim() === '') continue
+    push(pinnedValues, a.itemId, { name: def.name, id: def.id, value: formatAttributeValue(def, a.value) })
+  }
+  const pinned = new Map<Id, string[]>()
+  for (const [itemId, list] of pinnedValues) pinned.set(itemId, list.sort(byName).map((p) => p.value))
 
   const coverPos = new Map<Id, number>()
   const covers = new Map<Id, string>()
@@ -134,6 +185,9 @@ function buildIndex(s: InventorySnapshot): Index {
     covers,
     variantCovers,
     paths: new Map(),
+    itemVariants,
+    pinned,
+    variantValues,
   }
   const pieces = (parentId: Id | null): Quantity | null => {
     let sum: Quantity | null = null
@@ -192,9 +246,50 @@ function itemQuantity(ix: Index, itemId: Id): Quantity {
 
 const isEmpty = (q: Quantity): boolean => cmpQ(q, '0') <= 0
 
+/** @internal Stock of one bucket, or of the whole item when `variantId` is undefined (archived variants left out). */
+export function stockQuantity(s: InventorySnapshot, itemId: Id, variantId?: Id | null): Quantity {
+  const ix = snapshotIndex(s)
+  return variantId === undefined ? itemQuantity(ix, itemId) : (ix.buckets.get(bucketKey(itemId, variantId))?.quantity ?? '0')
+}
+
+const unitOf = (s: InventorySnapshot, item: Item): UnitDef => resolveUnit(item.unitKey, s.units) ?? BUILTIN_UNITS.pcs
+
 function amount(s: InventorySnapshot, item: Item, quantity: Quantity): { number: string; unit: string } {
-  const unit = resolveUnit(item.unitKey, s.units) ?? BUILTIN_UNITS.pcs
-  return formatAmountParts(quantity, unit)
+  return formatAmountParts(quantity, unitOf(s, item))
+}
+
+/** The amount with the unit as a suffix (spec 4.3): plain pieces have none. */
+function suffixAmount(quantity: Quantity, unit: UnitDef): { number: string; unit: string } {
+  const parts = formatAmountParts(quantity, unit)
+  return unit.key === 'pcs' && parts.unit === unit.symbol ? { number: parts.number, unit: '' } : parts
+}
+
+/** Buckets a list row shows before "+N". */
+export const LIST_BUCKETS = 4
+
+function listBuckets(s: InventorySnapshot, ix: Index, item: Item): { buckets: ListBucket[]; moreBuckets: number } {
+  const variants = ix.itemVariants.get(item.id) ?? []
+  if (variants.length === 0) return { buckets: [], moreBuckets: 0 }
+  const unit = unitOf(s, item)
+  const bucket = (label: string | null, quantity: Quantity): ListBucket => {
+    const { number, unit: suffix } = suffixAmount(quantity, unit)
+    // A prefix of pieces sticks to the number ("1.5k"); a unit symbol is a word of its own ("3 m").
+    const text = suffix === '' ? number : unit.key === 'pcs' ? `${number}${suffix}` : `${number} ${suffix}`
+    return { label, number: text, empty: isEmpty(quantity) }
+  }
+  const all: ListBucket[] = []
+  const loose = ix.buckets.get(bucketKey(item.id, null))?.quantity ?? '0'
+  if (cmpQ(loose, '0') !== 0) all.push(bucket(null, loose))
+  const axes = itemAxes(s, item.id)
+  for (const v of variants) {
+    // Axes joined by " / ", so " · " is left to separate the buckets: "100 nF / 50 V —".
+    const label = axes.map((a) => {
+      const value = ix.variantValues.get(v.id)?.get(a.id)
+      return value ? formatAttributeValue(a, value) : '—'
+    })
+    all.push(bucket(label.join(' / '), ix.buckets.get(bucketKey(item.id, v.id))?.quantity ?? '0'))
+  }
+  return { buckets: all.slice(0, LIST_BUCKETS), moreBuckets: Math.max(0, all.length - LIST_BUCKETS) }
 }
 
 function itemRow(s: InventorySnapshot, ix: Index, item: Item): ItemRow {
@@ -204,10 +299,17 @@ function itemRow(s: InventorySnapshot, ix: Index, item: Item): ItemRow {
     name: item.name,
     description: item.description,
     variantCount: ix.activeVariantCount.get(item.id) ?? 0,
-    ...amount(s, item, quantity),
+    ...suffixAmount(quantity, unitOf(s, item)),
     outOfStock: isEmpty(quantity),
     coverUrl: ix.covers.get(item.id) ?? null,
+    ...listBuckets(s, ix, item),
+    pinned: ix.pinned.get(item.id) ?? [],
   }
+}
+
+/** The values of the item's pinned attributes, as list rows show them (for the item card's header). */
+export function pinnedValues(s: InventorySnapshot, itemId: Id): string[] {
+  return snapshotIndex(s).pinned.get(itemId) ?? []
 }
 
 /** null when the folder is missing, archived, or under an archived ancestor. Root: folder null, crumbs []. */
@@ -247,6 +349,10 @@ export interface SearchRow {
   path: string
   /** The matched variant's photo, else the item's cover. */
   coverUrl: string | null
+  /** The item's pinned values (as ItemRow.pinned). */
+  pinned: string[]
+  /** number and unit in one: "4 pcs", "1.5k", "3 m". */
+  amount: string
 }
 
 export function searchRows(s: InventorySnapshot, hits: SearchHit[]): SearchRow[] {
@@ -266,12 +372,27 @@ export function searchRows(s: InventorySnapshot, hits: SearchHit[]): SearchRow[]
       name: item.name,
       variantName: variant?.name ?? null,
       ...amount(s, item, quantity),
+      amount: formatAmount(quantity, unitOf(s, item)),
       outOfStock: isEmpty(quantity),
       path: item.folderId === null ? '' : pathOf(ix, item.folderId).map((f) => f.name).join(' / '),
       coverUrl: (variant && hit.variantId !== null ? ix.variantCovers.get(hit.variantId) : undefined) ?? ix.covers.get(item.id) ?? null,
+      pinned: ix.pinned.get(item.id) ?? [],
     })
   }
   return rows
+}
+
+export type SnapshotSearch = ReturnType<typeof createSearch>
+const searches = new WeakMap<InventorySnapshot, SnapshotSearch>()
+
+/** Core search over a snapshot, built once per snapshot object (the palette, quick add and the share sheet share it). */
+export function snapshotSearch(s: InventorySnapshot): SnapshotSearch {
+  let search = searches.get(s)
+  if (!search) {
+    search = createSearch(s)
+    searches.set(s, search)
+  }
+  return search
 }
 
 export interface TreeNode {

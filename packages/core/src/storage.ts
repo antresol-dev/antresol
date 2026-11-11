@@ -2,6 +2,7 @@ import type { Command } from './commands'
 import type { Id } from './ids'
 import type { Inventory, InventorySnapshot, Movement } from './model'
 import type { SnapshotPatch } from './patch'
+import type { Quantity } from './quantity'
 
 export interface Actor {
   device: string
@@ -56,6 +57,14 @@ export class StorageError extends Error {
   }
 }
 
+/** A receipt found by its link (findReceiptsBySource). */
+export interface SourceReceipt {
+  at: string
+  itemId: Id
+  variantId: Id | null
+  quantity: Quantity
+}
+
 export interface InventoryStorage {
   readonly readOnly: boolean
   /** `rev`: the source's revision counter, read in the same snapshot as the list. It changes with every `apply`, so an
@@ -88,6 +97,10 @@ export interface InventoryStorage {
     runId: Id,
     onProgress?: (done: number, total: number) => void,
   ): Promise<{ inventoryIds: Id[] }>
+  /** Receipts of the inventory (archived items included) whose `sourceUrl` holds `key` as a whole part of the address,
+   *  case-insensitively: a lot id ("1005001234567890") or an address without its scheme ("lcsc.com/product-detail/c7593.html").
+   *  Newest first, at most 20. [] for an empty key. */
+  findReceiptsBySource(inventoryId: Id, key: string): Promise<SourceReceipt[]>
   /** One atomic write: the command, the revision bump and the reads of what it touched. Opaque revisions, like
    *  `listInventories`' rev. */
   apply(command: Command, actor: Actor): Promise<ApplyResult>

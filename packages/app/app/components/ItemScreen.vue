@@ -9,7 +9,9 @@ import { lastCounted } from '~/lib/counted'
 import { errorMessageKey } from '~/lib/errors'
 import { bucketDescription, itemView } from '~/lib/item-view'
 import { archiveNow } from '~/lib/undo'
+import { shopLinks } from '~/lib/share'
 import type { StockMode } from '~/lib/stock-forms'
+import { pinnedValues } from '~/lib/views'
 
 const props = defineProps<{ itemId: string; variantId: string | null }>()
 
@@ -190,6 +192,10 @@ async function removeAttribute(): Promise<void> {
   }
 }
 
+// The values shown in lists ("Show in lists") at the top of the card, and shop searches by the name (spec 4.10, 4.11).
+const pinned = computed(() => (snapshot.value && view.value ? pinnedValues(snapshot.value, props.itemId) : []))
+const shops = computed(() => (view.value ? shopLinks(view.value.item.name) : []))
+
 const highlight = computed(() => (view.value?.hasVariants ? props.variantId : null))
 const linkClass =
   'min-h-11 content-center rounded-md text-sm font-semibold text-primary underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring'
@@ -204,6 +210,11 @@ const linkClass =
   <ScreenBody>
     <template v-if="view && snapshot">
       <StockSheet :view="view" :target="stockTarget" @close="stockTarget = null" />
+      <ul v-if="pinned.length > 0" class="-mt-1 flex min-w-0 flex-wrap gap-1.5" :aria-label="$t('list.pinned')">
+        <li v-for="(value, i) in pinned" :key="i" class="max-w-full truncate rounded-md bg-chip px-2 py-0.5 text-[13px] font-semibold text-subtle-foreground">
+          {{ value }}
+        </li>
+      </ul>
       <ItemGallery :item-id="itemId" :photos="view.photos" />
       <div v-if="view.item.description || view.tags.length > 0" class="grid min-w-0 gap-2.5">
         <p v-if="view.item.description" class="text-[15px] whitespace-pre-line text-muted-foreground wrap-anywhere">
@@ -311,6 +322,12 @@ const linkClass =
       />
       <AttributeValueSheet :view="view" :open="attributeOpen" :attribute-id="attributeId" @close="attributeOpen = false" />
       <VariantValuesSheet :view="view" :variant-id="valuesId" @close="valuesId = null" />
+      <nav class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5" :aria-label="$t('shops.title')">
+        <span class="text-sm font-semibold text-subtle-foreground">{{ $t('shops.title') }}</span>
+        <a v-for="shop in shops" :key="shop.name" :href="shop.url" target="_blank" rel="noopener noreferrer" :class="linkClass">
+          {{ shop.name }}
+        </a>
+      </nav>
       <JournalList :item-id="itemId" />
     </template>
     <EmptyState v-else-if="snapshot || blocker?.kind === 'gone'" :text="$t('empty.itemGone')">

@@ -1,4 +1,4 @@
-import type { Command, FileStore, Id, Inventory, InventorySnapshot, Movement, RestoreMode } from '@graymatter/core'
+import type { Command, FileStore, Id, Inventory, InventorySnapshot, Movement, RestoreMode, SourceReceipt } from '@graymatter/core'
 import type { BackupFile } from './backup'
 import type { BackupInfo, DeviceDb } from './device-db'
 import type { FailureReason, SourceDriver } from './sources'
@@ -110,6 +110,9 @@ export interface Workspace {
   /** Journal of an item of the current inventory, newest first, after a check of its source when the interval has
    *  passed (as apply). Rejects without a network call while the source is unreachable. */
   loadMovements(itemId: Id): Promise<Movement[]>
+  /** Receipts of the current inventory whose link holds this lot key, newest first (storage findReceiptsBySource).
+   *  Rejects without a network call while the source is unreachable. */
+  findReceiptsBySource(key: string): Promise<SourceReceipt[]>
   /** Read-only copy of every inventory of a connected source (archived included) with all movements. Rejects with
    *  `unavailable` when the source is offline or failing; never returns a partial backup. */
   exportSource(sourceId: string): Promise<BackupFile>

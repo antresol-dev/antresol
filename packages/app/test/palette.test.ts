@@ -8,6 +8,8 @@ import {
   matchFolders,
   paletteActions,
   paletteResults,
+  pastedShare,
+  snapshotSearch,
   stepSelection,
   type PaletteAction,
   type PaletteContext,
@@ -268,5 +270,30 @@ describe('palette', () => {
     expect(paletteActions({ ...ctx, query: '' }, label).map((a) => a.kind)).not.toContain('addItem')
     expect(paletteActions({ ...ctx, query: '  ' }, label).map((a) => a.kind)).not.toContain('addItem')
     expect(paletteActions({ ...ctx, canWrite: false }, label).map((a) => a.kind)).not.toContain('addItem')
+  })
+
+  it('opens the share sheet for a pasted link or long title, never for a query that looks like a file', () => {
+    expect(pastedShare('tl072.pdf')).toBeNull()
+    expect(pastedShare('ne5532')).toBeNull()
+    expect(pastedShare(' https://www.aliexpress.com/item/1005001234567890.html ')).toEqual({
+      text: 'https://www.aliexpress.com/item/1005001234567890.html',
+    })
+    expect(pastedShare('600PCS 1/4W Metal Film Resistor 1% 10K 4.7K')).toEqual({ text: '600PCS 1/4W Metal Film Resistor 1% 10K 4.7K' })
+  })
+
+  it('shows pinned values on item rows', () => {
+    const s = structuredClone(snap)
+    const at = '2026-11-10T00:00:00Z'
+    s.attributes.push({ id: 'a-pkg', inventoryId, name: 'Package', kind: 'enum', options: ['DIP-8'], unit: '', siPrefixes: false, pinned: true, createdAt: at, updatedAt: at, createdBy: 'T', updatedBy: 'T' })
+    const ne = s.items.find((i) => i.name === 'NE555')!.id
+    s.itemAttributes.push({ itemId: ne, attributeId: 'a-pkg', value: 'DIP-8', axisPosition: null })
+    const ctx: PaletteContext = { query: 'ne555', folder: null, inventories, current: electronics, sections: [], canWrite: true }
+    const [row] = paletteResults(s, snapshotSearch(s), ctx, () => '')[0]!.rows
+    expect(row).toMatchObject({ kind: 'item', hit: { name: 'NE555', pinned: ['DIP-8'] } })
+  })
+
+  it('builds one search per snapshot', () => {
+    expect(snapshotSearch(snap)).toBe(snapshotSearch(snap))
+    expect(snapshotSearch(structuredClone(snap))).not.toBe(snapshotSearch(snap))
   })
 })

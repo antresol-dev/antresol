@@ -15,6 +15,7 @@ import {
   type Movement,
   type RestoreMode,
   type SnapshotPatch,
+  type SourceReceipt,
 } from '@graymatter/core'
 import { createCloudinaryStore } from '@graymatter/files-cloudinary'
 import { createImgurStore } from '@graymatter/files-imgur'
@@ -1086,6 +1087,13 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     return guarded(sourceId, conn, () => conn.storage.loadMovements(itemId))
   }
 
+  /** Earlier receipts of a shop lot in the current inventory (spec 4.10); rejects like loadMovements while offline. */
+  async function findReceiptsBySource(key: string): Promise<SourceReceipt[]> {
+    const { sourceId, conn } = journalSource()
+    const inventoryId = state.current!.inventoryId
+    return guarded(sourceId, conn, () => conn.storage.findReceiptsBySource(inventoryId, key))
+  }
+
   async function exportSource(sourceId: string): Promise<BackupFile> {
     const entry = state.sources.find((s) => s.config.id === sourceId)
     const conn = conns.get(sourceId)
@@ -1204,6 +1212,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       }
     },
     loadMovements,
+    findReceiptsBySource,
     exportSource,
     restoreSource,
     backupInfo: (sourceId) => db.getBackupInfo(sourceId),

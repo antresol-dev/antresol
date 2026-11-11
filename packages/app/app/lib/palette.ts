@@ -1,7 +1,17 @@
 import type { Folder, Id, InventorySnapshot, SearchHit } from '@graymatter/core'
+import { isShareLike, type ShareInput } from './share'
 import type { InventoryRef } from './types'
 import { byName, pathOf, searchRows, snapshotIndex, type SearchRow } from './views'
 import type { InventoryEntry } from './workspace'
+
+export { snapshotSearch } from './views'
+
+/** What a paste into the palette hands to the share sheet: a web address or a long shop title (isShareLike); null for
+ *  anything else, which is pasted into the field as usual ("tl072.pdf"). */
+export function pastedShare(text: string): ShareInput | null {
+  const t = text.trim()
+  return isShareLike(t) ? { text: t } : null
+}
 
 /** Core search's normalization: lowercase, letters and digits only. "TL-072" → "tl072". */
 export function compactText(s: string): string {

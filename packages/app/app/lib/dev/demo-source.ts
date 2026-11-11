@@ -177,6 +177,18 @@ export async function seedDemo(storage: InventoryStorage, actor: Actor, options:
     const pkg = newId()
     await run({ type: 'attribute.create', id: pkg, inventoryId: inv, name: 'Package', kind: 'enum', options: ['DIP-8', 'SOIC-8'], unit: '', siPrefixes: false })
     await run({ type: 'item.setAttribute', itemId: tl072, attributeId: pkg, value: 'DIP-8' })
+    // Shown next to item names in lists (spec 4.11), and a receipt with a shop link for "Bought on" (spec 4.10).
+    await run({ type: 'attribute.update', id: pkg, pinned: true })
+    await run({
+      type: 'stock.receive',
+      movementId: newId(),
+      itemId: tl072,
+      variantId: null,
+      quantity: '10',
+      totalPrice: 120,
+      sourceUrl: 'https://www.aliexpress.com/item/1005001234567890.html',
+      note: null,
+    })
     const old = await folder('Old projects')
     await item('LM741', old, { quantity: '2', totalPrice: null })
     await archive('folder', old)

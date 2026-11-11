@@ -91,6 +91,10 @@ describe('ranking', () => {
     expect(ids.slice(0, 2)).toEqual(['TL072', 'TL072CP'])
     expect(ids.slice(2).sort()).toEqual(['TL071', 'TL074', 'TL082', 'TLC272'].filter((x) => ids.includes(x)).sort())
   })
+  it('without fuzzy keeps exact and prefix hits only', () => {
+    expect(r.search('tl072', 50, { fuzzy: false }).map((h) => h.itemId)).toEqual(['TL072', 'TL072CP'])
+    expect(r.search('lm13600', 50, { fuzzy: false })).toEqual([])
+  })
   it('keeps one-edit typos but not two-edit neighbours', () => {
     expect(r.search('lm13600').map((h) => h.itemId)).toContain('LM13700')
     expect(r.search('lm358').map((h) => h.itemId)).not.toContain('LM386')

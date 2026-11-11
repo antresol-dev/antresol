@@ -13,11 +13,13 @@ export interface StockTarget {
   variantId: Id | null
   /** Count: the quantity to start from (the bucket's own when not given). */
   amount?: Quantity
+  /** What the form starts with instead of empty fields ("Receive here" carries what quick add had). */
+  prefill?: { amount?: string; price?: string; url?: string }
 }
 
 // Receive, use, set or move stock of one bucket of the item. The form resets on every opening.
 const props = defineProps<{ view: ItemView; target: StockTarget | null }>()
-const emit = defineEmits<{ close: [] }>()
+const emit = defineEmits<{ close: []; done: [] }>()
 
 const workspace = useWorkspace()
 const { state } = workspace
@@ -64,11 +66,14 @@ watch(
     void workspace.warmUp()
     openings.value++
     const bucket = props.view.buckets.find((b) => b.variantId === t.variantId)
-    // Count starts from the current quantity, selected so that typing replaces it (spec 4.12).
-    amount.value = t.mode === 'transfer' ? (bucket?.quantity ?? '') : t.mode === 'set' ? (t.amount ?? bucket?.quantity ?? '') : ''
+    // Count starts from the current quantity, selected so that typing replaces it (spec 4.12). "Receive here" carries
+    // what quick add had (prefill).
+    amount.value =
+      t.prefill?.amount ??
+      (t.mode === 'transfer' ? (bucket?.quantity ?? '') : t.mode === 'set' ? (t.amount ?? bucket?.quantity ?? '') : '')
     selectAmount = t.mode === 'set'
-    price.value = ''
-    url.value = ''
+    price.value = t.prefill?.price ?? ''
+    url.value = t.prefill?.url ?? ''
     note.value = ''
     toKey.value = ''
     busy.value = false
@@ -108,6 +113,7 @@ async function submit(): Promise<void> {
   errorKey.value = null
   try {
     await workspace.apply(built.command)
+    emit('done')
     emit('close')
   } catch (e) {
     errorKey.value = errorMessageKey(e)

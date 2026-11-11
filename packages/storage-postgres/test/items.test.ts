@@ -1,4 +1,12 @@
-import { newId, type Command, type Id, type InventoryStorage } from '@graymatter/core'
+import {
+  newId,
+  normalizeCommand,
+  validateCommand,
+  type Command,
+  type Id,
+  type InventorySnapshot,
+  type InventoryStorage,
+} from '@graymatter/core'
 import { describe, expect, it } from 'vitest'
 import { attributeCreate, makeStorage, TEST_ACTOR, variantsCreate } from './helpers'
 
@@ -302,14 +310,163 @@ describe('item.reorderAxes', () => {
 describe('attribute.delete', () => {
   it('removes every value of the attribute', async () => {
     const { run, load, addAxis, setShared, item, ohm, size } = await withAttributes()
+    const a = newId()
     await setShared(size, 'x')
     await addAxis(ohm)
-    await run(variantsCreate(item, [[newId(), { [ohm]: '4700' }]]))
+    await run(variantsCreate(item, [[a, { [ohm]: '4700' }]]))
+    // An axis of an item with variants cannot go (attribute_is_axis): the variant goes first.
+    await run({ type: 'archive', target: 'variant', id: a, archiveId: newId() })
+    await run({ type: 'deletePermanently', target: 'variant', id: a })
     await run({ type: 'attribute.delete', id: ohm })
     await run({ type: 'attribute.delete', id: size })
     const snap = await load()
+    expect(snap.attributes.map((x) => x.id)).not.toContain(ohm)
     expect(snap.itemAttributes).toEqual([])
     expect(snap.variantAttributeValues).toEqual([])
+  })
+})
+
+/**
+ * Device A validates a command on its copy, loaded before device B wrote: core passes it, and the database must not
+ * carry it out where what it holds now breaks the rules (spec 2026-11-11 variants §4.5-4.7). The write is skipped, its
+ * slice comes back as the database has it, and the revision rules reload A's copy.
+ */
+describe('a removal validated on a stale copy', () => {
+  /** One axis, Resistance; A loads its copy; then B adds two variants. */
+  async function lastAxis() {
+    const ctx = await withAttributes()
+    const [a, b] = [newId(), newId()]
+    await ctx.addAxis(ctx.ohm)
+    const stale = await ctx.load()
+    await ctx.run(variantsCreate(ctx.item, [[a, { [ctx.ohm]: '1000' }], [b, { [ctx.ohm]: '10000' }]]))
+    return { ...ctx, stale, a, b }
+  }
+
+  /** Validated on the stale copy (it passes), then sent. */
+  async function sendStale(ctx: { run: (c: Command) => Promise<unknown>; stale: InventorySnapshot }, c: Command) {
+    const command = normalizeCommand(c)
+    expect(validateCommand(command, ctx.stale)).toBeNull()
+    await ctx.run(command)
+  }
+
+  it('item.removeAttribute keeps the last axis of an item that has variants, and its values', async () => {
+    const ctx = await lastAxis()
+    await sendStale(ctx, { type: 'item.removeAttribute', itemId: ctx.item, attributeId: ctx.ohm })
+    expect(await ctx.links()).toEqual({ [ctx.ohm]: [0, null] })
+    expect(await ctx.values(ctx.ohm)).toEqual({ [ctx.a]: '1000', [ctx.b]: '10000' })
+  })
+
+  it('item.removeAxis keeps the last axis of an item that has variants, and its values', async () => {
+    const ctx = await lastAxis()
+    await sendStale(ctx, { type: 'item.removeAxis', itemId: ctx.item, attributeId: ctx.ohm })
+    expect(await ctx.links()).toEqual({ [ctx.ohm]: [0, null] })
+    expect(await ctx.values(ctx.ohm)).toEqual({ [ctx.a]: '1000', [ctx.b]: '10000' })
+  })
+
+  it('attribute.delete keeps an attribute that is an axis of an item that has variants', async () => {
+    const ctx = await lastAxis()
+    await sendStale(ctx, { type: 'attribute.delete', id: ctx.ohm })
+    const snap = await ctx.load()
+    expect(snap.attributes.map((x) => x.id)).toContain(ctx.ohm)
+    expect(await ctx.links()).toEqual({ [ctx.ohm]: [0, null] })
+    expect(await ctx.values(ctx.ohm)).toEqual({ [ctx.a]: '1000', [ctx.b]: '10000' })
+  })
+
+  it('attribute.delete keeps an axis of an item with variants even when the item has another axis', async () => {
+    const ctx = await withAttributes()
+    const a = newId()
+    await ctx.addAxis(ctx.ohm)
+    await ctx.addAxis(ctx.volt)
+    const stale = await ctx.load()
+    await ctx.run(variantsCreate(ctx.item, [[a, { [ctx.ohm]: '1000', [ctx.volt]: '50' }]]))
+    await sendStale({ ...ctx, stale }, { type: 'attribute.delete', id: ctx.volt })
+    expect(await ctx.links()).toEqual({ [ctx.ohm]: [0, null], [ctx.volt]: [1, null] })
+    expect(await ctx.values(ctx.volt)).toEqual({ [a]: '50' })
+  })
+
+  /** Two axes, Resistance and Voltage; A loads its copy; then B adds two variants that differ only by Voltage. */
+  async function twoAxes() {
+    const ctx = await withAttributes()
+    const [a, b] = [newId(), newId()]
+    await ctx.addAxis(ctx.ohm)
+    await ctx.addAxis(ctx.volt)
+    const stale = await ctx.load()
+    await ctx.run(
+      variantsCreate(ctx.item, [[a, { [ctx.ohm]: '1000', [ctx.volt]: '16' }], [b, { [ctx.ohm]: '1000', [ctx.volt]: '50' }]]),
+    )
+    return { ...ctx, stale, a, b }
+  }
+
+  it('item.removeAxis does not make two variants equal', async () => {
+    const ctx = await twoAxes()
+    await sendStale(ctx, { type: 'item.removeAxis', itemId: ctx.item, attributeId: ctx.volt })
+    expect(await ctx.links()).toEqual({ [ctx.ohm]: [0, null], [ctx.volt]: [1, null] })
+    expect(await ctx.values(ctx.volt)).toEqual({ [ctx.a]: '16', [ctx.b]: '50' })
+  })
+
+  it('item.removeAttribute does not make two variants equal', async () => {
+    const ctx = await twoAxes()
+    await sendStale(ctx, { type: 'item.removeAttribute', itemId: ctx.item, attributeId: ctx.volt })
+    expect(await ctx.links()).toEqual({ [ctx.ohm]: [0, null], [ctx.volt]: [1, null] })
+    expect(await ctx.values(ctx.volt)).toEqual({ [ctx.a]: '16', [ctx.b]: '50' })
+  })
+
+  it('compares text values on the remaining axes without case and outer spaces', async () => {
+    const ctx = await withAttributes()
+    const [a, b] = [newId(), newId()]
+    await ctx.addAxis(ctx.size)
+    await ctx.addAxis(ctx.volt)
+    const stale = await ctx.load()
+    await ctx.run(
+      variantsCreate(ctx.item, [[a, { [ctx.size]: 'Big', [ctx.volt]: '16' }], [b, { [ctx.size]: 'big', [ctx.volt]: '50' }]]),
+    )
+    await sendStale({ ...ctx, stale }, { type: 'item.removeAxis', itemId: ctx.item, attributeId: ctx.volt })
+    expect(await ctx.links()).toEqual({ [ctx.size]: [0, null], [ctx.volt]: [1, null] })
+  })
+
+  /** Two axes, Resistance and Voltage, and two variants that Resistance tells apart; A loads its copy. */
+  async function twoAxesApart() {
+    const ctx = await withAttributes()
+    const [a, b] = [newId(), newId()]
+    await ctx.addAxis(ctx.ohm)
+    await ctx.addAxis(ctx.volt)
+    await ctx.run(
+      variantsCreate(ctx.item, [[a, { [ctx.ohm]: '1000', [ctx.volt]: '16' }], [b, { [ctx.ohm]: '4700', [ctx.volt]: '50' }]]),
+    )
+    const stale = await ctx.load()
+    return { ...ctx, stale, a, b }
+  }
+
+  it('an axis the remaining axes still tell apart goes as usual, an empty value differing from a value', async () => {
+    const ctx = await twoAxesApart()
+    await ctx.run({ type: 'variant.setAttribute', variantId: ctx.a, attributeId: ctx.ohm, value: null })
+    await sendStale(ctx, { type: 'item.removeAxis', itemId: ctx.item, attributeId: ctx.volt })
+    expect(await ctx.links()).toEqual({ [ctx.ohm]: [0, null], [ctx.volt]: [null, null] })
+    expect(await ctx.values(ctx.volt)).toEqual({})
+    expect(await ctx.values(ctx.ohm)).toEqual({ [ctx.b]: '4700' })
+  })
+
+  it('empty values on the remaining axes are equal', async () => {
+    const ctx = await twoAxesApart()
+    await ctx.run({ type: 'variant.setAttribute', variantId: ctx.a, attributeId: ctx.ohm, value: null })
+    await ctx.run({ type: 'variant.setAttribute', variantId: ctx.b, attributeId: ctx.ohm, value: null })
+    await sendStale(ctx, { type: 'item.removeAxis', itemId: ctx.item, attributeId: ctx.volt })
+    expect(await ctx.links()).toEqual({ [ctx.ohm]: [0, null], [ctx.volt]: [1, null] })
+    expect(await ctx.values(ctx.volt)).toEqual({ [ctx.a]: '16', [ctx.b]: '50' })
+  })
+})
+
+describe('variant.createMany validated on a stale copy', () => {
+  it('creates no variant on an item that has no axis in the database', async () => {
+    const ctx = await withAttributes()
+    await ctx.addAxis(ctx.ohm)
+    const stale = await ctx.load()
+    // B takes the axis off (no variants yet), then A adds a variant on its copy, which still has the axis.
+    await ctx.run({ type: 'item.removeAxis', itemId: ctx.item, attributeId: ctx.ohm })
+    const command = normalizeCommand(variantsCreate(ctx.item, [[newId(), { [ctx.ohm]: '1000' }]]))
+    expect(validateCommand(command, stale)).toBeNull()
+    await ctx.run(command)
+    expect((await ctx.load()).variants).toEqual([])
   })
 })
 

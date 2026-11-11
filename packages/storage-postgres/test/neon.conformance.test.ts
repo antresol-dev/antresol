@@ -175,6 +175,34 @@ describe.skipIf(!url)('Neon conformance', () => {
         expect(fresh.attributes.find((x) => x.id === cap)).toMatchObject({ kind: 'number', unit: 'F', siPrefixes: true })
       })
 
+      it('skips an axis removal the database state forbids, whatever copy validated it', async () => {
+        const { storage } = await openPostgresStorage(exec)
+        const run = (c: Command) => storage.apply(c, TEST_ACTOR)
+        const [inv, item, ohm, size, a, b] = [newId(), newId(), newId(), newId(), newId(), newId()]
+        await run({ type: 'inventory.create', id: inv, name: `stale-${name}`, description: null, currency: 'USD' })
+        await run(itemCreate(inv, item, 'Resistor'))
+        await run(attributeCreate(inv, ohm, 'Resistance', 'number', { unit: 'Ω', siPrefixes: true }))
+        await run(attributeCreate(inv, size, 'Size'))
+        await run({ type: 'item.addAxis', itemId: item, attributeId: size, firstVariantId: newId() })
+        await run({ type: 'item.addAxis', itemId: item, attributeId: ohm, firstVariantId: newId() })
+        await run(variantsCreate(item, [[a, { [size]: 'Big', [ohm]: '1000' }], [b, { [size]: 'big', [ohm]: '4700' }]]))
+        // Sent unvalidated, as from a copy that is behind. Size alone leaves "Big" and "big" equal: skipped.
+        await run({ type: 'item.removeAxis', itemId: item, attributeId: ohm })
+        // Resistance alone tells them apart: Size goes. Then Resistance is the last axis of an item with variants.
+        await run({ type: 'item.removeAxis', itemId: item, attributeId: size })
+        const skipped = await run({ type: 'item.removeAttribute', itemId: item, attributeId: ohm })
+        expect(skipped.patch!.itemAttributes.find((r) => r.attributeId === ohm)).toMatchObject({ axisPosition: 0 })
+        await run({ type: 'attribute.delete', id: ohm })
+
+        const fresh = await storage.loadInventory(inv)
+        const links = Object.fromEntries(fresh.itemAttributes.map((r) => [r.attributeId, [r.axisPosition, r.value]]))
+        expect(links).toEqual({ [ohm]: [0, null], [size]: [null, null] })
+        expect(fresh.attributes.map((x) => x.id)).toContain(ohm)
+        expect(fresh.variantAttributeValues.map((r) => [r.variantId, r.attributeId, r.value]).sort()).toEqual(
+          [[a, ohm, '1000'], [b, ohm, '4700']].sort(),
+        )
+      })
+
       it('concurrent applies are serialized on the revision row', async () => {
         const other = make()
         try {

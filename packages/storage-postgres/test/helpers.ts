@@ -1,5 +1,5 @@
 import { PGlite } from '@electric-sql/pglite'
-import type { Actor, AttributeKind, Command, Id, InventorySnapshot, InventoryStorage } from '@graymatter/core'
+import { newId, type Actor, type AttributeKind, type Command, type Id, type InventorySnapshot, type InventoryStorage } from '@graymatter/core'
 import { afterEach } from 'vitest'
 import type { PgExecutor } from '../src/executor'
 import { createPgliteExecutor } from '../src/executors/pglite'
@@ -57,6 +57,12 @@ export const attributeCreate = (
   unit: extra.unit ?? '',
   siPrefixes: extra.siPrefixes ?? false,
 })
+
+/** A text attribute "Size", made an axis of the item: the database makes no variants on an item without an axis. */
+export const sizeAxis = (inventoryId: Id, itemId: Id, attributeId: Id): Command[] => [
+  attributeCreate(inventoryId, attributeId, 'Size'),
+  { type: 'item.addAxis', itemId, attributeId, firstVariantId: newId() },
+]
 
 /** Variants by their axis values: one record per variant, attribute id -> value. */
 export const variantsCreate = (itemId: Id, variants: [Id, Record<Id, string>][]): Command => ({

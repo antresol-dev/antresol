@@ -4,7 +4,8 @@ import { sql, updateSet, type Statement } from '../sql'
 type VariantCommand = Extract<Command, { type: 'variant.createMany' | 'variant.update' | 'variant.setAttribute' }>
 
 // A variant holds values only on the axes its item has in the database when the write runs (core checks the rules
-// against the device's copy, which may be stale): a value for any other attribute is not stored.
+// against the device's copy, which may be stale): a value for any other attribute is not stored. Likewise an item with
+// no axis in the database gets no variants (axis_required): the write is skipped, and the revision rules reload the copy.
 
 export function variantStatements(c: VariantCommand, actor: Actor): Statement[] {
   const by = actor.device
@@ -22,6 +23,8 @@ export function variantStatements(c: VariantCommand, actor: Actor): Statement[] 
                      (select coalesce(max(position), -1) from variants where item_id = ${c.itemId}::uuid) + n.ord::int,
                      ${by}, ${by}
               from unnest(${ids}::uuid[]) with ordinality as n(id, ord)
+              where exists (select 1 from item_attributes
+                            where item_id = ${c.itemId}::uuid and axis_position is not null)
               on conflict (id) do nothing
               returning id
             )

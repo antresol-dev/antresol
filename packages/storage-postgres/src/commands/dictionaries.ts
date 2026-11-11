@@ -42,7 +42,16 @@ export function dictionaryStatements(c: DictionaryCommand, actor: Actor): Statem
             where id = ${c.id}`,
       ]
     case 'attribute.delete':
-      return [sql`delete from attributes where id = ${c.id}`]
+      // Not while it is an axis of an item with variants in the database (attribute_is_axis), archived ones included:
+      // a copy validated before another device added the variants would take the variants' only distinguishing values.
+      // Skipped rather than refused; the command reloads the inventory anyway.
+      return [
+        sql`delete from attributes
+            where id = ${c.id}
+              and not exists (select 1 from item_attributes ia
+                              where ia.attribute_id = ${c.id} and ia.axis_position is not null
+                                and exists (select 1 from variants v where v.item_id = ia.item_id))`,
+      ]
     case 'unit.create':
       return [
         sql`insert into custom_units (id, inventory_id, name, symbol, prefix_powers, created_by, updated_by)

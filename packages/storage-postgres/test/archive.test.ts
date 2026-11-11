@@ -2,7 +2,7 @@ import { newId, StorageError, type Command, type InventoryStorage } from '@graym
 import { describe, expect, it } from 'vitest'
 import type { PgExecutor } from '../src/executor'
 import { openPostgresStorage } from '../src/storage'
-import { attributeCreate, makeExecutor, TEST_ACTOR, variantsCreate } from './helpers'
+import { attributeCreate, makeExecutor, sizeAxis, TEST_ACTOR, variantsCreate } from './helpers'
 
 interface Ctx {
   exec: PgExecutor
@@ -108,9 +108,10 @@ describe('archive and restore', () => {
     const c = await setup()
     const F = await folder(c, null, 'F')
     const it1 = await item(c, F, 'it')
-    const v1 = newId()
+    const [v1, size] = [newId(), newId()]
     const [C, D, E] = [newId(), newId(), newId()]
-    await run(c, variantsCreate(it1, [[v1, {}]]))
+    for (const cmd of sizeAxis(c.inv, it1, size)) await run(c, cmd)
+    await run(c, variantsCreate(it1, [[v1, { [size]: 'S' }]]))
     await run(c, { type: 'archive', target: 'variant', id: v1, archiveId: C })
     expect((await state(c)).variants.get(v1)).toEqual({ archiveId: C, archived: true })
     await run(c, { type: 'restore', archiveId: C })
@@ -171,8 +172,9 @@ describe('deletePermanently', () => {
   it('deletes an archived variant by cascade', async () => {
     const c = await setup()
     const it1 = await item(c, null, 'x', '3')
-    const v = newId()
-    await run(c, variantsCreate(it1, [[v, {}]]))
+    const [v, size] = [newId(), newId()]
+    for (const cmd of sizeAxis(c.inv, it1, size)) await run(c, cmd)
+    await run(c, variantsCreate(it1, [[v, { [size]: 'S' }]]))
     await run(c, { type: 'stock.receive', movementId: newId(), itemId: it1, variantId: v, quantity: '1', totalPrice: null, sourceUrl: null, note: null })
     await run(c, { type: 'archive', target: 'variant', id: v, archiveId: newId() })
     await run(c, { type: 'deletePermanently', target: 'variant', id: v })

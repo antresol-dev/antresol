@@ -1,6 +1,6 @@
 import { newId, type Command, type Quantity } from '@graymatter/core'
 import { describe, expect, it } from 'vitest'
-import { attributeCreate, makeStorage, TEST_ACTOR, variantsCreate } from './helpers'
+import { attributeCreate, makeStorage, sizeAxis, TEST_ACTOR, variantsCreate } from './helpers'
 
 const q = (s: string) => s as Quantity
 
@@ -58,8 +58,9 @@ describe('replaying a command with client ids is a no-op', () => {
   it('stock.receive, use, return, transfer and set', async () => {
     const { storage, inv } = await setup()
     const item = await plainItem(storage, inv)
-    const v = newId()
-    await storage.apply(variantsCreate(item, [[v, {}]]), TEST_ACTOR)
+    const [v, size] = [newId(), newId()]
+    for (const c of sizeAxis(inv, item, size)) await storage.apply(c, TEST_ACTOR)
+    await storage.apply(variantsCreate(item, [[v, { [size]: 'S' }]]), TEST_ACTOR)
     const qty = async (variantId: string | null) => (await storage.loadInventory(inv)).stock.find((l) => l.variantId === variantId)?.quantity
     const receive = (quantity: string): Command => ({
       type: 'stock.receive', movementId: newId(), itemId: item, variantId: null, quantity: q(quantity), totalPrice: null, sourceUrl: null, note: null,

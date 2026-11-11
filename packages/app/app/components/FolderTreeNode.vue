@@ -28,7 +28,8 @@ const ariaCurrent = computed(() =>
 
 // The second click on the folder whose screen is open opens or closes it; the first one only goes there.
 function click(e: MouseEvent): void {
-  if (props.root || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
+  // A long press already opened the menu (its capture handler prevented this click): no toggle on top of it.
+  if (e.defaultPrevented || props.root || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return
   if (rowClickAction(ariaCurrent.value === 'page') !== 'toggle') return
   e.preventDefault()
   if (props.row.hasChildren) emit('toggle', props.row.id)

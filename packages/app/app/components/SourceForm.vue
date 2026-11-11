@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { errorMessageKey } from '~/lib/errors'
-import { canSaveSource, checkConnectionString, createNeonDriver, type SourceProbe } from '~/lib/sources'
+import { canSaveSource, checkConnectionString, createNeonDriver, photoStoreProblem, type SourceProbe } from '~/lib/sources'
 import type { PhotoStore, SourceConfig } from '~/lib/types'
 
 const props = defineProps<{ source?: SourceConfig }>()
@@ -33,6 +33,7 @@ const imgurClientId = ref(props.source?.imgurClientId ?? '')
 const uploadcareKey = ref(props.source?.uploadcarePublicKey ?? '')
 const uploadcareCdn = ref(props.source?.uploadcareCdnBase ?? '')
 const cdnProblem = ref(false)
+const storeProblem = ref<ReturnType<typeof photoStoreProblem>>(null)
 const reveal = ref(false)
 const problem = ref<ReturnType<typeof checkConnectionString>>(null)
 const probe = ref<SourceProbe | null>(null)
@@ -67,6 +68,16 @@ const draft = (): Omit<SourceConfig, 'id' | 'createdAt'> => ({
 watch(uploadcareCdn, () => {
   cdnProblem.value = false
 })
+watch([photoStore, cloudinaryCloud, cloudinaryPreset], () => {
+  storeProblem.value = null
+})
+
+/** Both checks of the photo settings; true when they pass. */
+function photoSettingsOk(): boolean {
+  cdnProblem.value = !cdnValid()
+  storeProblem.value = photoStoreProblem(draft())
+  return !cdnProblem.value && storeProblem.value === null
+}
 
 watch(connectionString, () => {
   probe.value = null
@@ -76,8 +87,7 @@ watch(connectionString, () => {
 })
 
 async function check(): Promise<void> {
-  cdnProblem.value = !cdnValid()
-  if (cdnProblem.value) return
+  if (!photoSettingsOk()) return
   problem.value = checkConnectionString(connectionString.value)
   probe.value = null
   checkError.value = null
@@ -104,8 +114,7 @@ const saveKey = computed(() =>
 )
 
 async function save(): Promise<void> {
-  cdnProblem.value = !cdnValid()
-  if (cdnProblem.value) return
+  if (!photoSettingsOk()) return
   saving.value = true
   saveError.value = null
   try {
@@ -232,6 +241,8 @@ async function save(): Promise<void> {
           autocomplete="off"
           autocapitalize="off"
           spellcheck="false"
+          :aria-invalid="storeProblem === 'cloudinaryCloud' || storeProblem === 'cloudinaryCloudFormat' ? true : undefined"
+          aria-describedby="source-store-problem"
           class="h-11 rounded-field bg-surface"
         />
       </div>
@@ -246,8 +257,13 @@ async function save(): Promise<void> {
           autocomplete="off"
           autocapitalize="off"
           spellcheck="false"
+          :aria-invalid="storeProblem === 'cloudinaryPreset' ? true : undefined"
+          aria-describedby="source-store-problem"
           class="h-11 rounded-field bg-surface"
         />
+        <p id="source-store-problem" role="alert" class="text-sm text-destructive">
+          <template v-if="storeProblem">{{ $t(`sourceForm.problem.${storeProblem}`) }}</template>
+        </p>
         <p class="text-sm text-subtle-foreground">
           {{ $t('sourceForm.cloudinaryHint') }}
           <a

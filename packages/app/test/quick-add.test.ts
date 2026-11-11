@@ -86,6 +86,11 @@ describe('buildQuickAdd', () => {
   it('refuses a price or link without an amount', () => {
     expect(buildQuickAdd(input({ price: '2' }), snap, ids)).toEqual({ errorKey: 'quickAdd.needsAmount' })
     expect(buildQuickAdd(input({ url: 'https://x.example' }), snap, ids)).toEqual({ errorKey: 'quickAdd.needsAmount' })
+    // A link prefilled from the share sheet and left alone does not demand an amount; one the person edited does.
+    const shared = buildQuickAdd(input({ url: 'https://x.example', prefilledUrl: 'https://x.example' }), snap, ids)
+    expect('command' in shared && shared.command.initialReceipt).toBeNull()
+    expect(buildQuickAdd(input({ url: 'https://y.example', prefilledUrl: 'https://x.example' }), snap, ids)).toEqual({ errorKey: 'quickAdd.needsAmount' })
+    expect(buildQuickAdd(input({ price: '2', url: 'https://x.example', prefilledUrl: 'https://x.example' }), snap, ids)).toEqual({ errorKey: 'quickAdd.needsAmount' })
   })
 
   it('refuses an invalid amount or price', () => {
@@ -143,7 +148,7 @@ describe('existingMatches', () => {
 
   beforeAll(async () => {
     const opamps = snap.folders.find((f) => f.name === 'Op-amps')!.id
-    for (const c of [add('NE5532P', opamps, '4'), add('TL072CP', opamps, '12'), add('TL074', opamps, '3')]) {
+    for (const c of [add('NE5532P', opamps, '4'), add('TL072CP', opamps, '12'), add('TL074', opamps, '3'), { ...add('OPA2134', opamps, '2'), description: 'Dual op amp, DIP-8' } as Command]) {
       await storage.apply(c, { device: 'Test' })
     }
     s = await storage.loadInventory(snap.inventory.id)
@@ -175,6 +180,18 @@ describe('existingMatches', () => {
     expect(existingMatches('ne5533', s)).toEqual([])
     expect(existingMatches('   ', s)).toEqual([])
     expect(existingMatches('t', s)).toEqual([])
+  })
+
+  it('with every word required, finds only items that match all of them', () => {
+    const every = { everyWord: true }
+    // Not a match that merely shares one word or an attribute value (any-word search does find one).
+    expect(existingMatches('LM358 DIP-8', s, 3).length).toBeGreaterThan(0)
+    expect(existingMatches('LM358 DIP-8', s, 3, every)).toEqual([])
+    expect(names(existingMatches('ne5532', s, 3, every))).toEqual(['NE5532P'])
+    expect(names(existingMatches('tl072', s, 3, every))).toEqual(['TL072', 'TL072CP'])
+    expect(names(existingMatches('NE5532P Op-amp', s, 3, every))).toEqual([])
+    // The share sheet keeps any-word matching for its long titles.
+    expect(names(existingMatches('NE5532P DIP-8 lot', s))).toContain('NE5532P')
   })
 
   it('returns at most `limit` rows', () => {

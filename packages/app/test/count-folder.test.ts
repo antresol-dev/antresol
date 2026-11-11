@@ -1,6 +1,6 @@
 import { BUILTIN_UNITS, DomainError, newId, StorageError, type Command, type Id, type InventorySnapshot, type InventoryStorage } from '@graymatter/core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { applyCounts, countChanges, countRows, type CountRow } from '../app/lib/count-folder'
+import { applyCounts, countChanges, countRows, renewCountId, type CountRow } from '../app/lib/count-folder'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import type { SourceConfig } from '../app/lib/types'
 
@@ -184,6 +184,23 @@ describe('applyCounts', () => {
     expect(again).toEqual({ done: 2, failed: null })
     expect((sent[2] as { movementId: Id }).movementId).toBe(failedId)
     expect(ids.size).toBe(0)
+  })
+
+  it('gives an edited row a fresh id, so a corrected value is not dropped as a repeat of a write that timed out', async () => {
+    const sent: Command[] = []
+    const ids = new Map<string, Id>()
+    let fail = true
+    const apply = async (c: Command): Promise<void> => {
+      sent.push(c)
+      if (fail) throw new StorageError('unavailable')
+    }
+    await applyCounts([{ row: row('a'), target: '2' }], ids, apply)
+    renewCountId(ids, 'a')
+    fail = false
+    await applyCounts([{ row: row('a'), target: '5' }], ids, apply)
+    const [first, second] = sent as Extract<Command, { type: 'stock.set' }>[]
+    expect(second!.target).toBe('5')
+    expect(second!.movementId).not.toBe(first!.movementId)
   })
 
   it('reports a refusal of the source like any other failure', async () => {

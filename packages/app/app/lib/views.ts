@@ -353,6 +353,8 @@ export interface SearchRow {
   pinned: string[]
   /** number and unit in one: "4 pcs", "1.5k", "3 m". */
   amount: string
+  /** The item has variants (a hit without `variantId` then is the item itself, not a stock bucket to receive into). */
+  hasVariants: boolean
 }
 
 export function searchRows(s: InventorySnapshot, hits: SearchHit[]): SearchRow[] {
@@ -377,6 +379,7 @@ export function searchRows(s: InventorySnapshot, hits: SearchHit[]): SearchRow[]
       path: item.folderId === null ? '' : pathOf(ix, item.folderId).map((f) => f.name).join(' / '),
       coverUrl: (variant && hit.variantId !== null ? ix.variantCovers.get(hit.variantId) : undefined) ?? ix.covers.get(item.id) ?? null,
       pinned: ix.pinned.get(item.id) ?? [],
+      hasVariants: (ix.itemVariants.get(item.id) ?? []).length > 0,
     })
   }
   return rows
@@ -420,10 +423,18 @@ export function inventoryPieces(s: InventorySnapshot): Quantity | null {
   return snapshotIndex(s).subtreePieces.get(null) ?? null
 }
 
-/** A piece sum as the tree and lists show it: bare number, with the k/M prefix for big ones ("5", "1.2k"). */
+/** A folder's piece sum as the tree and folder list show it: a bare number, and with the k/M prefix at most three
+ *  significant digits ("5", "999", "1.65k", "12.3k", "123k", "1.2M"). An item's own quantity stays exact: use
+ *  formatAmount for it. */
 export function piecesLabel(q: Quantity): string {
   const { number, unit } = formatAmountParts(q, BUILTIN_UNITS.pcs)
-  return unit === BUILTIN_UNITS.pcs.symbol ? number : `${number}${unit}`
+  if (unit === BUILTIN_UNITS.pcs.symbol) return number
+  const digits = Math.max(0, 3 - number.split('.')[0]!.replace('-', '').length)
+  const fixed = Number(number).toFixed(digits)
+  const rounded = fixed.includes('.') ? fixed.replace(/\.?0+$/, '') : fixed
+  // 999.9k rounds up to a thousand: that is one M.
+  if (unit === 'k' && rounded === '1000') return '1M'
+  return `${rounded}${unit}`
 }
 
 export interface MoveTarget {

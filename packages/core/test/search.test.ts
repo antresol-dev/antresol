@@ -95,6 +95,11 @@ describe('ranking', () => {
     expect(r.search('tl072', 50, { fuzzy: false }).map((h) => h.itemId)).toEqual(['TL072', 'TL072CP'])
     expect(r.search('lm13600', 50, { fuzzy: false })).toEqual([])
   })
+  it("combineWith 'AND' needs every token of the query in the document", () => {
+    expect(r.search('tl072 cp', 50, { fuzzy: false }).map((h) => h.itemId)).toEqual(expect.arrayContaining(['TL072', 'TL072CP']))
+    expect(r.search('tl072 lm13700', 50, { fuzzy: false, combineWith: 'AND' })).toEqual([])
+    expect(r.search('tl072 lm13700', 50, { fuzzy: false }).length).toBeGreaterThan(0)
+  })
   it('keeps one-edit typos but not two-edit neighbours', () => {
     expect(r.search('lm13600').map((h) => h.itemId)).toContain('LM13700')
     expect(r.search('lm358').map((h) => h.itemId)).not.toContain('LM386')

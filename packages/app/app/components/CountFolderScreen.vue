@@ -3,7 +3,7 @@ import type { Id, Quantity } from '@graymatter/core'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from 'vue-sonner'
-import { applyCounts, countChanges, countRows, type CountRow } from '~/lib/count-folder'
+import { applyCounts, countChanges, countRows, renewCountId, type CountRow } from '~/lib/count-folder'
 import { errorMessageKey } from '~/lib/errors'
 import { folderView } from '~/lib/views'
 
@@ -55,6 +55,7 @@ const labelOf = (row: CountRow): string => (row.variantName === null ? row.itemN
 
 function edit(row: CountRow, text: string | number): void {
   entries.set(row.key, String(text))
+  renewCountId(ids, row.key)
   if (failed.value?.key === row.key) failed.value = null
 }
 

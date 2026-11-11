@@ -2,7 +2,7 @@ import { PGlite } from '@electric-sql/pglite'
 import { StorageError } from '@graymatter/core'
 import { createPgliteExecutor, inspectSchema, type PgExecutor } from '@graymatter/storage-postgres'
 import { describe, expect, it } from 'vitest'
-import { canSaveSource, checkConnectionString, classifyFailure, createNeonDriver, redactSecret } from '../app/lib/sources'
+import { canSaveSource, checkConnectionString, classifyFailure, createNeonDriver, photoStoreProblem, redactSecret } from '../app/lib/sources'
 import type { SourceConfig } from '../app/lib/types'
 
 const cfg = (connectionString = 'postgresql://u:secret@h/db'): SourceConfig => ({
@@ -124,5 +124,26 @@ describe('createNeonDriver connect redaction', () => {
     const error = await driver.connect(cfg()).catch((e: unknown) => e)
     expect(error).toBeInstanceOf(StorageError)
     expect((error as StorageError).message).not.toContain('secret')
+  })
+})
+
+describe('photoStoreProblem', () => {
+  const cl = (cloudinaryCloudName: string | null, cloudinaryUploadPreset: string | null) =>
+    photoStoreProblem({ photoStore: 'cloudinary', cloudinaryCloudName, cloudinaryUploadPreset })
+
+  it('accepts Cloudinary with both fields, or with none (photos are optional)', () => {
+    expect(cl('my-cloud_1', 'preset')).toBeNull()
+    expect(cl(null, null)).toBeNull()
+    expect(cl('  ', '')).toBeNull()
+  })
+  it('names the missing Cloudinary field and a cloud name that is not one', () => {
+    expect(cl('', 'preset')).toBe('cloudinaryCloud')
+    expect(cl('my-cloud', '')).toBe('cloudinaryPreset')
+    expect(cl('https://res.cloudinary.com/x', 'preset')).toBe('cloudinaryCloudFormat')
+    expect(cl('my.cloud', 'preset')).toBe('cloudinaryCloudFormat')
+  })
+  it('has nothing to cross-check for the other stores', () => {
+    expect(photoStoreProblem({ photoStore: 'imgur', cloudinaryCloudName: 'bad name', cloudinaryUploadPreset: null })).toBeNull()
+    expect(photoStoreProblem({ cloudinaryCloudName: null, cloudinaryUploadPreset: null })).toBeNull()
   })
 })

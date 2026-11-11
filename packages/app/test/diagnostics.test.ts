@@ -21,6 +21,19 @@ describe('error log', () => {
     expect(entry!.message).toContain('failed for')
   })
 
+  it('keeps no photo-store setting, whatever its field is called', async () => {
+    const config = {
+      uploadcarePublicKey: 'ucare-pub-1234',
+      cloudinaryCloudName: 'my-cloud-name',
+      cloudinaryUploadPreset: 'unsigned-preset',
+      imgurClientId: 'imgur-cid-5678',
+    }
+    const log = make(secretsOf(config))
+    log.logError('upload', new Error('POST https://api.cloudinary.com/v1_1/my-cloud-name/image/upload with imgur-cid-5678, unsigned-preset, ucare-pub-1234'))
+    const [entry] = await log.readErrors()
+    for (const secret of Object.values(config)) expect(entry!.message).not.toContain(secret)
+  })
+
   it('scrubs the URL-encoded form of a password', () => {
     expect(scrub('bad p%40ss here', ['p@ss'])).not.toContain('p%40ss')
   })

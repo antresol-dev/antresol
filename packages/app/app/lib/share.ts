@@ -83,7 +83,7 @@ export function cleanTitle(text: string): string {
     .join(' ')
 }
 
-/** What a receipt's link is matched by: the item id of an AliExpress address (`/item/<digits>.html`, any AliExpress
+/** What a receipt's link is matched by: the item id of an AliExpress address (`/item/<digits>.html` or `/i/<digits>.html`, any AliExpress
  *  host); elsewhere the address without scheme, `www.`, parameters or a trailing slash, lowercased. Null for a short
  *  AliExpress link (`a.aliexpress.com/_…`, which the browser cannot resolve), a bare host, or what is not a web address. */
 export function lotKey(url: string): string | null {
@@ -91,7 +91,7 @@ export function lotKey(url: string): string | null {
   if (!ok) return null
   const u = new URL(ok)
   const host = u.hostname.toLowerCase().replace(/^www\./, '')
-  if (host.split('.').includes('aliexpress')) return /\/item\/(\d+)\.html/i.exec(u.pathname)?.[1] ?? null
+  if (host.split('.').includes('aliexpress')) return /\/(?:item|i)\/(\d+)\.html/i.exec(u.pathname)?.[1] ?? null
   const path = u.pathname.replace(/\/+$/, '')
   return path === '' ? null : `${host}${path}`.toLowerCase()
 }

@@ -4,7 +4,7 @@ import { toast } from 'vue-sonner'
 import type { FolderDialog } from '~/composables/useDialogs'
 import { errorMessageKey } from '~/lib/errors'
 import { showsInside } from '~/lib/shell'
-import { archiveNow } from '~/lib/undo'
+import { archiveNow, focusHeadingIfLost } from '~/lib/undo'
 import { folderView } from '~/lib/views'
 
 // The folder sheets for the whole app: header buttons, row menus and the tree open them through useFolderDialog().
@@ -83,6 +83,7 @@ async function archive(): Promise<void> {
   }
   // The open screen showed the folder, something inside it or an item in it: go to its parent.
   if (archived && leave) await router.push(target.parentId === null ? '/' : `/folder/${target.parentId}`)
+  if (archived) focusHeadingIfLost()
 }
 </script>
 

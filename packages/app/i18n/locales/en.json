@@ -213,7 +213,7 @@
     "busy": "Wait for the current change to finish, then retry.",
     "uploading": "Uploading photo {n} of {total}",
     "progress": "{n} / {total}",
-    "noStore": "Add an Uploadcare public key in this source’s settings to attach photos",
+    "noStore": "Set up a photo store in this source’s settings to attach photos",
     "noStoreLink": "Open source settings",
     "viewer": "Photos",
     "counter": "{n} / {total}",
@@ -461,6 +461,9 @@
       "not_postgres_url": "This isn’t a Postgres connection string. It should start with postgresql://",
       "missing_password": "The connection string has a missing password.",
       "missing_database": "The connection string has a missing database name.",
+      "cloudinaryCloud": "Enter the Cloudinary cloud name, or clear the preset too.",
+      "cloudinaryCloudFormat": "A cloud name has only letters, digits, hyphens and underscores (no https://, no dots).",
+      "cloudinaryPreset": "Enter the unsigned upload preset, or clear the cloud name too.",
       "cdn": "Use the https://….ucarecd.net address from Dashboard → Delivery (or https://ucarecdn.com). Custom domains are not supported."
     },
     "result": {
@@ -547,6 +550,8 @@
     "chooseFolder": "Choose a folder",
     "existing": "Already in this inventory",
     "receiveHere": "Receive here",
+    "openMatch": "Open",
+    "photoDropped": "The photo was not added to the receipt. Add it on the item card.",
     "received": "Received into “{name}”"
   },
   "list": { "out": "Out", "more": "+{count}", "pinned": "Shown in lists" },
@@ -567,6 +572,7 @@
     "nothing": "Nothing like it here yet.",
     "open": "Open {name}",
     "receive": "Receive…",
+    "openCard": "Open",
     "quickAdd": "Quick add"
   },
   "shops": { "title": "Find in shops" },

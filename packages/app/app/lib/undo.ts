@@ -16,6 +16,10 @@ export interface UndoDeps {
 
 export interface KeyLike {
   key: string
+  /** Physical key ('KeyZ'): the same on every layout, unlike `key` ('я' on a Russian one). */
+  code?: string
+  /** Auto-repeat of a held key. */
+  repeat?: boolean
   ctrlKey: boolean
   metaKey: boolean
   shiftKey: boolean
@@ -56,7 +60,9 @@ export function createUndo(deps: UndoDeps) {
 
   /** Ctrl/⌘+Z while a toast is visible. Returns whether it undid something. */
   function onKey(e: KeyLike): boolean {
-    if (e.key.toLowerCase() !== 'z' || e.shiftKey || !(e.ctrlKey || e.metaKey) || e.inField) return false
+    if (!(e.key.toLowerCase() === 'z' || e.code === 'KeyZ') || e.shiftKey || !(e.ctrlKey || e.metaKey) || e.inField) return false
+    // A held key must not undo toast after toast.
+    if (e.repeat) return false
     const last = live[live.length - 1]
     if (!last) return false
     e.preventDefault()
@@ -105,6 +111,8 @@ function runtime(): ReturnType<typeof createUndo> {
     const el = e.target instanceof HTMLElement ? e.target : null
     core.onKey({
       key: e.key,
+      code: e.code,
+      repeat: e.repeat,
       ctrlKey: e.ctrlKey,
       metaKey: e.metaKey,
       shiftKey: e.shiftKey,
@@ -116,6 +124,16 @@ function runtime(): ReturnType<typeof createUndo> {
 }
 
 export const undoToast = (label: string, undo: Command, opts?: { minMs?: number }): void => runtime().undoToast(label, undo, opts)
+
+/** After an archive from a row's "⋯" menu the opener is gone and focus drops to <body>: the screen's heading takes it
+ *  (it has tabindex -1). Waits a frame for the menu's own focus return, and leaves focus alone if it went anywhere. */
+export function focusHeadingIfLost(): void {
+  requestAnimationFrame(() => {
+    const el = document.activeElement
+    if (el && el !== document.body) return
+    document.querySelector<HTMLElement>('h1')?.focus({ preventScroll: true })
+  })
+}
 
 /** Archive an item, folder or variant with no confirmation; the Undo toast says what happened. */
 export async function archiveNow(target: 'folder' | 'item' | 'variant', id: Id, name: string): Promise<void> {

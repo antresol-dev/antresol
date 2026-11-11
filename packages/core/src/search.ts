@@ -56,6 +56,8 @@ const variantOrder = (a: Variant, b: Variant): number =>
 export interface SearchOptions {
   /** false: exact and prefix hits only, no typo tolerance ("is this one I already have?"). Default true. */
   fuzzy?: boolean
+  /** 'AND': a text hit needs every token of the query (default 'OR': any token). Number matches are unaffected. */
+  combineWith?: 'AND' | 'OR'
 }
 
 export function createSearch(s: InventorySnapshot): { search(query: string, limit?: number, options?: SearchOptions): SearchHit[] } {
@@ -141,7 +143,7 @@ export function createSearch(s: InventorySnapshot): { search(query: string, limi
         if (q === '') return
         TIERS.forEach((opts, tier) => {
           if (opts.fuzzy && options.fuzzy === false) return
-          for (const r of index.search(q, { fields, ...opts })) {
+          for (const r of index.search(q, { fields, ...opts, combineWith: options.combineWith ?? 'OR' })) {
             const cand = { tier, score: r.score * boost }
             const prev = ranks.get(r.id)
             if (!prev || better(cand, prev)) {

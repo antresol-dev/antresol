@@ -193,6 +193,17 @@ describe('piece sums', () => {
     expect(piecesLabel('1200')).toBe('1.2k')
     expect(piecesLabel('2000000')).toBe('2M')
   })
+
+  it('keeps at most three significant digits of a big sum', () => {
+    expect(piecesLabel('999')).toBe('999')
+    expect(piecesLabel('1653')).toBe('1.65k')
+    expect(piecesLabel('12345')).toBe('12.3k')
+    expect(piecesLabel('123456')).toBe('123k')
+    expect(piecesLabel('1200000')).toBe('1.2M')
+    expect(piecesLabel('1000')).toBe('1k')
+    expect(piecesLabel('999900')).toBe('1M')
+    expect(piecesLabel('100000')).toBe('100k')
+  })
 })
 
 describe('index and edge cases', () => {

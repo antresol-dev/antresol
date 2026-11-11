@@ -1,5 +1,5 @@
 import { PGlite } from '@electric-sql/pglite'
-import { DomainError, FileError, newId, StorageError, type Command, type FileStore, type Id } from '@graymatter/core'
+import { DomainError, FileError, newId, StorageError, variantLabel, type Command, type FileStore, type Id } from '@graymatter/core'
 import { APP_SCHEMA_VERSION, createPgliteExecutor, type PgExecutor } from '@graymatter/storage-postgres'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { isReactive } from 'vue'
@@ -2078,7 +2078,8 @@ describe('workspace photos', () => {
   it('setVariantPhoto removes the old photo, then adds the new one', async () => {
     const { ws, uploads, commands } = await photoHarness()
     const snap = ws.state.snapshot!
-    const variant = snap.variants.find((v) => v.name === '10k')!
+    const resistorId = snap.items.find((i) => i.name === 'Резистор 0,25 Вт')!.id
+    const variant = snap.variants.find((v) => v.itemId === resistorId && variantLabel(snap, v) === '10 kΩ')!
     await ws.setVariantPhoto(variant.itemId, variant.id, file('one'))
     const first = ws.state.snapshot!.photos.find((p) => p.variantId === variant.id)!
     await ws.setVariantPhoto(variant.itemId, variant.id, file('two'))

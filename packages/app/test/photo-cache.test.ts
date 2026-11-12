@@ -18,10 +18,11 @@ const CL = 'https://res.cloudinary.com/demo/image/upload/v1/abc.jpg'
 const IM = 'https://i.imgur.com/Ab1.jpg'
 
 describe('photo runtime caching', () => {
-  it('is cache-first, 200 only (never opaque), with 600 thumbnails and 150 big photos', () => {
+  it('is cache-first, 200 only (never opaque), with 600 thumbnails and 150 big photos (plus the font cache)', () => {
     expect(rules.map((r) => [r.options.cacheName, r.options.expiration.maxEntries])).toEqual([
       [PHOTO_CACHE.thumbs, 600],
       [PHOTO_CACHE.full, 150],
+      ['gm-fonts', 60], // style fonts (test/fonts.test.ts), after the photo rules
     ])
     for (const r of rules) {
       expect(r.handler).toBe('CacheFirst')

@@ -30,13 +30,13 @@ const shortCrumbs = computed(() => collapseCrumbs(crumbs.value))
 // top edge (the owner, 2026-11-12), and a margin would take room the screen needs.
 const iconButton = 'pressable grid size-11 shrink-0 place-items-center'
 // tabindex -1: where focus lands when a sheet closes and the control that opened it is gone (AppSheet).
-const heading = 'rounded-chip text-2xl font-bold tracking-[-0.02em] outline-none focus-visible:ring-2 focus-visible:ring-ring'
+const heading = 'screen-title rounded-chip text-2xl outline-none focus-visible:ring-2 focus-visible:ring-ring'
 // Path links are flat: the accent tint and ink under the pointer.
 const crumbLink = 'pressable min-w-0 truncate rounded-chip'
 </script>
 
 <template>
-  <header class="sticky top-0 z-20 border-b border-border bg-background">
+  <header class="surface-header sticky top-0 z-20 border-b">
     <div
       :class="[
         'mx-auto grid w-full max-w-[720px] min-w-0 grid-cols-1 px-4 lg:max-w-[760px] lg:px-7',

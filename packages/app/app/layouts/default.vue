@@ -100,7 +100,7 @@ useEventListener(
   <TooltipProvider :delay-duration="TOOLTIP_DELAY">
     <div
       :class="[
-        'min-h-dvh bg-background text-foreground lg:grid lg:h-dvh lg:overflow-hidden',
+        'min-h-dvh text-foreground lg:grid lg:h-dvh lg:overflow-hidden',
         withTree ? '' : 'lg:grid-cols-[212px_minmax(0,1fr)]',
       ]"
       :style="withTree ? { gridTemplateColumns: `212px ${treeWidth}px minmax(0, 1fr)` } : undefined"

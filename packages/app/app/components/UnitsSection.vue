@@ -70,7 +70,7 @@ async function remove(): Promise<void> {
         {{ $t('dictionaries.addUnit') }}
       </Button>
     </div>
-    <ul>
+    <ul class="surface-list">
       <li
         v-for="row in rows"
         :key="row.unit.key"

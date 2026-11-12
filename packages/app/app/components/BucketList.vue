@@ -89,7 +89,7 @@ watch(() => props.highlight, reveal)
   <section class="grid min-w-0 grid-cols-1" :aria-label="$t('item.variantsTitle')">
     <!-- A flat list on the page (rows divided by lines); the current variant is a selected row, 2 px off its
          neighbours, and the lines next to it give way. -->
-    <ul ref="list">
+    <ul ref="list" class="surface-list">
       <li
         v-for="(row, i) in rows"
         :key="row.key"

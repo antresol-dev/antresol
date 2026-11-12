@@ -242,8 +242,8 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
         :aria-describedby="undefined"
         :class="
           desktop
-            ? 'fixed top-[72px] left-1/2 z-50 flex max-h-[calc(100dvh-144px)] w-[580px] max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col overflow-hidden rounded-card border border-border bg-surface shadow-2xl outline-none motion-safe:data-[state=open]:animate-pop-in motion-safe:data-[state=closed]:animate-pop-out motion-reduce:data-[state=open]:animate-fade-in motion-reduce:data-[state=closed]:animate-fade-out'
-            : 'fixed inset-0 z-50 flex flex-col-reverse bg-surface outline-none data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out'
+            ? 'fixed top-[72px] left-1/2 z-50 flex max-h-[calc(100dvh-144px)] w-[580px] max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col overflow-hidden surface-sheet rounded-card border shadow-2xl outline-none motion-safe:data-[state=open]:animate-pop-in motion-safe:data-[state=closed]:animate-pop-out motion-reduce:data-[state=open]:animate-fade-in motion-reduce:data-[state=closed]:animate-fade-out'
+            : 'surface-sheet fixed inset-0 z-50 flex flex-col-reverse outline-none data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out'
         "
         @open-auto-focus="onOpenAutoFocus"
         @close-auto-focus="onCloseAutoFocus"

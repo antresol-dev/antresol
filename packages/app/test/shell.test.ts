@@ -160,9 +160,10 @@ describe('themeColorMeta', () => {
 })
 
 describe('themeColorMeta tokens', () => {
-  it('matches the --background tokens of both themes', async () => {
+  it('matches the page colour of both themes before the style is applied (main.css --boot-page)', async () => {
     const { default: css } = await import('../app/assets/css/main.css?raw')
-    const bg = [...css.matchAll(/--background:\s*(#[0-9a-fA-F]{6})/g)].map((m) => m[1]!.toUpperCase())
+    const bg = [...css.matchAll(/--boot-page:\s*(#[0-9a-fA-F]{6})/g)].map((m) => m[1]!.toUpperCase())
+    expect(bg).toHaveLength(2)
     expect(themeColorMeta('system', 'light').map((m) => m.content)).toEqual(bg)
   })
 })

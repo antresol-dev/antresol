@@ -26,9 +26,10 @@ export function kebab(key: string): string {
   return key.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase())
 }
 
-/** A value that would end the declaration or the rule (or the <style> element) is a bug in a style module. */
+/** A value that would end the declaration or the rule (or the <style> element), or is not a string at all (a missing
+ *  token would otherwise become `--st-x:undefined`), is a bug in a style module. */
 function safe(name: string, value: string): string {
-  if (/[;{}<]/.test(value)) throw new Error(`Style token ${name} must not contain ; { } or <: ${value}`)
+  if (typeof value !== 'string' || /[;{}<]/.test(value)) throw new Error(`Style token ${name} must not contain ; { } or <: ${value}`)
   return value
 }
 

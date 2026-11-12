@@ -142,6 +142,9 @@ export const build: StyleBuild = (mode, accent) => {
       sheet: solidOf(card, solidOf(winBg + ', ' + wall)),
       sheetBlur: 'none',
       field: ctrl,
+      // contrast: the field's outline (and Camera / Gallery's) is 3:1 on every surface it sits on (WCAG 1.4.11): it was the list's
+      // 6–7 % hairline, 1.1–1.2:1. Light 47 % black, dark 40 % white.
+      fieldLine: dark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.47)',
       fieldSh: elevation,
     },
     mode,

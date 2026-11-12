@@ -142,11 +142,17 @@ export const build: StyleBuild = (mode, accent) => {
         ? K({ ...ghost.n, fg: muted }, S('rgba(0,0,0,0.08)', 0, 0, fg), S('rgba(0,0,0,0.16)', 0, 0, fg, 'scale(0.92)'))
         : K({ ...ghost.n, fg: muted }, ghost.h, ghost.p),
 
+      // contrast: dark, the stepper's pill on a selected row draws no white lift: its count and unit are the row's ink and
+      // muted text, 3.4–3.8:1 on the pill's 10 % white over the row's tint (4.5:1 on the tint alone). Its rim stays.
+      pillSelBg: dark ? 'rgba(255,255,255,0)' : c0,
+
       // App surfaces (see the header comment).
       sheet: spec + ', ' + solidOf(glassBg, solidOf(wall)),
       sheetBlur: 'none',
       field: c0,
-      fieldLine: line,
+      // contrast: the field's outline (and Camera / Gallery's) is 3:1 on every surface it sits on (WCAG 1.4.11): it was the
+      // divider's 8 % hairline, 1.2:1. Light 55 % of the page ink, dark 40 % white.
+      fieldLine: dark ? 'rgba(255,255,255,0.4)' : 'rgba(20,24,40,0.55)',
       fieldSh: highlight,
     },
     mode,

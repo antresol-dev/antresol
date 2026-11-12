@@ -29,7 +29,7 @@ const action = 'h-11 text-accent-ink'
     <p v-if="last" class="text-sm text-subtle-foreground">
       {{ 'count' in last ? $t(last.key, last.count) : $t(last.key) }}
     </p>
-    <div class="-mx-2 flex flex-wrap">
+    <div class="-mx-2 grid sm:flex sm:flex-wrap">
       <Button variant="ghost" :class="action" :disabled="exporting !== null || !connected" @click="exportBackup(source.config.id)">
         {{ exporting === source.config.id ? $t('settings.sources.exporting') : $t('settings.sources.exportBackup') }}
       </Button>

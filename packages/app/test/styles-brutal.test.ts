@@ -217,7 +217,7 @@ describe('brutal.css', () => {
     const code = brutalCss().replace(/\/\*[\s\S]*?\*\//g, '')
     const selectors = [...code.matchAll(/([^{};]+)\{/g)].map((m) => m[1]!.trim()).filter((s) => !s.startsWith('@'))
     expect(selectors.length).toBeGreaterThan(0)
-    for (const list of selectors) for (const s of topLevel(list)) expect(s, list).toMatch(/^\[data-style='brutal'\]/)
+    for (const list of selectors) for (const s of topLevel(list)) expect(s, list).toMatch(/^(\.dark)?\[data-style='brutal'\]/)
   })
 
   it('no colour of its own: every colour is a token', () => {

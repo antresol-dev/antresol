@@ -325,7 +325,8 @@ export interface AppSurfaces {
   sheet: string
   /** Their shadow. Default: cardSh. */
   sheetSh: string
-  /** Their 1 px border's colour. Default: 'transparent'. */
+  /** Their 1 px border's colour (also the navigation drawer's edge in the dark theme). Default: 'transparent'; in the dark
+   *  theme a 16 % white rim, so the edge does not vanish into the scrim. */
   sheetLine: string
   /** Their blur. Default: surfBlur. */
   sheetBlur: string

@@ -189,7 +189,9 @@ export function deriveSurfaces(k: MockupTokens & Partial<AppSurfaces>, mode: Mod
     fieldSh: k.fieldSh ?? 'none',
     sheet: k.sheet ?? k.card,
     sheetSh: k.sheetSh ?? k.cardSh,
-    sheetLine: k.sheetLine ?? 'transparent',
+    // Dark: a sheet or the drawer is the page's colour or near it, over a scrim of 80 % black: without a rim its edge
+    // vanishes (1.1–1.5:1). A light rim, 16 % white. Light themes need none.
+    sheetLine: k.sheetLine ?? (dark ? 'rgba(255,255,255,0.16)' : 'transparent'),
     sheetBlur: k.sheetBlur ?? k.surfBlur,
     overlay: k.overlay ?? 'rgba(0,0,0,0.8)',
     popSolid,

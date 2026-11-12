@@ -408,9 +408,16 @@
     text-transform: var(--st-label-case);
   }
   .section-label::before {
-    /* The mark is decoration: its alt text is empty, so screen readers do not read "✦" before every heading. */
-    content: var(--st-mark) / '';
+    content: var(--st-mark);
     color: var(--st-mark-color);
+  }
+  /* The mark is decoration: its alt text is empty, so screen readers do not read "✦" before every heading. An engine
+     without alt text in `content` would drop that whole declaration (and, a var() being valid at parse time, the one
+     above it would not stand in), so it is behind @supports: such an engine keeps the plain mark, and may read it. */
+  @supports (content: 'a' / 'b') {
+    .section-label::before {
+      content: var(--st-mark) / '';
+    }
   }
 
   .tabular-nums {
@@ -812,4 +819,52 @@
   [data-sonner-toaster][data-y-position='bottom'] {
     bottom: calc(var(--dock-h, env(safe-area-inset-bottom, 0px)) + 8px) !important;
   }
+}
+
+/* Toasts (vue-sonner): the box takes the menus' shadow, and the action ("Undo") is the style's secondary button (btn: its
+   fill, rim and shadow, the radius and weight of buttons, hover and press). Unlayered, with the toaster's attribute in
+   the selector, to win over the library's own rules wherever its stylesheet lands. */
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] {
+  box-shadow: var(--st-pop-sh);
+}
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button] {
+  border-radius: var(--st-btn-r);
+  background-color: var(--st-btn-n-bg);
+  background-image: var(--st-btn-n-img);
+  box-shadow: var(--st-btn-n-sh);
+  color: var(--popover-foreground);
+  font-weight: var(--st-plain-btn-weight);
+  -webkit-backdrop-filter: var(--st-ctrl-blur);
+  backdrop-filter: var(--st-ctrl-blur);
+}
+@media (hover: hover) {
+  [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button]:hover {
+    background-color: var(--st-btn-h-bg);
+    background-image: var(--st-btn-h-img);
+    box-shadow: var(--st-btn-h-sh);
+    color: var(--st-btn-h-fg);
+  }
+}
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button]:active {
+  background-color: var(--st-btn-p-bg);
+  background-image: var(--st-btn-p-img);
+  box-shadow: var(--st-btn-p-sh);
+  color: var(--st-btn-p-fg);
+}
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button]:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button]:active {
+    transform: var(--st-btn-p-tf);
+  }
+}
+
+/* Dark: the navigation drawer is the page's colour and the scrim behind it nearly black, so its open edge would vanish
+   (Tailwind's shadow-xl does not show on dark): it takes the sheets' rim (--st-sheet-line, derived for dark in
+   derive.ts). Neumorphism keeps its own (owner-approved) edge; Neo-brutal draws a 2 px line (brutal.css). Unlayered, to
+   replace the shadow utility. */
+.dark:not([data-style='neumorphism'], [data-style='brutal']) #nav-drawer {
+  box-shadow: inset -1px 0 0 var(--st-sheet-line);
 }

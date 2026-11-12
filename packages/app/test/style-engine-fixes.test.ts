@@ -21,8 +21,10 @@ const BOUND = 26
 
 describe('section marks are decorative', () => {
   it('the mark has empty alt text, so a screen reader does not read it before every heading', () => {
-    const rule = /\.section-label::before \{([^}]*)\}/.exec(mainCss)?.[1] ?? ''
+    // Inside @supports (alt text in content): an engine without it keeps the plain declaration before it (the mark, read aloud).
+    const rule = /@supports \(content: 'a' \/ 'b'\) \{\s*\.section-label::before \{([^}]*)\}/.exec(mainCss)?.[1] ?? ''
     expect(rule).toMatch(/content:\s*var\(--st-mark\)\s*\/\s*''\s*;/)
+    expect(/\.section-label::before \{([^}]*)\}/.exec(mainCss)?.[1]).toMatch(/content:\s*var\(--st-mark\)\s*;/)
   })
 
   it('no style draws a mark in its own CSS, where the alt text would be missing', () => {

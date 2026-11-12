@@ -42,6 +42,7 @@ export const build: StyleBuild = (mode, accent) => {
   const priSh = dark ? 'inset 0 0 0 1px rgba(255,255,255,0.08), inset 0 -1px 0 rgba(0,0,0,0.14)' : 'inset 0 0 0 1px rgba(255,255,255,0.08), inset 0 -1px 0 rgba(0,0,0,0.4)'
   const btnH = dark ? 'rgba(255,255,255,0.0837)' : 'rgba(249,249,249,0.5)'
   const btnP = dark ? 'rgba(255,255,255,0.0326)' : 'rgba(249,249,249,0.3)'
+  const ghost = K(S('rgba(0,0,0,0)', 0, 0, muted), S(subtle, 0, 0, fg), S(subtleP, 0, 0, muted))
 
   return finish(
     {
@@ -130,8 +131,11 @@ export const build: StyleBuild = (mode, accent) => {
           S(mix(A, '#000000', dark ? 0.2 : 0.15), 0, 'inset 0 0 0 1px rgba(255,255,255,0.08)', dark ? 'rgba(0,0,0,0.78)' : 'rgba(255,255,255,0.78)'),
         ),
         step: K(S('rgba(0,0,0,0)', 0, 0, fg), S(subtle, 0, 0, fg), S(subtleP, 0, 0, muted)),
-        ghost: K(S('rgba(0,0,0,0)', 0, 0, muted), S(subtle, 0, 0, fg), S(subtleP, 0, 0, muted)),
+        ghost,
       },
+      // The flat controls of a selected row (finish()'s default: ghost with the row's muted rest text). contrast: dark,
+      // the row menu "⋯" there hovers on 5 % white, not 6.05 % (its accent ink 4.38:1 on rose).
+      ghostSel: K({ ...ghost.n, fg: muted }, dark ? S('rgba(255,255,255,0.05)', 0, 0, fg) : ghost.h, ghost.p),
 
       // App surfaces (see the header comment).
       sheet: solidOf(card, solidOf(winBg + ', ' + wall)),

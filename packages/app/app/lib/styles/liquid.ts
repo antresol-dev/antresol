@@ -44,6 +44,9 @@ export const build: StyleBuild = (mode, accent) => {
   const line = dark ? 'rgba(255,255,255,0.08)' : 'rgba(20,24,40,0.08)'
   const sf = "-apple-system, 'SF Pro Text', 'Inter', system-ui, sans-serif"
   const aSh = 'inset 0 1px 0 rgba(255,255,255,0.45), inset 0 0 0 1px rgba(255,255,255,0.25), 0 6px 16px -4px ' + rgba(AL, 0.5)
+  // contrast: dark, a flat control pressed (and the row menu "⋯" open) lights 14 %, not c1's 16 %: the menu's accent ink
+  // is 4.38:1 on rose and 4.49:1 on copper there.
+  const ghost = K(S('rgba(255,255,255,0)', 0, 0, muted), S(c0, 0, 0, fg), S(dark ? 'rgba(255,255,255,0.14)' : c1, 0, 0, fg, 'scale(0.92)'))
   const step = K(
     S('rgba(255,255,255,0)', 0, 0, fg),
     S(dark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.35)', 0, 0, fg),
@@ -126,11 +129,17 @@ export const build: StyleBuild = (mode, accent) => {
           S(mix(AL, '#ffffff', 0.04), 0, aSh, '#FFFFFF', 'scale(0.96)'),
         ),
         step,
-        ghost: K(S('rgba(255,255,255,0)', 0, 0, muted), S(c0, 0, 0, fg), S(c1, 0, 0, fg, 'scale(0.92)')),
+        ghost,
       },
       // contrast: dark, the pressed half of the stepper on a selected row lights 12 %, not 18 % (4.1–4.5:1 on the
       // accent's tint). Light: the mock-up's (kinds.step).
       stepSel: dark ? K(step.n, step.h, S('rgba(255,255,255,0.12)', 0, 0, fg, 'scale(0.9)')) : step,
+      // The flat controls of a selected row (finish()'s default: ghost with the row's muted rest text). contrast: dark,
+      // the row menu "⋯" there shows accent ink, 4.5–5.1:1 on the row's tint alone: any white lift takes it under
+      // (3.4–3.8:1 on the mock-up's 10 %, 2.8–3.2:1 on 16 %), so it sinks instead, 8 % black on hover and 16 % pressed.
+      ghostSel: dark
+        ? K({ ...ghost.n, fg: muted }, S('rgba(0,0,0,0.08)', 0, 0, fg), S('rgba(0,0,0,0.16)', 0, 0, fg, 'scale(0.92)'))
+        : K({ ...ghost.n, fg: muted }, ghost.h, ghost.p),
 
       // App surfaces (see the header comment).
       sheet: spec + ', ' + solidOf(glassBg, solidOf(wall)),

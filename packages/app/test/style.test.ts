@@ -471,6 +471,7 @@ describe('base styles and utilities', () => {
   const utilities = [
     'raised', 'raised-sm', 'add-tile', 'raised-card', 'accent-button', 'painted', 'pressable', 'pill', 'pill-step', 'row-selected', 'glass',
     'surface-list', 'surface-header', 'surface-sheet', 'surface-tip', 'photo-cover', 'photo-thumb', 'tag-chip', 'screen-title', 'section-label',
+    'surface-bar', 'amount', 'btn-text', 'btn-label',
   ]
   it.each(utilities)('.%s is defined and listed in the header comment', (name) => {
     expect(rules(layer('components')).some((r) => r.selectors.split(',').includes(`.${name}`))).toBe(true)

@@ -21,7 +21,8 @@ export interface FakeRoot {
   inline: Map<string, string>
 }
 
-export function fakeRoot(): FakeRoot {
+/** `existing`: what <head> already holds (a stylesheet link, other style elements). */
+export function fakeRoot(existing: { tagName: string; id?: string; textContent?: string }[] = []): FakeRoot {
   const head: FakeElement[] = []
   const attributes = new Map<string, string>()
   const inline = new Map<string, string>()
@@ -39,6 +40,13 @@ export function fakeRoot(): FakeRoot {
       },
     }
     return el
+  }
+  for (const e of existing) {
+    const el = createElement(e.tagName)
+    el.id = e.id ?? ''
+    el.textContent = e.textContent ?? ''
+    el.parent = head
+    head.push(el)
   }
   const doc = {
     head: {

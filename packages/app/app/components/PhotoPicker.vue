@@ -19,7 +19,7 @@ function picked(event: Event): void {
   if (files.length > 0) emit('pick', props.multiple ? files : files.slice(0, 1))
 }
 // Flat, with a border (the owner, 2026-11-12): a raised pair here competed with the form's own buttons.
-const buttonClass = 'h-11 border border-input px-4 font-bold'
+const buttonClass = 'h-11 border border-input px-4 btn-label'
 </script>
 
 <template>

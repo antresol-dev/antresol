@@ -29,7 +29,17 @@ export function createAppearance(db: Pick<DeviceDb, 'getSettings' | 'putSettings
   const style = ref<StyleName>(DEFAULT_STYLE)
   const accent = ref<AccentName | null>(null)
   const effective = computed(() => effectiveAccent(style.value, accent.value))
-  const show = () => applyStyle(root, style.value, effective.value)
+  const show = (): void => {
+    try {
+      applyStyle(root, style.value, effective.value)
+    } catch {
+      // A style that cannot be drawn (a bad token) must not keep the app from starting: the default style instead.
+      // The stored choice stays as it is.
+      if (style.value === DEFAULT_STYLE) return
+      style.value = DEFAULT_STYLE
+      show()
+    }
+  }
   return {
     style: readonly(style),
     accent: readonly(accent),

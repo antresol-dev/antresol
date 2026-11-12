@@ -75,7 +75,7 @@ async function remove(): Promise<void> {
         {{ $t('dictionaries.addAttribute') }}
       </Button>
     </div>
-    <ul v-if="rows.length > 0">
+    <ul v-if="rows.length > 0" class="surface-list">
       <li
         v-for="row in rows"
         :key="row.attribute.id"

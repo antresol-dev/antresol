@@ -224,7 +224,7 @@ const linkClass =
           <li
             v-for="tag in view.tags"
             :key="tag.id"
-            class="max-w-full truncate rounded-full bg-chip px-2.5 py-1 text-[13px] font-semibold"
+            class="tag-chip max-w-full truncate px-2.5 py-1 text-[13px] font-semibold"
           >
             {{ tag.name }}
           </li>

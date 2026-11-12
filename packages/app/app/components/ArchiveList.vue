@@ -21,7 +21,7 @@ const icons: Record<ArchiveRow['kind'], Component> = { folder: Folder, item: Pac
 </script>
 
 <template>
-  <ul>
+  <ul class="surface-list">
     <li
       v-for="row in rows"
       :key="row.key"

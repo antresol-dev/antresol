@@ -52,7 +52,7 @@ const action = 'h-11 min-w-0 px-2 font-bold'
 </script>
 
 <template>
-  <section class="raised-card grid min-w-0 gap-3 p-4.5" :aria-label="$t('item.stock')">
+  <section class="stock-card raised-card grid min-w-0 gap-3 p-4.5" :aria-label="$t('item.stock')">
     <div class="flex min-w-0 items-start justify-between gap-3">
       <div class="grid min-w-0 gap-1.5">
         <!-- With a stepper the number is a flat button that opens Count. -->

@@ -68,32 +68,54 @@ describe('style fonts config', () => {
     expect(names).toEqual(expect.arrayContaining(['gm-photos-thumb', 'gm-photos-full']))
   })
 
-  it('precaches the woff2 files of Onest only', async () => {
-    const workbox = (await loadConfig()).pwa!.workbox!
-    expect(workbox.globPatterns?.some(g => g.includes('woff2'))).toBe(true)
+  it('globs woff2 files into the precache (the hook then keeps Onest\'s)', async () => {
+    expect((await loadConfig()).pwa!.workbox!.globPatterns?.some(g => g.includes('woff2'))).toBe(true)
+  })
+
+  it('the deploy workflow checks the generated service worker before uploading it', () => {
+    const yml = readFileSync(fileURLToPath(new URL('../../../.github/workflows/deploy.yml', import.meta.url)), 'utf8')
+    expect(yml.indexOf('scripts/check-sw.mjs')).toBeGreaterThan(yml.indexOf('generate'))
+    expect(yml.indexOf('scripts/check-sw.mjs')).toBeLessThan(yml.indexOf('upload-pages-artifact'))
+  })
+
+  it('does not set workbox.manifestTransforms: that would replace @vite-pwa/nuxt\'s own transform (index.html to the base URL) and the worker would not install', async () => {
+    expect((await loadConfig()).pwa?.workbox?.manifestTransforms).toBeUndefined()
+  })
+
+  /** What the module has set when the hook runs: its transform (index.html -> the base URL), standing in here. */
+  const moduleTransform = async (entries: { url: string }[]) => ({ manifest: entries.map(e => (e.url === 'index.html' ? { ...e, url: '/' } : e)) })
+
+  async function runHook(out: string, css: string) {
+    mkdirSync(join(out, '_nuxt/fonts'), { recursive: true })
+    writeFileSync(join(out, '_nuxt/entry.css'), css)
+    const hook = (await loadConfig()).hooks?.['pwa:beforeBuildServiceWorker']
+    if (!hook) throw new Error('no pwa:beforeBuildServiceWorker hook')
+    const options = { outDir: out, workbox: { manifestTransforms: [moduleTransform] } }
+    await hook(options as never)
+    return options.workbox.manifestTransforms
+  }
+
+  it('precaches the woff2 files of Onest only, after the module\'s transform, which stays and still maps index.html to the base URL', async () => {
     const out = mkdtempSync(join(tmpdir(), 'gm-fonts-'))
-    mkdirSync(join(out, '.output/public/_nuxt/fonts'), { recursive: true })
-    writeFileSync(join(out, '.output/public/_nuxt/entry.css'),
+    const transforms = await runHook(out,
       '@font-face{font-family:Onest;src:local(Onest),url(fonts/onest-a.woff2)format("woff2");font-weight:400}'
       + '@font-face{font-family:Manrope;src:url(fonts/manrope-a.woff2)format("woff2");font-weight:400}'
       + '@font-face{font-family:"Exo 2";src:url(fonts/exo-a.woff2)format("woff2")}'
       + '@font-face{font-family:Onest;src:url(fonts/onest-b.woff2)format("woff2");font-weight:600}')
-    vi.spyOn(process, 'cwd').mockReturnValue(out)
-    const transform = workbox.manifestTransforms![0]!
+    expect(transforms).toHaveLength(2)
+    expect(transforms[0]).toBe(moduleTransform)
     const entry = (url: string) => ({ url, size: 1, revision: null })
     const urls = ['_nuxt/entry.css', '_nuxt/fonts/onest-a.woff2', '_nuxt/fonts/manrope-a.woff2', '_nuxt/fonts/exo-a.woff2', '_nuxt/fonts/onest-b.woff2', 'index.html']
-    const { manifest } = await transform(urls.map(entry))
-    expect(manifest.map(e => e.url)).toEqual(['_nuxt/entry.css', '_nuxt/fonts/onest-a.woff2', '_nuxt/fonts/onest-b.woff2', 'index.html'])
+    let manifest = urls.map(entry)
+    for (const t of transforms) manifest = (await (t as (e: typeof manifest) => Promise<{ manifest: typeof manifest }>)(manifest)).manifest
+    expect(manifest.map(e => e.url)).toEqual(['_nuxt/entry.css', '_nuxt/fonts/onest-a.woff2', '_nuxt/fonts/onest-b.woff2', '/'])
   })
 
   it('fails the build instead of silently precaching no font when Onest is missing from the CSS', async () => {
-    const workbox = (await loadConfig()).pwa!.workbox!
     const out = mkdtempSync(join(tmpdir(), 'gm-fonts-'))
-    mkdirSync(join(out, '.output/public/_nuxt'), { recursive: true })
-    writeFileSync(join(out, '.output/public/_nuxt/entry.css'), '@font-face{font-family:Manrope;src:url(fonts/m.woff2)}')
-    vi.spyOn(process, 'cwd').mockReturnValue(out)
+    const transforms = await runHook(out, '@font-face{font-family:Manrope;src:url(fonts/m.woff2)}')
     const entry = (url: string) => ({ url, size: 1, revision: null })
-    await expect(workbox.manifestTransforms![0]!([entry('_nuxt/entry.css'), entry('_nuxt/fonts/m.woff2')])).rejects.toThrow(/Onest/)
+    await expect((transforms[1] as (e: ReturnType<typeof entry>[]) => Promise<unknown>)([entry('_nuxt/entry.css'), entry('_nuxt/fonts/m.woff2')])).rejects.toThrow(/Onest/)
   })
 })
 

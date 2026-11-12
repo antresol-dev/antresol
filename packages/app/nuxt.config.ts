@@ -3,6 +3,7 @@ import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import { cspFor } from './app/lib/csp'
+import { onestOnly } from './app/lib/precache-fonts'
 
 const baseURL = process.env.NUXT_APP_BASE_URL ?? '/'
 
@@ -97,28 +98,9 @@ export default defineNuxtConfig({
     },
     workbox: {
       globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
-      // Only the default style's font (Onest) is precached; the other families' woff2 files are cached on first use (gm-fonts below).
-      // @nuxt/fonts hashes the file names, so Onest's files are the ones its @font-face rules in the built CSS point at.
-      manifestTransforms: [
-        async (entries) => {
-          const isFont = (url: string) => url.endsWith('.woff2')
-          const fontEntries = entries.filter(e => isFont(e.url))
-          if (!fontEntries.length) return { manifest: entries }
-          const { readFileSync, existsSync } = await import('node:fs')
-          const { join } = await import('node:path')
-          const outDir = ['.output/public', 'dist'].map(d => join(process.cwd(), d)).find(d => existsSync(d))
-          if (!outDir) throw new Error('Cannot find the build output to tell the default style\'s font files apart')
-          const onest = new Set<string>()
-          for (const e of entries.filter(e => e.url.endsWith('.css'))) {
-            for (const [, family, body] of readFileSync(join(outDir, e.url), 'utf8').matchAll(/@font-face\{font-family:"?([^;"]+)"?;([^}]*)\}/g)) {
-              if (family !== 'Onest') continue
-              for (const [, file] of body!.matchAll(/url\(([^)]+\.woff2)\)/g)) onest.add(file!.split('/').pop()!)
-            }
-          }
-          if (!onest.size) throw new Error('No Onest @font-face found in the built CSS: the default style\'s font would not be precached')
-          return { manifest: entries.filter(e => !isFont(e.url) || onest.has(e.url.split('/').pop()!)) }
-        },
-      ],
+      // Only the default style's font (Onest) is precached, the rest on first use (gm-fonts below): filtered in the
+      // `pwa:beforeBuildServiceWorker` hook (hooks, below). Do NOT set manifestTransforms here: it replaces the module's own
+      // transform (index.html -> the base URL) and the service worker no longer installs (app/lib/precache-fonts.ts).
       // The app shell is precached under the base URL itself ("/graymatter/"), not under "index.html".
       navigateFallback: baseURL,
       // Files with an extension (assets, manifest, sw) are never navigations to the app shell.
@@ -160,6 +142,12 @@ export default defineNuxtConfig({
       ],
     },
     devOptions: { enabled: false },
+  },
+  hooks: {
+    // After @vite-pwa/nuxt has set its default manifest transform: ours is added to it, not put in its place.
+    'pwa:beforeBuildServiceWorker': (options) => {
+      options.workbox.manifestTransforms = [...(options.workbox.manifestTransforms ?? []), onestOnly(options.outDir)]
+    },
   },
   app: {
     // GitHub Pages project sites live under /<repo>/; set NUXT_APP_BASE_URL=/graymatter/ for that build.

@@ -82,8 +82,8 @@ export default defineNuxtConfig({
       short_name: 'GrayMatter',
       description: 'Personal inventory of anything',
       display: 'standalone',
-      background_color: '#EDEFF3',
-      theme_color: '#EDEFF3',
+      background_color: '#F4F5F7',
+      theme_color: '#F4F5F7',
       start_url: '.',
       scope: '.',
       // Relative to the manifest, so they work under /graymatter/ too. The layout reads and clears `action`.

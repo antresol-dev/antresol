@@ -2,9 +2,15 @@
 import { Toaster } from '@/components/ui/sonner'
 import { themeColorMeta } from '~/lib/shell'
 
-// Browser chrome colour: both media-scoped tags on "system", a single plain tag once a theme is picked.
+// Browser chrome colour (the current style's header): both media-scoped tags on "system", a single plain tag once a
+// theme is picked.
 const colorMode = useColorMode()
-useHead({ meta: computed(() => themeColorMeta(colorMode.preference, colorMode.value)) })
+const appearance = useAppearance()
+useHead({
+  meta: computed(() =>
+    themeColorMeta(colorMode.preference, colorMode.value, appearance.style.value, appearance.effectiveAccent.value),
+  ),
+})
 // <NuxtPwaAssets> adds its own plain theme-color (the manifest's, always light), which would win over ours for the dark
 // theme. Ours are the ones with a key.
 injectHead()?.hooks?.hook('tags:resolve', (ctx) => {

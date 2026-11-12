@@ -1,0 +1,11 @@
+/*
+ * S5 Linear: what its tokens cannot express (lib/styles/linear.ts). Linear is flat: no page pattern, no mark before
+ * section labels, labels in their own case; hairlines, radii and the menus' blur are all tokens. Left here:
+ *  - dark: the navigation drawer is the page's colour and the scrim behind it nearly black, so its open edge would
+ *    vanish (Tailwind's shadow-xl does not show on dark): it takes the header's hairline. Unlayered, to replace the
+ *    shadow utility.
+ */
+
+.dark[data-style='linear'] #nav-drawer {
+  box-shadow: inset -1px 0 0 var(--st-divider-color);
+}

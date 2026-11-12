@@ -17,7 +17,7 @@ import type { Kind, StyleBuild } from './types'
  *  - menus: a real 1 px border for the rim; dark: hovered items keep the text colour, muted text lighter;
  *  - shadow and sink share one duration and curve: 160 ms cubic-bezier(0.4, 0, 0.2, 1) (the mock-up: 200 ms ease-out);
  *  - radii: every control and tile 14, photo 20, small things 10; the header's line is its 1 px border;
- *  - the font stack keeps @nuxt/fonts' metric-matched fallbacks for Manrope.
+ *  - the font stack keeps @nuxt/fonts' metric-matched fallbacks for Manrope; plain button labels 500 (emphasised 700).
  */
 
 const ZERO = '0px 0px 0px transparent, 0px 0px 0px transparent'
@@ -211,6 +211,8 @@ export const build: StyleBuild = (mode, accent) => {
       tipFg: B,
       tipSh: 'none',
       smallR: '10px',
+      // Buttons the markup does not emphasise were font-medium; the emphasised actions bold (btnWeight's 700).
+      plainBtnWeight: '500',
     },
     mode,
   )

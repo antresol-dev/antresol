@@ -1,5 +1,5 @@
 import { ACCENTS, type AccentName } from '../accent'
-import { borderColor, mix, solidOf } from './color'
+import { borderColor, mix, solidOf, topLevel } from './color'
 import type { AppSurfaces, Kind, KindState, Mode, MockupTokens, StyleSource, StyleTokens } from './types'
 
 /*
@@ -117,6 +117,21 @@ export function finish(source: StyleSource, mode: Mode): StyleTokens {
   return deriveSurfaces(k, mode)
 }
 
+/** A shadow list turned upside down: every shadow's vertical offset negated (a header's bottom line becomes a bar's
+ *  top line). */
+export function mirrorY(shadow: string): string {
+  if (shadow.trim() === 'none') return 'none'
+  return topLevel(shadow)
+    .map((one) => {
+      let n = 0
+      // The second length of a shadow is its vertical offset; colours are inside () or #hex, never a bare length.
+      return one.replace(/(^|\s)(-?[\d.]+)(px)?(?=\s|$)/g, (m, space: string, num: string, px = '') =>
+        ++n === 2 ? `${space}${num.startsWith('-') ? num.slice(1) : num === '0' ? num : '-' + num}${px}` : m,
+      )
+    })
+    .join(', ')
+}
+
 /** The colour of the first `inset 0 0 0 Npx <colour>` ring in a shadow list, if any. */
 function ringColor(shadow: string): string | null {
   const m = /inset\s+0(?:px)?\s+0(?:px)?\s+0(?:px)?\s+[\d.]+px\s+(#[0-9a-fA-F]{3,8}|rgba?\([^()]*\))/.exec(shadow)
@@ -183,6 +198,8 @@ export function deriveSurfaces(k: MockupTokens & Partial<AppSurfaces>, mode: Mod
     tipFg: k.tipFg ?? k.popFg,
     tipSh: k.tipSh ?? k.popSh,
     smallR: k.smallR ?? k.ghostR,
+    plainBtnWeight: k.plainBtnWeight ?? k.btnWeight,
+    barSh: k.barSh ?? mirrorY(k.hdrSh),
   }
   return { ...k, ...derived }
 }

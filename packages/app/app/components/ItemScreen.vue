@@ -254,7 +254,7 @@ const linkClass =
         @archive="askArchive"
       />
       </div>
-      <Button variant="outline" class="h-11 justify-self-start px-4.5 font-bold" :disabled="locked" @click="addOpen = true">
+      <Button variant="outline" class="h-11 justify-self-start px-4.5 btn-label" :disabled="locked" @click="addOpen = true">
         <Plus class="size-5" aria-hidden="true" />
         {{ $t('variantsForm.open') }}
       </Button>

@@ -158,12 +158,12 @@ function partsOf(row: JournalRow): Part[] {
             <div class="flex min-w-0 items-baseline gap-3">
               <span class="min-w-0 grow text-[15px] font-bold wrap-anywhere">{{ title }}</span>
               <!-- A recount that matched shows the quantity it confirmed: "Counted 37 pcs ✓". -->
-              <span v-if="row.counted && row.balance" class="flex shrink-0 items-baseline gap-1 text-base font-bold tabular-nums">
+              <span v-if="row.counted && row.balance" class="amount flex shrink-0 items-baseline gap-1 text-base tabular-nums">
                 {{ row.balance.number }}
                 <span class="text-xs font-semibold text-muted-foreground">{{ row.balance.unit }}</span>
                 <Check class="size-4 self-center" aria-hidden="true" />
               </span>
-              <span v-else class="shrink-0 text-base font-bold tabular-nums">
+              <span v-else class="amount shrink-0 text-base tabular-nums">
                 {{ row.number }}
                 <span class="text-xs font-semibold text-muted-foreground">{{ row.unit }}</span>
               </span>

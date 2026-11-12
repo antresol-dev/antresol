@@ -15,6 +15,7 @@ import {
   treeCurrent,
 } from '../app/lib/shell'
 import type { SourceConfig } from '../app/lib/types'
+import { DEFAULT_STYLE, STYLES } from '../app/lib/styles/registry'
 
 const cfg: SourceConfig = {
   id: 'demo',
@@ -160,10 +161,11 @@ describe('themeColorMeta', () => {
 })
 
 describe('themeColorMeta tokens', () => {
-  it('matches the page colour of both themes before the style is applied (main.css --boot-page)', async () => {
+  it('the page before the style is applied (main.css --boot-page) is the default style\'s page in both themes', async () => {
     const { default: css } = await import('../app/assets/css/main.css?raw')
     const bg = [...css.matchAll(/--boot-page:\s*(#[0-9a-fA-F]{6})/g)].map((m) => m[1]!.toUpperCase())
     expect(bg).toHaveLength(2)
-    expect(themeColorMeta('system', 'light', 'neumorphism', 'indigo').map((m) => m.content)).toEqual(bg)
+    const page = (mode: 'light' | 'dark') => STYLES[DEFAULT_STYLE].build(mode, STYLES[DEFAULT_STYLE].defaultAccent).pageColor.toUpperCase()
+    expect(bg).toEqual([page('light'), page('dark')])
   })
 })

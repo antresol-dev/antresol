@@ -1,4 +1,4 @@
-import { SI_PREFIXES, type UnitDef } from '@graymatter/core'
+import { SI_PREFIXES, type UnitDef } from '@antresol/core'
 
 /** A prefix as the unit form labels it: "Y · yotta (10^24)", "µ · micro (10^-6)". */
 export function prefixNote(power: number): string {

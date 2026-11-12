@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { CORE_VERSION } from '@graymatter/core'
+import { CORE_VERSION } from '@antresol/core'
 
 describe('workspace', () => {
-  it('resolves @graymatter/core from storage-postgres', () => {
+  it('resolves @antresol/core from storage-postgres', () => {
     expect(CORE_VERSION).toBe('0.1.0')
   })
 })

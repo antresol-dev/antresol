@@ -1,12 +1,12 @@
-import { parseQuantity, type InventoryExport, type InventorySnapshot, type Movement, type RestoreMode } from '@graymatter/core'
-import { APP_SCHEMA_VERSION, backupProblems, SCHEMA_BASE } from '@graymatter/storage-postgres'
+import { parseQuantity, type InventoryExport, type InventorySnapshot, type Movement, type RestoreMode } from '@antresol/core'
+import { APP_SCHEMA_VERSION, backupProblems, SCHEMA_BASE } from '@antresol/storage-postgres'
 import { computed, watch, type WatchStopHandle } from 'vue'
 import type { BackupInfo, RestoreRun } from './device-db'
 import type { SourceConfig } from './types'
 import type { Workspace } from './workspace-types'
 
 export interface BackupFile {
-  format: 'graymatter-backup'
+  format: 'antresol-backup'
   version: 1
   exportedAt: string
   app: { schemaVersion: number }
@@ -18,7 +18,7 @@ export interface BackupFile {
 
 export function buildBackup(input: Omit<BackupFile, 'format' | 'version'>): BackupFile {
   return {
-    format: 'graymatter-backup',
+    format: 'antresol-backup',
     version: 1,
     exportedAt: input.exportedAt,
     app: { schemaVersion: input.app.schemaVersion },
@@ -28,14 +28,14 @@ export function buildBackup(input: Omit<BackupFile, 'format' | 'version'>): Back
   }
 }
 
-/** 'graymatter-<slug>-2026-11-11.json' (the date is UTC). */
+/** 'antresol-<slug>-2026-11-11.json' (the date is UTC). */
 export function backupFileName(sourceName: string, at: Date): string {
   const slug = sourceName
     .normalize('NFKD')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-  return `graymatter-${slug || 'source'}-${at.toISOString().slice(0, 10)}.json`
+  return `antresol-${slug || 'source'}-${at.toISOString().slice(0, 10)}.json`
 }
 
 export const REVOKE_DELAY_MS = 10_000
@@ -117,7 +117,7 @@ export async function fingerprint(text: string): Promise<string> {
 
 // ---- reading a file back ----
 
-/** `prerelease`: made by a pre-release GrayMatter, whose data no longer fits the schema. */
+/** `prerelease`: made by a pre-release Antresol, whose data no longer fits the schema. */
 export type BackupProblem = 'format' | 'version' | 'newer_schema' | 'prerelease'
 
 type Check = (value: unknown) => boolean
@@ -253,13 +253,13 @@ function preReleaseShape(inventories: unknown[]): boolean {
 
 /**
  * A file's JSON as a backup, every record checked field by field (nothing it does not know is kept), or why not:
- * `format` (not a GrayMatter backup, or damaged; `reason` says what, when it is more than a field's shape),
- * `version` (a file format this app does not know), `newer_schema` (made by a newer GrayMatter: its data may not fit
- * this app's schema), `prerelease` (made by a pre-release GrayMatter). Every reference must resolve inside its
+ * `format` (not a Antresol backup, or damaged; `reason` says what, when it is more than a field's shape),
+ * `version` (a file format this app does not know), `newer_schema` (made by a newer Antresol: its data may not fit
+ * this app's schema), `prerelease` (made by a pre-release Antresol). Every reference must resolve inside its
  * inventory and every value fit the schema (backupProblems), as the restore checks again before writing anything.
  */
 export function parseBackup(json: unknown): BackupFile | { error: BackupProblem; reason?: string } {
-  if (!isRecord(json) || json.format !== 'graymatter-backup') return { error: 'format' }
+  if (!isRecord(json) || json.format !== 'antresol-backup') return { error: 'format' }
   if (json.version !== 1) return { error: 'version' }
   const app = record<{ schemaVersion: number }>(json.app, { schemaVersion: int })
   if (!app) return { error: 'format' }

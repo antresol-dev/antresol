@@ -1,6 +1,6 @@
-import { cloudinaryThumbUrl, isCloudinaryUrl } from '@graymatter/files-cloudinary'
-import { imgurThumbUrl, isImgurUrl } from '@graymatter/files-imgur'
-import { isUploadcareUrl } from '@graymatter/files-uploadcare'
+import { cloudinaryThumbUrl, isCloudinaryUrl } from '@antresol/files-cloudinary'
+import { imgurThumbUrl, isImgurUrl } from '@antresol/files-imgur'
+import { isUploadcareUrl } from '@antresol/files-uploadcare'
 
 export { isCloudinaryUrl, isImgurUrl, isUploadcareUrl }
 export type PhotoSize = 'thumb' | 'card' | 'full'

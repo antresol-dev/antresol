@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Id } from '@graymatter/core'
+import type { Id } from '@antresol/core'
 import { toast } from 'vue-sonner'
 import { takeDraft, type QuickAddDraft } from '~/lib/quick-add-draft'
 import type { QuickAddState } from '~/composables/useDialogs'

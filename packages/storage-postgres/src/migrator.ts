@@ -1,4 +1,4 @@
-import { StorageError, type SchemaStatus } from '@graymatter/core'
+import { StorageError, type SchemaStatus } from '@antresol/core'
 import type { PgExecutor } from './executor'
 import { sql, type Statement } from './sql'
 
@@ -24,12 +24,12 @@ export const SCHEMA_BASE = 2
 
 export const APP_SCHEMA_VERSION = SCHEMA_BASE + migrations.length
 
-/** Arbitrary GrayMatter-specific key for pg_advisory_xact_lock; serialises migrations across devices. */
+/** Arbitrary Antresol-specific key for pg_advisory_xact_lock; serialises migrations across devices. */
 export const MIGRATION_LOCK_KEY = 7164290317
 
 /** Message and SQLSTATE of the error a migration batch raises when another device already moved the version. */
-export const CONCURRENT_MIGRATION_MESSAGE = 'gm_concurrent_migration'
-export const CONCURRENT_MIGRATION_SQLSTATE = 'GM001'
+export const CONCURRENT_MIGRATION_MESSAGE = 'antresol_concurrent_migration'
+export const CONCURRENT_MIGRATION_SQLSTATE = 'AN001'
 
 export function isConcurrentMigration(e: unknown): boolean {
   if (!(e instanceof Error)) return false
@@ -43,11 +43,11 @@ export function isConcurrentMigration(e: unknown): boolean {
  *  A migration takes it before touching any table: a write then waits for the whole migration (or the migration for
  *  the write), instead of each holding what the other waits for (a deadlock Postgres would end by aborting one). No row
  *  (hand-edited database, or one the initial migration has not filled yet): nothing to lock. */
-export const LOCK_REV: Statement = sql`select value from gm_meta where key = 'rev' for update`
+export const LOCK_REV: Statement = sql`select value from antresol_meta where key = 'rev' for update`
 
 /** Message and SQLSTATE of the error a write batch raises when the database needs a newer app to write. */
-export const NEWER_SCHEMA_MESSAGE = 'gm_newer_schema'
-export const NEWER_SCHEMA_SQLSTATE = 'GM003'
+export const NEWER_SCHEMA_MESSAGE = 'antresol_newer_schema'
+export const NEWER_SCHEMA_SQLSTATE = 'AN003'
 
 export function isNewerSchema(e: unknown): boolean {
   if (!(e instanceof Error)) return false
@@ -55,7 +55,7 @@ export function isNewerSchema(e: unknown): boolean {
 }
 
 /**
- * Right after LOCK_REV in every write batch (Plan 9 spec G3): fails with GM003 when the oldest app schema that may write
+ * Right after LOCK_REV in every write batch (Plan 9 spec G3): fails with AN003 when the oldest app schema that may write
  * (`min_app_schema`, or without that row the database's own version, as readSchemaMeta reads them) is above
  * `appVersion`. The status read when the storage opened goes stale once another device migrates; under the revision
  * lock a migration cannot slip in between this check and the write, since migrations take the same lock. A plain
@@ -65,8 +65,8 @@ export function schemaGuard(appVersion: number): Statement {
   if (!Number.isInteger(appVersion) || appVersion < 0) throw new Error(`invalid app version ${appVersion}`)
   return {
     text: `do $$ begin
-  if coalesce((select value from gm_meta where key = 'min_app_schema'),
-              (select value from gm_meta where key = 'schema_version'))::int > ${appVersion} then
+  if coalesce((select value from antresol_meta where key = 'min_app_schema'),
+              (select value from antresol_meta where key = 'schema_version'))::int > ${appVersion} then
     raise exception '${NEWER_SCHEMA_MESSAGE}' using errcode = '${NEWER_SCHEMA_SQLSTATE}';
   end if;
 end $$`,
@@ -74,10 +74,10 @@ end $$`,
   }
 }
 
-/** Gives `gm_meta.rev` a new unique value (see storage.ts for why it is opaque); creates the row if it is missing.
+/** Gives `antresol_meta.rev` a new unique value (see storage.ts for why it is opaque); creates the row if it is missing.
  *  Returns the new value (`apply` reports it; a migration ignores it). */
 export const REV_BUMP: Statement = {
-  text: `insert into gm_meta (key, value) values ('rev', gen_random_uuid()::text)
+  text: `insert into antresol_meta (key, value) values ('rev', gen_random_uuid()::text)
   on conflict (key) do update set value = excluded.value
   returning value`,
   params: [],
@@ -91,7 +91,7 @@ function migrationPrologue(expected: number): Statement[] {
     LOCK_REV,
     {
       text: `do $$ begin
-  if coalesce((select value from gm_meta where key = 'schema_version'), '0')::int <> ${expected} then
+  if coalesce((select value from antresol_meta where key = 'schema_version'), '0')::int <> ${expected} then
     raise exception '${CONCURRENT_MIGRATION_MESSAGE}' using errcode = '${CONCURRENT_MIGRATION_SQLSTATE}';
   end if;
 end $$`,
@@ -102,22 +102,22 @@ end $$`,
 
 function nonNegativeInteger(value: string, key: string): number {
   const n = Number(value)
-  if (!Number.isInteger(n) || n < 0) throw new Error(`gm_meta.${key} is not a non-negative integer`)
+  if (!Number.isInteger(n) || n < 0) throw new Error(`antresol_meta.${key} is not a non-negative integer`)
   return n
 }
 
 export interface SchemaMeta {
   /** 0 when the database has no schema yet. */
   dbVersion: number
-  /** The oldest app schema that may write (`gm_meta.min_app_schema`). Without the row (a database from before soft
+  /** The oldest app schema that may write (`antresol_meta.min_app_schema`). Without the row (a database from before soft
    *  migrations) the database's own version: until then every schema needed an app at least as new. */
   minAppSchema: number
 }
 
-/** Both versions in one query; throws on a value that is not a non-negative integer (a hand-edited gm_meta). */
+/** Both versions in one query; throws on a value that is not a non-negative integer (a hand-edited antresol_meta). */
 export async function readSchemaMeta(exec: PgExecutor): Promise<SchemaMeta> {
   const rows = await exec.query<{ key: string; value: string }>(
-    sql`select key, value from gm_meta where key in ('schema_version', 'min_app_schema')`,
+    sql`select key, value from antresol_meta where key in ('schema_version', 'min_app_schema')`,
   )
   const raw = (key: string) => rows.find((r) => r.key === key)?.value
   const version = raw('schema_version')
@@ -139,12 +139,12 @@ export async function ensureSchema(exec: PgExecutor, appVersion: number = APP_SC
   // Under the lock, so two devices on a brand-new database cannot race on the create (23505 / 42P07).
   await exec.batch([
     { text: `select pg_advisory_xact_lock(${MIGRATION_LOCK_KEY})`, params: [] },
-    sql`create table if not exists gm_meta (key text primary key, value text not null)`,
+    sql`create table if not exists antresol_meta (key text primary key, value text not null)`,
   ])
   for (;;) {
     const { dbVersion, minAppSchema } = await readSchemaMeta(exec)
     if (dbVersion >= 1 && dbVersion <= SCHEMA_BASE) {
-      throw new StorageError('outdated', 'the database was created by a pre-release GrayMatter; reset it')
+      throw new StorageError('outdated', 'the database was created by a pre-release Antresol; reset it')
     }
     if (dbVersion >= appVersion) {
       return { state: minAppSchema > appVersion ? 'newer' : 'ready', dbVersion, appVersion, minAppSchema }
@@ -156,7 +156,7 @@ export async function ensureSchema(exec: PgExecutor, appVersion: number = APP_SC
         ...(migrations[version - SCHEMA_BASE - 1] as Statement[]),
         // A migration may change data without any write passing through `apply`: devices must reload.
         REV_BUMP,
-        sql`insert into gm_meta (key, value) values ('schema_version', ${String(version)})
+        sql`insert into antresol_meta (key, value) values ('schema_version', ${String(version)})
             on conflict (key) do update set value = excluded.value`,
       ])
     } catch (e) {

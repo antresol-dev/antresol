@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { itemAxes, type Id, type Variant } from '@graymatter/core'
+import { itemAxes, type Id, type Variant } from '@antresol/core'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'

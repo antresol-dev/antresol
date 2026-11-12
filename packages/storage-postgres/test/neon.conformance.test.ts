@@ -1,4 +1,4 @@
-import { newId, normalizeCommand, patchSnapshot, type Command, type InventorySnapshot, type Quantity } from '@graymatter/core'
+import { newId, normalizeCommand, patchSnapshot, type Command, type InventorySnapshot, type Quantity } from '@antresol/core'
 import { neonConfig } from '@neondatabase/serverless'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { assertTestDatabase, createNeonHttpExecutor, createNeonWsExecutor, inspectSchema, type PgExecutor } from '../src'
@@ -12,20 +12,20 @@ import { renamed, seedRich } from './restore-fixtures'
 
 describe('assertTestDatabase', () => {
   it('rejects a database whose name does not end with _test', () => {
-    expect(() => assertTestDatabase('postgres://u:p@h/graymatter')).toThrow(/must end with "_test"/)
+    expect(() => assertTestDatabase('postgres://u:p@h/antresol')).toThrow(/must end with "_test"/)
   })
   it('accepts a _test database and ignores the query string', () => {
-    expect(() => assertTestDatabase('postgres://u:p@h/graymatter_test?sslmode=require')).not.toThrow()
+    expect(() => assertTestDatabase('postgres://u:p@h/antresol_test?sslmode=require')).not.toThrow()
   })
   it('rejects a _test suffix that only appears in the query string', () => {
-    expect(() => assertTestDatabase('postgres://u:p@h/graymatter?x=_test')).toThrow(/must end with "_test"/)
+    expect(() => assertTestDatabase('postgres://u:p@h/antresol?x=_test')).toThrow(/must end with "_test"/)
   })
 })
 
 // tests run in Node; src/ has no Node types on purpose
 declare const process: { env: Record<string, string | undefined> }
 
-const url = process.env.GM_NEON_TEST_URL
+const url = process.env.ANTRESOL_NEON_TEST_URL
 
 describe.skipIf(!url)('Neon conformance', () => {
   // Wiped before each driver's scenario so every driver runs the migrator itself.
@@ -87,10 +87,10 @@ describe.skipIf(!url)('Neon conformance', () => {
 
       it('batch returns the rows of each statement in order', async () => {
         const result = await exec.batch([
-          { text: 'create temp table gm_probe (x int) on commit drop', params: [] },
-          { text: 'insert into gm_probe values (1), (2)', params: [] },
-          { text: 'update gm_probe set x = x + 1 where x = 2', params: [] },
-          { text: 'select x from gm_probe order by x', params: [] },
+          { text: 'create temp table antresol_probe (x int) on commit drop', params: [] },
+          { text: 'insert into antresol_probe values (1), (2)', params: [] },
+          { text: 'update antresol_probe set x = x + 1 where x = 2', params: [] },
+          { text: 'select x from antresol_probe order by x', params: [] },
         ])
         expect(result.length).toBe(4)
         expect(result[1]).toEqual([])
@@ -250,7 +250,7 @@ describe.skipIf(!url)('Neon conformance', () => {
         // C2: 100n·50V -> 220n·25V next to 220n·50V; then b and c trade their values.
         await step(set([[a, { [cap]: '0.00000022', [volt]: '25' }]]))
         await step(set([[b, { [cap]: '0.00000047', [volt]: '16' }], [c, { [cap]: '0.00000022', [volt]: '50' }]]))
-        // Sent unvalidated, as from a copy that is behind: c would equal b. Refused whole (GM004), nothing written.
+        // Sent unvalidated, as from a copy that is behind: c would equal b. Refused whole (AN004), nothing written.
         const revBefore = (await storage.listInventories()).rev
         await expect(
           storage.apply(set([[a, { [volt]: '35' }], [c, { [cap]: '0.00000047', [volt]: '16' }]]), TEST_ACTOR),
@@ -276,15 +276,15 @@ describe.skipIf(!url)('Neon conformance', () => {
         expect(normSnapshot(copy)).toEqual(normSnapshot(await storage.loadInventory(inv)))
 
         // G3: another device moved the database past this app after it opened: the write is refused, nothing written.
-        const [{ value: min }] = (await exec.query(sql`select value from gm_meta where key = 'min_app_schema'`)) as [{ value: string }]
-        await exec.batch([sql`update gm_meta set value = '99' where key = 'min_app_schema'`])
+        const [{ value: min }] = (await exec.query(sql`select value from antresol_meta where key = 'min_app_schema'`)) as [{ value: string }]
+        await exec.batch([sql`update antresol_meta set value = '99' where key = 'min_app_schema'`])
         try {
           const rev = (await storage.listInventories()).rev
           await expect(storage.apply(itemCreate(inv, newId(), 'Late'), TEST_ACTOR)).rejects.toMatchObject({ code: 'read_only' })
           expect((await storage.listInventories()).rev).toBe(rev)
           expect((await storage.loadInventory(inv)).items.map((i) => i.id)).toEqual([item])
         } finally {
-          await exec.batch([sql`update gm_meta set value = ${min} where key = 'min_app_schema'`])
+          await exec.batch([sql`update antresol_meta set value = ${min} where key = 'min_app_schema'`])
         }
       })
 
@@ -294,7 +294,7 @@ describe.skipIf(!url)('Neon conformance', () => {
         const holder = make()
         const writer = make()
         const watcher = make()
-        const tag = `gm_race_${newId().replace(/-/g, '')}`
+        const tag = `antresol_race_${newId().replace(/-/g, '')}`
         /** Sessions other than the watcher's own whose current statement matches `pattern` (and `where`). */
         const sessions = async (pattern: string, where = 'true'): Promise<number> => {
           const [row] = await watcher.query<{ n: number }>({
@@ -326,7 +326,7 @@ describe.skipIf(!url)('Neon conformance', () => {
           )
           applying.catch(() => {})
           await until('the apply wait for the revision row', async () =>
-            (await sessions('%gm_meta%for update%', `wait_event_type = 'Lock'`)) > 0,
+            (await sessions('%antresol_meta%for update%', `wait_event_type = 'Lock'`)) > 0,
           )
           const [held, applied] = await Promise.all([holding, applying])
           const heldRev = held.at(-1)?.[0]?.value
@@ -423,7 +423,7 @@ describe.skipIf(!url)('Neon conformance', () => {
           [['A0', false], ['A1', false], ['A2', false], ['A3', false]],
         )
         await expect(migrator.batch([sql`update movements set note = 'edited' where item_id = ${item}`])).rejects.toThrow(
-          /gm_movements_append_only/,
+          /antresol_movements_append_only/,
         )
         await storage.apply({ type: 'archive', target: 'item', id: item, archiveId: newId() }, TEST_ACTOR)
         await storage.apply({ type: 'deletePermanently', target: 'item', id: item }, TEST_ACTOR)

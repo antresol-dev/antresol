@@ -1,6 +1,6 @@
 import { PGlite } from '@electric-sql/pglite'
-import { newId, StorageError, type InventoryStorage, type Movement, type Quantity } from '@graymatter/core'
-import { APP_SCHEMA_VERSION, createPgliteExecutor, openPostgresStorage, type PgExecutor } from '@graymatter/storage-postgres'
+import { newId, StorageError, type InventoryStorage, type Movement, type Quantity } from '@antresol/core'
+import { APP_SCHEMA_VERSION, createPgliteExecutor, openPostgresStorage, type PgExecutor } from '@antresol/storage-postgres'
 import { createStore, set } from 'idb-keyval'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -41,15 +41,15 @@ describe('backup file', () => {
     for (const forbidden of ['connectionString', 'postgres://', 'uploadcarePublicKey', 'secret', 'pk_123']) {
       expect(text).not.toContain(forbidden)
     }
-    expect(backup).toMatchObject({ format: 'graymatter-backup', version: 1, source: { name: 'Home', kind: 'neon' } })
+    expect(backup).toMatchObject({ format: 'antresol-backup', version: 1, source: { name: 'Home', kind: 'neon' } })
     expect(Object.keys(backup.source)).toEqual(['name', 'kind'])
   })
 
   it('names the file from a slug of the source name', () => {
     const at = new Date('2026-11-11T10:00:00Z')
-    expect(backupFileName('My Garage / #1!', at)).toBe('graymatter-my-garage-1-2026-11-11.json')
-    expect(backupFileName('Demo', at)).toBe('graymatter-demo-2026-11-11.json')
-    expect(backupFileName('???', at)).toBe('graymatter-source-2026-11-11.json')
+    expect(backupFileName('My Garage / #1!', at)).toBe('antresol-my-garage-1-2026-11-11.json')
+    expect(backupFileName('Demo', at)).toBe('antresol-demo-2026-11-11.json')
+    expect(backupFileName('???', at)).toBe('antresol-source-2026-11-11.json')
   })
 })
 
@@ -69,7 +69,7 @@ describe('downloadBackup', () => {
     const backup = buildBackup({ exportedAt: 't', app: { schemaVersion: 1 }, source: { name: 'Home', kind: 'neon' }, inventories: [] })
     downloadBackup(backup, new Date('2026-11-11T00:00:00Z'))
     expect(click).toHaveBeenCalled()
-    expect(link.download).toBe('graymatter-home-2026-11-11.json')
+    expect(link.download).toBe('antresol-home-2026-11-11.json')
     expect(revoke).not.toHaveBeenCalled()
     vi.advanceTimersByTime(REVOKE_DELAY_MS)
     expect(revoke).toHaveBeenCalledWith('blob:x')
@@ -122,7 +122,7 @@ describe('parseBackup', () => {
     expect(backupSummary(parsed as BackupFile)).toMatchObject({ inventories: 3 })
   })
 
-  it('refuses what is not a GrayMatter backup', () => {
+  it('refuses what is not a Antresol backup', () => {
     const ok = buildBackup({ exportedAt: '2026-11-11T10:00:00Z', app: { schemaVersion: 4 }, source: { name: 'H', kind: 'neon' }, inventories: [] })
     expect(parseBackup(JSON.parse(JSON.stringify(ok)))).toEqual(ok)
     for (const bad of [null, 'text', [], {}, { ...ok, format: 'other' }, { ...ok, inventories: {} }, { ...ok, exportedAt: 'soon' }]) {
@@ -215,7 +215,7 @@ describe('parseBackup: what the schema cannot hold', () => {
     }
   })
 
-  it('says a file of a pre-release GrayMatter cannot be restored, rather than calling it damaged', async () => {
+  it('says a file of a pre-release Antresol cannot be restored, rather than calling it damaged', async () => {
     const { all, s } = await electronics()
     expect(s.variants.length).toBeGreaterThan(0)
     // Before variants were defined by their axes: variants had names, item attributes no axis position.
@@ -342,7 +342,7 @@ describe('device bookkeeping', () => {
     await db.dropRestoreRun('sha-a', fresh.run.runId)
     expect(await db.getRestoreRun('sha-a')).toBeNull()
     // What an earlier build kept there (a bare run id) is no run.
-    await set('restoreRun:sha-c', newId(), createStore('graymatter', 'kv'))
+    await set('restoreRun:sha-c', newId(), createStore('antresol', 'kv'))
     expect(await db.getRestoreRun('sha-c')).toBeNull()
     expect((await db.beginRestoreRun('sha-c', 's1', 'new-ids')).resumed).toBe(false)
   })
@@ -617,7 +617,7 @@ describe('shareOrDownload', () => {
     const result = await shareOrDownload(backup, at, { canShare: () => true, share, touch: true })
     expect(result).toBe('shared')
     const files = share.mock.calls[0]![0].files!
-    expect(files[0]!.name).toBe('graymatter-home-2026-11-11.json')
+    expect(files[0]!.name).toBe('antresol-home-2026-11-11.json')
     expect(files[0]!.type).toBe('application/json')
     expect(click).not.toHaveBeenCalled()
   })

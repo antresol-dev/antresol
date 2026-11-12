@@ -1,4 +1,4 @@
-import { newId, normalizeCommand, StorageError, type ApplyResult, type Command, type Id } from '@graymatter/core'
+import { newId, normalizeCommand, StorageError, type ApplyResult, type Command, type Id } from '@antresol/core'
 import { describe, expect, it } from 'vitest'
 import { toStatements } from '../src/commands'
 import type { PgExecutor } from '../src/executor'
@@ -34,19 +34,19 @@ describe('ensureSchema', () => {
     expect(names).toContain('items')
     expect(names).toContain('movements')
     expect(APP_SCHEMA_VERSION).toBe(4)
-    expect(await exec.query(sql`select 1 from gm_meta where key = 'rev'`)).toHaveLength(1)
+    expect(await exec.query(sql`select 1 from antresol_meta where key = 'rev'`)).toHaveLength(1)
   })
 
   it('rejects a pre-release database as outdated and leaves it as it was', async () => {
     const exec = await makeExecutor()
     await exec.batch([
-      sql`create table gm_meta (key text primary key, value text not null)`,
-      sql`insert into gm_meta (key, value) values ('schema_version', '2')`,
+      sql`create table antresol_meta (key text primary key, value text not null)`,
+      sql`insert into antresol_meta (key, value) values ('schema_version', '2')`,
     ])
     const err = await ensureSchema(exec).catch((e) => e)
     expect(err).toBeInstanceOf(StorageError)
     expect(err.code).toBe('outdated')
-    expect(await exec.query(sql`select value from gm_meta where key = 'schema_version'`)).toEqual([{ value: '2' }])
+    expect(await exec.query(sql`select value from antresol_meta where key = 'schema_version'`)).toEqual([{ value: '2' }])
     expect(await exec.query(sql`select 1 from information_schema.tables where table_name = 'items'`)).toEqual([])
   })
 
@@ -72,8 +72,8 @@ describe('ensureSchema', () => {
     await ensureSchema(exec)
     const next = String(APP_SCHEMA_VERSION + 1)
     await exec.batch([
-      sql`update gm_meta set value = ${next} where key = 'schema_version'`,
-      sql`update gm_meta set value = ${next} where key = 'min_app_schema'`,
+      sql`update antresol_meta set value = ${next} where key = 'schema_version'`,
+      sql`update antresol_meta set value = ${next} where key = 'min_app_schema'`,
     ])
     expect(await ensureSchema(exec)).toEqual({
       state: 'newer',
@@ -106,14 +106,14 @@ function recording(exec: PgExecutor, onBatch?: (seen: number) => Promise<void>) 
 }
 
 describe('ensureSchema concurrency', () => {
-  it('creates gm_meta only after taking the lock', async () => {
+  it('creates antresol_meta only after taking the lock', async () => {
     const { wrapped, batches } = recording(await makeExecutor())
     await ensureSchema(wrapped)
     const first = batches[0] as string[]
     expect(first[0]).toBe(`select pg_advisory_xact_lock(${MIGRATION_LOCK_KEY})`)
-    expect(first[1]).toContain('create table if not exists gm_meta')
+    expect(first[1]).toContain('create table if not exists antresol_meta')
     for (const b of batches) {
-      const touch = b.findIndex((t) => t.includes('gm_meta'))
+      const touch = b.findIndex((t) => t.includes('antresol_meta'))
       const lock = b.findIndex((t) => t.includes('pg_advisory_xact_lock'))
       expect(lock).toBeGreaterThanOrEqual(0)
       expect(lock).toBeLessThan(touch)
@@ -123,16 +123,16 @@ describe('ensureSchema concurrency', () => {
   it('fails clearly on a non-integer schema_version', async () => {
     const exec = await makeExecutor()
     await ensureSchema(exec)
-    await exec.batch([sql`update gm_meta set value = 'abc' where key = 'schema_version'`])
+    await exec.batch([sql`update antresol_meta set value = 'abc' where key = 'schema_version'`])
     await expect(ensureSchema(exec)).rejects.toThrow('schema_version is not a non-negative integer')
   })
 
   it('isConcurrentMigration matches precisely', () => {
     const make = (message: string, code?: string) => Object.assign(new Error(message), { code })
-    expect(isConcurrentMigration(make('gm_concurrent_migration', 'GM001'))).toBe(true)
-    expect(isConcurrentMigration(make('gm_concurrent_migration', '23505'))).toBe(false)
-    expect(isConcurrentMigration(make('something else', 'GM001'))).toBe(false)
-    expect(isConcurrentMigration('gm_concurrent_migration')).toBe(false)
+    expect(isConcurrentMigration(make('antresol_concurrent_migration', 'AN001'))).toBe(true)
+    expect(isConcurrentMigration(make('antresol_concurrent_migration', '23505'))).toBe(false)
+    expect(isConcurrentMigration(make('something else', 'AN001'))).toBe(false)
+    expect(isConcurrentMigration('antresol_concurrent_migration')).toBe(false)
     expect(isConcurrentMigration(null)).toBe(false)
   })
 
@@ -146,7 +146,7 @@ describe('ensureSchema concurrency', () => {
       // The lock every write takes first: a write waits for the migration, never holds the row while the migration
       // waits for it with a table locked (Plan 6 carry-over).
       expect(b[1]).toBe(LOCK_REV.text)
-      expect(b[2]).toContain('gm_concurrent_migration')
+      expect(b[2]).toContain('antresol_concurrent_migration')
     }
   })
 
@@ -166,12 +166,12 @@ describe('ensureSchema concurrency', () => {
       minAppSchema: 3,
     })
     expect(raced).toBe(true)
-    // gm_meta create + exactly one rejected migration batch; nothing re-applied.
-    expect(batches.filter((b) => b.some((t) => t.includes('gm_concurrent_migration')))).toHaveLength(1)
+    // antresol_meta create + exactly one rejected migration batch; nothing re-applied.
+    expect(batches.filter((b) => b.some((t) => t.includes('antresol_concurrent_migration')))).toHaveLength(1)
     expect(rejections).toHaveLength(1)
     expect(isConcurrentMigration(rejections[0])).toBe(true)
-    expect((rejections[0] as { code?: string }).code).toBe('GM001')
-    expect(await exec.query(sql`select 1 from gm_meta where key = 'schema_version'`)).toHaveLength(1)
+    expect((rejections[0] as { code?: string }).code).toBe('AN001')
+    expect(await exec.query(sql`select 1 from antresol_meta where key = 'schema_version'`)).toHaveLength(1)
   })
 
   it('does not swallow other errors', async () => {
@@ -188,7 +188,7 @@ describe('ensureSchema concurrency', () => {
 })
 
 const metaValue = async (exec: PgExecutor, key: string): Promise<string | null> =>
-  (await exec.query<{ value: string }>(sql`select value from gm_meta where key = ${key}`))[0]?.value ?? null
+  (await exec.query<{ value: string }>(sql`select value from antresol_meta where key = ${key}`))[0]?.value ?? null
 
 const revOf = async (exec: PgExecutor): Promise<string | null> => metaValue(exec, 'rev')
 
@@ -248,7 +248,7 @@ describe('schema 4 (migration 0001)', () => {
 
     const { wrapped, batches } = recording(exec)
     expect(await ensureSchema(wrapped)).toEqual({ state: 'ready', dbVersion: 4, appVersion: 4, minAppSchema: 3 })
-    const migrationBatches = batches.filter((b) => b.some((t) => t.includes('gm_concurrent_migration')))
+    const migrationBatches = batches.filter((b) => b.some((t) => t.includes('antresol_concurrent_migration')))
     expect(migrationBatches).toHaveLength(1)
     expect(migrationBatches[0]!.join('\n')).toContain('"pinned"')
     expect(await metaValue(exec, 'schema_version')).toBe('4')
@@ -264,7 +264,7 @@ describe('schema 4 (migration 0001)', () => {
   it('an empty database runs the initial migration, then 0001', async () => {
     const { wrapped, batches } = recording(await makeExecutor())
     await ensureSchema(wrapped)
-    const migrationBatches = batches.filter((b) => b.some((t) => t.includes('gm_concurrent_migration')))
+    const migrationBatches = batches.filter((b) => b.some((t) => t.includes('antresol_concurrent_migration')))
     expect(migrationBatches).toHaveLength(2)
     expect(migrationBatches[0]!.join('\n')).toContain('CREATE TABLE "attributes"')
     expect(migrationBatches[1]!.join('\n')).toContain('"pinned"')
@@ -295,7 +295,7 @@ describe('schema 4 (migration 0001)', () => {
       sql`update movements set quantity = 0 where inventory_id = ${inv}`,
       sql`update movements set kind = 'usage' where kind = 'receipt'`,
     ]) {
-      await expect(exec.batch([change])).rejects.toThrow(/gm_movements_append_only/)
+      await expect(exec.batch([change])).rejects.toThrow(/antresol_movements_append_only/)
     }
     expect(await exec.query(journal)).toEqual(before)
 
@@ -335,7 +335,7 @@ describe('schema 4 (migration 0001)', () => {
       const migrating: PgExecutor = {
         ...exec,
         batch: async (statements) => {
-          const migration = statements.some((s) => s.text.includes('gm_concurrent_migration'))
+          const migration = statements.some((s) => s.text.includes('antresol_concurrent_migration'))
           if (migration && writeFirst) write = send()
           const pending = exec.batch(statements)
           if (migration && !writeFirst) write = send()
@@ -360,7 +360,7 @@ describe('schema 4 (migration 0001)', () => {
 
 describe('soft migrations (min_app_schema)', () => {
   const setMeta = (exec: PgExecutor, key: string, value: number) =>
-    exec.batch([sql`update gm_meta set value = ${String(value)} where key = ${key}`])
+    exec.batch([sql`update antresol_meta set value = ${String(value)} where key = ${key}`])
 
   it('an app of schema 3 on a schema-4 database writes while min_app_schema is 3, only reads above', async () => {
     const exec = await makeExecutor()
@@ -389,19 +389,19 @@ describe('soft migrations (min_app_schema)', () => {
     await setMeta(exec, 'min_app_schema', next)
     expect((await ensureSchema(exec)).state).toBe('newer')
     // No min_app_schema (made before soft migrations): it takes an app of its own version.
-    await exec.batch([sql`delete from gm_meta where key = 'min_app_schema'`])
+    await exec.batch([sql`delete from antresol_meta where key = 'min_app_schema'`])
     expect(await ensureSchema(exec)).toEqual({ state: 'newer', dbVersion: next, appVersion: APP_SCHEMA_VERSION, minAppSchema: next })
   })
 
   it('fails clearly on a non-integer min_app_schema', async () => {
     const exec = await makeExecutor()
     await ensureSchema(exec)
-    await exec.batch([sql`update gm_meta set value = 'x' where key = 'min_app_schema'`])
+    await exec.batch([sql`update antresol_meta set value = 'x' where key = 'min_app_schema'`])
     await expect(ensureSchema(exec)).rejects.toThrow('min_app_schema is not a non-negative integer')
   })
 
   // G3: the version is checked again under the revision lock of every write, not only when the storage opens.
-  describe('a write after the database moved past this app (GM003)', () => {
+  describe('a write after the database moved past this app (AN003)', () => {
     /** A database this app migrated, opened by an app of `appVersion` (default this one). */
     async function opened(appVersion?: number) {
       const exec = await makeExecutor()
@@ -434,7 +434,7 @@ describe('soft migrations (min_app_schema)', () => {
 
     it('without min_app_schema the database version decides', async () => {
       const { exec, storage, inv } = await opened()
-      await exec.batch([sql`delete from gm_meta where key = 'min_app_schema'`])
+      await exec.batch([sql`delete from antresol_meta where key = 'min_app_schema'`])
       await storage.apply(itemCreate(inv, newId()), TEST_ACTOR)
       await setMeta(exec, 'schema_version', APP_SCHEMA_VERSION + 1)
       await refused(storage, exec, inv)
@@ -516,11 +516,11 @@ describe('PgExecutor.batch', () => {
     await ensureSchema(exec)
     await expect(
       exec.batch([
-        sql`insert into gm_meta (key, value) values ('a', '1')`,
-        sql`insert into gm_meta (key, value) values ('a', '2')`,
+        sql`insert into antresol_meta (key, value) values ('a', '1')`,
+        sql`insert into antresol_meta (key, value) values ('a', '2')`,
       ]),
     ).rejects.toThrow(/duplicate key/)
-    expect(await exec.query(sql`select 1 from gm_meta where key = 'a'`)).toEqual([])
+    expect(await exec.query(sql`select 1 from antresol_meta where key = 'a'`)).toEqual([])
   })
 })
 

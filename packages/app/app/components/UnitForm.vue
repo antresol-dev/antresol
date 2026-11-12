@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { SI_PREFIXES, type CustomUnit } from '@graymatter/core'
+import { SI_PREFIXES, type CustomUnit } from '@antresol/core'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'

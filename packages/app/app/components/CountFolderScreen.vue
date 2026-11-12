@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Id, Quantity } from '@graymatter/core'
+import type { Id, Quantity } from '@antresol/core'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from 'vue-sonner'

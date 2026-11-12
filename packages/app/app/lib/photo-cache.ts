@@ -1,7 +1,7 @@
 import { isCloudinaryUrl, isImgurUrl, isUploadcareUrl } from './photo-url'
 
 /** Cache names of the service worker's photo caches (nuxt.config.ts pwa.workbox.runtimeCaching uses the same names). */
-export const PHOTO_CACHE = { thumbs: 'gm-photos-thumb', full: 'gm-photos-full' } as const
+export const PHOTO_CACHE = { thumbs: 'antresol-photos-thumb', full: 'antresol-photos-full' } as const
 
 /** The three stores send `Access-Control-Allow-Origin: *`, so their photos are fetched with CORS: the service worker then
  *  caches real (non-opaque) responses. Device and foreign urls are never loaded this way. */

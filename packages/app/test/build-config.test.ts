@@ -17,14 +17,14 @@ describe('production build config', () => {
   })
 
   it('takes the base path from NUXT_APP_BASE_URL (GitHub Pages project site)', async () => {
-    expect((await loadConfig('/graymatter/')).app?.baseURL).toBe('/graymatter/')
+    expect((await loadConfig('/antresol/')).app?.baseURL).toBe('/antresol/')
   })
 
   it('falls back to the app shell precached under the base URL for navigations', async () => {
     expect((await loadConfig()).pwa?.workbox?.navigateFallback).toBe('/')
-    const workbox = (await loadConfig('/graymatter/')).pwa?.workbox
-    expect(workbox?.navigateFallback).toBe('/graymatter/')
-    expect(workbox?.navigateFallbackDenylist?.some((re: RegExp) => re.test('/graymatter/_nuxt/a.js'))).toBe(true)
+    const workbox = (await loadConfig('/antresol/')).pwa?.workbox
+    expect(workbox?.navigateFallback).toBe('/antresol/')
+    expect(workbox?.navigateFallbackDenylist?.some((re: RegExp) => re.test('/antresol/_nuxt/a.js'))).toBe(true)
   })
 
   it('keeps the manifest relative so it follows the base path', async () => {

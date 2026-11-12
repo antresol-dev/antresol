@@ -1,6 +1,6 @@
 import { PGlite } from '@electric-sql/pglite'
-import { DomainError, FileError, newId, StorageError, variantLabel, type Command, type FileStore, type Id } from '@graymatter/core'
-import { APP_SCHEMA_VERSION, createPgliteExecutor, type PgExecutor } from '@graymatter/storage-postgres'
+import { DomainError, FileError, newId, StorageError, variantLabel, type Command, type FileStore, type Id } from '@antresol/core'
+import { APP_SCHEMA_VERSION, createPgliteExecutor, type PgExecutor } from '@antresol/storage-postgres'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computed, isReactive } from 'vue'
 import { createMemoryDeviceDb, type DeviceDb } from '../app/lib/device-db'
@@ -364,7 +364,7 @@ describe('workspace', () => {
     const ws = h.workspace({ checkForUpdate })
     await ws.start()
     const next = APP_SCHEMA_VERSION + 1
-    await h.pgs[0]!.exec(`update gm_meta set value = '${next}' where key in ('schema_version', 'min_app_schema')`)
+    await h.pgs[0]!.exec(`update antresol_meta set value = '${next}' where key in ('schema_version', 'min_app_schema')`)
     // The refresh reuses the open connection, yet checks the schema through it.
     await ws.refresh()
     expect(ws.state.sources[0]!.status).toBe('read_only')
@@ -385,7 +385,7 @@ describe('workspace', () => {
     expect(fresh.state.readOnly).toBe('schema_newer')
     expect(freshCheck).toHaveBeenCalledTimes(1)
     // Back to this app's version: the next refresh makes the source writable again.
-    await h.pgs[0]!.exec(`update gm_meta set value = '${APP_SCHEMA_VERSION}' where key in ('schema_version', 'min_app_schema')`)
+    await h.pgs[0]!.exec(`update antresol_meta set value = '${APP_SCHEMA_VERSION}' where key in ('schema_version', 'min_app_schema')`)
     await ws.refresh()
     expect(ws.state.sources[0]!.status).toBe('ready')
     expect(ws.state.readOnly).toBeNull()
@@ -401,7 +401,7 @@ describe('workspace', () => {
     const ws = h.workspace({ checkForUpdate })
     await ws.start()
     // Another device's app migrated the source to the next schema, an additive one: min_app_schema stays.
-    await h.pgs[0]!.exec(`update gm_meta set value = '${APP_SCHEMA_VERSION + 1}' where key = 'schema_version'`)
+    await h.pgs[0]!.exec(`update antresol_meta set value = '${APP_SCHEMA_VERSION + 1}' where key = 'schema_version'`)
     const connects = h.flags.connectCalls
     await ws.refresh()
     expect(ws.state.sources[0]!.status).toBe('ready')
@@ -424,9 +424,9 @@ describe('workspace', () => {
     const ws = h.workspace({ checkForUpdate })
     await ws.start()
     // Another device's app migrated the source to a schema this app may not write, after this app connected. The write
-    // batch checks it under the revision lock (GM003) and refuses with read_only.
+    // batch checks it under the revision lock (AN003) and refuses with read_only.
     const next = APP_SCHEMA_VERSION + 1
-    await h.pgs[0]!.exec(`update gm_meta set value = '${next}' where key in ('schema_version', 'min_app_schema')`)
+    await h.pgs[0]!.exec(`update antresol_meta set value = '${next}' where key in ('schema_version', 'min_app_schema')`)
     h.flags.applyError = new StorageError('read_only')
     await expect(ws.apply(folderCreate(id, 'Nope'))).rejects.toMatchObject({ code: 'read_only' })
     h.flags.applyError = null
@@ -453,10 +453,10 @@ describe('workspace', () => {
     const ws = h.workspace({ checkForUpdate })
     await ws.start()
     // The refresh reuses the connection and finds the schema still one this app writes; before it answers, another
-    // device migrates past this app and a write is refused for it (GM003, the real guard of the write batch).
+    // device migrates past this app and a write is refused for it (AN003, the real guard of the write batch).
     h.flags.afterInspect = async () => {
       const next = APP_SCHEMA_VERSION + 1
-      await h.pgs[0]!.exec(`update gm_meta set value = '${next}' where key in ('schema_version', 'min_app_schema')`)
+      await h.pgs[0]!.exec(`update antresol_meta set value = '${next}' where key in ('schema_version', 'min_app_schema')`)
       await expect(ws.apply(folderCreate(id, 'Nope'))).rejects.toMatchObject({ code: 'read_only' })
       expect(ws.state.readOnly).toBe('schema_newer')
     }
@@ -947,7 +947,7 @@ describe('workspace', () => {
     await ws.applyTo(refB, { type: 'archive', target: 'inventory', id: b, archiveId: newId() })
     const backup = await ws.exportSource('s1')
     expect(backup).toMatchObject({
-      format: 'graymatter-backup',
+      format: 'antresol-backup',
       version: 1,
       app: { schemaVersion: APP_SCHEMA_VERSION },
       source: { name: 'Source s1', kind: 'neon' },

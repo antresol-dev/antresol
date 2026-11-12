@@ -1,4 +1,4 @@
-import type { Command, Id, SnapshotPatch } from '@graymatter/core'
+import type { Command, Id, SnapshotPatch } from '@antresol/core'
 import { snapshotSql } from '../queries'
 import * as rows from '../rows'
 import { sql, type Statement } from '../sql'
@@ -59,8 +59,8 @@ const id = (value: Id): Statement => sql`${value}::uuid`
 /** The item and inventory that `rememberedItemSlice` stores, before the command, in transaction-local settings
  *  (`set_config(..., true)`). Null when nothing was stored: a setting never set in the session reads null, one that an
  *  earlier transaction set reads '' after its end. */
-const REMEMBERED_ITEM: Statement = { text: `nullif(current_setting('gm.item_id', true), '')::uuid`, params: [] }
-const REMEMBERED_INVENTORY: Statement = { text: `nullif(current_setting('gm.inventory_id', true), '')::uuid`, params: [] }
+const REMEMBERED_ITEM: Statement = { text: `nullif(current_setting('antresol.item_id', true), '')::uuid`, params: [] }
+const REMEMBERED_INVENTORY: Statement = { text: `nullif(current_setting('antresol.inventory_id', true), '')::uuid`, params: [] }
 
 const itemOfVariant = (variantId: Id): Statement => sql`(select item_id from variants where id = ${variantId}::uuid)`
 const inventoryOfItem = (item: Statement): Statement => sql`(select inventory_id from items where id = ${item})`
@@ -121,7 +121,7 @@ const itemSlice = (item: Statement, inventory: Statement = inventoryOfItem(item)
 function rememberedItemSlice(item: Statement): AffectedReads {
   return reads({
     before: [
-      sql`select set_config('gm.item_id', id::text, true), set_config('gm.inventory_id', inventory_id::text, true)
+      sql`select set_config('antresol.item_id', id::text, true), set_config('antresol.inventory_id', inventory_id::text, true)
           from items where id = ${item}`,
     ],
     item: REMEMBERED_ITEM,

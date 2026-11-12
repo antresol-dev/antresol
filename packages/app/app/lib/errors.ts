@@ -1,4 +1,4 @@
-import { DOMAIN_ERROR_CODES, DomainError, FILE_ERROR_CODES, FileError, STORAGE_ERROR_CODES, StorageError } from '@graymatter/core'
+import { DOMAIN_ERROR_CODES, DomainError, FILE_ERROR_CODES, FileError, STORAGE_ERROR_CODES, StorageError } from '@antresol/core'
 import { PROBE_FAILURES } from './sources'
 
 const isProbeFailure = (e: unknown): e is { reason: (typeof PROBE_FAILURES)[number] } =>

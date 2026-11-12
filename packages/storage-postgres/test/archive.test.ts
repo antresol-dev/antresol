@@ -1,4 +1,4 @@
-import { newId, StorageError, type Command, type InventoryStorage } from '@graymatter/core'
+import { newId, StorageError, type Command, type InventoryStorage } from '@antresol/core'
 import { describe, expect, it } from 'vitest'
 import type { PgExecutor } from '../src/executor'
 import { openPostgresStorage } from '../src/storage'

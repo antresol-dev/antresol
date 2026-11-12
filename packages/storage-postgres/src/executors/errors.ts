@@ -1,4 +1,4 @@
-import { StorageError } from '@graymatter/core'
+import { StorageError } from '@antresol/core'
 
 export function unavailable(cause: unknown): StorageError {
   // Deliberately generic: driver messages can echo connection details.

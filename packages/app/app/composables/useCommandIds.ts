@@ -1,4 +1,4 @@
-import { newId, type Id } from '@graymatter/core'
+import { newId, type Id } from '@antresol/core'
 import { reactive } from 'vue'
 
 /**

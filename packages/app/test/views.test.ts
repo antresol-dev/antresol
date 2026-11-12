@@ -9,7 +9,7 @@ import {
   type InventorySnapshot,
   type InventoryStorage,
   type Photo,
-} from '@graymatter/core'
+} from '@antresol/core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import type { SourceConfig } from '../app/lib/types'

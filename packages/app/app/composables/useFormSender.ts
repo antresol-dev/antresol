@@ -1,4 +1,4 @@
-import type { Command } from '@graymatter/core'
+import type { Command } from '@antresol/core'
 import { createUnconfirmedSender, type UnconfirmedSender } from '~/lib/unconfirmed'
 
 /**

@@ -1,4 +1,4 @@
-import type { Folder, Id, InventorySnapshot, SearchHit } from '@graymatter/core'
+import type { Folder, Id, InventorySnapshot, SearchHit } from '@antresol/core'
 import { nearestSuggestion, type NearestSuggestion } from './nearest'
 import { isShareLike, type ShareInput } from './share'
 import type { InventoryRef } from './types'

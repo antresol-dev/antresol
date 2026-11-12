@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Attribute } from '@graymatter/core'
+import type { Attribute } from '@antresol/core'
 import { Pencil, Plus, Trash2 } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'

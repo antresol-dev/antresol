@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { variantLabel, type Id } from '@graymatter/core'
+import { variantLabel, type Id } from '@antresol/core'
 import { Plus } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { toast } from 'vue-sonner'

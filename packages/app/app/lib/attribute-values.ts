@@ -1,4 +1,4 @@
-import { parseNumberValue, type Attribute } from '@graymatter/core'
+import { parseNumberValue, type Attribute } from '@antresol/core'
 
 export type ParsedInput = { value: string } | { error: 'invalid_number' | 'invalid_option' | 'name_required' }
 

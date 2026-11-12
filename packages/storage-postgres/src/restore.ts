@@ -6,7 +6,7 @@ import {
   type RestoreMode,
   type RestoreOptions,
   type RestoreResult,
-} from '@graymatter/core'
+} from '@antresol/core'
 import type { PgExecutor } from './executor'
 import { LOCK_REV, REV_BUMP } from './migrator'
 import type { Statement } from './sql'
@@ -350,22 +350,22 @@ function insertStatement(table: RestoreTable, rows: (string | null)[][]): Statem
   const select = table.columns.map(selectExpression).join(', ')
   const key = table.key.map((c) => `"${c}"`).join(', ')
   return {
-    text: `with gm_added as (
+    text: `with antresol_added as (
 insert into ${table.name} (${names})
 select ${select}
-from unnest(${arrays}) with ordinality as r(${names}, gm_ord)
-order by r.gm_ord
+from unnest(${arrays}) with ordinality as r(${names}, antresol_ord)
+order by r.antresol_ord
 on conflict (${key}) do nothing
 returning 1
 )
-select count(*)::int as added from gm_added`,
+select count(*)::int as added from antresol_added`,
     params: table.columns.map((_, i) => rows.map((row) => row[i] ?? null)),
   }
 }
 
 /** Message and SQLSTATE of the error the first batch of a same-ids restore raises when the source holds an inventory. */
-export const RESTORE_NOT_EMPTY_MESSAGE = 'gm_restore_not_empty'
-export const RESTORE_NOT_EMPTY_SQLSTATE = 'GM002'
+export const RESTORE_NOT_EMPTY_MESSAGE = 'antresol_restore_not_empty'
+export const RESTORE_NOT_EMPTY_SQLSTATE = 'AN002'
 
 /** Right after the revision lock in the first batch of a same-ids restore (not one that goes on with an earlier run):
  *  fails unless the source holds no inventory. Every other row hangs off an inventory. A plain statement: fits one Neon
@@ -420,7 +420,7 @@ function plan(
 
 /**
  * InventoryStorage.restore (see there). Each batch is one transaction: the revision lock first (writes and migrations
- * queue on it, as with apply), then `options.guard` (the storage's schema check, GM003), in the first batch of a same-ids
+ * queue on it, as with apply), then `options.guard` (the storage's schema check, AN003), in the first batch of a same-ids
  * restore the empty-source check, the inserts, the revision bump. `batchRows`: tests use small batches.
  */
 export async function restoreBackup(

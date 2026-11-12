@@ -1,4 +1,4 @@
-import { createSearch, newId, variantLabel, type Actor, type Id, type InventorySnapshot, type InventoryStorage } from '@graymatter/core'
+import { createSearch, newId, variantLabel, type Actor, type Id, type InventorySnapshot, type InventoryStorage } from '@antresol/core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import {

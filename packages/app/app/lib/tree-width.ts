@@ -1,9 +1,9 @@
-/** Width of the folder tree on desktop: px, kept in localStorage (`gm.treeWidth`). */
+/** Width of the folder tree on desktop: px, kept in localStorage (`antresol.treeWidth`). */
 export const TREE_WIDTH_DEFAULT = 264
 export const TREE_WIDTH_MIN = 200
 /** Keyboard step of the separator. */
 export const TREE_WIDTH_STEP = 16
-const STORAGE_KEY = 'gm.treeWidth'
+const STORAGE_KEY = 'antresol.treeWidth'
 
 /** At most half the window, never below the minimum (a narrow window keeps the minimum). */
 export function treeWidthMax(windowWidth: number): number {

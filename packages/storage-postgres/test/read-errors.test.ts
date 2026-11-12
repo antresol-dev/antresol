@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { newId } from '@graymatter/core'
+import { newId } from '@antresol/core'
 import { openPostgresStorage } from '../src/storage'
 import { makeExecutor } from './helpers'
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Folder, Id } from '@graymatter/core'
+import type { Folder, Id } from '@antresol/core'
 import { ChevronDown } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'

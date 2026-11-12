@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Pencil, Plus, Split, Trash2 } from '@lucide/vue'
-import type { Id } from '@graymatter/core'
+import type { Id } from '@antresol/core'
 import { Button } from '@/components/ui/button'
 import type { AttributeRow } from '~/lib/item-view'
 

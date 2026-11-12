@@ -1,5 +1,5 @@
 {
-  "name": "@graymatter/app",
+  "name": "@antresol/app",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,11 +11,11 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "@graymatter/core": "workspace:*",
-    "@graymatter/files-cloudinary": "workspace:*",
-    "@graymatter/files-imgur": "workspace:*",
-    "@graymatter/files-uploadcare": "workspace:*",
-    "@graymatter/storage-postgres": "workspace:*",
+    "@antresol/core": "workspace:*",
+    "@antresol/files-cloudinary": "workspace:*",
+    "@antresol/files-imgur": "workspace:*",
+    "@antresol/files-uploadcare": "workspace:*",
+    "@antresol/storage-postgres": "workspace:*",
     "@lucide/vue": "^1.70.0",
     "@neondatabase/serverless": "^1.2.0",
     "@nuxt/fonts": "^1.2.0",

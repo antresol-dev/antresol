@@ -1,4 +1,4 @@
-import { cmpQ, newId, type Command, type Id, type InventorySnapshot, type Quantity, type UnitDef } from '@graymatter/core'
+import { cmpQ, newId, type Command, type Id, type InventorySnapshot, type Quantity, type UnitDef } from '@antresol/core'
 import { parseAmountText } from './amounts'
 import { itemView } from './item-view'
 import { folderView } from './views'

@@ -1,5 +1,5 @@
 {
-  "name": "@graymatter/storage-postgres",
+  "name": "@antresol/storage-postgres",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@graymatter/core": "workspace:*",
+    "@antresol/core": "workspace:*",
     "@neondatabase/serverless": "^1.2.0"
   },
   "devDependencies": {

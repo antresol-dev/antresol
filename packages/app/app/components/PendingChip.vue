@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatAmountParts, type UnitDef } from '@graymatter/core'
+import { formatAmountParts, type UnitDef } from '@antresol/core'
 import { Loader2 } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { signedAmount, STEP_DELAY_MS, type BucketStepper } from '~/composables/useItemSteppers'

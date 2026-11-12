@@ -8,7 +8,7 @@ import type {
   RestoreMode,
   RestoreResult,
   SourceReceipt,
-} from '@graymatter/core'
+} from '@antresol/core'
 import type { BackupFile } from './backup'
 import type { BackupInfo, DeviceDb, RestoreRun } from './device-db'
 import type { FailureReason, SourceDriver } from './sources'

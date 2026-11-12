@@ -10,8 +10,8 @@ describe('readBatch (PGlite)', () => {
 
   it('rejects a write and leaves no trace', async () => {
     const exec = await makeExecutor()
-    await exec.batch([sql`create table gm_meta (key text primary key, value text)`])
-    await expect(exec.readBatch([sql`insert into gm_meta (key, value) values ('x', 'y')`])).rejects.toThrow(/read-only transaction/)
-    expect(await exec.query(sql`select 1 from gm_meta where key = 'x'`)).toEqual([])
+    await exec.batch([sql`create table antresol_meta (key text primary key, value text)`])
+    await expect(exec.readBatch([sql`insert into antresol_meta (key, value) values ('x', 'y')`])).rejects.toThrow(/read-only transaction/)
+    expect(await exec.query(sql`select 1 from antresol_meta where key = 'x'`)).toEqual([])
   })
 })

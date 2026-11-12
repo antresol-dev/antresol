@@ -1,4 +1,4 @@
-import type { Actor, Command } from '@graymatter/core'
+import type { Actor, Command } from '@antresol/core'
 import { sql, updateSet, type Statement } from '../sql'
 
 type FolderCommand = Extract<Command, { type: 'folder.create' | 'folder.update' | 'folder.move' }>

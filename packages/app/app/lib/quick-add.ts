@@ -1,4 +1,4 @@
-import { cmpQ, resolveUnit, type Command, type Id, type InventorySnapshot, type SearchHit } from '@graymatter/core'
+import { cmpQ, resolveUnit, type Command, type Id, type InventorySnapshot, type SearchHit } from '@antresol/core'
 import { parseAmountText, parseMoneyText } from './amounts'
 import { searchRows, snapshotSearch, type SearchRow } from './views'
 

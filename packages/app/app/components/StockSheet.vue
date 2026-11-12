@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { getCurrency, type Command, type Id, type Quantity } from '@graymatter/core'
+import { getCurrency, type Command, type Id, type Quantity } from '@antresol/core'
 import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'

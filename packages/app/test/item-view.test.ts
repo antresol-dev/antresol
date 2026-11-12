@@ -1,4 +1,4 @@
-import { itemStock, newId, type Command, type InventorySnapshot, type InventoryStorage, type Movement } from '@graymatter/core'
+import { itemStock, newId, type Command, type InventorySnapshot, type InventoryStorage, type Movement } from '@antresol/core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import { attributeChoices, bucketDescription, itemView, journalDays, journalRows, looseTransferOffer, type JournalRow } from '../app/lib/item-view'

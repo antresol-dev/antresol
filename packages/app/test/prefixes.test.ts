@@ -1,4 +1,4 @@
-import { BUILTIN_UNITS } from '@graymatter/core'
+import { BUILTIN_UNITS } from '@antresol/core'
 import { describe, expect, it } from 'vitest'
 import { prefixList, prefixNote } from '../app/lib/prefixes'
 

@@ -4,8 +4,8 @@ import { openDeviceDb } from '~/lib/device-db'
 declare global {
   interface Window {
     /** Dev builds only: switch the look from the console before the settings screen can, e.g.
-     *  `await __gmAppearance.setStyle('retro')`, `await __gmAppearance.setAccent('rose')` (null: "Style default"). */
-    __gmAppearance?: Appearance
+     *  `await __antresolAppearance.setStyle('retro')`, `await __antresolAppearance.setAccent('rose')` (null: "Style default"). */
+    __antresolAppearance?: Appearance
   }
 }
 
@@ -18,7 +18,7 @@ export default defineNuxtPlugin({
   async setup() {
     const appearance = createAppearance(await openDeviceDb(), document.documentElement)
     await appearance.load()
-    if (import.meta.dev) window.__gmAppearance = appearance
+    if (import.meta.dev) window.__antresolAppearance = appearance
     return { provide: { appearance } }
   },
 })

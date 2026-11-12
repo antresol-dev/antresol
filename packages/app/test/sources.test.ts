@@ -1,6 +1,6 @@
 import { PGlite } from '@electric-sql/pglite'
-import { StorageError } from '@graymatter/core'
-import { createPgliteExecutor, inspectSchema, type PgExecutor } from '@graymatter/storage-postgres'
+import { StorageError } from '@antresol/core'
+import { createPgliteExecutor, inspectSchema, type PgExecutor } from '@antresol/storage-postgres'
 import { describe, expect, it } from 'vitest'
 import { canSaveSource, checkConnectionString, classifyFailure, createNeonDriver, photoStoreProblem, redactSecret } from '../app/lib/sources'
 import type { SourceConfig } from '../app/lib/types'
@@ -50,7 +50,7 @@ describe('createNeonDriver', () => {
 
   it('rejects a pre-release database as outdated, classified as outdated', async () => {
     const db = new PGlite()
-    await db.exec("create table gm_meta (key text primary key, value text not null); insert into gm_meta values ('schema_version', '2')")
+    await db.exec("create table antresol_meta (key text primary key, value text not null); insert into antresol_meta values ('schema_version', '2')")
     const driver = createNeonDriver(() => createPgliteExecutor(db))
     const err = await driver.connect(cfg()).catch((e) => e)
     expect(err).toMatchObject({ code: 'outdated' })
@@ -59,7 +59,7 @@ describe('createNeonDriver', () => {
 
   it('probes a pre-release database as outdated, which cannot be saved', async () => {
     const db = new PGlite()
-    await db.exec("create table gm_meta (key text primary key, value text not null); insert into gm_meta values ('schema_version', '2')")
+    await db.exec("create table antresol_meta (key text primary key, value text not null); insert into antresol_meta values ('schema_version', '2')")
     const driver = createNeonDriver(() => createPgliteExecutor(db))
     const res = await driver.probe(cfg())
     expect(res).toMatchObject({ ok: true, inspection: { state: 'outdated', dbVersion: 2 } })

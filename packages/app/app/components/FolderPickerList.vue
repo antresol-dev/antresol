@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Id } from '@graymatter/core'
+import type { Id } from '@antresol/core'
 import { Check } from '@lucide/vue'
 import type { MoveTarget } from '~/lib/views'
 

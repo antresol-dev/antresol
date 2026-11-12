@@ -22,7 +22,7 @@ describe('photo runtime caching', () => {
     expect(rules.map((r) => [r.options.cacheName, r.options.expiration.maxEntries])).toEqual([
       [PHOTO_CACHE.thumbs, 600],
       [PHOTO_CACHE.full, 150],
-      ['gm-fonts', 60], // style fonts (test/fonts.test.ts), after the photo rules
+      ['antresol-fonts', 60], // style fonts (test/fonts.test.ts), after the photo rules
     ])
     for (const r of rules) {
       expect(r.handler).toBe('CacheFirst')

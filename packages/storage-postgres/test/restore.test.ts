@@ -6,7 +6,7 @@ import {
   type InventoryStorage,
   type Movement,
   type Quantity,
-} from '@graymatter/core'
+} from '@antresol/core'
 import { describe, expect, it } from 'vitest'
 import type { PgExecutor } from '../src/executor'
 import { backupProblems, RESTORE_BATCH_ROWS, RESTORE_TABLES, restoreBackup, uuidV5 } from '../src/restore'
@@ -29,11 +29,11 @@ async function exported(storage: InventoryStorage): Promise<{ inventories: Inven
 
 const withoutSeq = (movements: Movement[]) => movements.map(({ seq: _seq, ...m }) => m)
 
-/** Every row of every GrayMatter table, `seq` left out (a restored movement gets a new one), as JSON keyed by table. */
+/** Every row of every Antresol table, `seq` left out (a restored movement gets a new one), as JSON keyed by table. */
 async function allRows(exec: PgExecutor): Promise<Map<string, string[]>> {
   const tables = await exec.query<{ table_name: string }>(
     sql`select table_name from information_schema.tables
-        where table_schema = 'public' and table_type = 'BASE TABLE' and table_name <> 'gm_meta' order by table_name`,
+        where table_schema = 'public' and table_type = 'BASE TABLE' and table_name <> 'antresol_meta' order by table_name`,
   )
   const out = new Map<string, string[]>()
   for (const { table_name } of tables) {
@@ -114,7 +114,7 @@ describe('restore', () => {
     await openOn(exec)
     const columns = await exec.query<{ table_name: string; column_name: string; data_type: string }>(
       sql`select table_name, column_name, data_type from information_schema.columns
-          where table_schema = 'public' and table_name <> 'gm_meta' order by table_name, column_name`,
+          where table_schema = 'public' and table_name <> 'antresol_meta' order by table_name, column_name`,
     )
     const declared = new Map(RESTORE_TABLES.map((t) => [t.name, new Map(t.columns.map((c) => [c.name, c]))]))
     expect([...declared.keys()].sort()).toEqual([...new Set(columns.map((c) => c.table_name))].sort())
@@ -131,7 +131,7 @@ describe('restore', () => {
       sql`select tc.table_name, kcu.column_name from information_schema.table_constraints tc
           join information_schema.key_column_usage kcu
             on kcu.constraint_schema = tc.constraint_schema and kcu.constraint_name = tc.constraint_name
-          where tc.table_schema = 'public' and tc.constraint_type = 'PRIMARY KEY' and tc.table_name <> 'gm_meta'`,
+          where tc.table_schema = 'public' and tc.constraint_type = 'PRIMARY KEY' and tc.table_name <> 'antresol_meta'`,
     )
     for (const table of RESTORE_TABLES) {
       const key = keys.filter((k) => k.table_name === table.name).map((k) => k.column_name).sort()
@@ -278,13 +278,13 @@ describe('restore', () => {
     ])
     for (const call of counting.calls) {
       expect(call[0]!.text).toBe(LOCK_REV.text)
-      // Right after the lock, as in every write: this app may still write (GM003).
-      expect(call[1]!.text).toMatch(/gm_newer_schema/)
+      // Right after the lock, as in every write: this app may still write (AN003).
+      expect(call[1]!.text).toMatch(/antresol_newer_schema/)
       expect(call.at(-1)!.text).toBe(REV_BUMP.text)
     }
     // The first batch alone then checks that the source is empty.
-    expect(counting.calls[0]![2]!.text).toMatch(/gm_restore_not_empty/)
-    expect(counting.calls.slice(1).flat().some((st) => /gm_restore_not_empty/.test(st.text))).toBe(false)
+    expect(counting.calls[0]![2]!.text).toMatch(/antresol_restore_not_empty/)
+    expect(counting.calls.slice(1).flat().some((st) => /antresol_restore_not_empty/.test(st.text))).toBe(false)
     const stock = (await target.loadInventory(inv)).stock.find((l) => l.itemId === wire)!
     expect(stock.quantity).toBe('1211.75')
   })
@@ -401,7 +401,7 @@ describe('restore', () => {
     const exec = await makeExecutor()
     await openOn(exec)
     // A database that needs a newer app to write.
-    await exec.batch([sql`insert into gm_meta (key, value) values ('min_app_schema', '99') on conflict (key) do update set value = '99'`])
+    await exec.batch([sql`insert into antresol_meta (key, value) values ('min_app_schema', '99') on conflict (key) do update set value = '99'`])
     const { storage } = await openPostgresStorage(exec)
     expect(storage.readOnly).toBe(true)
     await expect(storage.restore({ inventories: [] }, 'same-ids', newId())).rejects.toMatchObject({ code: 'read_only' })

@@ -1,4 +1,4 @@
-import { newId, variantLabel, type Id } from '@graymatter/core'
+import { newId, variantLabel, type Id } from '@antresol/core'
 import { axisAddLoss } from '~/lib/axes'
 import { looseTransferOffer } from '~/lib/item-view'
 

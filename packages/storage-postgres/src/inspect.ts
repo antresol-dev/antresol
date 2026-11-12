@@ -1,4 +1,4 @@
-import type { SchemaInspection } from '@graymatter/core'
+import type { SchemaInspection } from '@antresol/core'
 import type { PgExecutor } from './executor'
 import { APP_SCHEMA_VERSION, readSchemaMeta, SCHEMA_BASE } from './migrator'
 
@@ -30,7 +30,7 @@ export async function inspectSchema(exec: PgExecutor): Promise<SchemaInspection>
                       and n.nspname not in (${IGNORED_SQL}) and n.nspname !~ '^pg_(toast_)?temp_'
                       and not exists (select 1 from pg_depend d
                                        where d.classid = 'pg_class'::regclass and d.objid = c.oid and d.deptype = 'e'))::int as tables,
-                   (select count(*) from information_schema.tables where table_schema = 'public' and table_name = 'gm_meta')::int as meta`,
+                   (select count(*) from information_schema.tables where table_schema = 'public' and table_name = 'antresol_meta')::int as meta`,
     params: [],
   })
   if (!counts || counts.tables === 0) return { state: 'empty' }

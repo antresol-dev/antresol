@@ -1,4 +1,4 @@
-import type { Id } from '@graymatter/core'
+import type { Id } from '@antresol/core'
 
 export interface InventoryRef {
   sourceId: string

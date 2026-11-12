@@ -51,7 +51,7 @@ describe('device file store', () => {
   it('does not cache a miss', async () => {
     const id = 'late-file'
     expect(await resolveDeviceUrl(`device:${id}`)).toBeNull()
-    await set(id, new Blob(['x']), createStore('gm-files', 'files'))
+    await set(id, new Blob(['x']), createStore('antresol-files', 'files'))
     expect(await resolveDeviceUrl(`device:${id}`)).toBe('blob:test/1')
   })
 

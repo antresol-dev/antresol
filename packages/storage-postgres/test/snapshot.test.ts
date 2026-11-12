@@ -1,4 +1,4 @@
-import { newId, type Command } from '@graymatter/core'
+import { newId, type Command } from '@antresol/core'
 import { describe, expect, it } from 'vitest'
 import { sql } from '../src/sql'
 import { openPostgresStorage } from '../src/storage'

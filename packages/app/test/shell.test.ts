@@ -1,4 +1,4 @@
-import { newId, type InventorySnapshot } from '@graymatter/core'
+import { newId, type InventorySnapshot } from '@antresol/core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import {

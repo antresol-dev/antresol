@@ -1,4 +1,4 @@
-import type { Actor, Command } from '@graymatter/core'
+import type { Actor, Command } from '@antresol/core'
 import { sql, type Statement } from '../sql'
 
 type PhotoCommand = Extract<Command, { type: 'photo.add' | 'photo.replace' | 'photo.remove' | 'photo.reorder' }>

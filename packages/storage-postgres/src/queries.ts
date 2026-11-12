@@ -1,4 +1,4 @@
-import { StorageError, type Id, type InventorySnapshot, type Movement, type Inventory, type SourceReceipt } from '@graymatter/core'
+import { StorageError, type Id, type InventorySnapshot, type Movement, type Inventory, type SourceReceipt } from '@antresol/core'
 import type { PgExecutor } from './executor'
 import * as rows from './rows'
 import { sql, type Statement } from './sql'
@@ -7,7 +7,7 @@ const AUDIT = 'created_at, updated_at, created_by, updated_by'
 const ARCHIVE = 'archived_at, archive_id'
 
 /** The inventories and the revision counter, read in one snapshot transaction (so `rev` matches the list). */
-const revStatement = sql`select value from gm_meta where key = 'rev'`
+const revStatement = sql`select value from antresol_meta where key = 'rev'`
 
 /** A missing row (hand-edited database) is "unknown": a value that never equals one a device cached. */
 const toRev = (result: Record<string, unknown>[] | undefined): string =>

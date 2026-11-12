@@ -18,7 +18,7 @@ import {
   type InventorySnapshot,
   type InventoryStorage,
   type Quantity,
-} from '@graymatter/core'
+} from '@antresol/core'
 import fc from 'fast-check'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { PgExecutor } from '../src/executor'

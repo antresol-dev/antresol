@@ -1,5 +1,5 @@
 import { PGlite } from '@electric-sql/pglite'
-import { newId, type Actor, type AttributeKind, type Command, type Id, type InventorySnapshot, type InventoryStorage } from '@graymatter/core'
+import { newId, type Actor, type AttributeKind, type Command, type Id, type InventorySnapshot, type InventoryStorage } from '@antresol/core'
 import { afterEach } from 'vitest'
 import type { PgExecutor } from '../src/executor'
 import { createPgliteExecutor } from '../src/executors/pglite'

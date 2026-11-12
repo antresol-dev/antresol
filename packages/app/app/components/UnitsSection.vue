@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CustomUnit, UnitDef } from '@graymatter/core'
+import type { CustomUnit, UnitDef } from '@antresol/core'
 import { Pencil, Plus, Trash2 } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'

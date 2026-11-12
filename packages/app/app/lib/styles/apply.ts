@@ -4,7 +4,7 @@ import { STYLES } from './registry'
 import type { Kind, KindState, StyleName, StyleTokens } from './types'
 
 /*
- * Tokens → CSS variables (spec §6; Review Focus 1, 2). Both themes of the style go into one <style id="gm-style">
+ * Tokens → CSS variables (spec §6; Review Focus 1, 2). Both themes of the style go into one <style id="antresol-style">
  * (`:root{…}` light, `.dark{…}` dark: color-mode puts .dark on <html>), and <html> gets data-style="<name>" for the
  * style's own CSS (assets/css/styles/<name>.css). Applying a style replaces that element: nothing of the previous
  * style stays.
@@ -15,7 +15,7 @@ import type { Kind, KindState, StyleName, StyleTokens } from './types'
  * fallback, opaque versions of the translucent surfaces: --st-{hdr,card,list,photo,sheet}-solid.
  */
 
-export const STYLE_ELEMENT_ID = 'gm-style'
+export const STYLE_ELEMENT_ID = 'antresol-style'
 
 const KIND_KEYS = new Set(['stepSel', 'ghostSel', 'painted', 'paintedDanger'])
 const STATES = ['n', 'h', 'p'] as const
@@ -69,7 +69,7 @@ export function styleCss(name: StyleName, accent: AccentName): string {
   return block(':root', build('light', accent)) + block('.dark', build('dark', accent))
 }
 
-/** Puts the style on `root` (normally <html>): its one <style id="gm-style"> replaces any earlier one. */
+/** Puts the style on `root` (normally <html>): its one <style id="antresol-style"> replaces any earlier one. */
 export function applyStyle(root: HTMLElement, name: StyleName, accent: AccentName): void {
   const doc = root.ownerDocument
   const next = doc.createElement('style')

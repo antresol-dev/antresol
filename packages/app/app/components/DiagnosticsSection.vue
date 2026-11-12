@@ -25,7 +25,7 @@ async function copy(): Promise<void> {
 
 async function share(): Promise<void> {
   try {
-    await navigator.share({ title: 'GrayMatter diagnostics', text: text.value })
+    await navigator.share({ title: 'Antresol diagnostics', text: text.value })
   } catch {
     // Cancelled by the person, or not possible: nothing to report.
   }

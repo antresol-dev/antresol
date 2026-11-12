@@ -1,4 +1,4 @@
-import { newId, type Inventory, type InventorySnapshot, type RestoreMode } from '@graymatter/core'
+import { newId, type Inventory, type InventorySnapshot, type RestoreMode } from '@antresol/core'
 import { createStore, del, get, getMany, keys, set, setMany, update, type UseStore } from 'idb-keyval'
 import type { AccentName } from './accent'
 import type { StyleName } from './styles/types'
@@ -283,11 +283,11 @@ export function createMemoryDeviceDb(): DeviceDb {
   return buildDeviceDb(memoryKv(), false)
 }
 
-/** IndexedDB (idb-keyval store 'graymatter'/'kv'); falls back to memory when IndexedDB is missing or unusable. */
+/** IndexedDB (idb-keyval store 'antresol'/'kv'); falls back to memory when IndexedDB is missing or unusable. */
 export async function openDeviceDb(): Promise<DeviceDb> {
   try {
     if (typeof indexedDB === 'undefined' || !indexedDB) return createMemoryDeviceDb()
-    const kv = idbKv(createStore('graymatter', 'kv'))
+    const kv = idbKv(createStore('antresol', 'kv'))
     await kv.set('__probe', 1)
     await kv.del('__probe')
     void requestPersistence()

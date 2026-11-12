@@ -1,4 +1,4 @@
-import { StorageError, type Id, type Quantity } from '@graymatter/core'
+import { StorageError, type Id, type Quantity } from '@antresol/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createStepper, flushWhenHidden, stepCommand } from '../app/lib/stepper'
 

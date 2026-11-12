@@ -1,4 +1,4 @@
-import { normalizeCommand, StorageError, type InventoryStorage, type SchemaStatus } from '@graymatter/core'
+import { normalizeCommand, StorageError, type InventoryStorage, type SchemaStatus } from '@antresol/core'
 import { toStatements } from './commands'
 import { isStaleWrite } from './commands/variants'
 import { affectedReads } from './commands/reads'
@@ -15,8 +15,8 @@ const bumpRev = REV_BUMP
 
 const valueOf = (result: Record<string, unknown>[] | undefined): unknown => result?.[0]?.value
 
-/** Lets StorageError through; a write the schema guard refused (GM003) becomes StorageError('read_only'), one the
- *  database refused as stale (GM004) StorageError('conflict'); anything else becomes StorageError('failed'), keeping
+/** Lets StorageError through; a write the schema guard refused (AN003) becomes StorageError('read_only'), one the
+ *  database refused as stale (AN004) StorageError('conflict'); anything else becomes StorageError('failed'), keeping
  *  the cause. */
 async function wrapFailure<T>(run: () => Promise<T>): Promise<T> {
   try {
@@ -24,7 +24,7 @@ async function wrapFailure<T>(run: () => Promise<T>): Promise<T> {
   } catch (cause) {
     if (cause instanceof StorageError) throw cause
     const error = isNewerSchema(cause)
-      ? new StorageError('read_only', 'the database needs a newer GrayMatter to write')
+      ? new StorageError('read_only', 'the database needs a newer Antresol to write')
       : isStaleWrite(cause)
         ? new StorageError('conflict', 'changed on another device')
         : new StorageError('failed', cause instanceof Error ? cause.message : undefined)
@@ -39,7 +39,7 @@ export async function openPostgresStorage(
   options: { appVersion?: number } = {},
 ): Promise<{ storage: InventoryStorage; status: SchemaStatus }> {
   if ((await inspectSchema(exec)).state === 'foreign') {
-    throw new StorageError('incompatible', 'the database holds tables that do not belong to GrayMatter')
+    throw new StorageError('incompatible', 'the database holds tables that do not belong to Antresol')
   }
   const status = await ensureSchema(exec, options.appVersion)
   const readOnly = status.state === 'newer'
@@ -67,7 +67,7 @@ export async function openPostgresStorage(
         const before = reads?.before ?? []
         const write = toStatements(normalized, actor)
         // One atomic batch, one Neon HTTP transaction: lock and read the revision, check that this app may still write
-        // (GM003), remember ids the command is about to delete, the command, the bump, then the reads of what it
+        // (AN003), remember ids the command is about to delete, the command, the bump, then the reads of what it
         // touched. Replaying a command whose inserts are `on conflict do nothing` still bumps and reads: a needless
         // reload elsewhere, never a missed one.
         const result = await exec.batch([LOCK_REV, guard, ...before, ...write, bumpRev, ...(reads?.statements ?? [])])

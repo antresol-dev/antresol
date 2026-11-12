@@ -17,11 +17,11 @@ import {
   type RestoreResult,
   type SnapshotPatch,
   type SourceReceipt,
-} from '@graymatter/core'
-import { createCloudinaryStore } from '@graymatter/files-cloudinary'
-import { createImgurStore } from '@graymatter/files-imgur'
-import { createUploadcareStore } from '@graymatter/files-uploadcare'
-import { APP_SCHEMA_VERSION } from '@graymatter/storage-postgres'
+} from '@antresol/core'
+import { createCloudinaryStore } from '@antresol/files-cloudinary'
+import { createImgurStore } from '@antresol/files-imgur'
+import { createUploadcareStore } from '@antresol/files-uploadcare'
+import { APP_SCHEMA_VERSION } from '@antresol/storage-postgres'
 import { markRaw, reactive } from 'vue'
 import { buildBackup, type BackupFile } from './backup'
 import { logError, secretsOf, setSecretSource } from './diagnostics'
@@ -250,7 +250,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   const passedRevs = new Map<string, Map<string, number>>()
   /** Per source: the tick the listing of its stored list (`listings`) started at; the latest such tick, never lowered. */
   const listedAt = new Map<string, number>()
-  /** Per source: the tick at which a write refused for a newer schema (GM003) turned it read-only. A check that
+  /** Per source: the tick at which a write refused for a newer schema (AN003) turned it read-only. A check that
    *  started before looked at the schema before that: it does not make the source writable again (applyOutcome). */
   const schemaNewerAt = new Map<string, number>()
   /** Per source: removals under way (overlapping calls count each); an edit is refused meanwhile. */
@@ -549,7 +549,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     setSource(config, status, text, reason)
   }
 
-  /** A write on `conn` was refused because the source's schema now needs a newer app (GM003): as if the connection had
+  /** A write on `conn` was refused because the source's schema now needs a newer app (AN003): as if the connection had
    *  opened on it. Only while `conn` is the source's open connection; the next check that starts after this reconnects
    *  and finds the same, and one already on its way does not undo it (schemaNewerAt). */
   function markSchemaNewer(sourceId: string, conn: SourceConnection): void {
@@ -1367,7 +1367,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   }
 
   /** Runs a storage call on `conn`: an `unavailable` failure marks the source failing, a write refused for a schema that
-   *  needs a newer app (`read_only`, GM003) marks it read-only, both only while `conn` is still its connection. Any
+   *  needs a newer app (`read_only`, AN003) marks it read-only, both only while `conn` is still its connection. Any
    *  failure is redacted with the connection string `conn` was opened with, even if the source was edited or removed
    *  since. `network`: the call always reads the source, so its success is an answer (for the warm-up); a call that may
    *  stay on the device notes its own. */

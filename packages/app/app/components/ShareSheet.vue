@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { SourceReceipt } from '@graymatter/core'
+import type { SourceReceipt } from '@antresol/core'
 import { until } from '@vueuse/core'
 import { Button } from '@/components/ui/button'
 import { formatDate } from '~/lib/format'

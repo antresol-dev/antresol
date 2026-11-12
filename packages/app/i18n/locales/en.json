@@ -1,5 +1,5 @@
 {
-  "app": { "name": "GrayMatter" },
+  "app": { "name": "Antresol" },
   "ui": { "close": "Close", "cancel": "Cancel", "back": "Back" },
   "nav": {
     "sections": "Sections",
@@ -33,7 +33,7 @@
   "update": { "available": "New version available", "reload": "Reload", "offlineReady": "Ready to work offline" },
   "updateBanner": {
     "title": "Update to keep editing",
-    "text": "A newer GrayMatter updated this source. Changes are off until this app updates."
+    "text": "A newer Antresol updated this source. Changes are off until this app updates."
   },
   "tree": { "expand": "Expand {name}", "collapse": "Collapse {name}", "resize": "Resize the folder tree" },
   "search": {
@@ -414,10 +414,10 @@
     "movements": "{count} movement | {count} movements",
     "exported": "Exported {date} from “{name}”",
     "problem": {
-      "format": "This file is not a GrayMatter backup, or it is damaged.",
-      "version": "This version of GrayMatter can’t read this backup file.",
-      "newer_schema": "This backup was made by a newer GrayMatter. Update the app to restore it.",
-      "prerelease": "This backup was made by a pre-release version of GrayMatter and can’t be restored."
+      "format": "This file is not a Antresol backup, or it is damaged.",
+      "version": "This version of Antresol can’t read this backup file.",
+      "newer_schema": "This backup was made by a newer Antresol. Update the app to restore it.",
+      "prerelease": "This backup was made by a pre-release version of Antresol and can’t be restored."
     },
     "mode": "How to restore",
     "sameIds": "With the same ids",
@@ -499,12 +499,12 @@
       "cdn": "Use the https://….ucarecd.net address from Dashboard → Delivery (or https://ucarecdn.com). Custom domains are not supported."
     },
     "result": {
-      "empty": "This source is empty. GrayMatter will set it up.",
-      "older": "An older GrayMatter source. It will be upgraded.",
-      "outdated": "This database was made by a pre-release version of GrayMatter. Reset it to use it here.",
+      "empty": "This source is empty. Antresol will set it up.",
+      "older": "An older Antresol source. It will be upgraded.",
+      "outdated": "This database was made by a pre-release version of Antresol. Reset it to use it here.",
       "current": "Ready to use.",
-      "newer": "This source was updated by a newer GrayMatter",
-      "foreign": "This database already has other tables. Use an empty Neon database for GrayMatter."
+      "newer": "This source was updated by a newer Antresol",
+      "foreign": "This database already has other tables. Use an empty Neon database for Antresol."
     },
     "save": {
       "empty": "Set up and save",
@@ -691,8 +691,8 @@
       "read_only": "This source is read-only right now.",
       "unavailable": "Can’t reach the source. Check your connection.",
       "not_found": "That item no longer exists.",
-      "incompatible": "This database isn’t a GrayMatter source.",
-      "outdated": "This database was made by a pre-release version of GrayMatter. Reset it to use it here.",
+      "incompatible": "This database isn’t a Antresol source.",
+      "outdated": "This database was made by a pre-release version of Antresol. Reset it to use it here.",
       "failed": "The source reported an error. Try again.",
       "not_empty": "This source already holds inventories. Restore the backup as new inventories instead.",
       "conflict": "Changed on another device — values reloaded. Check them and save again."
@@ -711,8 +711,8 @@
       "auth": "The source rejected the login. Check the connection string.",
       "no_database": "The source wasn’t found. Check the connection string.",
       "failed": "Couldn’t check the source. Try again.",
-      "incompatible": "This source isn’t a GrayMatter source.",
-      "outdated": "This database was made by a pre-release version of GrayMatter. Reset it to use it here."
+      "incompatible": "This source isn’t a Antresol source.",
+      "outdated": "This database was made by a pre-release version of Antresol. Reset it to use it here."
     }
   }
 }

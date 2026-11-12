@@ -13,7 +13,7 @@ export interface SchemaStatus {
   state: 'ready' | 'newer'
   dbVersion: number
   appVersion: number
-  /** `gm_meta.min_app_schema`: the oldest app schema that may write. Without the row (a database from before soft
+  /** `antresol_meta.min_app_schema`: the oldest app schema that may write. Without the row (a database from before soft
    *  migrations), the database's own version. */
   minAppSchema: number
 }

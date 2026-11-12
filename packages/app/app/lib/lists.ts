@@ -1,4 +1,4 @@
-import type { AttributeKind } from '@graymatter/core'
+import type { AttributeKind } from '@antresol/core'
 
 /** Splits on commas, semicolons and line breaks; trims; drops empty; removes case-insensitive duplicates, keeping the first. */
 export function parseNameList(text: string): string[] {

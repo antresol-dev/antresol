@@ -10,7 +10,7 @@ import {
   type InventorySnapshot,
   type Quantity,
   type SourceReceipt,
-} from '@graymatter/core'
+} from '@antresol/core'
 import { existingMatches, kiloK, type MatchRow } from './quick-add'
 import { nearestSuggestion, suffixed, unitOf, VALUE_WORD, type NearestSuggestion } from './nearest'
 import { pathOf, snapshotIndex, stockQuantity } from './views'

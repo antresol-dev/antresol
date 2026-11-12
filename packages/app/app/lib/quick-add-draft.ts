@@ -1,4 +1,4 @@
-import type { Id } from '@graymatter/core'
+import type { Id } from '@antresol/core'
 
 /** What the quick add form held when the person left it through "Open" on a match. */
 export interface QuickAddDraft {

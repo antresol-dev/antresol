@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { StorageError } from '@graymatter/core'
+import { StorageError } from '@antresol/core'
 import { createNeonWsExecutor } from '../src/executors/neon-ws'
 import { sql } from '../src/sql'
 

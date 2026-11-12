@@ -1,4 +1,4 @@
-import { createSearch, newId, type Id, type InventorySnapshot } from '@graymatter/core'
+import { createSearch, newId, type Id, type InventorySnapshot } from '@antresol/core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { unitChoices } from '../app/lib/amounts'
 import { archiveEntries } from '../app/lib/archive'

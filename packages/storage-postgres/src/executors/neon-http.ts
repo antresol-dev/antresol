@@ -21,7 +21,7 @@ interface HookedInit extends RequestInit {
   onBytes?: (bytes: number) => void
 }
 
-const HOOKED = Symbol('graymatter.fetch-hook')
+const HOOKED = Symbol('antresol.fetch-hook')
 
 /**
  * The driver reads the response body itself, so "first byte" and the byte count have to be seen from the fetch function it

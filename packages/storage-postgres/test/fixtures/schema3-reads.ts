@@ -13,7 +13,7 @@ function raw(text: string) {
 export const listInventories = (): Statement[] => [
   sql`select id, name, description, currency::text as currency, ${raw(`${AUDIT}, ${ARCHIVE}`)}
         from inventories order by name, id`,
-  sql`select value from gm_meta where key = 'rev'`,
+  sql`select value from antresol_meta where key = 'rev'`,
 ]
 
 export const snapshotSql = {

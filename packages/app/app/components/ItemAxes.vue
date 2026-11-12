@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { axisRemovalPreview, type Id } from '@graymatter/core'
+import { axisRemovalPreview, type Id } from '@antresol/core'
 import { ArrowDown, ArrowUp, Link2, ListOrdered, Plus, Trash2 } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'

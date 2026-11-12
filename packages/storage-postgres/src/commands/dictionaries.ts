@@ -1,4 +1,4 @@
-import { MAX_PINNED_ATTRIBUTES, type Actor, type Command } from '@graymatter/core'
+import { MAX_PINNED_ATTRIBUTES, type Actor, type Command } from '@antresol/core'
 import { sql, updateSet, type Statement } from '../sql'
 
 type DictionaryCommand = Extract<

@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 /*
- * GrayMatter styles (spec 2026-11-12 "styles"): the look comes from the current style's tokens, CSS variables --st-*
- * that lib/styles/apply.ts writes into <style id="gm-style"> (light in :root, dark in .dark) from the style's
+ * Antresol styles (spec 2026-11-12 "styles"): the look comes from the current style's tokens, CSS variables --st-*
+ * that lib/styles/apply.ts writes into <style id="antresol-style"> (light in :root, dark in .dark) from the style's
  * TypeScript module (lib/styles/<name>.ts; the key list is lib/styles/types.ts). This file only reads them: no colour,
  * radius, shadow or font of its own. A style's drawings that tokens cannot express live in assets/css/styles/<name>.css,
  * under [data-style='<name>'] (data-style is on <html>).
@@ -246,32 +246,42 @@
      declaration it finds in CSS, and the styles name theirs in TypeScript (injected at runtime, never seen by the
      module). These rules are never matched by an element: one per style family, so each gets its fallback faces, which
      the styles' stacks then name (lib/styles/fonts.ts, test/fonts.test.ts). */
-  .gm-font-faces-onest {
+  .antresol-font-faces-onest {
     font-family: 'Onest', system-ui, sans-serif;
   }
-  .gm-font-faces-manrope {
+  .antresol-font-faces-manrope {
     font-family: 'Manrope', system-ui, sans-serif;
   }
-  .gm-font-faces-inter {
+  .antresol-font-faces-inter {
     font-family: 'Inter', system-ui, sans-serif;
   }
-  .gm-font-faces-rubik {
+  .antresol-font-faces-rubik {
     font-family: 'Rubik', system-ui, sans-serif;
   }
-  .gm-font-faces-unbounded {
+  .antresol-font-faces-unbounded {
     font-family: 'Unbounded', system-ui, sans-serif;
   }
-  .gm-font-faces-exo-2 {
+  .antresol-font-faces-exo-2 {
     font-family: 'Exo 2', system-ui, sans-serif;
   }
-  .gm-font-faces-jost {
+  .antresol-font-faces-jost {
     font-family: 'Jost', system-ui, sans-serif;
   }
-  .gm-font-faces-ibm-plex-sans {
+  .antresol-font-faces-ibm-plex-sans {
     font-family: 'IBM Plex Sans', system-ui, sans-serif;
   }
-  .gm-font-faces-ibm-plex-mono {
+  .antresol-font-faces-ibm-plex-mono {
     font-family: 'IBM Plex Mono', system-ui, sans-serif;
+  }
+  .antresol-font-faces-fredoka {
+    font-family: 'Fredoka', system-ui, sans-serif;
+  }
+
+  /* The "Antresol" wordmark: Fredoka 600 in every style, with its metric fallback faces (lib/styles/fonts.ts). */
+  .antresol-wordmark {
+    font-family: 'Fredoka', "Fredoka Fallback: Segoe UI", "Fredoka Fallback: Helvetica Neue", "Fredoka Fallback: Arial", "Fredoka Fallback: Noto Sans", "Fredoka Fallback: Liberation Sans", system-ui, sans-serif;
+    font-weight: 600;
+    letter-spacing: -0.01em;
   }
 
   /* The window layer between the page and the content (Acrylic's Mica): fixed, so it never moves a thing. */

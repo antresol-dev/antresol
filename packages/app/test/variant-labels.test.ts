@@ -1,4 +1,4 @@
-import { createSearch } from '@graymatter/core'
+import { createSearch } from '@antresol/core'
 import { describe, expect, it } from 'vitest'
 import { archiveEntries } from '../app/lib/archive'
 import { itemView, journalRows } from '../app/lib/item-view'

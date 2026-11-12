@@ -1,4 +1,4 @@
-import { variantLabel, type Id, type InventorySnapshot } from '@graymatter/core'
+import { variantLabel, type Id, type InventorySnapshot } from '@antresol/core'
 
 export interface ArchiveEntry {
   archiveId: Id

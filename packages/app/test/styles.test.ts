@@ -286,7 +286,7 @@ describe.each(MODES)('Neumorphism equals main.css before styles: %s', (mode) => 
 // ---------------------------------------------------------------------------------------------------------------------
 
 describe('applying a style (Review Focus 1)', () => {
-  it('one <style id="gm-style"> with both themes, data-style on <html>, nothing of the previous style left', () => {
+  it('one <style id="antresol-style"> with both themes, data-style on <html>, nothing of the previous style left', () => {
     const root = fakeRoot()
     applyStyle(root.el, 'neumorphism', 'indigo')
     expect(root.head.filter((e) => e.id === STYLE_ELEMENT_ID)).toHaveLength(1)

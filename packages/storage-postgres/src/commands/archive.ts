@@ -1,4 +1,4 @@
-import type { Actor, Command } from '@graymatter/core'
+import type { Actor, Command } from '@antresol/core'
 import { sql, type Statement } from '../sql'
 
 type ArchiveCommand = Extract<Command, { type: 'archive' | 'restore' | 'deletePermanently' }>

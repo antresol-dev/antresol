@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Id } from '@graymatter/core'
+import type { Id } from '@antresol/core'
 import { Archive, ClipboardCheck, Folder, FolderInput, Pencil } from '@lucide/vue'
 import type { ComponentPublicInstance } from 'vue'
 import { piecesLabel, type FolderRow } from '~/lib/views'

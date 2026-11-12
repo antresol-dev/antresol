@@ -9,7 +9,7 @@ export function navAvailability(historyState: unknown): { canBack: boolean; canF
 }
 
 /** Key of the inventory a history entry was opened in, next to Vue Router's own keys in history.state. */
-export const INVENTORY_KEY = 'gmInventory'
+export const INVENTORY_KEY = 'antresolInventory'
 
 export function entryInventory(historyState: unknown): InventoryRef | null {
   if (!isObject(historyState)) return null

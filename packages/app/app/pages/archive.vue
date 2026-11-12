@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Command } from '@graymatter/core'
+import type { Command } from '@antresol/core'
 import { toast } from 'vue-sonner'
 import type { ArchiveRow } from '~/components/ArchiveList.vue'
 import { archiveEntries } from '~/lib/archive'

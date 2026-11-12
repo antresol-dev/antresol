@@ -15,9 +15,9 @@ describe('inspectSchema', () => {
     await openPostgresStorage(exec)
     const v = APP_SCHEMA_VERSION
     expect(await inspectSchema(exec)).toEqual({ state: 'current', dbVersion: v, appVersion: v })
-    await exec.batch([sql`update gm_meta set value = ${String(v + 1)}`])
+    await exec.batch([sql`update antresol_meta set value = ${String(v + 1)}`])
     expect(await inspectSchema(exec)).toEqual({ state: 'newer', dbVersion: v + 1, appVersion: v })
-    await exec.batch([sql`update gm_meta set value = '0'`])
+    await exec.batch([sql`update antresol_meta set value = '0'`])
     expect(await inspectSchema(exec)).toEqual({ state: 'older', dbVersion: 0, appVersion: v })
   })
 
@@ -25,12 +25,12 @@ describe('inspectSchema', () => {
     const exec = await makeExecutor()
     await openPostgresStorage(exec)
     const v = APP_SCHEMA_VERSION
-    await exec.batch([sql`update gm_meta set value = ${String(v + 1)} where key = 'schema_version'`])
+    await exec.batch([sql`update antresol_meta set value = ${String(v + 1)} where key = 'schema_version'`])
     expect(await inspectSchema(exec)).toEqual({ state: 'current', dbVersion: v + 1, appVersion: v })
-    await exec.batch([sql`update gm_meta set value = ${String(v + 1)} where key = 'min_app_schema'`])
+    await exec.batch([sql`update antresol_meta set value = ${String(v + 1)} where key = 'min_app_schema'`])
     expect(await inspectSchema(exec)).toEqual({ state: 'newer', dbVersion: v + 1, appVersion: v })
     // Without min_app_schema (made before soft migrations) a newer database needs an app of its own version.
-    await exec.batch([sql`delete from gm_meta where key = 'min_app_schema'`])
+    await exec.batch([sql`delete from antresol_meta where key = 'min_app_schema'`])
     expect(await inspectSchema(exec)).toEqual({ state: 'newer', dbVersion: v + 1, appVersion: v })
   })
 
@@ -39,7 +39,7 @@ describe('inspectSchema', () => {
     await openPostgresStorage(exec)
     const v = APP_SCHEMA_VERSION
     for (const old of [1, SCHEMA_BASE]) {
-      await exec.batch([sql`update gm_meta set value = ${String(old)} where key = 'schema_version'`])
+      await exec.batch([sql`update antresol_meta set value = ${String(old)} where key = 'schema_version'`])
       expect(await inspectSchema(exec)).toEqual({ state: 'outdated', dbVersion: old, appVersion: v })
     }
     await expect(openPostgresStorage(exec)).rejects.toMatchObject({ code: 'outdated' })
@@ -51,7 +51,7 @@ describe('inspectSchema', () => {
     expect(await inspectSchema(exec)).toEqual({ state: 'foreign' })
     await expect(openPostgresStorage(exec)).rejects.toMatchObject({ code: 'incompatible' })
     const rows = await exec.query<{ n: number }>(
-      sql`select count(*)::int as n from information_schema.tables where table_name = 'gm_meta'`,
+      sql`select count(*)::int as n from information_schema.tables where table_name = 'antresol_meta'`,
     )
     expect(rows[0]?.n).toBe(0)
   })

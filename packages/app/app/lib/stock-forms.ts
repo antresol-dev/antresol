@@ -1,4 +1,4 @@
-import { cmpQ, type Command, type Id, type UnitDef } from '@graymatter/core'
+import { cmpQ, type Command, type Id, type UnitDef } from '@antresol/core'
 import { parseAmountText, parseMoneyText } from './amounts'
 
 export type StockMode = 'receive' | 'use' | 'set' | 'transfer'

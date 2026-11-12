@@ -22,7 +22,7 @@ import {
   type Quantity,
   type StockLine,
   type UnitDef,
-} from '@graymatter/core'
+} from '@antresol/core'
 import { byName, compareIds, pathOf, snapshotIndex, type Crumb } from './views'
 
 export interface BucketRow {

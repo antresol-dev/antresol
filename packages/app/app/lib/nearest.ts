@@ -13,7 +13,7 @@ import {
   type NearestHit,
   type Quantity,
   type UnitDef,
-} from '@graymatter/core'
+} from '@antresol/core'
 import { kiloK } from './quick-add'
 import { pathOf, snapshotIndex } from './views'
 

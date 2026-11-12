@@ -1,4 +1,4 @@
-import { addAxisPreview, duplicateOf, formatAttributeValue, formatNumberValue, parseNumberValue, variantLabel, type AttributeKind, type AxisRemoval, type Command, type Id, type InventorySnapshot } from '@graymatter/core'
+import { addAxisPreview, duplicateOf, formatAttributeValue, formatNumberValue, parseNumberValue, variantLabel, type AttributeKind, type AxisRemoval, type Command, type Id, type InventorySnapshot } from '@antresol/core'
 import { parseNameList } from './lists'
 
 /** The unit of a number attribute is at most this many characters (the same limit as core's). */

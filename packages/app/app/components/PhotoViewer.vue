@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Photo } from '@graymatter/core'
+import type { Photo } from '@antresol/core'
 import { ChevronLeft, ChevronRight, ImageUp, Trash2, X } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'

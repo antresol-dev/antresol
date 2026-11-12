@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { Photo } from '@graymatter/core'
-import { FileError } from '@graymatter/core'
+import type { Photo } from '@antresol/core'
+import { FileError } from '@antresol/core'
 import { Plus } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import { errorMessageKey } from '~/lib/errors'

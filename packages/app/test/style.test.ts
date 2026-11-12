@@ -302,8 +302,6 @@ describe.each(shadowThemes)('$theme shadows: the mock-up hybrid2 sh() at depth $
     ['raised-sm-shadow-pressed', 2.5, 6, 'shadow-pressed'],
     ['step-shadow-pressed', 2, 5, 'shadow-pressed'],
     ['selected-step-shadow-pressed', 2, 5, 'shadow-selected-pressed'],
-    // The folder tree's well (concave), the owner's 2026-11-12 phone pass.
-    ['well-shadow', 4, 10, 'shadow-dark'],
   ]
   it.each(pressedTokens)('--%s is I(%d, %d) after a zero outer pair', (token, x, b, darkColour) => {
     const [d, l] = sh(x, b)
@@ -715,12 +713,12 @@ describe('components and pages', () => {
       expect(viewer.indexOf("$t('ui.close')")).toBeGreaterThan(viewer.indexOf("$t('photos.counter'"))
     })
 
-    it('the folder tree sits in a well (concave), in the panel and in the drawer', () => {
-      const wells = (name: string) => nodes(name).filter((n) => words(classText(n)).has('concave'))
-      expect(wells('components/TreePanel.vue').length).toBe(1)
-      expect(wells('components/AppNav.vue').length).toBe(1)
-      expect(file('components/AppNav.vue').source).not.toMatch(/\braised-card\b/)
-      expect(css).toMatch(/\.concave\s*\{[^}]*box-shadow:\s*var\(--well-shadow\);/)
+    it('the folder tree sits flat, in the panel and in the drawer: neither concave nor raised', () => {
+      for (const name of ['components/TreePanel.vue', 'components/AppNav.vue', 'components/FolderTree.vue']) {
+        const shaded = nodes(name).filter((n) => ['concave', 'raised-card'].some((c) => words(classText(n)).has(c)))
+        expect(shaded).toEqual([])
+      }
+      expect(css).not.toMatch(/\.concave\b|--well-shadow/)
     })
 
     it('Tags & fields: section headings 17 px bold in the text colour, thinner "Add …" buttons (raised-sm, 40 px), a divider between sections', () => {

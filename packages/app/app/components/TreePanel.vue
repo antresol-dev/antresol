@@ -93,8 +93,9 @@ function key(e: KeyboardEvent): void {
         <TooltipContent>{{ $t('folderMenu.new') }}</TooltipContent>
       </Tooltip>
     </div>
-    <!-- The hierarchy sits in a well (concave); p-1.5 leaves the rows' focus rings room inside the scroll container. -->
-    <div class="concave mx-2 mb-3 min-h-0 flex-1 overflow-y-auto p-1.5">
+    <!-- The hierarchy sits flat on the panel (the owner, 2026-11-12: neither concave nor raised). pt-0.5: room for the
+         first row's focus ring inside the scroll container. -->
+    <div class="min-h-0 flex-1 overflow-y-auto px-2 pt-0.5 pb-3">
       <FolderTree variant="panel" />
     </div>
   </div>

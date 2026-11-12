@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { createImgbbStore } from '../src/index'
 import fixtureDataUri from './fixtures/flat-2048x1536.webp?inline'
 
-// Talks to the real ImgBB; skipped without a key. Each run leaves one image that ImgBB deletes after 10 minutes.
+// Talks to the real ImgBB: runs only with `pnpm --filter @antresol/files-imgbb test:live` (never in `pnpm test`), and is
+// skipped there without a key. Each run leaves one image that ImgBB deletes after 10 minutes.
 const key = import.meta.env.ANTRESOL_IMGBB_TEST_KEY as string | undefined
 
 describe.skipIf(!key)('ImgBB live upload', () => {

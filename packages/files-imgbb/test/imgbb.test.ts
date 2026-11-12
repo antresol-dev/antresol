@@ -1,4 +1,5 @@
 import { FileError } from '@antresol/core'
+import type { ConfigEnv } from 'vite'
 import { describe, expect, it, vi } from 'vitest'
 import { createImgbbStore, IMGBB_MEDIUM_SIDE, IMGBB_THUMB_SIDE, isImgbbUrl } from '../src/index'
 
@@ -219,5 +220,20 @@ describe('isImgbbUrl', () => {
     ['not a URL', 'nope'],
   ])('rejects %s', (_name, url) => {
     expect(isImgbbUrl(url)).toBe(false)
+  })
+})
+
+describe('the live test', () => {
+  it('runs only in mode live (`test:live`), never in the default run, key or not', async () => {
+    const { default: config } = await import('../vitest.config')
+    const files = (mode: string) => {
+      const { test } = (config as (env: ConfigEnv) => { test: { include: string[]; exclude: string[] } })({ mode, command: 'serve' })
+      return { include: test.include, exclude: test.exclude }
+    }
+    const LIVE = 'test/**/*.live.test.ts'
+    expect(files('test').include).toEqual(['test/**/*.test.ts'])
+    expect(files('test').exclude).toContain(LIVE)
+    expect(files('live').include).toEqual([LIVE])
+    expect(files('live').exclude).not.toContain(LIVE)
   })
 })

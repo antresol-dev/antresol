@@ -148,14 +148,14 @@ describe('launchReady', () => {
 
 describe('themeColorMeta', () => {
   it('system: one tag per colour scheme', () => {
-    expect(themeColorMeta('system', 'dark')).toEqual([
+    expect(themeColorMeta('system', 'dark', 'neumorphism', 'indigo')).toEqual([
       { key: 'theme-color-light', name: 'theme-color', content: '#EDEFF3', media: '(prefers-color-scheme: light)' },
       { key: 'theme-color-dark', name: 'theme-color', content: '#2A2E37', media: '(prefers-color-scheme: dark)' },
     ])
   })
   it('manual choice: a single tag without media', () => {
-    expect(themeColorMeta('dark', 'dark')).toEqual([{ key: 'theme-color', name: 'theme-color', content: '#2A2E37' }])
-    expect(themeColorMeta('light', 'light')).toEqual([{ key: 'theme-color', name: 'theme-color', content: '#EDEFF3' }])
+    expect(themeColorMeta('dark', 'dark', 'neumorphism', 'indigo')).toEqual([{ key: 'theme-color', name: 'theme-color', content: '#2A2E37' }])
+    expect(themeColorMeta('light', 'light', 'neumorphism', 'indigo')).toEqual([{ key: 'theme-color', name: 'theme-color', content: '#EDEFF3' }])
   })
 })
 
@@ -164,6 +164,6 @@ describe('themeColorMeta tokens', () => {
     const { default: css } = await import('../app/assets/css/main.css?raw')
     const bg = [...css.matchAll(/--boot-page:\s*(#[0-9a-fA-F]{6})/g)].map((m) => m[1]!.toUpperCase())
     expect(bg).toHaveLength(2)
-    expect(themeColorMeta('system', 'light').map((m) => m.content)).toEqual(bg)
+    expect(themeColorMeta('system', 'light', 'neumorphism', 'indigo').map((m) => m.content)).toEqual(bg)
   })
 })

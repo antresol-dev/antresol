@@ -179,7 +179,7 @@ function returnFocus(event: Event): void {
          reduced motion. No transitions on it: the keyboard changes its max height, and that must not animate. -->
     <DialogContent
       :show-close-button="false"
-      class="max-h-[calc(100dvh-1rem)] overflow-y-auto top-auto bottom-0 left-0 max-w-full translate-x-0 translate-y-0 rounded-b-none rounded-t-card border-x-0 border-b-0 bg-surface p-4 pb-6 outline-none motion-safe:data-[state=open]:animate-sheet-in motion-safe:data-[state=closed]:animate-sheet-out motion-reduce:animate-none sm:max-w-full md:top-1/2 md:bottom-auto md:left-1/2 md:max-w-[480px] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-card md:border md:pb-4 md:motion-safe:data-[state=open]:animate-pop-in md:motion-safe:data-[state=closed]:animate-pop-out"
+      class="max-h-[calc(100dvh-1rem)] overflow-y-auto top-auto bottom-0 left-0 max-w-full translate-x-0 translate-y-0 rounded-b-none rounded-t-card border-x-0 border-b-0 p-4 pb-6 outline-none motion-safe:data-[state=open]:animate-sheet-in motion-safe:data-[state=closed]:animate-sheet-out motion-reduce:animate-none sm:max-w-full md:top-1/2 md:bottom-auto md:left-1/2 md:max-w-[480px] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-card md:border md:pb-4 md:motion-safe:data-[state=open]:animate-pop-in md:motion-safe:data-[state=closed]:animate-pop-out"
       :inert="leaving || undefined"
       :class="leaving && 'pointer-events-none'"
       :style="leavingHeight === null ? undefined : { height: `${leavingHeight}px` }"

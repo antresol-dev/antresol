@@ -41,7 +41,7 @@ const time = (iso: string): string => new Date(iso).toLocaleString()
 
 <template>
   <section class="grid gap-2" aria-labelledby="settings-diagnostics">
-    <h2 id="settings-diagnostics" class="text-sm font-semibold text-subtle-foreground">{{ $t('diagnostics.title') }}</h2>
+    <h2 id="settings-diagnostics" class="section-label text-sm">{{ $t('diagnostics.title') }}</h2>
     <div class="raised-card grid gap-2 p-4.5">
       <p class="text-sm text-subtle-foreground">{{ $t('diagnostics.hint') }}</p>
       <p v-if="!entries.length" class="text-sm">{{ $t('diagnostics.empty') }}</p>

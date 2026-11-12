@@ -1,294 +1,150 @@
 @import "tailwindcss";
 
 /*
- * GrayMatter design system "Hybrid v2" (spec 2026-11-12 §A): the owner's mock-up — light theme board 7 (depth 0.7,
- * light 1.1, shade 0.7, flat surface, soft accent button), dark theme board 8 (base #2A2E37, depth 0.8, light 0.7,
- * shade 0.9, painted accent button, near-black shadows, a faint top-left light and a 1 px rim). The shadow numbers
- * are the mock-up's hybrid2 sh() computed once per theme.
+ * GrayMatter styles (spec 2026-11-12 "styles"): the look comes from the current style's tokens, CSS variables --st-*
+ * that lib/styles/apply.ts writes into <style id="gm-style"> (light in :root, dark in .dark) from the style's
+ * TypeScript module (lib/styles/<name>.ts; the key list is lib/styles/types.ts). This file only reads them: no colour,
+ * radius, shadow or font of its own. A style's drawings that tokens cannot express live in assets/css/styles/<name>.css,
+ * under [data-style='<name>'] (data-style is on <html>).
  *
  * Utilities: plain classes in @layer components, so a Tailwind utility on the same element always wins (no variants
  * such as md:raised). The interactive states are unlayered, so they also win over a bg-* utility.
- *   raised               button, R(4,10), radius 14. Button variant "outline".
- *   raised-sm            icon button and "Add…" tile, R(3,7), radius 14. Button "outline" with an icon size.
- *   raised-card          card (stock, photo block), R(6,14), radius 20. Padding is yours: p-4.5 (18 px).
- *   accent-button        the accent button: Button "default", the dock's +. Light theme: soft — the accent's tint,
- *                        accent-ink text, a shadow in the accent's shade. Dark theme: painted, white text, bevel.
- *   painted              a painted surface: --paint (default the accent's paint), --paint-foreground text, bevel.
- *                        painted-destructive repaints it with --destructive (Button "destructive").
- *   pressable            hover, press and transitions. Hover tints towards the accent (no movement); press sinks the
- *                        shadows inside and scales raised controls to 0.97 (raised-sm) / 0.985 (raised, accent-button,
- *                        painted). Alone it is the flat ghost control (Button "ghost"): accent 8 % on hover, 16 %
- *                        pressed (16 / 24 % dark). Text without its own text-* utility turns --accent-ink on hover.
- *                        Radius 14.
- *   pill                 the −/+ stepper body, R(3,8), radius 14. Its halves: `pill-step pressable`, seam between.
- *   row-selected         selected row (tree folder, palette row, current variant): accent gradient 17 % → 8 % (24 % →
- *                        12 % dark), text and icons --accent-ink, radius 14; a pill inside takes the accent's shadow.
- *   glass                menus, select lists, combobox lists: liquid glass — a translucent tinted pane that blurs and
- *                        saturates what is behind it, a specular rim, a soft drop shadow. Radius 20. Items inside:
- *                        hover --glass-hover with --glass-hover-foreground text, separators --glass-divider; muted
- *                        and destructive text take the glass's own shades.
- *   rounded-card 20 / rounded-field 14 / rounded-chip 10 / rounded-full: the only radii (rounded-thumb and
- *                        rounded-icon = 10, rounded-fab = 14 are older names on the same scale).
  *
- * Tokens (:root light, .dark dark; Tailwind colours of the same names):
- *   text      --foreground (ink), --muted-foreground, --subtle-foreground, --dimmed-foreground, --icon, --accent-ink
- *             (accent-coloured text, links: text-accent-ink, not text-primary), --selected-muted, --destructive,
- *             --warning
- *   surfaces  --background = --surface (flat), --hover, --pressed, --ghost-hover, --ghost-pressed, --chip, --thumb,
- *             --field (inputs), --rail, --popover, --accent-soft, --selected-from/--selected-to, --selected-pill
- *   accent    --accent (from lib/accent.ts: --accent-light / --accent-dark on <html>), --accent-paint (what painted
- *             surfaces take), --accent-foreground (text on the paint), --primary (checkboxes, progress), --ring
- *   button    --accent-button(-hover|-pressed), --accent-button-foreground, --accent-button-shadow(-hover|-pressed)
- *   lines     --divider, --border, --input, --tree-line, --pill-seam
- *   shadows   colours --shadow-dark, --shadow-light, --rim (dark), --shadow-hover, --shadow-pressed, --shadow-selected,
- *             --shadow-selected-pressed; lists --raised-shadow(-hover|-pressed), --raised-sm-shadow(-hover|-pressed),
- *             --card-shadow, --pill-shadow, --pill-shadow-selected, --step-shadow-pressed,
- *             --selected-step-shadow-pressed, --flat-shadow
- *   glass     --glass-bg, --glass-img, --glass-blur, --glass-border, --glass-shadow, --glass-hover,
- *             --glass-hover-foreground, --glass-divider, --glass-muted, --glass-danger
- * Every text/background pair is at 4.5:1 or better in both themes for every accent: test/style.test.ts. Where a
- * mock-up shade fails a pair, the shade is adjusted (and says so next to it).
+ *   Utility              The mock-up's role (tokens)                    Where
+ *   pressable            ghost (kinds.ghost; radius ghostR; motion tr)  flat controls; with a kind below: its states
+ *   raised               btn (kinds.btn; btnR; ctrlBlur)                Button outline/secondary, raised controls
+ *   raised-sm            ib (kinds.ib; ibR; ctrlBlur)                   Button outline icon sizes, small raised tiles
+ *   add-tile             add (kinds.add; thumbR; ctrlBlur)              the gallery's "Add photos" tile
+ *   accent-button        primary (kinds.primary; primR; ctrlBlur)       Button default, the dock's +
+ *   painted              painted (painted; primR)                       a surface painted in the accent
+ *   painted-destructive  paintedDanger                                  Button destructive (with painted)
+ *   pill                 pill (pillBg, pillImg, pillSh, pillR, ctrlBlur) the −/+ stepper's body
+ *   pill-step            step (kinds.step; pillRL / pillRR; seam)       its halves (`pill-step pressable`)
+ *   row-selected         cur (cur, curSh, curR, curM, curFg, curMuted)  selected row: current variant, tree folder,
+ *                        + pillSel*, stepSel, ghostSel inside it        palette row, nav link, folder pickers
+ *   glass                pop (pop, popSh, popR, popBlur, popFg, popBorder, popMuted, popDanger; items popHover,
+ *                        popHoverFg, popItemR; separators popDiv)       menus, select lists, combobox lists
+ *   raised-card          card (card, cardSh, cardR, cardFg, cardMuted, surfBlur)  cards: stock, settings, photo block
+ *   surface-list         list (list, listSh, listR, surfBlur)           lists of rows: variants, attributes, history,
+ *                                                                       folders, items, Tags & fields, archive
+ *   surface-header       hdr (hdr, hdrSh, hdrLine, hdrBlur)             the screen header
+ *   surface-bar          hdr, hdrLine, hdrBlur; barSh                   a bottom bar (the count screen's)
+ *   surface-sheet        sheet (sheet, sheetSh, sheetLine, sheetBlur)   sheets, dialogs, the search palette
+ *   surface-tip          tip (tip, tipFg, tipSh)                        tooltips
+ *   photo-cover          photo (photo, photoSh, photoR, photoFg, surfBlur)  the item's cover photo
+ *   photo-thumb          thumbs (thumbs-0, thumbSh, thumbR, thumbFg, surfBlur)  the gallery's thumbnails
+ *   tag-chip             chips (chips-0, chip-fgs-0, chipSh, chipR, chipFont)  the item's tags
+ *   screen-title         head (headFont, headWeight, headTrack, headCase)       the screen title (h1)
+ *   section-label        label (labelFont, labelWeight, labelTrack, labelCase, subtle; mark, markColor)  section
+ *                        headings ("Variants", "Attributes", "History", settings sections)
+ *   stock-card           (no rules: the hook for a style's LED, `led`, ledColor, ledGlow)  the stock card
+ *   tabular-nums         numFont                                        every number
+ *   amount               numWeight                                      the amounts the mock-up draws: stock total,
+ *                                                                       stepper count, list and history amounts
+ *   btn-text / btn-label plainBtnWeight / btnWeight                     every Button's label / the emphasised actions
+ *   .lucide              stroke, cap, join                              every icon (at Lucide's default width)
+ *   body                 page, fg, font; the window layer winBg, winBlur (body::before)
+ *   rounded-card / rounded-field / rounded-chip (= rounded-thumb, rounded-icon) / rounded-fab: cardR / btnR / smallR /
+ *                        primR; rounded-full.
+ *
+ * Not applied, on purpose (spec §3: sizes are the markup's): headSize, labelSize; the rest and pressed text colour (n.fg, p.fg) of ib, add, btn, step and ghost — the markup gives text its colour, hover
+ * turns text without a text-* utility to h.fg — and the shadows of ghost (flat controls keep their focus rings).
+ *
+ * Semantic tokens (Tailwind colours of the same names) are the style's: --background (pageColor), --surface, --hover
+ * (rowHover), --ghost-hover / --ghost-pressed (ghost h/p), --chip, --thumb, --field, --rail, --foreground (fg),
+ * --muted-foreground (muted), --subtle-foreground (subtle), --dimmed-foreground (dimmed), --icon, --accent-ink (ink),
+ * --accent, --accent-soft(-foreground), --primary(-foreground), --ring, --destructive(-foreground), --warning,
+ * --divider (dividerColor), --border, --input (fieldLine), --tree-line, --popover (popSolid), --glass-hover(-foreground)
+ * and --glass-divider (menus), --selected-pill (pillSelBg), --selected-muted (curMuted), --thumb-foreground (thumbFg).
+ * Contrast of every text/background pair, in every style, theme and accent: test/styles.test.ts.
  */
+
+/* The styles' own drawings: one @import per style, here (imports come first), e.g. @import "./styles/retro.css"; */
+@import "./styles/base.css";
+@import "./styles/acrylic.css";
+@import "./styles/liquid.css";
+@import "./styles/linear.css";
+@import "./styles/brutal.css";
+@import "./styles/y2k.css";
+@import "./styles/retro.css";
+@import "./styles/tinkerer.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
   color-scheme: light;
+  /* The page before the style is applied (only until the app's script runs): the default style's page colour. */
+  --boot-page: #F4F5F7;
 
-  /* Accent */
-  --accent: var(--accent-light, #4F46E5);
-  --accent-paint: var(--accent);
-  --accent-foreground: #FFFFFF;
-  --accent-ink: color-mix(in srgb, var(--accent) 82%, #000000);
-  --accent-soft: color-mix(in srgb, var(--background) 88%, var(--accent));
-  --accent-soft-foreground: var(--accent-ink);
+  --accent: var(--st-accent);
+  --accent-paint: var(--st-painted-n-bg);
+  --accent-foreground: var(--st-painted-n-fg);
+  --accent-ink: var(--st-ink);
+  --accent-soft: var(--st-accent-soft);
+  --accent-soft-foreground: var(--st-accent-soft-fg);
 
-  /* Surfaces. Cards and buttons are the page's own colour, raised by shadow. */
-  --background: #EDEFF3;
-  --surface: #EDEFF3;
-  --hover: color-mix(in srgb, var(--background) 93%, var(--accent));
-  --pressed: color-mix(in srgb, var(--background) 88%, var(--accent));
-  --ghost-hover: color-mix(in srgb, var(--accent) 8%, transparent);
-  --ghost-pressed: color-mix(in srgb, var(--accent) 16%, transparent);
-  --selected-from: color-mix(in srgb, var(--accent) 17%, transparent);
-  --selected-to: color-mix(in srgb, var(--accent) 8%, transparent);
-  --selected-pill: color-mix(in srgb, var(--background) 92%, var(--accent));
-  /* The −/+ halves of the stepper on a selected row. */
-  --selected-step-hover: rgba(255, 255, 255, 0.45);
-  --selected-step-hover-ink: var(--accent-ink);
-  --selected-step-pressed: color-mix(in srgb, var(--background) 82%, var(--accent));
-  --chip: #DDE1E8;
-  --thumb: #E2E5EB;
-  --field: #F6F7F9;
-  --rail: #E4E7ED;
+  --background: var(--st-page-color, var(--boot-page));
+  --surface: var(--st-surface);
+  --hover: var(--st-row-hover);
+  --pressed: var(--st-btn-p-bg);
+  --ghost-hover: var(--st-ghost-h-bg);
+  --ghost-pressed: var(--st-ghost-p-bg);
+  --selected-pill: var(--st-pill-sel-bg);
+  --chip: var(--st-chip);
+  --thumb: var(--st-thumb);
+  --field: var(--st-field);
+  --rail: var(--st-rail);
 
-  /* Text */
-  --foreground: #1C2030;
-  --muted-foreground: #565D6E;
-  --subtle-foreground: #565D6E;
-  --dimmed-foreground: #474D5A;
-  --selected-muted: #4B5263;
-  --thumb-foreground: #565D6E;
-  --icon: #2F3442;
-  --destructive: #B91C1C;
-  --destructive-foreground: #FFFFFF;
-  --warning: #92400E;
+  --foreground: var(--st-fg);
+  --muted-foreground: var(--st-muted);
+  --subtle-foreground: var(--st-subtle);
+  --dimmed-foreground: var(--st-dimmed);
+  --selected-muted: var(--st-cur-muted);
+  --thumb-foreground: var(--st-thumb-fg);
+  --icon: var(--st-icon);
+  --destructive: var(--st-destructive);
+  --destructive-foreground: var(--st-destructive-fg);
+  --warning: var(--st-warning);
 
-  /* Lines */
-  --divider: #D9DDE5;
-  --border: #D9DDE5;
-  --input: #CDD2DB;
-  --tree-line: #CDD2DB;
-  --pill-seam: rgba(150, 160, 180, 0.22);
+  --divider: var(--st-divider-color);
+  --border: var(--st-border);
+  --input: var(--st-field-line);
+  --tree-line: var(--st-tree-line);
 
-  /* Shadow colours: dark 0.42·shade, light 0.8·light. The tinted ones are the mock-up's DKa(k): mix(accent, #1C2030,
-     0.45) at k·shade (k = 0.3 hover, 0.42 pressed, 0.5 selected, 0.55 selected and pressed). */
-  --shadow-dark: rgba(150, 160, 180, 0.29);
-  --shadow-light: rgba(255, 255, 255, 0.88);
-  --shade-base: #1C2030;
-  --shade-share: 55%;
-  --tint-shadow: color-mix(in srgb, var(--accent-paint) var(--shade-share), var(--shade-base));
-  --shadow-hover: color-mix(in srgb, var(--tint-shadow) 21%, transparent);
-  --shadow-pressed: color-mix(in srgb, var(--tint-shadow) 29.4%, transparent);
-  --shadow-selected: color-mix(in srgb, var(--tint-shadow) 35%, transparent);
-  --shadow-selected-pressed: color-mix(in srgb, var(--tint-shadow) 38.5%, transparent);
-  --painted-alpha: 38.5%;
-
-  /* Shadow lists at depth 0.7, light 1.1, shade 0.7. Outer and inset pairs are always both listed (the unused one at
-     zero), so raised ↔ pressed animates instead of jumping. R(x, b) and I(x, b) as in the mock-up. */
-  --flat-shadow: 0px 0px 0px transparent, 0px 0px 0px transparent, inset 0px 0px 0px transparent, inset 0px 0px 0px transparent;
-  --raised-shadow: 2.4px 2.4px 6.2px var(--shadow-dark), -3.1px -3.1px 7.7px var(--shadow-light), inset 0px 0px 0px transparent, inset 0px 0px 0px transparent;
-  --raised-shadow-hover: 2.4px 2.4px 6.2px var(--shadow-hover), -3.1px -3.1px 7.7px var(--shadow-light), inset 0px 0px 0px transparent, inset 0px 0px 0px transparent;
-  --raised-shadow-pressed: 0px 0px 0px transparent, 0px 0px 0px transparent, inset 1.8px 1.8px 4.3px var(--shadow-pressed), inset -2.3px -2.3px 5.4px var(--shadow-light);
-  --raised-sm-shadow: 1.8px 1.8px 4.3px var(--shadow-dark), -2.3px -2.3px 5.4px var(--shadow-light), inset 0px 0px 0px transparent, inset 0px 0px 0px transparent;
-  --raised-sm-shadow-hover: 1.8px 1.8px 4.3px var(--shadow-hover), -2.3px -2.3px 5.4px var(--shadow-light), inset 0px 0px 0px transparent, inset 0px 0px 0px transparent;
-  --raised-sm-shadow-pressed: 0px 0px 0px transparent, 0px 0px 0px transparent, inset 1.5px 1.5px 3.7px var(--shadow-pressed), inset -1.9px -1.9px 4.6px var(--shadow-light);
-  --card-shadow: 3.6px 3.6px 8.6px var(--shadow-dark), -4.6px -4.6px 10.8px var(--shadow-light), inset 0px 0px 0px transparent, inset 0px 0px 0px transparent;
-  --pill-shadow: 1.8px 1.8px 4.9px var(--shadow-dark), -2.3px -2.3px 6.2px var(--shadow-light), inset 0px 0px 0px transparent, inset 0px 0px 0px transparent;
-  --pill-shadow-selected: 1.8px 1.8px 4.9px var(--shadow-selected), -2.3px -2.3px 6.2px var(--shadow-light), inset 0px 0px 0px transparent, inset 0px 0px 0px transparent;
-  --step-shadow-pressed: 0px 0px 0px transparent, 0px 0px 0px transparent, inset 1.2px 1.2px 3.1px var(--shadow-pressed), inset -1.5px -1.5px 3.9px var(--shadow-light);
-  --selected-step-shadow-pressed: 0px 0px 0px transparent, 0px 0px 0px transparent, inset 1.2px 1.2px 3.1px var(--shadow-selected-pressed), inset -1.5px -1.5px 3.9px var(--shadow-light);
-
-  /* The accent button, soft (board 7, the owner's choice): the accent's tint 14 % (hover 20 %), accent-ink text,
-     R(4,10) in the accent's shade DKa(0.45) (hover 0.5), pressed I(3,7) at DKa(0.55). The mock-up's pressed tint
-     (24 %) takes accent-ink under 4.5:1 on blue, green and orange: the press keeps the hover tint and shows by the
-     sink. */
-  --accent-button: color-mix(in srgb, var(--background) 86%, var(--accent));
-  --accent-button-hover: color-mix(in srgb, var(--background) 80%, var(--accent));
-  --accent-button-pressed: var(--accent-button-hover);
-  --accent-button-foreground: var(--accent-ink);
-  --accent-button-shadow: 2.4px 2.4px 6.2px color-mix(in srgb, var(--tint-shadow) 31.5%, transparent), -3.1px -3.1px 7.7px var(--shadow-light), inset 0px 0px 0px transparent, inset 0px 0px 0px transparent;
-  --accent-button-shadow-hover: 2.4px 2.4px 6.2px var(--shadow-selected), -3.1px -3.1px 7.7px var(--shadow-light), inset 0px 0px 0px transparent, inset 0px 0px 0px transparent;
-  --accent-button-shadow-pressed: 0px 0px 0px transparent, 0px 0px 0px transparent, inset 1.8px 1.8px 4.3px var(--shadow-selected-pressed), inset -2.3px -2.3px 5.4px var(--shadow-light);
-
-  /* Glass: menus, select lists and combobox lists (the mock-up's glass* tokens). */
-  --glass-bg: rgba(255, 255, 255, 0.38);
-  --glass-img: linear-gradient(165deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.12) 38%, rgba(255, 255, 255, 0) 62%, rgba(255, 255, 255, 0.18) 100%);
-  --glass-blur: blur(14px) saturate(180%);
-  --glass-border: rgba(255, 255, 255, 0.65);
-  --glass-shadow: 0 18px 40px -14px rgba(28, 32, 48, 0.35), 0 4px 12px -4px rgba(28, 32, 48, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 1px rgba(255, 255, 255, 0.3), inset 1px 0 0 rgba(255, 255, 255, 0.35);
-  --glass-hover: rgba(255, 255, 255, 0.55);
-  --glass-hover-foreground: var(--accent-ink);
-  --glass-divider: rgba(28, 32, 48, 0.1);
-  --glass-muted: var(--muted-foreground);
-  --glass-danger: #B91C1C;
+  --glass-hover: var(--st-pop-hover);
+  --glass-hover-foreground: var(--st-pop-hover-fg);
+  --glass-divider: var(--st-pop-div);
 
   /* shadcn-vue names */
-  --primary: var(--accent);
-  --primary-foreground: var(--accent-foreground);
+  --primary: var(--st-primary);
+  --primary-foreground: var(--st-primary-fg);
   --card: var(--surface);
-  --card-foreground: var(--foreground);
-  --popover: var(--surface);
-  --popover-foreground: var(--foreground);
+  --card-foreground: var(--st-card-fg);
+  --popover: var(--st-pop-solid);
+  --popover-foreground: var(--st-pop-fg);
   --secondary: var(--chip);
   --secondary-foreground: var(--foreground);
   --muted: var(--thumb);
-  --ring: var(--accent);
+  --ring: var(--st-ring);
 }
 
-/* Board 8 "Hybrid v2 dark", tuned on its own: a mid-dark base (so a shadow darker than it can still exist),
-   near-black shadows, a faint top-left light and a 1 px rim instead of a white glow, which reads as haze on dark. */
 .dark {
   color-scheme: dark;
-
-  /* The accent lifted by 12 % white (lib/accent.ts writes it as --accent-dark) for tints, gradients and fills;
-     accent-coloured text is the accent half-way to white. The painted button keeps the accent itself: the lift takes
-     white text under 4.5:1 on blue, teal, green and orange. */
-  --accent: var(--accent-dark, #645CE8);
-  --accent-paint: var(--accent-light, #4F46E5);
-  --accent-foreground: #FFFFFF;
-  --accent-ink: color-mix(in srgb, var(--accent-light, #4F46E5) 50%, #FFFFFF);
-
-  --background: #2A2E37;
-  --surface: #2A2E37;
-  /* Flat controls tint more on dark: the same alpha barely registers there. The mock-up's 26 % (pressed, and the
-     selected row's strong end) takes accent-ink under 4.5:1 on rose: 24 %. */
-  --ghost-hover: color-mix(in srgb, var(--accent) 16%, transparent);
-  --ghost-pressed: color-mix(in srgb, var(--accent) 24%, transparent);
-  --selected-from: color-mix(in srgb, var(--accent) 24%, transparent);
-  --selected-to: color-mix(in srgb, var(--accent) 12%, transparent);
-  --selected-pill: color-mix(in srgb, var(--background) 88%, var(--accent));
-  /* The mock-up's white 7 % under accent-ink is under 4.5:1 on rose and pink: the hovered half lights its text up
-     to the foreground instead. */
-  --selected-step-hover: rgba(255, 255, 255, 0.07);
-  --selected-step-hover-ink: var(--foreground);
-  --chip: #373C48;
-  --thumb: #323743;
-  --field: #24272F;
-  --rail: #252931;
-
-  --foreground: #E6E8EE;
-  --muted-foreground: #A3A9B6;
-  --subtle-foreground: #A3A9B6;
-  --dimmed-foreground: #BFC4CE;
-  /* Lighter than muted: muted text on the selected row stays at 4.5:1. */
-  --selected-muted: #B4B9C4;
-  --thumb-foreground: #A3A9B6;
-  --icon: #D2D6DE;
-  --destructive: #F87171;
-  --destructive-foreground: #16181D;
-  --warning: #FBBF24;
-
-  --divider: #363B46;
-  --border: #363B46;
-  --input: rgba(255, 255, 255, 0.12);
-  --tree-line: #414653;
-  --pill-seam: rgba(0, 0, 0, 0.28);
-
-  /* Shadow colours: near-black 0.62·shade, light 0.07·light, rim 0.06·light. The tinted ones are the mock-up's dark
-     DKa(k): mix(accent, black, 0.8) at k·1.5·shade. Hover keeps a visible shadow: only its hue changes. */
-  --shadow-dark: rgba(6, 8, 12, 0.56);
-  --shadow-light: rgba(255, 255, 255, 0.049);
-  --rim: rgba(255, 255, 255, 0.042);
-  --shade-base: #000000;
-  --shade-share: 20%;
-  --shadow-hover: color-mix(in srgb, var(--tint-shadow) 40.5%, transparent);
-  --shadow-pressed: color-mix(in srgb, var(--tint-shadow) 56.7%, transparent);
-  --shadow-selected: color-mix(in srgb, var(--tint-shadow) 67.5%, transparent);
-  --shadow-selected-pressed: color-mix(in srgb, var(--tint-shadow) 74.3%, transparent);
-  --painted-alpha: 74.3%;
-
-  /* Shadow lists at depth 0.8, light 0.7, shade 0.9. The raised state's spare inset slot carries the rim: the edge
-     catching the light. */
-  --raised-shadow: 3.1px 3.1px 7.7px var(--shadow-dark), -2.2px -2.2px 5.6px var(--shadow-light), inset 0.8px 0.8px 0px var(--rim), inset 0px 0px 0px transparent;
-  --raised-shadow-hover: 3.1px 3.1px 7.7px var(--shadow-hover), -2.2px -2.2px 5.6px var(--shadow-light), inset 0.8px 0.8px 0px var(--rim), inset 0px 0px 0px transparent;
-  --raised-shadow-pressed: 0px 0px 0px transparent, 0px 0px 0px transparent, inset 2.3px 2.3px 5.4px var(--shadow-pressed), inset -1.7px -1.7px 3.9px var(--shadow-light);
-  --raised-sm-shadow: 2.3px 2.3px 5.4px var(--shadow-dark), -1.7px -1.7px 3.9px var(--shadow-light), inset 0.8px 0.8px 0px var(--rim), inset 0px 0px 0px transparent;
-  --raised-sm-shadow-hover: 2.3px 2.3px 5.4px var(--shadow-hover), -1.7px -1.7px 3.9px var(--shadow-light), inset 0.8px 0.8px 0px var(--rim), inset 0px 0px 0px transparent;
-  --raised-sm-shadow-pressed: 0px 0px 0px transparent, 0px 0px 0px transparent, inset 1.9px 1.9px 4.6px var(--shadow-pressed), inset -1.4px -1.4px 3.4px var(--shadow-light);
-  --card-shadow: 4.6px 4.6px 10.8px var(--shadow-dark), -3.4px -3.4px 7.8px var(--shadow-light), inset 0.8px 0.8px 0px var(--rim), inset 0px 0px 0px transparent;
-  --pill-shadow: 2.3px 2.3px 6.1px var(--shadow-dark), -1.7px -1.7px 4.5px var(--shadow-light), inset 0.8px 0.8px 0px var(--rim), inset 0px 0px 0px transparent;
-  --pill-shadow-selected: 2.3px 2.3px 6.1px var(--shadow-selected), -1.7px -1.7px 4.5px var(--shadow-light), inset 0.8px 0.8px 0px var(--rim), inset 0px 0px 0px transparent;
-  --step-shadow-pressed: 0px 0px 0px transparent, 0px 0px 0px transparent, inset 1.5px 1.5px 3.8px var(--shadow-pressed), inset -1.1px -1.1px 2.8px var(--shadow-light);
-  --selected-step-shadow-pressed: 0px 0px 0px transparent, 0px 0px 0px transparent, inset 1.5px 1.5px 3.8px var(--shadow-selected-pressed), inset -1.1px -1.1px 2.8px var(--shadow-light);
-
-  /* The accent button, painted (board 8): R(4,10) at DKa(0.55) with the rim, then a thin bevel — the painted edge
-     catches the same top-left light; pressed I(3,7) in the paint's deep shade. It darkens on hover and press like
-     the light theme's painted surfaces (lightening takes white text under 4.5:1). */
-  --accent-button: var(--accent-paint);
-  --accent-button-hover: color-mix(in srgb, var(--accent-paint) 92%, #000000);
-  --accent-button-pressed: color-mix(in srgb, var(--accent-paint) 90%, #000000);
-  --accent-button-foreground: var(--accent-foreground);
-  --accent-button-shadow:
-    3.1px 3.1px 7.7px var(--shadow-selected-pressed), -2.2px -2.2px 5.6px var(--shadow-light),
-    inset 0.8px 0.8px 0px var(--rim), inset 0px 0px 0px transparent,
-    inset 0.8px 0.8px 1.2px rgba(255, 255, 255, 0.3), inset -0.8px -0.8px 1.6px color-mix(in srgb, color-mix(in srgb, var(--accent-paint) 55%, #000000) 30%, transparent);
-  --accent-button-shadow-hover: var(--accent-button-shadow);
-  --accent-button-shadow-pressed:
-    0px 0px 0px transparent, 0px 0px 0px transparent,
-    inset 2.3px 2.3px 5.4px color-mix(in srgb, color-mix(in srgb, var(--accent-paint) 55%, #000000) 55%, transparent), inset -1.7px -1.7px 3.9px rgba(255, 255, 255, 0.22),
-    inset 0px 0px 0px transparent, inset 0px 0px 0px transparent;
-
-  /* Glass */
-  --glass-bg: rgba(44, 48, 58, 0.48);
-  --glass-img: linear-gradient(165deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.03) 38%, rgba(255, 255, 255, 0) 62%, rgba(255, 255, 255, 0.05) 100%);
-  --glass-blur: blur(16px) saturate(160%);
-  --glass-border: rgba(255, 255, 255, 0.12);
-  --glass-shadow: 0 20px 44px -12px rgba(0, 0, 0, 0.6), 0 4px 12px -4px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.18), inset 0 -1px 1px rgba(255, 255, 255, 0.04);
-  --glass-hover: rgba(255, 255, 255, 0.1);
-  /* The mock-up's accent-ink on a hovered item is under 4.5:1 on several accents (the white highlight lifts the
-     pane): the hovered item keeps the foreground. Muted text takes the selected row's lighter muted for the same
-     reason. */
-  --glass-hover-foreground: var(--foreground);
-  --glass-divider: rgba(255, 255, 255, 0.08);
-  --glass-muted: var(--selected-muted);
-  --glass-danger: #FCA5A5;
-
-  /* Checkboxes, radio dots and progress on dark need to stand out from it: the accent's ink with dark text. */
-  --primary: var(--accent-ink);
-  --primary-foreground: #16181D;
-  --ring: var(--accent-ink);
+  --boot-page: #111216;
 }
 
 /* The radius scale (spec 4.2): cards and sheets, buttons/fields/row tiles, chips and nested elements, circles.
-   A nested element is never rounder than its parent: its radius ≤ the parent's − the gap between them. */
+   A nested element is never rounder than its parent. The style sets the numbers. */
 @theme {
-  --radius-card: 20px;
-  --radius-field: 14px;
-  --radius-chip: 10px;
+  --radius-card: var(--st-card-r);
+  /* The button radius, bounded: --radius-field also shapes tall boxes (text areas, picker lists, notices, banners). A style
+     with pill ends (999px) would make them capsules that clip their first and last lines. 26px still makes a capsule of
+     anything up to 52px high (fields, buttons, rows) and a bounded rounded box of anything taller. */
+  --radius-field: min(var(--st-btn-r), 26px);
+  --radius-chip: var(--st-small-r);
   --radius-thumb: var(--radius-chip);
   --radius-icon: var(--radius-chip);
-  --radius-fab: var(--radius-field);
+  --radius-fab: var(--st-prim-r);
 }
 
 @theme inline {
@@ -329,10 +185,10 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  /* Layers. Movement is used under motion-safe: only; backdrops fade (opacity only) in both modes.
-     Navigation drawer: slides in from the left. Bottom sheets: slide up; from 768 px they are centred windows that
-     appear with a slight scale, like dropdown menus. Translate utilities use the `translate` property, so these
-     transforms add to them instead of replacing them. */
+  /* Layers. Movement is used under motion-safe: only; backdrops fade (opacity only) in both modes. The same in every
+     style (spec §3). Navigation drawer: slides in from the left. Bottom sheets: slide up; from 768 px they are centred
+     windows that appear with a slight scale, like dropdown menus. Translate utilities use the `translate` property, so
+     these transforms add to them instead of replacing them. */
   --animate-drawer-in: drawer-in 200ms ease-out;
   --animate-drawer-out: drawer-out 200ms ease-in;
   --animate-sheet-in: sheet-in 200ms ease-out;
@@ -373,10 +229,70 @@
     border-color: var(--border);
   }
 
+  /* The page: the style's background (patterns and wallpapers included) fills the viewport; layouts are transparent. */
   body {
-    background-color: var(--background);
+    background: var(--st-page, var(--boot-page));
     color: var(--foreground);
+    font-family: var(--st-font, 'Onest', system-ui, sans-serif);
+  }
+
+  /* The font before the style is applied: the default style's (Base, Onest). Every style's family is served whether
+     or not CSS names it (nuxt.config.ts, fonts.families: global), since the styles name theirs in TypeScript. */
+  :root:not([data-style]) body {
+    font-family: 'Onest', system-ui, sans-serif;
+  }
+
+  /* @nuxt/fonts writes its metric-matched "<Family> Fallback: …" faces only for the first family of a font-family
+     declaration it finds in CSS, and the styles name theirs in TypeScript (injected at runtime, never seen by the
+     module). These rules are never matched by an element: one per style family, so each gets its fallback faces, which
+     the styles' stacks then name (lib/styles/fonts.ts, test/fonts.test.ts). */
+  .gm-font-faces-onest {
+    font-family: 'Onest', system-ui, sans-serif;
+  }
+  .gm-font-faces-manrope {
     font-family: 'Manrope', system-ui, sans-serif;
+  }
+  .gm-font-faces-inter {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  .gm-font-faces-rubik {
+    font-family: 'Rubik', system-ui, sans-serif;
+  }
+  .gm-font-faces-unbounded {
+    font-family: 'Unbounded', system-ui, sans-serif;
+  }
+  .gm-font-faces-exo-2 {
+    font-family: 'Exo 2', system-ui, sans-serif;
+  }
+  .gm-font-faces-jost {
+    font-family: 'Jost', system-ui, sans-serif;
+  }
+  .gm-font-faces-ibm-plex-sans {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  }
+  .gm-font-faces-ibm-plex-mono {
+    font-family: 'IBM Plex Mono', system-ui, sans-serif;
+  }
+
+  /* The window layer between the page and the content (Acrylic's Mica): fixed, so it never moves a thing. */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background: var(--st-win-bg, transparent);
+    -webkit-backdrop-filter: var(--st-win-blur, none);
+    backdrop-filter: var(--st-win-blur, none);
+    pointer-events: none;
+  }
+
+  /* Icons: the style's stroke on those drawn at Lucide's default width (a set :stroke-width stays), caps and joins. */
+  .lucide[stroke-width='2'] {
+    stroke-width: var(--st-stroke);
+  }
+  .lucide {
+    stroke-linecap: var(--st-cap);
+    stroke-linejoin: var(--st-join);
   }
 
   /* Keyboard focus: a visible accent ring; a shadow alone is not enough (spec 4.1). outline-none opts out. */
@@ -396,201 +312,440 @@
 }
 
 @layer components {
-  /* Liquid glass: menus, select lists and combobox lists float over content of every colour, so they take the colour
-     of what is behind them (blur and saturation) and show only a specular rim and a soft drop shadow of their own.
-     Muted and destructive text inside take the glass's shades (both read at 4.5:1 on it and on a hovered item). */
-  .glass {
-    --muted-foreground: var(--glass-muted);
-    --subtle-foreground: var(--glass-muted);
-    --destructive: var(--glass-danger);
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-card);
-    background-color: var(--glass-bg);
-    background-image: var(--glass-img);
-    -webkit-backdrop-filter: var(--glass-blur);
-    backdrop-filter: var(--glass-blur);
-    box-shadow: var(--glass-shadow);
-    color: var(--foreground);
+  /* ---- Surfaces ---- */
+
+  .surface-header {
+    border-color: var(--st-hdr-line);
+    background: var(--st-hdr);
+    box-shadow: var(--st-hdr-sh);
+    -webkit-backdrop-filter: var(--st-hdr-blur);
+    backdrop-filter: var(--st-hdr-blur);
   }
 
-  /* Without backdrop blur the pane would show the page through it unblurred: it takes the page's colour instead. */
-  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-    .glass {
-      background-color: var(--popover);
+  .raised-card {
+    --muted-foreground: var(--st-card-muted);
+    --subtle-foreground: var(--st-card-muted);
+    border-radius: var(--st-card-r);
+    background: var(--st-card);
+    box-shadow: var(--st-card-sh);
+    color: var(--st-card-fg);
+    -webkit-backdrop-filter: var(--st-surf-blur);
+    backdrop-filter: var(--st-surf-blur);
+  }
+
+  .surface-list {
+    border-radius: var(--st-list-r);
+    background: var(--st-list);
+    box-shadow: var(--st-list-sh);
+    -webkit-backdrop-filter: var(--st-surf-blur);
+    backdrop-filter: var(--st-surf-blur);
+  }
+
+  /* Sheets and dialogs: their 1 px border (top only on the phone) takes the sheet's line. */
+  .surface-sheet {
+    border-color: var(--st-sheet-line);
+    background: var(--st-sheet);
+    box-shadow: var(--st-sheet-sh);
+    -webkit-backdrop-filter: var(--st-sheet-blur);
+    backdrop-filter: var(--st-sheet-blur);
+  }
+
+  /* A bottom bar (the count screen's sticky bar): the header's surface, its line on the top edge. */
+  .surface-bar {
+    border-color: var(--st-hdr-line);
+    background: var(--st-hdr);
+    box-shadow: var(--st-bar-sh);
+    -webkit-backdrop-filter: var(--st-hdr-blur);
+    backdrop-filter: var(--st-hdr-blur);
+  }
+
+  .surface-tip {
+    background-color: var(--st-tip);
+    box-shadow: var(--st-tip-sh);
+    color: var(--st-tip-fg);
+  }
+
+  .photo-cover {
+    border-radius: var(--st-photo-r);
+    background: var(--st-photo);
+    box-shadow: var(--st-photo-sh);
+    color: var(--st-photo-fg);
+    -webkit-backdrop-filter: var(--st-surf-blur);
+    backdrop-filter: var(--st-surf-blur);
+  }
+
+  /* A style with several thumbnail colours cycles them in its own CSS (:nth-child with --st-thumbs-1…). */
+  .photo-thumb {
+    border-radius: var(--st-thumb-r);
+    background: var(--st-thumbs-0);
+    box-shadow: var(--st-thumb-sh);
+    color: var(--st-thumb-fg);
+    -webkit-backdrop-filter: var(--st-surf-blur);
+    backdrop-filter: var(--st-surf-blur);
+  }
+
+  /* A style with several chip colours cycles them in its own CSS (:nth-child with --st-chips-1…, --st-chip-fgs-1…). */
+  .tag-chip {
+    border-radius: var(--st-chip-r);
+    background: var(--st-chips-0);
+    box-shadow: var(--st-chip-sh);
+    color: var(--st-chip-fgs-0);
+    font-family: var(--st-chip-font);
+  }
+
+  .screen-title {
+    font-family: var(--st-head-font);
+    font-weight: var(--st-head-weight);
+    letter-spacing: var(--st-head-track);
+    text-transform: var(--st-head-case);
+  }
+
+  .section-label {
+    color: var(--subtle-foreground);
+    font-family: var(--st-label-font);
+    font-weight: var(--st-label-weight);
+    letter-spacing: var(--st-label-track);
+    text-transform: var(--st-label-case);
+  }
+  .section-label::before {
+    content: var(--st-mark);
+    color: var(--st-mark-color);
+  }
+  /* The mark is decoration: its alt text is empty, so screen readers do not read "✦" before every heading. An engine
+     without alt text in `content` would drop that whole declaration (and, a var() being valid at parse time, the one
+     above it would not stand in), so it is behind @supports: such an engine keeps the plain mark, and may read it. */
+  @supports (content: 'a' / 'b') {
+    .section-label::before {
+      content: var(--st-mark) / '';
     }
   }
 
-  /* High-contrast preference: the pane is the opaque popover surface, nothing shows through it. */
+  .tabular-nums {
+    font-family: var(--st-num-font);
+  }
+
+  /* Weights (sizes stay the markup's): amounts the mock-up draws at numWeight; button labels — plain ones, and the
+     emphasised actions the mock-up draws (btn-label wins over btn-text on the same Button). */
+  .amount {
+    font-weight: var(--st-num-weight);
+  }
+  .btn-text {
+    font-weight: var(--st-plain-btn-weight);
+  }
+  .btn-label {
+    font-weight: var(--st-btn-weight);
+  }
+
+  /* Fields: their background (--field), border (--input) and radius (rounded-field) are the markup's utilities. */
+  :where([data-slot='input'], [data-slot='textarea'], [data-slot='select-trigger']) {
+    box-shadow: var(--st-field-sh);
+  }
+
+  /* Menus, select lists, combobox lists. Muted and destructive text inside take the menu's own shades (both read at
+     4.5:1 on it and on a hovered item). Items: rounded-(--st-pop-item-r), focus:bg-(--glass-hover). */
+  .glass {
+    --muted-foreground: var(--st-pop-muted);
+    --subtle-foreground: var(--st-pop-muted);
+    --destructive: var(--st-pop-danger);
+    border: 1px solid var(--st-pop-border);
+    border-radius: var(--st-pop-r);
+    background: var(--st-pop);
+    -webkit-backdrop-filter: var(--st-pop-blur);
+    backdrop-filter: var(--st-pop-blur);
+    box-shadow: var(--st-pop-sh);
+    color: var(--st-pop-fg);
+  }
+
+  /* Without backdrop blur a translucent pane would show the page through it unblurred: it takes its opaque colour. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass {
+      background: var(--st-pop-solid);
+    }
+  }
+
+  /* High-contrast preference: every blurred panel is opaque, nothing shows through it (popBlur, surfBlur, hdrBlur,
+     ctrlBlur, winBlur, the sheets' blur). */
   @media (prefers-contrast: more) {
     .glass {
-      background-color: var(--popover);
-      background-image: none;
+      background: var(--st-pop-solid);
+    }
+    .surface-header,
+    .surface-bar {
+      background: var(--st-hdr-solid);
+    }
+    .raised-card {
+      background: var(--st-card-solid);
+    }
+    .surface-list {
+      background: var(--st-list-solid);
+    }
+    .surface-sheet {
+      background: var(--st-sheet-solid);
+    }
+    .photo-cover {
+      background: var(--st-photo-solid);
+    }
+    .glass,
+    .surface-header,
+    .surface-bar,
+    .raised-card,
+    .surface-list,
+    .surface-sheet,
+    .photo-cover,
+    .photo-thumb,
+    .raised,
+    .raised-sm,
+    .add-tile,
+    .accent-button,
+    .pill {
       -webkit-backdrop-filter: none;
       backdrop-filter: none;
     }
   }
 
-  /* Order matters: the kinds below override the ghost defaults of .pressable. */
+  /* ---- Controls ----
+     Each kind sets its states' variables (--n-* rest, --h-* hover, --p-* pressed: bg, img, sh, fg, tf) from its
+     tokens; the shadowed kinds draw their rest state below, every state rule (after this layer) reads them.
+     Order matters: the kinds override the ghost defaults of .pressable. */
   .pressable {
-    --hover-bg: var(--ghost-hover);
-    --active-bg: var(--ghost-pressed);
-    --hover-ink: var(--accent-ink);
-    border-radius: var(--radius-field);
-    /* The shadow and the sink share one duration and curve, so the raised shadow never fades before the control
-       goes down (or comes back before it rises). */
-    transition:
-      background-color 180ms ease,
-      color 180ms ease,
-      box-shadow 160ms cubic-bezier(0.4, 0, 0.2, 1),
-      transform 160ms cubic-bezier(0.4, 0, 0.2, 1);
+    --n-bg: var(--st-ghost-n-bg);
+    --h-bg: var(--st-ghost-h-bg);
+    --h-img: var(--st-ghost-h-img);
+    --h-sh: var(--st-ghost-h-sh);
+    --h-fg: var(--st-ghost-h-fg);
+    --h-tf: var(--st-ghost-h-tf);
+    --p-bg: var(--st-ghost-p-bg);
+    --p-img: var(--st-ghost-p-img);
+    --p-sh: var(--st-ghost-p-sh);
+    --p-fg: var(--st-ghost-p-fg);
+    --p-tf: var(--st-ghost-p-tf);
+    border-radius: var(--st-ghost-r);
+    background-color: var(--n-bg);
+    /* The shadow and the sink share one duration and curve where the style says so (Neumorphism). */
+    transition: var(--st-tr);
   }
 
   .raised {
-    --hover-bg: var(--hover);
-    --active-bg: var(--pressed);
-    --hover-shadow: var(--raised-shadow-hover);
-    --active-shadow: var(--raised-shadow-pressed);
-    --active-scale: 0.985;
-    background-color: var(--surface);
-    box-shadow: var(--raised-shadow);
-    border-radius: var(--radius-field);
+    --n-bg: var(--st-btn-n-bg);
+    --n-img: var(--st-btn-n-img);
+    --n-sh: var(--st-btn-n-sh);
+    --h-bg: var(--st-btn-h-bg);
+    --h-img: var(--st-btn-h-img);
+    --h-sh: var(--st-btn-h-sh);
+    --h-fg: var(--st-btn-h-fg);
+    --h-tf: var(--st-btn-h-tf);
+    --p-bg: var(--st-btn-p-bg);
+    --p-img: var(--st-btn-p-img);
+    --p-sh: var(--st-btn-p-sh);
+    --p-fg: var(--st-btn-p-fg);
+    --p-tf: var(--st-btn-p-tf);
+    border-radius: var(--st-btn-r);
   }
 
   .raised-sm {
-    --hover-bg: var(--hover);
-    --active-bg: var(--pressed);
-    --hover-shadow: var(--raised-sm-shadow-hover);
-    --active-shadow: var(--raised-sm-shadow-pressed);
-    --active-scale: 0.97;
-    background-color: var(--surface);
-    box-shadow: var(--raised-sm-shadow);
-    border-radius: var(--radius-field);
+    --n-bg: var(--st-ib-n-bg);
+    --n-img: var(--st-ib-n-img);
+    --n-sh: var(--st-ib-n-sh);
+    --h-bg: var(--st-ib-h-bg);
+    --h-img: var(--st-ib-h-img);
+    --h-sh: var(--st-ib-h-sh);
+    --h-fg: var(--st-ib-h-fg);
+    --h-tf: var(--st-ib-h-tf);
+    --p-bg: var(--st-ib-p-bg);
+    --p-img: var(--st-ib-p-img);
+    --p-sh: var(--st-ib-p-sh);
+    --p-fg: var(--st-ib-p-fg);
+    --p-tf: var(--st-ib-p-tf);
+    border-radius: var(--st-ib-r);
   }
 
-  .raised-card {
-    background-color: var(--surface);
-    box-shadow: var(--card-shadow);
-    border-radius: var(--radius-card);
+  .add-tile {
+    --n-bg: var(--st-add-n-bg);
+    --n-img: var(--st-add-n-img);
+    --n-sh: var(--st-add-n-sh);
+    --h-bg: var(--st-add-h-bg);
+    --h-img: var(--st-add-h-img);
+    --h-sh: var(--st-add-h-sh);
+    --h-fg: var(--st-add-h-fg);
+    --h-tf: var(--st-add-h-tf);
+    --p-bg: var(--st-add-p-bg);
+    --p-img: var(--st-add-p-img);
+    --p-sh: var(--st-add-p-sh);
+    --p-fg: var(--st-add-p-fg);
+    --p-tf: var(--st-add-p-tf);
+    border-radius: var(--st-thumb-r);
   }
 
-  /* The accent button: the same physics as every raised control, only its surface carries the accent. Soft in the
-     light theme, painted in the dark one: the --accent-button tokens of each theme. */
+  /* The primary button: the same physics as every raised control, only its surface carries the accent. */
   .accent-button {
-    --hover-bg: var(--accent-button-hover);
-    --active-bg: var(--accent-button-pressed);
-    --hover-ink: var(--accent-button-foreground);
-    --hover-shadow: var(--accent-button-shadow-hover);
-    --active-shadow: var(--accent-button-shadow-pressed);
-    --active-scale: 0.985;
-    background-color: var(--accent-button);
-    color: var(--accent-button-foreground);
-    box-shadow: var(--accent-button-shadow);
-    border-radius: var(--radius-field);
+    --n-bg: var(--st-primary-n-bg);
+    --n-img: var(--st-primary-n-img);
+    --n-sh: var(--st-primary-n-sh);
+    --h-bg: var(--st-primary-h-bg);
+    --h-img: var(--st-primary-h-img);
+    --h-sh: var(--st-primary-h-sh);
+    --h-fg: var(--st-primary-h-fg);
+    --h-tf: var(--st-primary-h-tf);
+    --p-bg: var(--st-primary-p-bg);
+    --p-img: var(--st-primary-p-img);
+    --p-sh: var(--st-primary-p-sh);
+    --p-fg: var(--st-primary-p-fg);
+    --p-tf: var(--st-primary-p-tf);
+    border-radius: var(--st-prim-r);
+    color: var(--st-primary-n-fg);
   }
 
   .painted {
-    --paint: var(--accent-paint);
-    --paint-foreground: var(--accent-foreground);
-    /* A painted surface with white text darkens on hover: lightening it (the mock-up's +12 % white) takes the text
-       under 4.5:1 on red, green, blue and orange. */
-    --paint-toward: #000000;
-    --paint-hover: color-mix(in srgb, var(--paint) 92%, var(--paint-toward));
-    --paint-pressed: color-mix(in srgb, var(--paint) 90%, #000000);
-    --paint-deep: color-mix(in srgb, var(--paint) 55%, #000000);
-    --paint-shadow: color-mix(in srgb, color-mix(in srgb, var(--paint) var(--shade-share), var(--shade-base)) var(--painted-alpha), transparent);
-    --hover-bg: var(--paint-hover);
-    --active-bg: var(--paint-pressed);
-    --hover-ink: var(--paint-foreground);
-    --active-scale: 0.985;
-    /* R(4,10) in the paint's own shade, then a thin bevel: the painted edge catches the same top-left light. Pressed:
-       I(3,7) in the paint's deep shade. Depth 0.7, light 1.1, shade 0.7. */
-    --hover-shadow:
-      2.4px 2.4px 6.2px var(--paint-shadow), -3.1px -3.1px 7.7px var(--shadow-light),
-      inset 0px 0px 0px transparent, inset 0px 0px 0px transparent,
-      inset 0.7px 0.7px 1px rgba(255, 255, 255, 0.3), inset -0.7px -0.7px 1.4px color-mix(in srgb, var(--paint-deep) 30%, transparent);
-    --active-shadow:
-      0px 0px 0px transparent, 0px 0px 0px transparent,
-      inset 1.8px 1.8px 4.3px color-mix(in srgb, var(--paint-deep) 55%, transparent), inset -2.3px -2.3px 5.4px rgba(255, 255, 255, 0.22),
-      inset 0px 0px 0px transparent, inset 0px 0px 0px transparent;
-    background-color: var(--paint);
+    --n-bg: var(--st-painted-n-bg);
+    --n-img: var(--st-painted-n-img);
+    --n-sh: var(--st-painted-n-sh);
+    --h-bg: var(--st-painted-h-bg);
+    --h-img: var(--st-painted-h-img);
+    --h-sh: var(--st-painted-h-sh);
+    --h-fg: var(--st-painted-h-fg);
+    --h-tf: var(--st-painted-h-tf);
+    --p-bg: var(--st-painted-p-bg);
+    --p-img: var(--st-painted-p-img);
+    --p-sh: var(--st-painted-p-sh);
+    --p-fg: var(--st-painted-p-fg);
+    --p-tf: var(--st-painted-p-tf);
+    --paint-foreground: var(--st-painted-n-fg);
+    border-radius: var(--st-prim-r);
     color: var(--paint-foreground);
-    box-shadow: var(--hover-shadow);
-    border-radius: var(--radius-field);
-  }
-
-  /* The dark theme's depth 0.8, light 0.7, shade 0.9, with the rim. */
-  .dark .painted {
-    --hover-shadow:
-      3.1px 3.1px 7.7px var(--paint-shadow), -2.2px -2.2px 5.6px var(--shadow-light),
-      inset 0.8px 0.8px 0px var(--rim), inset 0px 0px 0px transparent,
-      inset 0.8px 0.8px 1.2px rgba(255, 255, 255, 0.3), inset -0.8px -0.8px 1.6px color-mix(in srgb, var(--paint-deep) 30%, transparent);
-    --active-shadow:
-      0px 0px 0px transparent, 0px 0px 0px transparent,
-      inset 2.3px 2.3px 5.4px color-mix(in srgb, var(--paint-deep) 55%, transparent), inset -1.7px -1.7px 3.9px rgba(255, 255, 255, 0.22),
-      inset 0px 0px 0px transparent, inset 0px 0px 0px transparent;
   }
 
   .painted-destructive {
-    --paint: var(--destructive);
-    --paint-foreground: var(--destructive-foreground);
-  }
-
-  /* The dark theme's destructive paint is light, with dark text: it lightens on hover. */
-  .dark .painted-destructive {
-    --paint-toward: #FFFFFF;
+    --n-bg: var(--st-painted-danger-n-bg);
+    --n-img: var(--st-painted-danger-n-img);
+    --n-sh: var(--st-painted-danger-n-sh);
+    --h-bg: var(--st-painted-danger-h-bg);
+    --h-img: var(--st-painted-danger-h-img);
+    --h-sh: var(--st-painted-danger-h-sh);
+    --h-fg: var(--st-painted-danger-h-fg);
+    --h-tf: var(--st-painted-danger-h-tf);
+    --p-bg: var(--st-painted-danger-p-bg);
+    --p-img: var(--st-painted-danger-p-img);
+    --p-sh: var(--st-painted-danger-p-sh);
+    --p-fg: var(--st-painted-danger-p-fg);
+    --p-tf: var(--st-painted-danger-p-tf);
+    --paint-foreground: var(--st-painted-danger-n-fg);
   }
 
   .pill {
     display: inline-flex;
-    background-color: var(--surface);
-    box-shadow: var(--pill-shadow);
-    border-radius: var(--radius-field);
+    border-radius: var(--st-pill-r);
+    background-color: var(--st-pill-bg);
+    background-image: var(--st-pill-img);
+    box-shadow: var(--st-pill-sh);
+    -webkit-backdrop-filter: var(--st-ctrl-blur);
+    backdrop-filter: var(--st-ctrl-blur);
   }
 
   .pill-step {
-    --active-bg: var(--pressed);
-    --hover-shadow: var(--flat-shadow);
-    --active-shadow: var(--step-shadow-pressed);
-    box-shadow: var(--flat-shadow);
+    --n-bg: var(--st-step-n-bg);
+    --n-img: var(--st-step-n-img);
+    --n-sh: var(--st-step-n-sh);
+    --h-bg: var(--st-step-h-bg);
+    --h-img: var(--st-step-h-img);
+    --h-sh: var(--st-step-h-sh);
+    --h-fg: var(--st-step-h-fg);
+    --h-tf: var(--st-step-h-tf);
+    --p-bg: var(--st-step-p-bg);
+    --p-img: var(--st-step-p-img);
+    --p-sh: var(--st-step-p-sh);
+    --p-fg: var(--st-step-p-fg);
+    --p-tf: var(--st-step-p-tf);
   }
 
-  /* Each half is rounded on the pill's outer side only. */
+  /* The rest state of every kind that draws a surface. */
+  .raised,
+  .raised-sm,
+  .add-tile,
+  .accent-button,
+  .painted,
+  .pill-step {
+    background-color: var(--n-bg);
+    background-image: var(--n-img);
+    box-shadow: var(--n-sh);
+  }
+  .raised,
+  .raised-sm,
+  .add-tile,
+  .accent-button {
+    -webkit-backdrop-filter: var(--st-ctrl-blur);
+    backdrop-filter: var(--st-ctrl-blur);
+  }
+
+  /* Each half is rounded on the pill's outer side only; the seam between them is a 1 px line. */
   .pill > .pill-step:first-child {
-    border-radius: var(--radius-field) 0 0 var(--radius-field);
+    border-radius: var(--st-pill-r-l);
   }
   .pill > .pill-step:last-child {
-    border-radius: 0 var(--radius-field) var(--radius-field) 0;
+    border-radius: var(--st-pill-r-r);
   }
   .pill > .pill-step + .pill-step {
-    border-left: 1px solid var(--pill-seam);
+    border-left: var(--st-seam);
   }
 
+  /* The selected row. Its background and ring are drawn behind its content, inset by curM: the row keeps its box. */
   .row-selected {
-    --icon: var(--accent-ink);
-    --muted-foreground: var(--selected-muted);
-    --subtle-foreground: var(--selected-muted);
-    background-image: linear-gradient(90deg, var(--selected-from), var(--selected-to));
-    color: var(--accent-ink);
-    border-radius: var(--radius-field);
+    --icon: var(--st-cur-fg);
+    --muted-foreground: var(--st-cur-muted);
+    --subtle-foreground: var(--st-cur-muted);
+    /* The markup's flat tints in the row (bg-(--ghost-hover), data-[state=open]:bg-(--ghost-pressed)) are ghostSel's. */
+    --ghost-hover: var(--st-ghost-sel-h-bg);
+    --ghost-pressed: var(--st-ghost-sel-p-bg);
+    position: relative;
+    isolation: isolate;
+    border-radius: var(--st-cur-r);
+    color: var(--st-cur-fg);
+  }
+  .row-selected::after {
+    content: '';
+    position: absolute;
+    inset: var(--st-cur-m);
+    z-index: -1;
+    border-radius: inherit;
+    background: var(--st-cur);
+    box-shadow: var(--st-cur-sh);
+    pointer-events: none;
   }
 
-  /* The stepper on a selected row is made of the colour it sits on; its shadow takes the accent. */
+  /* The stepper on a selected row and its halves, and flat controls in the row. */
   .row-selected .pill {
-    background-color: var(--selected-pill);
-    box-shadow: var(--pill-shadow-selected);
+    background-color: var(--st-pill-sel-bg);
+    background-image: none;
+    box-shadow: var(--st-pill-sel-sh);
   }
-
-  /* Its halves light up under the pointer and sink deeper into the accent. */
+  .row-selected :where(.pressable:not(.raised, .raised-sm, .add-tile, .accent-button, .painted, .pill-step)) {
+    --n-bg: var(--st-ghost-sel-n-bg);
+    --h-bg: var(--st-ghost-sel-h-bg);
+    --h-fg: var(--st-ghost-sel-h-fg);
+    --h-tf: var(--st-ghost-sel-h-tf);
+    --p-bg: var(--st-ghost-sel-p-bg);
+    --p-fg: var(--st-ghost-sel-p-fg);
+    --p-tf: var(--st-ghost-sel-p-tf);
+  }
   .row-selected .pill-step {
-    --hover-bg: var(--selected-step-hover);
-    --hover-ink: var(--selected-step-hover-ink);
-    --active-bg: var(--selected-step-pressed);
-    --active-shadow: var(--selected-step-shadow-pressed);
+    --n-bg: var(--st-step-sel-n-bg);
+    --n-img: var(--st-step-sel-n-img);
+    --n-sh: var(--st-step-sel-n-sh);
+    --h-bg: var(--st-step-sel-h-bg);
+    --h-img: var(--st-step-sel-h-img);
+    --h-sh: var(--st-step-sel-h-sh);
+    --h-fg: var(--st-step-sel-h-fg);
+    --h-tf: var(--st-step-sel-h-tf);
+    --p-bg: var(--st-step-sel-p-bg);
+    --p-img: var(--st-step-sel-p-img);
+    --p-sh: var(--st-step-sel-p-sh);
+    --p-fg: var(--st-step-sel-p-fg);
+    --p-tf: var(--st-step-sel-p-tf);
   }
 
+  /* Text without its own text-* utility takes the kind's hover colour. */
   @media (hover: hover) {
     .pressable:hover:not(:disabled, [aria-disabled='true'], [data-disabled]) {
-      color: var(--hover-ink);
+      color: var(--h-fg);
     }
   }
 
@@ -602,24 +757,32 @@
 }
 
 /* Interactive states. Unlayered on purpose: they must win over a bg-* utility on the same control (outline buttons
-   are passed bg-surface). Only the shadow-carrying kinds change their shadows and scale. */
+   are passed bg-surface). Only the kinds that draw a surface change their image and shadow (a flat control keeps a
+   focus ring); transforms only without reduced motion. */
 @media (hover: hover) {
   .pressable:hover:not(:disabled, [aria-disabled='true'], [data-disabled]) {
-    background-color: var(--hover-bg);
+    background-color: var(--h-bg);
   }
-  .pressable:is(.raised, .raised-sm, .accent-button, .painted, .pill-step):hover:not(:disabled, [aria-disabled='true'], [data-disabled]) {
-    box-shadow: var(--hover-shadow);
+  .pressable:is(.raised, .raised-sm, .add-tile, .accent-button, .painted, .pill-step):hover:not(:disabled, [aria-disabled='true'], [data-disabled]) {
+    background-image: var(--h-img);
+    box-shadow: var(--h-sh);
+  }
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .pressable:hover:not(:disabled, [aria-disabled='true'], [data-disabled]) {
+    transform: var(--h-tf);
   }
 }
 .pressable:active:not(:disabled, [aria-disabled='true'], [data-disabled]) {
-  background-color: var(--active-bg);
+  background-color: var(--p-bg);
 }
-.pressable:is(.raised, .raised-sm, .accent-button, .painted, .pill-step):active:not(:disabled, [aria-disabled='true'], [data-disabled]) {
-  box-shadow: var(--active-shadow);
+.pressable:is(.raised, .raised-sm, .add-tile, .accent-button, .painted, .pill-step):active:not(:disabled, [aria-disabled='true'], [data-disabled]) {
+  background-image: var(--p-img);
+  box-shadow: var(--p-sh);
 }
 @media (prefers-reduced-motion: no-preference) {
-  .pressable:is(.raised, .raised-sm, .accent-button, .painted):active:not(:disabled, [aria-disabled='true'], [data-disabled]) {
-    transform: scale(var(--active-scale));
+  .pressable:active:not(:disabled, [aria-disabled='true'], [data-disabled]) {
+    transform: var(--p-tf);
   }
 }
 
@@ -656,4 +819,52 @@
   [data-sonner-toaster][data-y-position='bottom'] {
     bottom: calc(var(--dock-h, env(safe-area-inset-bottom, 0px)) + 8px) !important;
   }
+}
+
+/* Toasts (vue-sonner): the box takes the menus' shadow, and the action ("Undo") is the style's secondary button (btn: its
+   fill, rim and shadow, the radius and weight of buttons, hover and press). Unlayered, with the toaster's attribute in
+   the selector, to win over the library's own rules wherever its stylesheet lands. */
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] {
+  box-shadow: var(--st-pop-sh);
+}
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button] {
+  border-radius: var(--st-btn-r);
+  background-color: var(--st-btn-n-bg);
+  background-image: var(--st-btn-n-img);
+  box-shadow: var(--st-btn-n-sh);
+  color: var(--popover-foreground);
+  font-weight: var(--st-plain-btn-weight);
+  -webkit-backdrop-filter: var(--st-ctrl-blur);
+  backdrop-filter: var(--st-ctrl-blur);
+}
+@media (hover: hover) {
+  [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button]:hover {
+    background-color: var(--st-btn-h-bg);
+    background-image: var(--st-btn-h-img);
+    box-shadow: var(--st-btn-h-sh);
+    color: var(--st-btn-h-fg);
+  }
+}
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button]:active {
+  background-color: var(--st-btn-p-bg);
+  background-image: var(--st-btn-p-img);
+  box-shadow: var(--st-btn-p-sh);
+  color: var(--st-btn-p-fg);
+}
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button]:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button]:active {
+    transform: var(--st-btn-p-tf);
+  }
+}
+
+/* Dark: the navigation drawer is the page's colour and the scrim behind it nearly black, so its open edge would vanish
+   (Tailwind's shadow-xl does not show on dark): it takes the sheets' rim (--st-sheet-line, derived for dark in
+   derive.ts). Neumorphism keeps its own (owner-approved) edge; Neo-brutal draws a 2 px line (brutal.css). Unlayered, to
+   replace the shadow utility. */
+.dark:not([data-style='neumorphism'], [data-style='brutal']) #nav-drawer {
+  box-shadow: inset -1px 0 0 var(--st-sheet-line);
 }

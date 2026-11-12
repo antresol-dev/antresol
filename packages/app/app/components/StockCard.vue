@@ -47,12 +47,14 @@ const counted = computed(() => {
 })
 
 const amountClass = 'flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-1 text-left'
-const numberClass = 'text-[32px] leading-none font-bold tracking-[-0.02em] tabular-nums wrap-anywhere'
+const numberClass = 'amount text-[32px] leading-none tracking-[-0.02em] tabular-nums wrap-anywhere'
 const action = 'h-11 min-w-0 px-2 font-bold'
 </script>
 
 <template>
-  <section class="raised-card grid min-w-0 gap-3 p-4.5" :aria-label="$t('item.stock')">
+  <!-- data-stock is the card's state for the styles' CSS (Tinkerer's LED): "out" at zero or less, otherwise "ok". There is no
+       "low" state: the app has no reorder threshold. -->
+  <section class="stock-card raised-card grid min-w-0 gap-3 p-4.5" :data-stock="total.outOfStock ? 'out' : 'ok'" :aria-label="$t('item.stock')">
     <div class="flex min-w-0 items-start justify-between gap-3">
       <div class="grid min-w-0 gap-1.5">
         <!-- With a stepper the number is a flat button that opens Count. -->
@@ -65,13 +67,13 @@ const action = 'h-11 min-w-0 px-2 font-bold'
           @click="emit('count')"
         >
           <span :class="[numberClass, total.outOfStock && 'text-muted-foreground']">{{ total.number }}</span>
-          <span class="text-sm font-semibold text-muted-foreground">{{ total.unit }}</span>
-          <span v-if="total.outOfStock" class="ml-1.5 text-sm font-semibold text-muted-foreground">{{ $t('item.outOfStock') }}</span>
+          <span class="text-sm leading-none font-semibold text-muted-foreground">{{ total.unit }}</span>
+          <span v-if="total.outOfStock" class="ml-1.5 text-sm leading-none font-semibold text-muted-foreground">{{ $t('item.outOfStock') }}</span>
         </button>
         <p v-else :class="amountClass">
           <span :class="[numberClass, total.outOfStock && 'text-muted-foreground']">{{ total.number }}</span>
-          <span class="text-sm font-semibold text-muted-foreground">{{ total.unit }}</span>
-          <span v-if="total.outOfStock" class="ml-1.5 text-sm font-semibold text-muted-foreground">{{ $t('item.outOfStock') }}</span>
+          <span class="text-sm leading-none font-semibold text-muted-foreground">{{ total.unit }}</span>
+          <span v-if="total.outOfStock" class="ml-1.5 text-sm leading-none font-semibold text-muted-foreground">{{ $t('item.outOfStock') }}</span>
         </p>
         <p v-if="prices" class="text-[13px] text-muted-foreground tabular-nums">{{ prices }}</p>
         <p v-if="counted" class="text-[13px] text-muted-foreground">{{ counted }}</p>

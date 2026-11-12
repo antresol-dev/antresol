@@ -3,6 +3,7 @@ import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
 import { cspFor } from './app/lib/csp'
+import { onestOnly } from './app/lib/precache-fonts'
 
 const baseURL = process.env.NUXT_APP_BASE_URL ?? '/'
 
@@ -52,7 +53,21 @@ export default defineNuxtConfig({
     storageKey: 'gm-color-mode',
   },
   fonts: {
-    families: [{ name: 'Manrope', provider: 'google', weights: [400, 500, 600, 700, 800] }],
+    defaults: { subsets: ['latin', 'latin-ext', 'cyrillic'] },
+    families: [
+      // Onest is the Base style's font (the default style): preloaded and precached.
+      { name: 'Onest', provider: 'google', weights: [400, 500, 600, 700], global: true, display: 'swap', preload: { subsets: ['latin', 'cyrillic'], weights: [400, 600] } },
+      // The rest are declared (global: every @font-face is in the CSS, the browser fetches a face only when a style uses it),
+      // never preloaded; the service worker caches them on first use (gm-fonts).
+      { name: 'Manrope', provider: 'google', weights: [400, 500, 600, 700, 800], global: true, display: 'swap', preload: false },
+      { name: 'Inter', provider: 'google', weights: [400, 500, 600, 700], global: true, display: 'swap', preload: false },
+      { name: 'Rubik', provider: 'google', weights: [400, 500, 600, 700], global: true, display: 'swap', preload: false },
+      { name: 'Unbounded', provider: 'google', weights: [600, 700, 800], global: true, display: 'swap', preload: false },
+      { name: 'Exo 2', provider: 'google', weights: [400, 500, 600, 700], global: true, display: 'swap', preload: false },
+      { name: 'Jost', provider: 'google', weights: [400, 500, 600], global: true, display: 'swap', preload: false },
+      { name: 'IBM Plex Sans', provider: 'google', weights: [400, 500, 600], global: true, display: 'swap', preload: false },
+      { name: 'IBM Plex Mono', provider: 'google', weights: [400, 500, 600], global: true, display: 'swap', preload: false },
+    ],
   },
   i18n: {
     defaultLocale: 'en',
@@ -68,8 +83,8 @@ export default defineNuxtConfig({
       short_name: 'GrayMatter',
       description: 'Personal inventory of anything',
       display: 'standalone',
-      background_color: '#EDEFF3',
-      theme_color: '#EDEFF3',
+      background_color: '#F4F5F7',
+      theme_color: '#F4F5F7',
       start_url: '.',
       scope: '.',
       // Relative to the manifest, so they work under /graymatter/ too. The layout reads and clears `action`.
@@ -83,6 +98,9 @@ export default defineNuxtConfig({
     },
     workbox: {
       globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+      // Only the default style's font (Onest) is precached, the rest on first use (gm-fonts below): filtered in the
+      // `pwa:beforeBuildServiceWorker` hook (hooks, below). Do NOT set manifestTransforms here: it replaces the module's own
+      // transform (index.html -> the base URL) and the service worker no longer installs (app/lib/precache-fonts.ts).
       // The app shell is precached under the base URL itself ("/graymatter/"), not under "index.html".
       navigateFallback: baseURL,
       // Files with an extension (assets, manifest, sw) are never navigations to the app shell.
@@ -110,9 +128,26 @@ export default defineNuxtConfig({
             cacheableResponse: { statuses: [200] },
           },
         },
+        {
+          // Fonts of the other styles (@nuxt/fonts emits them under _nuxt/fonts/): cache first, real 200 responses only, so a
+          // style's font works offline once it has been used. Onest is already in the precache and answered from there.
+          urlPattern: /\/_nuxt\/fonts\/[^/]+\.woff2(?:\?.*)?$/,
+          handler: 'CacheFirst',
+          options: {
+            cacheName: 'gm-fonts',
+            expiration: { maxEntries: 60 },
+            cacheableResponse: { statuses: [200] },
+          },
+        },
       ],
     },
     devOptions: { enabled: false },
+  },
+  hooks: {
+    // After @vite-pwa/nuxt has set its default manifest transform: ours is added to it, not put in its place.
+    'pwa:beforeBuildServiceWorker': (options) => {
+      options.workbox.manifestTransforms = [...(options.workbox.manifestTransforms ?? []), onestOnly(options.outDir)]
+    },
   },
   app: {
     // GitHub Pages project sites live under /<repo>/; set NUXT_APP_BASE_URL=/graymatter/ for that build.

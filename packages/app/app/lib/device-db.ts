@@ -1,6 +1,7 @@
 import { newId, type Inventory, type InventorySnapshot, type RestoreMode } from '@graymatter/core'
 import { createStore, del, get, getMany, keys, set, setMany, update, type UseStore } from 'idb-keyval'
 import type { AccentName } from './accent'
+import type { StyleName } from './styles/types'
 import type { InventoryRef, SourceConfig } from './types'
 import type { CheckInterval } from './workspace-types'
 
@@ -9,8 +10,12 @@ export interface DeviceSettings {
   current: InventoryRef | null
   /** Absent until chosen: DEFAULT_CHECK_INTERVAL. */
   checkInterval?: CheckInterval
-  /** Absent until chosen: DEFAULT_ACCENT. A value this app does not know (from a newer one) counts as absent. */
+  /** Absent until chosen ("Style default": the style's own accent). A value this app does not know (from a newer one)
+   *  counts as absent and stays stored. */
   accent?: AccentName
+  /** Absent until chosen: DEFAULT_STYLE (lib/styles/registry.ts). A value this app does not know counts as absent and
+   *  stays stored. */
+  style?: StyleName
 }
 
 /** This device's backup bookkeeping for one source (the reminder and "Last backup" in settings). */

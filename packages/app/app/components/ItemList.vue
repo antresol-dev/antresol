@@ -49,9 +49,9 @@ const rows = computed(() =>
 
 <template>
   <section class="grid min-w-0 grid-cols-1 gap-2">
-    <h2 class="px-1 text-[13px] font-semibold text-subtle-foreground">{{ $t('folder.items', { count: items.length }) }}</h2>
+    <h2 class="section-label px-1 text-[13px]">{{ $t('folder.items', { count: items.length }) }}</h2>
     <!-- A flat list on the page: rows divided by lines, a row tile tinted under the pointer. -->
-    <ul>
+    <ul class="surface-list">
       <li
         v-for="item in rows"
         :key="item.id"
@@ -88,7 +88,7 @@ const rows = computed(() =>
             v-if="item.outOfStock"
             class="shrink-0 rounded-chip bg-chip px-2 py-0.5 text-xs font-bold text-subtle-foreground"
           >{{ $t('list.out') }}</span>
-          <span v-else class="shrink-0 text-base font-bold tabular-nums">
+          <span v-else class="amount shrink-0 text-base tabular-nums">
             {{ item.number }}<span v-if="item.unit" class="text-xs font-semibold text-muted-foreground" :class="item.unitGap && 'ml-0.5'">{{ item.unit }}</span>
           </span>
         </NuxtLink>

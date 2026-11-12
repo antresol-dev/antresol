@@ -19,9 +19,9 @@ const actions = computed(() => [
 
 <template>
   <section class="grid min-w-0 grid-cols-1 gap-2">
-    <h2 class="px-1 text-[13px] font-semibold text-subtle-foreground">{{ $t('item.attributes') }}</h2>
+    <h2 class="section-label px-1 text-[13px]">{{ $t('item.attributes') }}</h2>
     <!-- A flat list on the page, rows divided by lines. -->
-    <dl v-if="attributes.length > 0">
+    <dl v-if="attributes.length > 0" class="surface-list">
       <div
         v-for="a in attributes"
         :key="a.attributeId"
@@ -43,7 +43,7 @@ const actions = computed(() => [
         />
       </div>
     </dl>
-    <Button variant="outline" class="mt-1 h-11 justify-self-start px-4.5 font-bold" :disabled="locked" @click="emit('add')">
+    <Button variant="outline" class="mt-1 h-11 justify-self-start px-4.5 btn-label" :disabled="locked" @click="emit('add')">
       <Plus class="size-5" aria-hidden="true" />
       {{ $t('item.addAttribute') }}
     </Button>

@@ -114,8 +114,8 @@ onBeforeUnmount(() => document.removeEventListener('paste', onPaste))
 const cover = computed(() => props.photos[0] ?? null)
 const alt = (i: number): string => t('photos.alt', { n: i + 1, total: props.photos.length })
 // The mock-up's photo block: the cover and its thumbnails lie flat on the photo backing; "Add photos" is a raised tile.
-// Tiles are 14 like every tile; 6 px apart, so the raised one has room for its shadow.
-const tile = 'relative size-16 shrink-0 overflow-hidden rounded-field'
+// Tiles take the style's thumbnail radius; 6 px apart, so the raised one has room for its shadow.
+const tile = 'relative size-16 shrink-0 overflow-hidden'
 const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thumb-foreground motion-safe:animate-pulse'
 </script>
 
@@ -131,14 +131,14 @@ const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thu
     <template v-if="cover">
       <button
         type="button"
-        class="aspect-[4/3] max-h-96 w-full overflow-hidden rounded-card bg-thumb"
+        class="photo-cover aspect-[4/3] max-h-96 w-full overflow-hidden"
         :aria-label="alt(0)"
         @click="show(0)"
       >
         <PhotoImg :url="cover.url" size="full" :alt="alt(0)" class="size-full object-cover" />
       </button>
       <div v-if="photos.length > 1 || progress || canAdd" class="flex flex-wrap gap-1.5">
-        <button v-for="(p, i) in photos" :key="p.id" type="button" :class="[tile, 'bg-thumb']" :aria-label="alt(i)" @click="show(i)">
+        <button v-for="(p, i) in photos" :key="p.id" type="button" :class="[tile, 'photo-thumb']" :aria-label="alt(i)" @click="show(i)">
           <PhotoImg :url="p.url" size="thumb" :alt="alt(i)" class="size-full object-cover" />
         </button>
         <div
@@ -146,14 +146,14 @@ const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thu
           :key="`up${n}`"
           role="status"
           :aria-label="$t('photos.uploading', { n, total: progress?.total ?? 0 })"
-          :class="[tile, pending]"
+          :class="[tile, 'photo-thumb', pending]"
         >
           {{ $t('photos.progress', { n, total: progress?.total ?? 0 }) }}
         </div>
         <button
           v-if="canAdd"
           type="button"
-          :class="[tile, 'raised-sm pressable grid place-items-center']"
+          :class="[tile, 'add-tile pressable grid place-items-center']"
           :aria-label="$t('photos.add')"
           @click="addOpen = true"
         >
@@ -178,7 +178,7 @@ const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thu
         <PhotoPicker v-else multiple :disabled="!canAdd" @pick="upload" />
       </div>
       <div v-if="skeletons.length > 1" class="flex flex-wrap gap-1.5">
-        <div v-for="n in skeletons.slice(1)" :key="`up${n}`" :class="[tile, pending]">
+        <div v-for="n in skeletons.slice(1)" :key="`up${n}`" :class="[tile, 'photo-thumb', pending]">
           {{ $t('photos.progress', { n, total: progress?.total ?? 0 }) }}
         </div>
       </div>

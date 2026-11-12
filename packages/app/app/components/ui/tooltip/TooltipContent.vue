@@ -28,11 +28,11 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
       data-slot="tooltip-content"
       aria-hidden="true"
       v-bind="{ ...forwarded, ...$attrs }"
-      :class="cn('bg-foreground text-background motion-safe:animate-pop-in motion-safe:data-[state=closed]:animate-pop-out motion-reduce:animate-fade-in motion-reduce:data-[state=closed]:animate-fade-out z-50 w-fit origin-(--reka-tooltip-content-transform-origin) rounded-chip px-3 py-1.5 text-xs text-balance', props.class)"
+      :class="cn('surface-tip motion-safe:animate-pop-in motion-safe:data-[state=closed]:animate-pop-out motion-reduce:animate-fade-in motion-reduce:data-[state=closed]:animate-fade-out z-50 w-fit origin-(--reka-tooltip-content-transform-origin) rounded-chip px-3 py-1.5 text-xs text-balance', props.class)"
     >
       <slot />
 
-      <TooltipArrow class="bg-foreground fill-foreground z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-xs" />
+      <TooltipArrow class="bg-(--st-tip) fill-(--st-tip) z-50 size-2.5 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-xs" />
     </TooltipContent>
   </TooltipPortal>
 </template>

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { DEFAULT_STYLE, STYLES } from '../app/lib/styles/registry'
 
 vi.stubGlobal('defineNuxtConfig', <T>(config: T) => config)
 const { default: config } = await import('../nuxt.config')
@@ -31,12 +32,15 @@ describe('nuxt config', () => {
     })
   })
 
-  it('paints the splash and title bar in the Hybrid v2 background', () => {
+  it('paints the splash and title bar in the default style\'s light page colour', () => {
     const manifest = config.pwa?.manifest
-    expect(manifest && [manifest.background_color, manifest.theme_color]).toEqual(['#EDEFF3', '#EDEFF3'])
+    const { build, defaultAccent } = STYLES[DEFAULT_STYLE]
+    const page = build('light', defaultAccent).pageColor
+    expect(page).toBe('#F4F5F7')
+    expect(manifest && [manifest.background_color, manifest.theme_color]).toEqual([page, page])
   })
 
   it('loads Manrope 800 (font-extrabold)', () => {
-    expect(config.fonts?.families?.[0]).toMatchObject({ name: 'Manrope', weights: [400, 500, 600, 700, 800] })
+    expect(config.fonts?.families?.find(f => f.name === 'Manrope')).toMatchObject({ name: 'Manrope', weights: [400, 500, 600, 700, 800] })
   })
 })

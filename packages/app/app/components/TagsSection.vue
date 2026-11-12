@@ -96,7 +96,7 @@ async function remove(): Promise<void> {
         {{ $t('dictionaries.addTag') }}
       </Button>
     </div>
-    <ul v-if="rows.length > 0">
+    <ul v-if="rows.length > 0" class="surface-list">
       <li
         v-for="row in rows"
         :key="row.tag.id"

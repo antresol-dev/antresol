@@ -224,7 +224,7 @@ const linkClass =
           <li
             v-for="tag in view.tags"
             :key="tag.id"
-            class="max-w-full truncate rounded-full bg-chip px-2.5 py-1 text-[13px] font-semibold"
+            class="tag-chip max-w-full truncate px-2.5 py-1 text-[13px] font-semibold"
           >
             {{ tag.name }}
           </li>
@@ -254,7 +254,7 @@ const linkClass =
         @archive="askArchive"
       />
       </div>
-      <Button variant="outline" class="h-11 justify-self-start px-4.5 font-bold" :disabled="locked" @click="addOpen = true">
+      <Button variant="outline" class="h-11 justify-self-start px-4.5 btn-label" :disabled="locked" @click="addOpen = true">
         <Plus class="size-5" aria-hidden="true" />
         {{ $t('variantsForm.open') }}
       </Button>

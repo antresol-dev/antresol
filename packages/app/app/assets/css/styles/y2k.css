@@ -1,0 +1,26 @@
+/*
+ * S7 Y2K: what its tokens cannot draw (lib/styles/y2k.ts holds the rest — the grid-and-star wallpaper is `page`, the
+ * ✦ before section labels is `mark`, the frosted bubbles are `card`, `list` and `photo` with their blur, the springy
+ * press is `tr` with each control's pressed scale). Here: the pastel cycles of tag chips and
+ * thumbnails, whose first colour main.css already paints (--st-chips-0, --st-thumbs-0).
+ */
+
+@layer components {
+  [data-style='y2k'] .tag-chip:nth-child(4n + 2) {
+    background: var(--st-chips-1);
+  }
+  [data-style='y2k'] .tag-chip:nth-child(4n + 3) {
+    background: var(--st-chips-2);
+  }
+  [data-style='y2k'] .tag-chip:nth-child(4n + 4) {
+    background: var(--st-chips-3);
+  }
+
+  /* Thumbnails: the gallery row also holds upload placeholders and the "Add photos" tile; count thumbnails only. */
+  [data-style='y2k'] .photo-thumb:nth-child(3n + 2 of .photo-thumb) {
+    background: var(--st-thumbs-1);
+  }
+  [data-style='y2k'] .photo-thumb:nth-child(3n + 3 of .photo-thumb) {
+    background: var(--st-thumbs-2);
+  }
+}

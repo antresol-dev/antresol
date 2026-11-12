@@ -1,0 +1,27 @@
+/*
+ * S4 Liquid glass: what its tokens (lib/styles/liquid.ts) cannot say. The wallpaper, the glass of every panel and
+ * control (backdrop-filter from hdrBlur, surfBlur, ctrlBlur, popBlur), the rims and the springy press are token-driven.
+ *
+ * Unlayered: these rules must win over the markup's utilities on the same element.
+ */
+
+/* Blur only panels. A control inside a blurred panel (a stepper in every variant row, swatches in a settings card) or on
+   an opaque sheet would only blur the panel's own even glass again, once per row: it keeps its glass fill and rim
+   without a backdrop of its own. Controls on the page and in the dock keep theirs. */
+[data-style='liquid'] :is(.surface-header, .surface-list, .raised-card, .surface-sheet, .glass) :is(.raised, .raised-sm, .add-tile, .accent-button, .pill) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* List thumbnails and icon tiles stay rounded squares (12 px, the mock-up's item radius), not circles that crop photos.
+   (Blocks the markup rounds like a field — banners, option rows, the text area — are bounded by main.css.) */
+[data-style='liquid'] {
+  --radius-thumb: 12px;
+  --radius-icon: 12px;
+}
+
+/* Unchecked checkboxes and radios take the style's muted colour: the fields' hairline (8 %) leaves an empty box all but
+   invisible on glass. */
+[data-style='liquid'] :is([data-slot='checkbox'], [data-slot='radio-group-item']):not([data-state='checked'], [aria-invalid='true']) {
+  border-color: var(--st-muted);
+}

@@ -1,0 +1,5 @@
+/*
+ * S1 Base: what its tokens cannot express (lib/styles/base.ts). Base is flat: no page pattern, no mark before section
+ * labels, labels in their own case; shadows, tones and radii are all tokens. Nothing is left for CSS: the dark drawer's
+ * edge is main.css's for every style.
+ */

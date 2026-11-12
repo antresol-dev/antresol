@@ -42,7 +42,7 @@ function pointerdown(id: Id, e: PointerEvent): void {
 
 <template>
   <!-- A flat list on the page: rows divided by lines, a row tile tinted under the pointer. -->
-  <ul>
+  <ul class="surface-list">
     <li
       v-for="f in folders"
       :key="f.id"

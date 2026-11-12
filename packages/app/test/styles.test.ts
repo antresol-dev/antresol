@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -371,7 +371,7 @@ const WHITE: Rgba = { r: 255, g: 255, b: 255, a: 1 }
  * `neumorphismGhostSel`: Neumorphism's (and the stubs', which draw it) "⋯" in a selected row on hover and open is
  * 3.9–4.5:1 since before styles — a known exception (plan 10 Task 1 report, concern 1), checked for no other style.
  */
-function contrastProblems(t: StyleTokens, neumorphismGhostSel = false): string[] {
+function contrastProblems(t: StyleTokens, neumorphismGhostSel = false, stateInk: StateInk = { h: false, p: false }): string[] {
   const problems: string[] = []
   const page = backdrops(`${t.winBg}, ${t.page}`, [WHITE])
   const on = (bg: string, under: Rgba[]) => backdrops(bg, under)
@@ -388,6 +388,9 @@ function contrastProblems(t: StyleTokens, neumorphismGhostSel = false): string[]
     }
   }
   for (const [name, surface] of [['page', page], ['card', card], ['list', list], ['pop', pop]] as const) {
+    // A card with text of its own (Neo-brutal's Memphis cards: ink in both themes, where its dark page text is light)
+    // gives everything in it that text in the style's CSS (brutal.css); cardFg and cardMuted are checked below.
+    if (name === 'card' && t.cardFg !== t.fg) continue
     for (const text of ['fg', 'muted', 'icon'] as const) check(`${text} on ${name}`, t[text], surface)
   }
   check('subtle on page', t.subtle, page)
@@ -440,21 +443,38 @@ function contrastProblems(t: StyleTokens, neumorphismGhostSel = false): string[]
   }
   // The row menu "⋯" draws its hover and open text in the markup's accent ink (hover:text-accent-ink,
   // data-[state=open]:text-accent-ink) on the ghost tints (in a selected row, ghostSel's).
+  // A style whose own CSS re-points that ink to the state's text (stateInk) draws the state's fg there instead.
   for (const s of ['h', 'p'] as const) {
-    check(`ink on ghost.${s}.bg (row menu)`, t.ink, on(t.kinds.ghost[s].bg, list))
-    if (!neumorphismGhostSel) check(`ink on ghostSel.${s}.bg (row menu in a selected row)`, t.ink, on(t.ghostSel[s].bg, cur))
+    const ghostInk = stateInk[s] ? t.kinds.ghost[s].fg : t.ink
+    const selInk = stateInk[s] ? t.ghostSel[s].fg : t.ink
+    check(`${stateInk[s] ? `ghost.${s}.fg` : 'ink'} on ghost.${s}.bg (row menu)`, ghostInk, on(t.kinds.ghost[s].bg, list))
+    if (!neumorphismGhostSel) check(`${stateInk[s] ? `ghostSel.${s}.fg` : 'ink'} on ghostSel.${s}.bg (row menu in a selected row)`, selInk, on(t.ghostSel[s].bg, cur))
   }
   return problems
 }
 
+interface StateInk {
+  h: boolean
+  p: boolean
+}
+/** Whether the style's own CSS (assets/css/styles/<name>.css) re-points --accent-ink on a hovered (h) or pressed and
+ *  open (p) control to that state's text colour (Neo-brutal: ink on its Memphis fills, where no accent reads in the
+ *  dark theme): the row menu's "⋯" then shows that colour, not the accent ink. */
+function stateInkOf(name: StyleName): StateInk {
+  const path = fileURLToPath(new URL(`../app/assets/css/styles/${name}.css`, import.meta.url))
+  const code = existsSync(path) ? readFileSync(path, 'utf8') : ''
+  return { h: code.includes('--accent-ink: var(--h-fg)'), p: code.includes('--accent-ink: var(--p-fg)') }
+}
+
 describe.each(STYLE_NAMES)('contrast: %s', (name) => {
   const info = STYLES[name]
+  const stateInk = stateInkOf(name)
   const accents: AccentName[] = info.fixedPalette ? [info.defaultAccent] : ACCENT_NAMES
   it.each(MODES.flatMap((mode) => accents.map((accent) => [mode, accent] as const)))('%s, %s: every text on its background at 4.5:1 or better', (mode, accent) => {
     const t = info.build(mode, accent)
     // Neumorphism's own tokens (itself, or a stub that still draws it) carry the one known exception.
     const own = name === 'neumorphism' || JSON.stringify(t) === JSON.stringify(neumorphism(mode, effectiveAccent(name, accent)))
-    expect(contrastProblems(t, own)).toEqual([])
+    expect(contrastProblems(t, own, stateInk)).toEqual([])
   })
 })
 

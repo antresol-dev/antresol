@@ -1,0 +1,53 @@
+/*
+ * S8 Retro atomic: what its tokens (lib/styles/retro.ts) cannot say. Every colour here is a token. The atom-dot page,
+ * the ✦ mark, the capitals and the boomerang radii are tokens already.
+ *
+ *  1. Dashed row dividers: the app draws its dividers as 1 px lines (::before with bg-divider, divide-*, border-*);
+ *     here they are the mock-up's `divider`, a 1 px dashed border, in the same 1 px box.
+ *  2. Tags and thumbnails take their colours in turn, as on the board.
+ *  3. Field-sized things (inputs, select triggers, text areas, picker lists, rows under the pointer) take the selected
+ *     row's boomerang instead of the controls' 999 px: a text area or a scrolling list drawn as a stadium would clip
+ *     its corners. Buttons keep their kind's round ends, except the few the markup gives rounded-field (a sheet's main
+ *     button), which then match the fields above them.
+ *  4. The phone sheet's top corners: rounded-t-card cannot take the card's four-value boomerang (each corner holds one
+ *     radius), so they are its top-left and top-right.
+ */
+
+[data-style='retro']:root {
+  --radius-field: var(--st-cur-r);
+}
+
+/* 1. */
+[data-style='retro'] [class*='before:bg-divider']::before,
+[data-style='retro'] .h-px.bg-divider {
+  background-color: transparent;
+  border-top: var(--st-divider);
+}
+[data-style='retro'] .divide-divider > *,
+[data-style='retro'] .border-divider {
+  border-style: dashed;
+}
+
+/* 2. */
+@layer components {
+  [data-style='retro'] .tag-chip:nth-child(3n + 2) {
+    background: var(--st-chips-1);
+  }
+  [data-style='retro'] .tag-chip:nth-child(3n) {
+    background: var(--st-chips-2);
+  }
+  [data-style='retro'] .photo-thumb:nth-child(3n + 2) {
+    background: var(--st-thumbs-1);
+  }
+  [data-style='retro'] .photo-thumb:nth-child(3n) {
+    background: var(--st-thumbs-2);
+  }
+}
+
+/* 4. Below 768 px (md), where the sheet is a bottom sheet: 26 px and 8 px, the card's top corners. */
+@media (width < 48rem) {
+  [data-style='retro'] .surface-sheet.rounded-t-card {
+    border-top-left-radius: 26px;
+    border-top-right-radius: 8px;
+  }
+}

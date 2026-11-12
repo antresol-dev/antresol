@@ -61,6 +61,8 @@
 
 /* The styles' own drawings: one @import per style, here (imports come first), e.g. @import "./styles/retro.css"; */
 @import "./styles/base.css";
+@import "./styles/acrylic.css";
+@import "./styles/liquid.css";
 @import "./styles/linear.css";
 
 @custom-variant dark (&:where(.dark, .dark *));

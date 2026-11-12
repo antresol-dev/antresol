@@ -1,4 +1,4 @@
-import { newId, type Command, type Quantity } from '@graymatter/core'
+import { newId, type Command, type Quantity } from '@antresol/core'
 import { describe, expect, it } from 'vitest'
 import { attributeCreate, makeStorage, sizeAxis, TEST_ACTOR, variantsCreate } from './helpers'
 

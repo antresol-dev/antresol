@@ -1,4 +1,4 @@
-import { customUnitKey, newId, type Command, type Id, type InventorySnapshot, type InventoryStorage, type Quantity } from '@graymatter/core'
+import { customUnitKey, newId, type Command, type Id, type InventorySnapshot, type InventoryStorage, type Quantity } from '@antresol/core'
 import { attributeCreate, TEST_ACTOR, variantsCreate } from './helpers'
 
 const q = (s: string) => s as Quantity

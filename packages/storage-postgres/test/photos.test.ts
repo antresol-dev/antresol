@@ -1,4 +1,4 @@
-import { newId, patchSnapshot, type Command, type Id } from '@graymatter/core'
+import { newId, patchSnapshot, type Command, type Id } from '@antresol/core'
 import { describe, expect, it } from 'vitest'
 import { itemCreate, makeStorage, sizeAxis, sliceOf, TEST_ACTOR, variantsCreate } from './helpers'
 

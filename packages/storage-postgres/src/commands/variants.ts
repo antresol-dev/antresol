@@ -1,4 +1,4 @@
-import type { Actor, Command } from '@graymatter/core'
+import type { Actor, Command } from '@antresol/core'
 import { sql, updateSet, type Statement } from '../sql'
 
 type VariantCommand = Extract<
@@ -12,19 +12,19 @@ type VariantCommand = Extract<
 
 /** Message and SQLSTATE of the error a write batch raises when the database refuses what a copy that is behind allowed
  *  (storage.ts turns it into StorageError('conflict')). */
-export const STALE_WRITE_MESSAGE = 'gm_stale_write'
-export const STALE_WRITE_SQLSTATE = 'GM004'
+export const STALE_WRITE_MESSAGE = 'antresol_stale_write'
+export const STALE_WRITE_SQLSTATE = 'AN004'
 
 export function isStaleWrite(e: unknown): boolean {
   if (!(e instanceof Error)) return false
   return (e as { code?: unknown }).code === STALE_WRITE_SQLSTATE && e.message.includes(STALE_WRITE_MESSAGE)
 }
 
-/** Fails the batch with GM004 when the check before it set `gm.stale_write` (transaction-local) to true. A `do` block
+/** Fails the batch with AN004 when the check before it set `antresol.stale_write` (transaction-local) to true. A `do` block
  *  takes no parameters, hence the setting in between; plain statements, so they fit one Neon HTTP transaction. */
 const REFUSE_IF_STALE: Statement = {
   text: `do $$ begin
-  if current_setting('gm.stale_write', true) = 'true' then
+  if current_setting('antresol.stale_write', true) = 'true' then
     raise exception '${STALE_WRITE_MESSAGE}' using errcode = '${STALE_WRITE_SQLSTATE}';
   end if;
 end $$`,
@@ -38,7 +38,7 @@ end $$`,
  *   wins, null erasing; any other stays), compared as core's `sameAxisValue` does: text without case and outer spaces,
  *   other kinds exactly, an empty value equal only to empty. Stale when a variant the command names ends equal to
  *   another variant;
- * - stale: the batch fails with GM004, so nothing is written (not even the revision). Core checks the same rule on the
+ * - stale: the batch fails with AN004, so nothing is written (not even the revision). Core checks the same rule on the
  *   device's copy, so this only happens for a copy that is behind: the app is told (`conflict`) and syncs the source;
  * - otherwise the erased values go and the others are written, on axes of the item and variants of the item only.
  * Postgres `lower` follows the database's locale (see axisMayGo in items.ts): for non-ASCII text the guard is
@@ -71,7 +71,7 @@ function setValues(c: Extract<Command, { type: 'variant.setValues' }>): Statemen
           ) as key
           from variants v where v.item_id = ${item}::uuid
         )
-        select set_config('gm.stale_write', (exists (
+        select set_config('antresol.stale_write', (exists (
           select 1 from final f join final g on g.key = f.key and g.id <> f.id
           where f.id in (select variant_id from x)
         ))::text, true)`,

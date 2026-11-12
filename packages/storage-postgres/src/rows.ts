@@ -15,7 +15,7 @@ import {
   type Tag,
   type Variant,
   type VariantAttributeValue,
-} from '@graymatter/core'
+} from '@antresol/core'
 
 // Row types: numeric/bigint columns are selected `::text` in SQL (see queries.ts).
 export type Row = Record<string, unknown>

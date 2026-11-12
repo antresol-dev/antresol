@@ -1,4 +1,4 @@
-import type { Actor, Command } from '@graymatter/core'
+import type { Actor, Command } from '@antresol/core'
 import type { Statement } from '../sql'
 import { archiveStatements } from './archive'
 import { dictionaryStatements } from './dictionaries'

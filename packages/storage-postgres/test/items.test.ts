@@ -6,7 +6,7 @@ import {
   type Id,
   type InventorySnapshot,
   type InventoryStorage,
-} from '@graymatter/core'
+} from '@antresol/core'
 import { describe, expect, it } from 'vitest'
 import { attributeCreate, makeStorage, TEST_ACTOR, variantsCreate } from './helpers'
 

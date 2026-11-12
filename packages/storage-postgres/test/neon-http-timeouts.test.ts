@@ -1,6 +1,6 @@
 import { neonConfig } from '@neondatabase/serverless'
 import { afterEach, describe, expect, it } from 'vitest'
-import { StorageError } from '@graymatter/core'
+import { StorageError } from '@antresol/core'
 import { createNeonHttpExecutor } from '../src/executors/neon-http'
 import { sql } from '../src/sql'
 

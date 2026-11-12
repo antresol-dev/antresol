@@ -1,4 +1,4 @@
-import type { Actor, Command } from '@graymatter/core'
+import type { Actor, Command } from '@antresol/core'
 import { sql, updateSet, type Statement } from '../sql'
 
 type InventoryCommand = Extract<Command, { type: 'inventory.create' | 'inventory.update' }>

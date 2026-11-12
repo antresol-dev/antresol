@@ -1,4 +1,4 @@
-import { newId, StorageError } from '@graymatter/core'
+import { newId, StorageError } from '@antresol/core'
 import { describe, expect, it } from 'vitest'
 import { APP_SCHEMA_VERSION, ensureSchema } from '../src/migrator'
 import { sql } from '../src/sql'
@@ -57,7 +57,7 @@ describe('inventories', () => {
     const exec = await makeExecutor()
     await ensureSchema(exec)
     const next = String(APP_SCHEMA_VERSION + 1)
-    await exec.batch([sql`update gm_meta set value = ${next} where key in ('schema_version', 'min_app_schema')`])
+    await exec.batch([sql`update antresol_meta set value = ${next} where key in ('schema_version', 'min_app_schema')`])
     const { storage, status } = await openPostgresStorage(exec)
     expect(status.state).toBe('newer')
     expect(storage.readOnly).toBe(true)
@@ -109,7 +109,7 @@ describe('revision', () => {
   it('is recreated by the next apply when the row is missing, and reads as unknown meanwhile', async () => {
     const exec = await makeExecutor()
     const { storage } = await openPostgresStorage(exec)
-    await exec.batch([sql`delete from gm_meta where key = 'rev'`])
+    await exec.batch([sql`delete from antresol_meta where key = 'rev'`])
     const a = (await storage.listInventories()).rev
     expect(a).not.toBe((await storage.listInventories()).rev)
     await storage.apply({ type: 'inventory.create', id: newId(), name: 'A', description: null, currency: 'USD' }, TEST_ACTOR)
@@ -121,11 +121,11 @@ describe('revision', () => {
   it('is changed by a migration batch', async () => {
     const exec = await makeExecutor()
     await exec.batch([
-      sql`create table gm_meta (key text primary key, value text not null)`,
-      sql`insert into gm_meta (key, value) values ('rev', 'fixed')`,
+      sql`create table antresol_meta (key text primary key, value text not null)`,
+      sql`insert into antresol_meta (key, value) values ('rev', 'fixed')`,
     ])
     await ensureSchema(exec)
-    const rows = await exec.query<{ value: string }>(sql`select value from gm_meta where key = 'rev'`)
+    const rows = await exec.query<{ value: string }>(sql`select value from antresol_meta where key = 'rev'`)
     expect(rows[0]!.value).not.toBe('fixed')
   })
 })

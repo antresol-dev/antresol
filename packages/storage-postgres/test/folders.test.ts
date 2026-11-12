@@ -1,4 +1,4 @@
-import { newId, type InventoryStorage } from '@graymatter/core'
+import { newId, type InventoryStorage } from '@antresol/core'
 import { describe, expect, it } from 'vitest'
 import { makeStorage, TEST_ACTOR } from './helpers'
 

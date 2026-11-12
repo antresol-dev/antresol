@@ -1,4 +1,4 @@
-import { negQ, type Actor, type Command } from '@graymatter/core'
+import { negQ, type Actor, type Command } from '@antresol/core'
 import { sql, type Statement } from '../sql'
 
 type StockCommand = Extract<Command, { type: 'stock.receive' | 'stock.use' | 'stock.return' | 'stock.set' | 'stock.transfer' }>

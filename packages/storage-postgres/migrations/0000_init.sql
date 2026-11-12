@@ -176,4 +176,4 @@ CREATE INDEX "photos_item_id_idx" ON "photos" USING btree ("item_id");--> statem
 CREATE INDEX "tags_inventory_id_idx" ON "tags" USING btree ("inventory_id");--> statement-breakpoint
 CREATE INDEX "variants_archive_id_idx" ON "variants" USING btree ("archive_id");--> statement-breakpoint
 CREATE INDEX "variants_item_id_idx" ON "variants" USING btree ("item_id");--> statement-breakpoint
-INSERT INTO "gm_meta" ("key", "value") VALUES ('rev', gen_random_uuid()::text) ON CONFLICT ("key") DO NOTHING;
+INSERT INTO "antresol_meta" ("key", "value") VALUES ('rev', gen_random_uuid()::text) ON CONFLICT ("key") DO NOTHING;

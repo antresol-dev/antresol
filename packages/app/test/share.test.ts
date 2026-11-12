@@ -1,4 +1,4 @@
-import { newId, variantLabel, type Id, type InventorySnapshot, type InventoryStorage } from '@graymatter/core'
+import { newId, variantLabel, type Id, type InventorySnapshot, type InventoryStorage } from '@antresol/core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import { boughtRows, cleanTitle, isShareLike, lotKey, parseShare, shareMatches, shareParams, shopLinks, valueChips } from '../app/lib/share'

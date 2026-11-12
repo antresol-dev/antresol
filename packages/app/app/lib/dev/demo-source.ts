@@ -1,12 +1,12 @@
-import { newId, type Actor, type Command, type InventoryStorage } from '@graymatter/core'
-import { APP_SCHEMA_VERSION, createPgliteExecutor, inspectSchema, openPostgresStorage, type PgExecutor } from '@graymatter/storage-postgres'
+import { newId, type Actor, type Command, type InventoryStorage } from '@antresol/core'
+import { APP_SCHEMA_VERSION, createPgliteExecutor, inspectSchema, openPostgresStorage, type PgExecutor } from '@antresol/storage-postgres'
 import { probeWithExecutor, type SourceConnection, type SourceDriver } from '../sources'
 import type { SourceConfig } from '../types'
 
 const DEMO_ACTOR: Actor = { device: 'Demo' }
 
 /** The schema version is in the name: a database of an earlier schema is left behind, not opened. */
-export const demoStorageName = (sourceId: string): string => `idb://graymatter-dev-s${APP_SCHEMA_VERSION}-${sourceId}`
+export const demoStorageName = (sourceId: string): string => `idb://antresol-dev-s${APP_SCHEMA_VERSION}-${sourceId}`
 
 export interface DemoDriver extends SourceDriver {
   /** Closes every database the driver opened. The app never calls it (they live as long as the page); tests do. */
@@ -14,7 +14,7 @@ export interface DemoDriver extends SourceDriver {
 }
 
 /** extras (default true): archived records (this task) and tags and attributes (Task 11) on top of the base data.
- *  Dev only: PGlite in the browser (idb://graymatter-dev-s<version>-<sourceId>) or in memory when memory=true; seeds demo data on an empty database. */
+ *  Dev only: PGlite in the browser (idb://antresol-dev-s<version>-<sourceId>) or in memory when memory=true; seeds demo data on an empty database. */
 export function createDemoDriver(options: { memory?: boolean; extras?: boolean } = {}): DemoDriver {
   // One database per source id for the lifetime of the page, shared by probe and every connection:
   // closing a connection must not close the database a newer connection uses.

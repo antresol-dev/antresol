@@ -1,4 +1,4 @@
-import type { Id, InventorySnapshot } from '@graymatter/core'
+import type { Id, InventorySnapshot } from '@antresol/core'
 
 export interface CountedAgo {
   /** How many units back; 0 = today. */

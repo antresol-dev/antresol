@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { StorageError, type RestoreMode } from '@graymatter/core'
+import { StorageError, type RestoreMode } from '@antresol/core'
 import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'

@@ -6,7 +6,7 @@
 
 - **HTTP raw.** `neon(url)`: `select 1` дважды, `CREATE TABLE`, `sql.transaction` с двумя `INSERT`, `count(*)`, `DELETE`.
 - **WebSocket raw.** `Pool`: `connect`, `select 1`, `CREATE TABLE`, `BEGIN`, два `INSERT`, `COMMIT`, `count(*)`, `DROP TABLE`.
-- **GrayMatter storage (websocket / http).** Сверх плана: наш настоящий `@graymatter/storage-postgres` в браузерной сборке. Шаги: `openPostgresStorage` (миграции через `import.meta.glob`), `apply(inventory.create)`, `listInventories`, `loadInventory`.
+- **Antresol storage (websocket / http).** Сверх плана: наш настоящий `@antresol/storage-postgres` в браузерной сборке. Шаги: `openPostgresStorage` (миграции через `import.meta.glob`), `apply(inventory.create)`, `listInventories`, `loadInventory`.
 
 Проект Neon: `graymatter`, регион aws-eu-central-1 (Франкфурт).
 

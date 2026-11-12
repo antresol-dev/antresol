@@ -1,4 +1,4 @@
-import { BUILTIN_UNITS, customUnitKey, newId, type Command, type InventorySnapshot, type InventoryStorage } from '@graymatter/core'
+import { BUILTIN_UNITS, customUnitKey, newId, type Command, type InventorySnapshot, type InventoryStorage } from '@antresol/core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import en from '../i18n/locales/en.json'
 import { dictionaryView } from '../app/lib/dictionaries'

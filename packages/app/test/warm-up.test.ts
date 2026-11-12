@@ -1,6 +1,6 @@
 import { PGlite } from '@electric-sql/pglite'
-import { newId, type Command } from '@graymatter/core'
-import { createPgliteExecutor, type PgExecutor } from '@graymatter/storage-postgres'
+import { newId, type Command } from '@antresol/core'
+import { createPgliteExecutor, type PgExecutor } from '@antresol/storage-postgres'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryDeviceDb } from '../app/lib/device-db'
 import { createNeonDriver } from '../app/lib/sources'

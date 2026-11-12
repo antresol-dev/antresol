@@ -3,13 +3,13 @@ import {
   type InventoryStorage,
   type SchemaInspection,
   type SchemaStatus,
-} from '@graymatter/core'
+} from '@antresol/core'
 import {
   createNeonHttpExecutor,
   inspectSchema,
   openPostgresStorage,
   type PgExecutor,
-} from '@graymatter/storage-postgres'
+} from '@antresol/storage-postgres'
 import type { SourceConfig } from './types'
 
 export type ConnectionStringProblem = 'empty' | 'not_postgres_url' | 'missing_password' | 'missing_database'

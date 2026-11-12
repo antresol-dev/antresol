@@ -1,7 +1,7 @@
 /**
  * The service worker precaches only the fonts every screen needs: the default style's (Onest) and the Antresol wordmark's
  * (Fredoka 600, the only weight declared); the other families' woff2 files are cached on first
- * use (the gm-fonts rule in nuxt.config.ts). @nuxt/fonts hashes the file names, so these are the files its
+ * use (the antresol-fonts rule in nuxt.config.ts). @nuxt/fonts hashes the file names, so these are the files its
  * @font-face rules in the built CSS point at.
  *
  * This is a manifest transform applied from the `pwa:beforeBuildServiceWorker` hook, AFTER @vite-pwa/nuxt's own

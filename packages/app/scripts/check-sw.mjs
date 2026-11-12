@@ -2,7 +2,7 @@
 //   node scripts/check-sw.mjs [outDir]        (default .output/public)
 //  1. it evaluates: createHandlerBoundToURL(<navigateFallback>) throws `non-precached-url` at the top of sw.js when the
 //     app shell is not precached under that URL (a manifestTransforms set in the config replaces @vite-pwa/nuxt's own);
-//  2. the precache holds that URL (the base URL: "/" or "/graymatter/");
+//  2. the precache holds that URL (the base URL: "/" or "/antresol/");
 //  3. the only woff2 files precached are those of Onest (the default style's font) and Fredoka (the wordmark), as the built CSS names them.
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'

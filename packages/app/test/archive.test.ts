@@ -1,4 +1,4 @@
-import { newId, variantLabel, type Command, type InventorySnapshot, type InventoryStorage } from '@graymatter/core'
+import { newId, variantLabel, type Command, type InventorySnapshot, type InventoryStorage } from '@antresol/core'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { archiveEntries } from '../app/lib/archive'
 import { createDemoDriver, seedDemo } from '../app/lib/dev/demo-source'

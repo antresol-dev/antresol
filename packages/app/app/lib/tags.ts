@@ -1,4 +1,4 @@
-import type { InventorySnapshot, Tag } from '@graymatter/core'
+import type { InventorySnapshot, Tag } from '@antresol/core'
 import { compareIds } from './views'
 
 export interface TagMatches {

@@ -1,4 +1,4 @@
-import { BUILTIN_UNITS, newId, type InventorySnapshot } from '@graymatter/core'
+import { BUILTIN_UNITS, newId, type InventorySnapshot } from '@antresol/core'
 import { describe, expect, it } from 'vitest'
 import { amountPreview, parseAmountText, parseMoneyText, pricePreview, unitChoices } from '../app/lib/amounts'
 import { dictionaryView } from '../app/lib/dictionaries'

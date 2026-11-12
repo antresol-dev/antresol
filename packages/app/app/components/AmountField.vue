@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { UnitDef } from '@graymatter/core'
+import type { UnitDef } from '@antresol/core'
 import { amountPreview } from '~/lib/amounts'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'

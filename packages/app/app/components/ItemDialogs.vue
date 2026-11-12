@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Id, Item } from '@graymatter/core'
+import type { Id, Item } from '@antresol/core'
 import { toast } from 'vue-sonner'
 import type { ItemDialog } from '~/composables/useDialogs'
 import { errorMessageKey } from '~/lib/errors'

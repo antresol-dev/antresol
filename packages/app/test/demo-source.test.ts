@@ -1,4 +1,4 @@
-import { createSearch, itemAxes, variantLabel } from '@graymatter/core'
+import { createSearch, itemAxes, variantLabel } from '@antresol/core'
 import type { Transaction } from '@electric-sql/pglite'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createDemoDriver, demoStorageName, type DemoDriver } from '../app/lib/dev/demo-source'
@@ -49,7 +49,7 @@ afterEach(async () => {
 
 describe('demo source', () => {
   it('keeps its browser storage under a name carrying the schema version', () => {
-    expect(demoStorageName('demo')).toBe('idb://graymatter-dev-s4-demo')
+    expect(demoStorageName('demo')).toBe('idb://antresol-dev-s4-demo')
   })
 
   it('seeds two inventories with stock', async () => {

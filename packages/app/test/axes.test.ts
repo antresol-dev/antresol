@@ -1,4 +1,4 @@
-import { axisRemovalPreview } from '@graymatter/core'
+import { axisRemovalPreview } from '@antresol/core'
 import { describe, expect, it } from 'vitest'
 import { attributeCreateCommand, attributeFormError, axesSummary, axisAddLoss, axisRemovalNotice, movedAxes, prefixExample, variantClash } from '../app/lib/axes'
 import { axisSnapshot } from './fixtures/axis-snapshot'

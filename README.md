@@ -44,8 +44,8 @@ pnpm dev
 
 - Demo data exists only in development. Run `pnpm dev` and open `/welcome`. Production builds have no demo.
 - Checks: `pnpm test`, `pnpm typecheck`, `pnpm lint`.
-- Some tests need a real Neon database. Put its connection string in `GM_NEON_TEST_URL` in `.env.local`. The database name must end in `_test`, so the tests never touch real data. Without the variable, those tests skip themselves.
-- Devices skip reloading an inventory when the revision in `gm_meta` is unchanged, and only writes through the app change it. After editing data with SQL (for example in the Neon console), run `insert into gm_meta (key, value) values ('rev', gen_random_uuid()::text) on conflict (key) do update set value = excluded.value`, or other devices will not notice the change.
+- Some tests need a real Neon database. Put its connection string in `ANTRESOL_NEON_TEST_URL` in `.env.local`. The database name must end in `_test`, so the tests never touch real data. Without the variable, those tests skip themselves.
+- Devices skip reloading an inventory when the revision in `antresol_meta` is unchanged, and only writes through the app change it. After editing data with SQL (for example in the Neon console), run `insert into antresol_meta (key, value) values ('rev', gen_random_uuid()::text) on conflict (key) do update set value = excluded.value`, or other devices will not notice the change.
 - To try the dev server on a phone over USB, run `adb reverse tcp:3000 tcp:3000` and open `http://localhost:3000` on the phone.
 
 ## Deploy your own
@@ -79,7 +79,7 @@ Tried different options but the best one was Sortly as it is friendly for person
 Thus, because I love reinventing the wheel, I started this project.
 
 #### Screenshots
-<img src="https://github.com/hazer-hazer/graymatter/assets/29581311/bdeaca77-7b86-4717-b4d6-e5a40f75366c" width="500px">
+<img src="https://github.com/hazer-hazer/antresol/assets/29581311/bdeaca77-7b86-4717-b4d6-e5a40f75366c" width="500px">
 
 #### Stack
 

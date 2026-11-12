@@ -2,7 +2,7 @@
 import { useMediaQuery } from '@vueuse/core'
 import type { Component } from 'vue'
 import { Archive, ArrowRightLeft, Camera, Download, Pencil, PencilLine, SlidersHorizontal, Upload } from '@lucide/vue'
-import type { Id, UnitDef } from '@graymatter/core'
+import type { Id, UnitDef } from '@antresol/core'
 import type { BucketStepper } from '~/composables/useItemSteppers'
 import type { BucketRow } from '~/lib/item-view'
 import type { StockMode } from '~/lib/stock-forms'

@@ -50,7 +50,7 @@ export default defineNuxtConfig({
     classSuffix: '',
     preference: 'system',
     fallback: 'light',
-    storageKey: 'gm-color-mode',
+    storageKey: 'antresol-color-mode',
   },
   fonts: {
     defaults: { subsets: ['latin', 'latin-ext', 'cyrillic'] },
@@ -60,7 +60,7 @@ export default defineNuxtConfig({
       // The "Antresol" wordmark (every screen, every style): Fredoka 600 only, latin and latin-ext, preloaded and precached.
       { name: 'Fredoka', provider: 'google', weights: [600], subsets: ['latin', 'latin-ext'], global: true, display: 'swap', preload: { subsets: ['latin'], weights: [600] } },
       // The rest are declared (global: every @font-face is in the CSS, the browser fetches a face only when a style uses it),
-      // never preloaded; the service worker caches them on first use (gm-fonts).
+      // never preloaded; the service worker caches them on first use (antresol-fonts).
       { name: 'Manrope', provider: 'google', weights: [400, 500, 600, 700, 800], global: true, display: 'swap', preload: false },
       { name: 'Inter', provider: 'google', weights: [400, 500, 600, 700], global: true, display: 'swap', preload: false },
       { name: 'Rubik', provider: 'google', weights: [400, 500, 600, 700], global: true, display: 'swap', preload: false },
@@ -89,21 +89,21 @@ export default defineNuxtConfig({
       theme_color: '#F4F5F7',
       start_url: '.',
       scope: '.',
-      // Relative to the manifest, so they work under /graymatter/ too. The layout reads and clears `action`.
+      // Relative to the manifest, so they work under /antresol/ too. The layout reads and clears `action`.
       shortcuts: [
         { name: 'Add item', url: './?action=add' },
         { name: 'Search', url: './?action=search' },
       ],
-      // "Share" from a shop app opens /share (relative, so /graymatter/share on Pages); Android puts the link in `text`.
+      // "Share" from a shop app opens /share (relative, so /antresol/share on Pages); Android puts the link in `text`.
       // GET needs no service worker of its own; a cold start goes through 404.html and navigateFallback like any deep link.
       share_target: { action: './share', method: 'GET', params: { title: 'title', text: 'text', url: 'url' } },
     },
     workbox: {
       globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
-      // Only the fonts of every screen (Onest, the default style's, and Fredoka 600, the wordmark) are precached, the rest on first use (gm-fonts below): filtered in the
+      // Only the fonts of every screen (Onest, the default style's, and Fredoka 600, the wordmark) are precached, the rest on first use (antresol-fonts below): filtered in the
       // `pwa:beforeBuildServiceWorker` hook (hooks, below). Do NOT set manifestTransforms here: it replaces the module's own
       // transform (index.html -> the base URL) and the service worker no longer installs (app/lib/precache-fonts.ts).
-      // The app shell is precached under the base URL itself ("/graymatter/"), not under "index.html".
+      // The app shell is precached under the base URL itself ("/antresol/"), not under "index.html".
       navigateFallback: baseURL,
       // Files with an extension (assets, manifest, sw) are never navigations to the app shell.
       navigateFallbackDenylist: [/\/[^/?]+\.[^/]+$/],
@@ -116,7 +116,7 @@ export default defineNuxtConfig({
           urlPattern: /^https:\/\/(?:(?:ucarecdn\.com|[a-z0-9.-]+\.ucarecd\.net)\/.+\/-\/preview\/160x160\/|res\.cloudinary\.com\/[^/]+\/image\/upload\/w_400,|i\.imgur\.com\/[A-Za-z0-9]+m\.[a-z0-9]+(?:$|\?))/,
           handler: 'CacheFirst',
           options: {
-            cacheName: 'gm-photos-thumb',
+            cacheName: 'antresol-photos-thumb',
             expiration: { maxEntries: 600, purgeOnQuotaError: true },
             cacheableResponse: { statuses: [200] },
           },
@@ -125,7 +125,7 @@ export default defineNuxtConfig({
           urlPattern: /^https:\/\/(?:ucarecdn\.com|[a-z0-9.-]+\.ucarecd\.net|res\.cloudinary\.com|i\.imgur\.com)\//,
           handler: 'CacheFirst',
           options: {
-            cacheName: 'gm-photos-full',
+            cacheName: 'antresol-photos-full',
             expiration: { maxEntries: 150, purgeOnQuotaError: true },
             cacheableResponse: { statuses: [200] },
           },
@@ -136,7 +136,7 @@ export default defineNuxtConfig({
           urlPattern: /\/_nuxt\/fonts\/[^/]+\.woff2(?:\?.*)?$/,
           handler: 'CacheFirst',
           options: {
-            cacheName: 'gm-fonts',
+            cacheName: 'antresol-fonts',
             expiration: { maxEntries: 60 },
             cacheableResponse: { statuses: [200] },
           },
@@ -152,7 +152,7 @@ export default defineNuxtConfig({
     },
   },
   app: {
-    // GitHub Pages project sites live under /<repo>/; set NUXT_APP_BASE_URL=/graymatter/ for that build.
+    // GitHub Pages project sites live under /<repo>/; set NUXT_APP_BASE_URL=/antresol/ for that build.
     baseURL,
     head: {
       title: 'Antresol',

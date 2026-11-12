@@ -1,4 +1,4 @@
-import type { Id, InventorySnapshot, Quantity } from '@graymatter/core'
+import type { Id, InventorySnapshot, Quantity } from '@antresol/core'
 import { folderTree, folderView, type TreeNode } from './views'
 
 /** Folder ids the user has open. Absent = closed: folders start collapsed. */
@@ -58,9 +58,9 @@ export function toggleOpen(open: TreeOpen, id: Id): TreeOpen {
   return rest
 }
 
-const storageKey = (inventoryId: Id): string => `gm-tree:${inventoryId}`
+const storageKey = (inventoryId: Id): string => `antresol-tree:${inventoryId}`
 
-/** localStorage key `gm-tree:<inventoryId>`; {} when missing, unreadable or the storage throws. */
+/** localStorage key `antresol-tree:<inventoryId>`; {} when missing, unreadable or the storage throws. */
 export function loadTreeOpen(inventoryId: Id): TreeOpen {
   try {
     const raw = localStorage.getItem(storageKey(inventoryId))

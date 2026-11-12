@@ -16,7 +16,7 @@ describe('history-nav', () => {
   })
 
   it('reads the inventory stamped on an entry', () => {
-    expect(INVENTORY_KEY).toBe('gmInventory')
+    expect(INVENTORY_KEY).toBe('antresolInventory')
     expect(entryInventory({ back: null, [INVENTORY_KEY]: A })).toEqual(A)
     expect(entryInventory({ [INVENTORY_KEY]: { ...A, extra: 1 } })).toEqual(A)
     expect(entryInventory({ [INVENTORY_KEY]: 'junk' })).toBeNull()

@@ -1,4 +1,4 @@
-import type { Id } from '@graymatter/core'
+import type { Id } from '@antresol/core'
 import type { Ref } from 'vue'
 import type { ShareInput } from '~/lib/share'
 

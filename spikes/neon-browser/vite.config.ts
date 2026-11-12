@@ -53,6 +53,6 @@ function spikeEndpoints(testUrl: string | undefined): Plugin {
 }
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, repoRoot, 'GM_')
-  return { plugins: [spikeEndpoints(env.GM_NEON_TEST_URL)] }
+  const env = loadEnv(mode, repoRoot, 'ANTRESOL_')
+  return { plugins: [spikeEndpoints(env.ANTRESOL_NEON_TEST_URL)] }
 })

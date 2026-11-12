@@ -1,4 +1,4 @@
-import type { InventorySnapshot, StockLine } from '@graymatter/core'
+import type { InventorySnapshot, StockLine } from '@antresol/core'
 import { describe, expect, it } from 'vitest'
 import { countedAgo, lastCounted } from '../app/lib/counted'
 

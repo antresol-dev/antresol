@@ -1,4 +1,4 @@
-import { addQ, cmpQ, negQ, newId, type Command, type Id, type Quantity } from '@graymatter/core'
+import { addQ, cmpQ, negQ, newId, type Command, type Id, type Quantity } from '@antresol/core'
 import { computed, readonly, ref, shallowRef, type ComputedRef, type Ref } from 'vue'
 
 /**

@@ -1,4 +1,4 @@
-import { newId, type Command, type Id, type InventorySnapshot, type InventoryStorage } from '@graymatter/core'
+import { newId, type Command, type Id, type InventorySnapshot, type InventoryStorage } from '@antresol/core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import { buildQuickAdd, existingMatches, type QuickAddInput } from '../app/lib/quick-add'

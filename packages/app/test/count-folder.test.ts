@@ -1,4 +1,4 @@
-import { BUILTIN_UNITS, DomainError, newId, StorageError, type Command, type Id, type InventorySnapshot, type InventoryStorage } from '@graymatter/core'
+import { BUILTIN_UNITS, DomainError, newId, StorageError, type Command, type Id, type InventorySnapshot, type InventoryStorage } from '@antresol/core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { applyCounts, countChanges, countRows, renewCountId, type CountIds, type CountRow } from '../app/lib/count-folder'
 import { createDemoDriver } from '../app/lib/dev/demo-source'

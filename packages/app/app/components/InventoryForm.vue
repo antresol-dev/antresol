@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CURRENCIES } from '@graymatter/core'
+import { CURRENCIES } from '@antresol/core'
 import { Check, ChevronDown } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import {
@@ -23,7 +23,7 @@ import { errorMessageKey } from '~/lib/errors'
 const props = defineProps<{ mode: 'create' | 'rename' }>()
 const emit = defineEmits<{ done: [] }>()
 
-const LAST_CURRENCY_KEY = 'gm-last-currency'
+const LAST_CURRENCY_KEY = 'antresol-last-currency'
 
 function readLastCurrency(): string {
   try {

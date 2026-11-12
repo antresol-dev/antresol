@@ -1,4 +1,4 @@
-import { CURRENCIES, type Currency } from '@graymatter/core'
+import { CURRENCIES, type Currency } from '@antresol/core'
 
 const BY_CODE: readonly Currency[] = Object.values(CURRENCIES).sort((a, b) => (a.code < b.code ? -1 : a.code > b.code ? 1 : 0))
 

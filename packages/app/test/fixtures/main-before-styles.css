@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /*
- * GrayMatter design system "Hybrid v2" (spec 2026-11-12 §A): the owner's mock-up — light theme board 7 (depth 0.7,
+ * Antresol design system "Hybrid v2" (spec 2026-11-12 §A): the owner's mock-up — light theme board 7 (depth 0.7,
  * light 1.1, shade 0.7, flat surface, soft accent button), dark theme board 8 (base #2A2E37, depth 0.8, light 0.7,
  * shade 0.9, painted accent button, near-black shadows, a faint top-left light and a 1 px rim). The shadow numbers
  * are the mock-up's hybrid2 sh() computed once per theme.

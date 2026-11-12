@@ -35,10 +35,10 @@ describe('tab icon', () => {
 })
 
 describe('product name', () => {
-  it('is Antresol in the strings, with no GrayMatter left for users to see', () => {
+  it('is Antresol in the strings, with no old product name left for users to see', () => {
     const en = readFileSync(fileURLToPath(new URL('../i18n/locales/en.json', import.meta.url)), 'utf8')
     expect(JSON.parse(en).app.name).toBe('Antresol')
-    expect(en).not.toMatch(/GrayMatter/i)
+    expect(en).not.toMatch(/Gray\s?Matter/i)
   })
 
   it('is Antresol in the manifest and the page title', async () => {

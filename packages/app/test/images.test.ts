@@ -1,4 +1,4 @@
-import { FileError } from '@graymatter/core'
+import { FileError } from '@antresol/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fitWithin, isImageType, isOutOfMemory, MAX_SIDE, prepareImage } from '../app/lib/images'
 

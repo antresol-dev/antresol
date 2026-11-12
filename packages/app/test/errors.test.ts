@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { DOMAIN_ERROR_CODES, DomainError, FILE_ERROR_CODES, FileError, STORAGE_ERROR_CODES, StorageError } from '@graymatter/core'
+import { DOMAIN_ERROR_CODES, DomainError, FILE_ERROR_CODES, FileError, STORAGE_ERROR_CODES, StorageError } from '@antresol/core'
 import en from '../i18n/locales/en.json'
 import { errorMessageKey } from '../app/lib/errors'
 import { PROBE_FAILURES } from '../app/lib/sources'

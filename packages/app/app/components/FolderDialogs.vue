@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Folder } from '@graymatter/core'
+import type { Folder } from '@antresol/core'
 import { toast } from 'vue-sonner'
 import type { FolderDialog } from '~/composables/useDialogs'
 import { errorMessageKey } from '~/lib/errors'

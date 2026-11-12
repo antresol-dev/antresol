@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Id } from '@graymatter/core'
+import type { Id } from '@antresol/core'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'

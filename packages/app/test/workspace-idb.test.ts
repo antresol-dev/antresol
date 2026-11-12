@@ -1,4 +1,4 @@
-import { newId } from '@graymatter/core'
+import { newId } from '@antresol/core'
 import { afterAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import { openDeviceDb } from '../app/lib/device-db'

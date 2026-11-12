@@ -1,4 +1,4 @@
-import { FileError, type FileErrorCode, type FileStore, type StoredFile } from '@graymatter/core'
+import { FileError, type FileErrorCode, type FileStore, type StoredFile } from '@antresol/core'
 
 export interface CloudinaryOptions {
   cloudName: string

@@ -1,4 +1,4 @@
-import type { Command } from '@graymatter/core'
+import type { Command } from '@antresol/core'
 import { describe, expect, it, vi } from 'vitest'
 import { archiveAtOnce, createUndo, UNDO_MIN_MS, type KeyLike, type UndoDeps } from '../app/lib/undo'
 

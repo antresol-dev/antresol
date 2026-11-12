@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { UnitDef } from '@graymatter/core'
+import type { UnitDef } from '@antresol/core'
 import { Button } from '@/components/ui/button'
 import type { BucketStepper } from '~/composables/useItemSteppers'
 import { countedAgo } from '~/lib/counted'

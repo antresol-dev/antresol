@@ -1,11 +1,11 @@
-import { newId, type Actor, type InventoryStorage } from '@graymatter/core'
+import { newId, type Actor, type InventoryStorage } from '@antresol/core'
 import {
   assertTestDatabase,
   createNeonHttpExecutor,
   createNeonWsExecutor,
   openPostgresStorage,
   type PgExecutor,
-} from '@graymatter/storage-postgres'
+} from '@antresol/storage-postgres'
 import { neon, neonConfig, Pool, type PoolClient } from '@neondatabase/serverless'
 
 type StepResult = { scenario: string; step: string; ms: number; ok: boolean; error?: string }
@@ -65,14 +65,14 @@ async function httpRaw(url: string) {
   await scenario('HTTP raw', [
     ['select 1 (first)', () => sql`select 1`],
     ['select 1 (again)', () => sql`select 1`],
-    ['create table', () => sql`create table if not exists gm_spike (id uuid primary key, note text)`],
+    ['create table', () => sql`create table if not exists antresol_spike (id uuid primary key, note text)`],
     ['transaction: 2 inserts', () =>
       sql.transaction([
-        sql`insert into gm_spike values (${a}, 'http a')`,
-        sql`insert into gm_spike values (${b}, 'http b')`,
+        sql`insert into antresol_spike values (${a}, 'http a')`,
+        sql`insert into antresol_spike values (${b}, 'http b')`,
       ])],
-    ['select count(*)', () => sql`select count(*) from gm_spike`],
-    ['delete', () => sql`delete from gm_spike where id in (${a}, ${b})`],
+    ['select count(*)', () => sql`select count(*) from antresol_spike`],
+    ['delete', () => sql`delete from antresol_spike where id in (${a}, ${b})`],
   ])
 }
 
@@ -85,13 +85,13 @@ async function wsRaw(url: string) {
     await scenario('WebSocket raw', [
       ['connect', async () => { client = await pool.connect() }],
       ['select 1', q('select 1')],
-      ['create table', q('create table if not exists gm_spike (id uuid primary key, note text)')],
+      ['create table', q('create table if not exists antresol_spike (id uuid primary key, note text)')],
       ['BEGIN', q('BEGIN')],
-      ['insert a', q('insert into gm_spike values ($1, $2)', [newId(), 'ws a'])],
-      ['insert b', q('insert into gm_spike values ($1, $2)', [newId(), 'ws b'])],
+      ['insert a', q('insert into antresol_spike values ($1, $2)', [newId(), 'ws a'])],
+      ['insert b', q('insert into antresol_spike values ($1, $2)', [newId(), 'ws b'])],
       ['COMMIT', q('COMMIT')],
-      ['select count(*)', q('select count(*) from gm_spike')],
-      ['drop table', q('drop table gm_spike')],
+      ['select count(*)', q('select count(*) from antresol_spike')],
+      ['drop table', q('drop table antresol_spike')],
     ])
   } finally {
     client?.release()
@@ -105,7 +105,7 @@ async function storageStack(label: string, make: (url: string) => PgExecutor, ur
   const inventoryId = newId()
   let storage: InventoryStorage | undefined
   try {
-    await scenario(`GrayMatter storage (${label})`, [
+    await scenario(`Antresol storage (${label})`, [
       ['open (migrate / check schema)', async () => { storage = (await openPostgresStorage(exec)).storage }],
       ['apply inventory.create', () =>
         storage!.apply({ type: 'inventory.create', id: inventoryId, name: `Spike ${label}`, description: null, currency: 'USD' }, actor)],

@@ -1,4 +1,4 @@
-import { DomainError, newId, StorageError, type Command, type Id } from '@graymatter/core'
+import { DomainError, newId, StorageError, type Command, type Id } from '@antresol/core'
 import { computed, readonly, ref, shallowRef, type ComputedRef, type Ref } from 'vue'
 
 /** The source may or may not have taken the write: it did not answer in time, or the connection dropped (spec 4.7). The

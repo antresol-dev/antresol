@@ -1,4 +1,4 @@
-import { BUILTIN_UNITS, evaluateAmount, evaluatePrice, formatAmount, getCurrency, parseAmount, parseMoney, customUnitKey, type InventorySnapshot, type Quantity, type UnitDef } from '@graymatter/core'
+import { BUILTIN_UNITS, evaluateAmount, evaluatePrice, formatAmount, getCurrency, parseAmount, parseMoney, customUnitKey, type InventorySnapshot, type Quantity, type UnitDef } from '@antresol/core'
 import { byName } from './views'
 
 /** Built-ins in BUILTIN_UNITS order, then custom units by name in the lists' order (as on Tags & fields). */

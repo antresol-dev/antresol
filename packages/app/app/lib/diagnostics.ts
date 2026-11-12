@@ -29,7 +29,7 @@ export function memoryKeyValue(): KeyValue {
   }
 }
 
-/** The device store of the log and the traffic counter (IndexedDB 'graymatter-diag'/'kv'), memory where there is none. */
+/** The device store of the log and the traffic counter (IndexedDB 'antresol-diag'/'kv'), memory where there is none. */
 export function deviceKeyValue(): KeyValue {
   let store: UseStore | null = null
   let fallback: KeyValue | null = null
@@ -37,7 +37,7 @@ export function deviceKeyValue(): KeyValue {
     if (fallback) return { mem: fallback }
     try {
       if (typeof indexedDB === 'undefined' || !indexedDB) throw new Error('no indexedDB')
-      store ??= createStore('graymatter-diag', 'kv')
+      store ??= createStore('antresol-diag', 'kv')
       return { idb: store }
     } catch {
       fallback = memoryKeyValue()

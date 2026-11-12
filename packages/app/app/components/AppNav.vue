@@ -25,7 +25,7 @@ const linkState = (key: Section): string => (section.value === key ? 'row-select
     <!-- A row like the nav rows below (width, height, radius, states): the whole row is the link home. -->
     <NuxtLink to="/" class="pressable flex min-h-11 shrink-0 items-center gap-2 px-2.5">
       <AppLogo class="size-[26px] shrink-0" />
-      <span class="gm-wordmark text-[17px]">{{ $t('app.name') }}</span>
+      <span class="antresol-wordmark text-[17px]">{{ $t('app.name') }}</span>
     </NuxtLink>
 
     <div class="shrink-0">

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { Attribute, AttributeKind, Id } from '@graymatter/core'
-import { MAX_PINNED_ATTRIBUTES } from '@graymatter/core'
+import type { Attribute, AttributeKind, Id } from '@antresol/core'
+import { MAX_PINNED_ATTRIBUTES } from '@antresol/core'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'

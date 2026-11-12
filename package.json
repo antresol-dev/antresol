@@ -1,11 +1,11 @@
 {
-  "name": "graymatter",
+  "name": "antresol",
   "private": true,
   "packageManager": "pnpm@11.24.0",
   "type": "module",
   "scripts": {
-    "dev": "pnpm --filter @graymatter/app dev",
-    "build": "pnpm --filter @graymatter/app generate",
+    "dev": "pnpm --filter @antresol/app dev",
+    "build": "pnpm --filter @antresol/app generate",
     "test": "vitest run",
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint"

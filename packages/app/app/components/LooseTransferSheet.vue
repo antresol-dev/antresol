@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Id } from '@graymatter/core'
+import type { Id } from '@antresol/core'
 import { Button } from '@/components/ui/button'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { errorMessageKey } from '~/lib/errors'

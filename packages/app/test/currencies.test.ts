@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CURRENCIES } from '@graymatter/core'
+import { CURRENCIES } from '@antresol/core'
 import { currencyOptions } from '../app/lib/currencies'
 
 describe('currencyOptions', () => {

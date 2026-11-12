@@ -1,4 +1,4 @@
-import { newId, type Command, type Id } from '@graymatter/core'
+import { newId, type Command, type Id } from '@antresol/core'
 import { toast } from 'vue-sonner'
 import { errorMessageKey } from './errors'
 

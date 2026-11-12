@@ -1,4 +1,4 @@
-import { BUILTIN_UNITS, cmpQ, formatAmountParts, negQ, resolveUnit, StorageError, variantLabel, type Id, type Quantity, type UnitDef } from '@graymatter/core'
+import { BUILTIN_UNITS, cmpQ, formatAmountParts, negQ, resolveUnit, StorageError, variantLabel, type Id, type Quantity, type UnitDef } from '@antresol/core'
 import { toast } from 'vue-sonner'
 import { errorMessageKey } from '~/lib/errors'
 import { createStepper, flushWhenHidden, stepCommand, type Stepper } from '~/lib/stepper'

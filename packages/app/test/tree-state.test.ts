@@ -1,4 +1,4 @@
-import { newId, type InventorySnapshot, type InventoryStorage } from '@graymatter/core'
+import { newId, type InventorySnapshot, type InventoryStorage } from '@antresol/core'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import { loadTreeOpen, openPath, rowClickAction, saveTreeOpen, toggleOpen, treeRows } from '../app/lib/tree-state'
@@ -121,15 +121,15 @@ describe('tree state on the device', () => {
     const store = memoryStorage()
     vi.stubGlobal('localStorage', store)
     saveTreeOpen('inv-a', { [ics]: true })
-    expect(store.getItem('gm-tree:inv-a')).not.toBeNull()
+    expect(store.getItem('antresol-tree:inv-a')).not.toBeNull()
     expect(loadTreeOpen('inv-a')).toEqual({ [ics]: true })
     expect(loadTreeOpen('inv-b')).toEqual({})
 
-    store.setItem('gm-tree:inv-c', 'not json')
+    store.setItem('antresol-tree:inv-c', 'not json')
     expect(loadTreeOpen('inv-c')).toEqual({})
-    store.setItem('gm-tree:inv-d', JSON.stringify([ics]))
+    store.setItem('antresol-tree:inv-d', JSON.stringify([ics]))
     expect(loadTreeOpen('inv-d')).toEqual({})
-    store.setItem('gm-tree:inv-e', JSON.stringify({ [ics]: true, [opamps]: 'yes', [passive]: false }))
+    store.setItem('antresol-tree:inv-e', JSON.stringify({ [ics]: true, [opamps]: 'yes', [passive]: false }))
     expect(loadTreeOpen('inv-e')).toEqual({ [ics]: true })
 
     vi.stubGlobal('localStorage', {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { isUploadcareCdnBase } from '@graymatter/files-uploadcare'
+import { isUploadcareCdnBase } from '@antresol/files-uploadcare'
 import { Eye, EyeOff } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'

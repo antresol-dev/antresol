@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { getCurrency, type Command, type Id } from '@graymatter/core'
+import { getCurrency, type Command, type Id } from '@antresol/core'
 import { refDebounced } from '@vueuse/core'
 import { ChevronDown, X } from '@lucide/vue'
 import { Button } from '@/components/ui/button'

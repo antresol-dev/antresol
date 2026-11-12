@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Id } from '@graymatter/core'
+import type { Id } from '@antresol/core'
 import { Check } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import { errorMessageKey } from '~/lib/errors'

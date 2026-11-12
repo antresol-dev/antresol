@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { formatNumberValue, type Attribute } from '@graymatter/core'
+import { formatNumberValue, type Attribute } from '@antresol/core'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { parseAttributeInput } from '~/lib/attribute-values'

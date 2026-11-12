@@ -23,19 +23,19 @@ importers:
 
   packages/app:
     dependencies:
-      '@graymatter/core':
+      '@antresol/core':
         specifier: workspace:*
         version: link:../core
-      '@graymatter/files-cloudinary':
+      '@antresol/files-cloudinary':
         specifier: workspace:*
         version: link:../files-cloudinary
-      '@graymatter/files-imgur':
+      '@antresol/files-imgur':
         specifier: workspace:*
         version: link:../files-imgur
-      '@graymatter/files-uploadcare':
+      '@antresol/files-uploadcare':
         specifier: workspace:*
         version: link:../files-uploadcare
-      '@graymatter/storage-postgres':
+      '@antresol/storage-postgres':
         specifier: workspace:*
         version: link:../storage-postgres
       '@lucide/vue':
@@ -138,25 +138,25 @@ importers:
 
   packages/files-cloudinary:
     dependencies:
-      '@graymatter/core':
+      '@antresol/core':
         specifier: workspace:*
         version: link:../core
 
   packages/files-imgur:
     dependencies:
-      '@graymatter/core':
+      '@antresol/core':
         specifier: workspace:*
         version: link:../core
 
   packages/files-uploadcare:
     dependencies:
-      '@graymatter/core':
+      '@antresol/core':
         specifier: workspace:*
         version: link:../core
 
   packages/storage-postgres:
     dependencies:
-      '@graymatter/core':
+      '@antresol/core':
         specifier: workspace:*
         version: link:../core
       '@neondatabase/serverless':
@@ -178,10 +178,10 @@ importers:
 
   spikes/neon-browser:
     dependencies:
-      '@graymatter/core':
+      '@antresol/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@graymatter/storage-postgres':
+      '@antresol/storage-postgres':
         specifier: workspace:*
         version: link:../../packages/storage-postgres
       '@neondatabase/serverless':

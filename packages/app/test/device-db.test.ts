@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createStore, get, keys, set } from 'idb-keyval'
-import { newId, type Inventory, type InventorySnapshot } from '@graymatter/core'
+import { newId, type Inventory, type InventorySnapshot } from '@antresol/core'
 import { createMemoryDeviceDb, openDeviceDb, type DeviceDb } from '../app/lib/device-db'
 import type { InventoryRef, SourceConfig } from '../app/lib/types'
 
@@ -142,7 +142,7 @@ describe.each<[string, () => Promise<DeviceDb>]>([
 describe('revisions of copies cached by an older app (IndexedDB)', () => {
   it('are read from the record, and moved without rewriting it', async () => {
     const db = await openDeviceDb()
-    const store = createStore('graymatter', 'kv')
+    const store = createStore('antresol', 'kv')
     const s = newId()
     const [atFrom, atOther] = [newId(), newId()]
     const legacy = (rev: string) => ({ ...snap(), rev })

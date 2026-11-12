@@ -1,4 +1,4 @@
-import type { Id, InventorySnapshot } from '@graymatter/core'
+import type { Id, InventorySnapshot } from '@antresol/core'
 import type { InventoryRef } from './types'
 import type { AccentName } from './accent'
 import { solidOf } from './styles/color'

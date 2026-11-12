@@ -8,8 +8,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@graymatter/core": "workspace:*",
-    "@graymatter/storage-postgres": "workspace:*",
+    "@antresol/core": "workspace:*",
+    "@antresol/storage-postgres": "workspace:*",
     "@neondatabase/serverless": "^1.2.0"
   }
 }

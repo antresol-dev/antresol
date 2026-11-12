@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { StorageError, type Movement } from '@graymatter/core'
+import { StorageError, type Movement } from '@antresol/core'
 import { Check, ExternalLink } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { errorMessageKey } from '~/lib/errors'

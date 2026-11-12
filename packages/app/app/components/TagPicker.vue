@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Id, InventorySnapshot } from '@graymatter/core'
+import type { Id, InventorySnapshot } from '@antresol/core'
 import { Plus } from '@lucide/vue'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'

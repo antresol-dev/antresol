@@ -1,18 +1,18 @@
-import { FileError, newId, type FileStore, type StoredFile } from '@graymatter/core'
+import { FileError, newId, type FileStore, type StoredFile } from '@antresol/core'
 import { createStore, get, set, type UseStore } from 'idb-keyval'
 
 const PROVIDER = 'device'
 const PREFIX = 'device:'
 
 let store: UseStore | null = null
-const files = (): UseStore => (store ??= createStore('gm-files', 'files'))
+const files = (): UseStore => (store ??= createStore('antresol-files', 'files'))
 
 // Promises, so concurrent calls for one id share a single object URL.
 const cache = new Map<string, Promise<string | null>>()
 const made = new Set<string>()
 let generation = 0
 
-/** Blobs in IndexedDB (idb-keyval store 'gm-files'/'files'); provider 'device', fileId = newId(), url = 'device:<fileId>'. */
+/** Blobs in IndexedDB (idb-keyval store 'antresol-files'/'files'); provider 'device', fileId = newId(), url = 'device:<fileId>'. */
 export function createDeviceFileStore(): FileStore {
   return {
     provider: PROVIDER,

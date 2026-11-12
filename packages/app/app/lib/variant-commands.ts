@@ -1,4 +1,4 @@
-import { duplicatesAfter, type Command, type Id, type InventorySnapshot, type Variant } from '@graymatter/core'
+import { duplicatesAfter, type Command, type Id, type InventorySnapshot, type Variant } from '@antresol/core'
 
 export interface ValuesRow {
   variantId: Id

@@ -52,21 +52,21 @@ describe('style fonts config', () => {
     expect(preloaded).toEqual(['Onest', 'Fredoka'])
   })
 
-  it('caches the other fonts on first use: CacheFirst, gm-fonts, 60 files, status 200 only', async () => {
-    const rule = (await loadConfig()).pwa?.workbox?.runtimeCaching?.find(r => r.options?.cacheName === 'gm-fonts')
-    if (!rule) throw new Error('no gm-fonts rule')
+  it('caches the other fonts on first use: CacheFirst, antresol-fonts, 60 files, status 200 only', async () => {
+    const rule = (await loadConfig()).pwa?.workbox?.runtimeCaching?.find(r => r.options?.cacheName === 'antresol-fonts')
+    if (!rule) throw new Error('no antresol-fonts rule')
     expect(rule.handler).toBe('CacheFirst')
     expect(rule.options?.expiration?.maxEntries).toBe(60)
     expect(rule.options?.cacheableResponse?.statuses).toEqual([200])
     const re = rule.urlPattern as RegExp
-    expect(re.test('https://x.github.io/graymatter/_nuxt/fonts/abc-DEF_1.woff2')).toBe(true)
+    expect(re.test('https://x.github.io/antresol/_nuxt/fonts/abc-DEF_1.woff2')).toBe(true)
     expect(re.test('https://x.test/_nuxt/fonts/abc.woff2')).toBe(true)
     expect(re.test('https://x.test/_nuxt/abc.js')).toBe(false)
   })
 
   it('keeps the photo caches', async () => {
     const names = (await loadConfig()).pwa?.workbox?.runtimeCaching?.map(r => r.options?.cacheName)
-    expect(names).toEqual(expect.arrayContaining(['gm-photos-thumb', 'gm-photos-full']))
+    expect(names).toEqual(expect.arrayContaining(['antresol-photos-thumb', 'antresol-photos-full']))
   })
 
   it('globs woff2 files into the precache (the hook then keeps Onest\'s and Fredoka\'s)', async () => {
@@ -97,7 +97,7 @@ describe('style fonts config', () => {
   }
 
   it('precaches the woff2 files of Onest and Fredoka only, after the module\'s transform, which stays and still maps index.html to the base URL', async () => {
-    const out = mkdtempSync(join(tmpdir(), 'gm-fonts-'))
+    const out = mkdtempSync(join(tmpdir(), 'antresol-fonts-'))
     const transforms = await runHook(out,
       '@font-face{font-family:Onest;src:local(Onest),url(fonts/onest-a.woff2)format("woff2");font-weight:400}'
       + '@font-face{font-family:Manrope;src:url(fonts/manrope-a.woff2)format("woff2");font-weight:400}'
@@ -115,14 +115,14 @@ describe('style fonts config', () => {
   })
 
   it('fails the build instead of silently precaching no font when Onest is missing from the CSS', async () => {
-    const out = mkdtempSync(join(tmpdir(), 'gm-fonts-'))
+    const out = mkdtempSync(join(tmpdir(), 'antresol-fonts-'))
     const transforms = await runHook(out, '@font-face{font-family:Manrope;src:url(fonts/m.woff2)}')
     const entry = (url: string) => ({ url, size: 1, revision: null })
     await expect((transforms[1] as (e: ReturnType<typeof entry>[]) => Promise<unknown>)([entry('_nuxt/entry.css'), entry('_nuxt/fonts/m.woff2')])).rejects.toThrow(/Onest/)
   })
 
   it('fails the build when the wordmark\'s Fredoka is missing from the CSS', async () => {
-    const out = mkdtempSync(join(tmpdir(), 'gm-fonts-'))
+    const out = mkdtempSync(join(tmpdir(), 'antresol-fonts-'))
     const transforms = await runHook(out, '@font-face{font-family:Onest;src:url(fonts/o.woff2)}')
     const entry = (url: string) => ({ url, size: 1, revision: null })
     await expect((transforms[1] as (e: ReturnType<typeof entry>[]) => Promise<unknown>)([entry('_nuxt/entry.css'), entry('_nuxt/fonts/o.woff2')])).rejects.toThrow(/Fredoka/)

@@ -45,12 +45,12 @@ describe('clampTreeWidth', () => {
   })
 })
 
-describe('gm.treeWidth', () => {
+describe('antresol.treeWidth', () => {
   it('saves and reads the width in pixels, and forgets it on null', () => {
     vi.stubGlobal('localStorage', memoryStorage())
     expect(loadTreeWidth()).toBeNull()
     saveTreeWidth(312.4)
-    expect(localStorage.getItem('gm.treeWidth')).toBe('312')
+    expect(localStorage.getItem('antresol.treeWidth')).toBe('312')
     expect(loadTreeWidth()).toBe(312)
     saveTreeWidth(null)
     expect(loadTreeWidth()).toBeNull()
@@ -58,9 +58,9 @@ describe('gm.treeWidth', () => {
 
   it('ignores a value that is not a width', () => {
     vi.stubGlobal('localStorage', memoryStorage())
-    localStorage.setItem('gm.treeWidth', 'wide')
+    localStorage.setItem('antresol.treeWidth', 'wide')
     expect(loadTreeWidth()).toBeNull()
-    localStorage.setItem('gm.treeWidth', '-5')
+    localStorage.setItem('antresol.treeWidth', '-5')
     expect(loadTreeWidth()).toBeNull()
   })
 

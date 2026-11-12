@@ -19,7 +19,7 @@ import {
   type StockLine,
   type UnitDef,
   type Variant,
-} from '@graymatter/core'
+} from '@antresol/core'
 
 export interface Crumb {
   /** null is the inventory root; its name is the inventory name. */

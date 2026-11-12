@@ -6,7 +6,7 @@ import {
   type InventorySnapshot,
   type Tag,
   type UnitDef,
-} from '@graymatter/core'
+} from '@antresol/core'
 import { byName } from './views'
 
 export interface DictionaryView {

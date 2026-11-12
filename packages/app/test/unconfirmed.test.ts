@@ -1,4 +1,4 @@
-import { DomainError, newId, StorageError, type Command } from '@graymatter/core'
+import { DomainError, newId, StorageError, type Command } from '@antresol/core'
 import { describe, expect, it } from 'vitest'
 import { createUnconfirmedSender, isUnknownOutcome, landedBefore, payloadId } from '../app/lib/unconfirmed'
 

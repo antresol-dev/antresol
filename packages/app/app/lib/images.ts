@@ -1,4 +1,4 @@
-import { FileError } from '@graymatter/core'
+import { FileError } from '@antresol/core'
 
 export const MAX_SIDE = 2048
 export const MAX_INPUT_BYTES = 40 * 1024 * 1024

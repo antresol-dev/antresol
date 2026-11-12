@@ -1,4 +1,4 @@
-import { FileError } from '@graymatter/core'
+import { FileError } from '@antresol/core'
 import { describe, expect, it, vi } from 'vitest'
 import { cloudinaryThumbUrl, createCloudinaryStore, isCloudinaryUrl } from '../src/index'
 

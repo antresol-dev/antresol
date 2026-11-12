@@ -10,3 +10,6 @@ coverage/
 .neon
 spikes/*/results.jsonl
 packages/app/dist
+
+# Legacy TLS key: removed from history (it was public); never commit it again
+api/ssl/*.key

@@ -3,7 +3,7 @@
 //  1. it evaluates: createHandlerBoundToURL(<navigateFallback>) throws `non-precached-url` at the top of sw.js when the
 //     app shell is not precached under that URL (a manifestTransforms set in the config replaces @vite-pwa/nuxt's own);
 //  2. the precache holds that URL (the base URL: "/" or "/graymatter/");
-//  3. the only woff2 files precached are the default style's (Onest), as the built CSS names them.
+//  3. the only woff2 files precached are those of Onest (the default style's font) and Fredoka (the wordmark), as the built CSS names them.
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import vm from 'node:vm'
@@ -46,22 +46,25 @@ try {
   problems.push(`sw.js does not evaluate: ${e?.message ?? e}${e?.details ? ' ' + JSON.stringify(e.details) : ''}`)
 }
 
-// The precached fonts: only Onest's.
+// The precached fonts: only Onest's and Fredoka's.
+const PRECACHED = ['Onest', 'Fredoka']
 const onest = new Set()
+const seen = new Set()
 for (const css of precached.filter(u => u.endsWith('.css'))) {
   for (const [, family, body] of readFileSync(join(outDir, css), 'utf8').matchAll(/@font-face\{font-family:"?([^;"]+)"?;([^}]*)\}/g)) {
-    if (family !== 'Onest') continue
+    seen.add(family)
+    if (!PRECACHED.includes(family)) continue
     for (const [, file] of body.matchAll(/url\(([^)]+\.woff2)\)/g)) onest.add(file.split('/').pop())
   }
 }
 const fonts = precached.filter(u => u.endsWith('.woff2'))
-if (!onest.size) problems.push('the built CSS has no Onest @font-face')
+for (const f of PRECACHED) if (!seen.has(f)) problems.push(`the built CSS has no ${f} @font-face`)
 if (!fonts.length) problems.push('no woff2 file is precached: the default style\'s font is missing offline')
-for (const f of fonts) if (!onest.has(f.split('/').pop())) problems.push(`precached font that is not Onest's: ${f}`)
-for (const f of onest) if (!fonts.some(u => u.endsWith('/' + f))) problems.push(`Onest's ${f} is not precached`)
+for (const f of fonts) if (!onest.has(f.split('/').pop())) problems.push(`precached font that is not Onest's or Fredoka's: ${f}`)
+for (const f of onest) if (!fonts.some(u => u.endsWith('/' + f))) problems.push(`${f} (Onest or Fredoka) is not precached`)
 
 if (problems.length) {
   console.error('Service worker check failed:\n - ' + problems.join('\n - '))
   process.exit(1)
 }
-console.log(`Service worker OK: ${precached.length} precached, shell at "${handler}", ${fonts.length} woff2 (Onest only)`)
+console.log(`Service worker OK: ${precached.length} precached, shell at "${handler}", ${fonts.length} woff2 (Onest and Fredoka only)`)

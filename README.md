@@ -1,16 +1,16 @@
-# GrayMatter
+# Antresol
 
-GrayMatter is a personal inventory app for small things, mostly electronic components. It runs in the browser, works offline once loaded, and installs on your phone like an app.
+Antresol is a personal inventory app for small things, mostly electronic components. It runs in the browser, works offline once loaded, and installs on your phone like an app.
 
-The idea: you are at the workbench or in a shop and wonder "do I have a TL072?". Open GrayMatter, type "TL072" into search, and see how many you have and which drawer they are in.
+The idea: you are at the workbench or in a shop and wonder "do I have a TL072?". Open Antresol, type "TL072" into search, and see how many you have and which drawer they are in.
 
-Your data lives in your own free Neon (Postgres) project. There is no GrayMatter server and there are no accounts.
+Your data lives in your own free Neon (Postgres) project. There is no Antresol server and there are no accounts.
 
 ## Use it
 
 1. Open the app at the address of your GitHub Pages site (see "Deploy your own" below).
 2. Install it as an app. On Android Chrome: menu, then "Install app".
-3. Add a source. Create a free project at [Neon](https://neon.tech/), copy its connection string, and paste it into GrayMatter's settings. The connection string stays on your device.
+3. Add a source. Create a free project at [Neon](https://neon.tech/), copy its connection string, and paste it into Antresol's settings. The connection string stays on your device.
 4. Optional: set up photos (see below).
 
 ### Backups
@@ -26,7 +26,7 @@ Photos are stored in [Uploadcare](https://uploadcare.com/). Setup for each sourc
 1. Create a project in the [Uploadcare dashboard](https://app.uploadcare.com/).
 2. Copy the project's public key.
 3. Turn signed uploads off in the project. The app has no secret key, so it cannot sign uploads.
-4. Paste the key into the "Uploadcare public key" field of the source in GrayMatter's settings.
+4. Paste the key into the "Uploadcare public key" field of the source in Antresol's settings.
 5. Fill the "Photo address" field. Projects created after September 2025 must paste their personal `*.ucarecd.net` address, shown in the dashboard under Delivery (for example `https://abc123.ucarecd.net`, without a path). Leave it empty to use `ucarecdn.com`, which is right only for projects created before September 2025.
 6. Mind the free plan limits: 1,000 operations per month (each upload is one operation, and so is each first request for an image size), 1 GB of storage and 5 GB of traffic per month. When a limit is exceeded, photos stop loading until next month. The inventory keeps working. Pricing: <https://uploadcare.com/pricing/>.
 7. The app never deletes files. To remove a photo from Uploadcare, delete it in the dashboard.

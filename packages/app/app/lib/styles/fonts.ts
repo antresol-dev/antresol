@@ -9,8 +9,8 @@
 /** The system fonts the module matches the web fonts' metrics against (its fallback faces' suffixes). */
 export const FALLBACK_BASES = ['Segoe UI', 'Helvetica Neue', 'Arial', 'Noto Sans', 'Liberation Sans'] as const
 
-/** The families the styles use; main.css names each (test/fonts.test.ts holds the three lists to one another). */
-export const FONT_FAMILIES = ['Onest', 'Manrope', 'Inter', 'Rubik', 'Unbounded', 'Exo 2', 'Jost', 'IBM Plex Sans', 'IBM Plex Mono'] as const
+/** The families the styles use, and Fredoka (the wordmark, every screen); main.css names each (test/fonts.test.ts holds the three lists to one another). */
+export const FONT_FAMILIES = ['Onest', 'Manrope', 'Inter', 'Rubik', 'Unbounded', 'Exo 2', 'Jost', 'IBM Plex Sans', 'IBM Plex Mono', 'Fredoka'] as const
 export type FontFamily = (typeof FONT_FAMILIES)[number]
 
 /** `'Family', "Family Fallback: …", …` — to be followed by the generic tail. */

@@ -18,6 +18,7 @@ const WEIGHTS: Record<string, number[]> = {
   Jost: [400, 500, 600],
   'IBM Plex Sans': [400, 500, 600],
   'IBM Plex Mono': [400, 500, 600],
+  Fredoka: [600],
 }
 
 async function loadConfig() {
@@ -34,21 +35,21 @@ describe('style fonts config', () => {
     for (const f of families) expect(f.weights, f.name).toEqual(WEIGHTS[f.name!])
   })
 
-  it('self-hosts latin, latin-ext and cyrillic with font-display swap', async () => {
+  it('self-hosts latin, latin-ext and cyrillic (the wordmark: latin and latin-ext) with font-display swap', async () => {
     const fonts = (await loadConfig()).fonts!
     expect(fonts.defaults?.subsets).toEqual(['latin', 'latin-ext', 'cyrillic'])
     for (const f of fonts.families ?? []) {
       expect(f.provider, f.name).toBe('google')
-      expect(f.subsets ?? fonts.defaults?.subsets, f.name).toEqual(['latin', 'latin-ext', 'cyrillic'])
+      expect(f.subsets ?? fonts.defaults?.subsets, f.name).toEqual(f.name === 'Fredoka' ? ['latin', 'latin-ext'] : ['latin', 'latin-ext', 'cyrillic'])
       expect(f.display, f.name).toBe('swap')
       expect(f.global, f.name).toBe(true) // declared for every style, fetched by the browser only when used
     }
   })
 
-  it('preloads only Onest, the default (Base) style font', async () => {
+  it('preloads only Onest (the default style\'s font) and Fredoka (the wordmark)', async () => {
     const families = (await loadConfig()).fonts?.families ?? []
     const preloaded = families.filter(f => f.preload !== false).map(f => f.name)
-    expect(preloaded).toEqual(['Onest'])
+    expect(preloaded).toEqual(['Onest', 'Fredoka'])
   })
 
   it('caches the other fonts on first use: CacheFirst, gm-fonts, 60 files, status 200 only', async () => {
@@ -68,7 +69,7 @@ describe('style fonts config', () => {
     expect(names).toEqual(expect.arrayContaining(['gm-photos-thumb', 'gm-photos-full']))
   })
 
-  it('globs woff2 files into the precache (the hook then keeps Onest\'s)', async () => {
+  it('globs woff2 files into the precache (the hook then keeps Onest\'s and Fredoka\'s)', async () => {
     expect((await loadConfig()).pwa!.workbox!.globPatterns?.some(g => g.includes('woff2'))).toBe(true)
   })
 
@@ -95,20 +96,22 @@ describe('style fonts config', () => {
     return options.workbox.manifestTransforms
   }
 
-  it('precaches the woff2 files of Onest only, after the module\'s transform, which stays and still maps index.html to the base URL', async () => {
+  it('precaches the woff2 files of Onest and Fredoka only, after the module\'s transform, which stays and still maps index.html to the base URL', async () => {
     const out = mkdtempSync(join(tmpdir(), 'gm-fonts-'))
     const transforms = await runHook(out,
       '@font-face{font-family:Onest;src:local(Onest),url(fonts/onest-a.woff2)format("woff2");font-weight:400}'
       + '@font-face{font-family:Manrope;src:url(fonts/manrope-a.woff2)format("woff2");font-weight:400}'
       + '@font-face{font-family:"Exo 2";src:url(fonts/exo-a.woff2)format("woff2")}'
-      + '@font-face{font-family:Onest;src:url(fonts/onest-b.woff2)format("woff2");font-weight:600}')
+      + '@font-face{font-family:Onest;src:url(fonts/onest-b.woff2)format("woff2");font-weight:600}'
+      + '@font-face{font-family:Fredoka;src:url(fonts/fredoka-a.woff2)format("woff2");font-weight:600}'
+      + '@font-face{font-family:"Fredoka Fallback: Arial";src:local(Arial);font-weight:600}')
     expect(transforms).toHaveLength(2)
     expect(transforms[0]).toBe(moduleTransform)
     const entry = (url: string) => ({ url, size: 1, revision: null })
-    const urls = ['_nuxt/entry.css', '_nuxt/fonts/onest-a.woff2', '_nuxt/fonts/manrope-a.woff2', '_nuxt/fonts/exo-a.woff2', '_nuxt/fonts/onest-b.woff2', 'index.html']
+    const urls = ['_nuxt/entry.css', '_nuxt/fonts/onest-a.woff2', '_nuxt/fonts/manrope-a.woff2', '_nuxt/fonts/exo-a.woff2', '_nuxt/fonts/onest-b.woff2', '_nuxt/fonts/fredoka-a.woff2', 'index.html']
     let manifest = urls.map(entry)
     for (const t of transforms) manifest = (await (t as (e: typeof manifest) => Promise<{ manifest: typeof manifest }>)(manifest)).manifest
-    expect(manifest.map(e => e.url)).toEqual(['_nuxt/entry.css', '_nuxt/fonts/onest-a.woff2', '_nuxt/fonts/onest-b.woff2', '/'])
+    expect(manifest.map(e => e.url)).toEqual(['_nuxt/entry.css', '_nuxt/fonts/onest-a.woff2', '_nuxt/fonts/onest-b.woff2', '_nuxt/fonts/fredoka-a.woff2', '/'])
   })
 
   it('fails the build instead of silently precaching no font when Onest is missing from the CSS', async () => {
@@ -116,6 +119,13 @@ describe('style fonts config', () => {
     const transforms = await runHook(out, '@font-face{font-family:Manrope;src:url(fonts/m.woff2)}')
     const entry = (url: string) => ({ url, size: 1, revision: null })
     await expect((transforms[1] as (e: ReturnType<typeof entry>[]) => Promise<unknown>)([entry('_nuxt/entry.css'), entry('_nuxt/fonts/m.woff2')])).rejects.toThrow(/Onest/)
+  })
+
+  it('fails the build when the wordmark\'s Fredoka is missing from the CSS', async () => {
+    const out = mkdtempSync(join(tmpdir(), 'gm-fonts-'))
+    const transforms = await runHook(out, '@font-face{font-family:Onest;src:url(fonts/o.woff2)}')
+    const entry = (url: string) => ({ url, size: 1, revision: null })
+    await expect((transforms[1] as (e: ReturnType<typeof entry>[]) => Promise<unknown>)([entry('_nuxt/entry.css'), entry('_nuxt/fonts/o.woff2')])).rejects.toThrow(/Fredoka/)
   })
 })
 

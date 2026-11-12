@@ -47,9 +47,9 @@ describe('backup file', () => {
 
   it('names the file from a slug of the source name', () => {
     const at = new Date('2026-11-11T10:00:00Z')
-    expect(backupFileName('My Garage / #1!', at)).toBe('graymatter-my-garage-1-2026-11-11.json')
-    expect(backupFileName('Demo', at)).toBe('graymatter-demo-2026-11-11.json')
-    expect(backupFileName('???', at)).toBe('graymatter-source-2026-11-11.json')
+    expect(backupFileName('My Garage / #1!', at)).toBe('antresol-my-garage-1-2026-11-11.json')
+    expect(backupFileName('Demo', at)).toBe('antresol-demo-2026-11-11.json')
+    expect(backupFileName('???', at)).toBe('antresol-source-2026-11-11.json')
   })
 })
 
@@ -69,7 +69,7 @@ describe('downloadBackup', () => {
     const backup = buildBackup({ exportedAt: 't', app: { schemaVersion: 1 }, source: { name: 'Home', kind: 'neon' }, inventories: [] })
     downloadBackup(backup, new Date('2026-11-11T00:00:00Z'))
     expect(click).toHaveBeenCalled()
-    expect(link.download).toBe('graymatter-home-2026-11-11.json')
+    expect(link.download).toBe('antresol-home-2026-11-11.json')
     expect(revoke).not.toHaveBeenCalled()
     vi.advanceTimersByTime(REVOKE_DELAY_MS)
     expect(revoke).toHaveBeenCalledWith('blob:x')
@@ -617,7 +617,7 @@ describe('shareOrDownload', () => {
     const result = await shareOrDownload(backup, at, { canShare: () => true, share, touch: true })
     expect(result).toBe('shared')
     const files = share.mock.calls[0]![0].files!
-    expect(files[0]!.name).toBe('graymatter-home-2026-11-11.json')
+    expect(files[0]!.name).toBe('antresol-home-2026-11-11.json')
     expect(files[0]!.type).toBe('application/json')
     expect(click).not.toHaveBeenCalled()
   })

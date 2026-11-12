@@ -273,6 +273,16 @@
   .gm-font-faces-ibm-plex-mono {
     font-family: 'IBM Plex Mono', system-ui, sans-serif;
   }
+  .gm-font-faces-fredoka {
+    font-family: 'Fredoka', system-ui, sans-serif;
+  }
+
+  /* The "Antresol" wordmark: Fredoka 600 in every style, with its metric fallback faces (lib/styles/fonts.ts). */
+  .gm-wordmark {
+    font-family: 'Fredoka', "Fredoka Fallback: Segoe UI", "Fredoka Fallback: Helvetica Neue", "Fredoka Fallback: Arial", "Fredoka Fallback: Noto Sans", "Fredoka Fallback: Liberation Sans", system-ui, sans-serif;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
 
   /* The window layer between the page and the content (Acrylic's Mica): fixed, so it never moves a thing. */
   body::before {

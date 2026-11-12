@@ -28,14 +28,14 @@ export function buildBackup(input: Omit<BackupFile, 'format' | 'version'>): Back
   }
 }
 
-/** 'graymatter-<slug>-2026-11-11.json' (the date is UTC). */
+/** 'antresol-<slug>-2026-11-11.json' (the date is UTC). */
 export function backupFileName(sourceName: string, at: Date): string {
   const slug = sourceName
     .normalize('NFKD')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-  return `graymatter-${slug || 'source'}-${at.toISOString().slice(0, 10)}.json`
+  return `antresol-${slug || 'source'}-${at.toISOString().slice(0, 10)}.json`
 }
 
 export const REVOKE_DELAY_MS = 10_000

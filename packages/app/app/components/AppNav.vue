@@ -22,12 +22,10 @@ const linkState = (key: Section): string => (section.value === key ? 'row-select
 
 <template>
   <div :class="['flex flex-col gap-3.5 px-2.5 py-3.5', props.variant === 'drawer' ? 'h-full min-h-0' : 'min-h-full']">
-    <NuxtLink
-      to="/"
-      class="pressable flex min-h-11 shrink-0 items-center gap-2 self-start px-1.5 text-base font-bold tracking-[-0.02em]"
-    >
-      <img src="/favicon.svg" alt="" class="size-6.5 rounded-icon" >
-      {{ $t('app.name') }}
+    <!-- A row like the nav rows below (width, height, radius, states): the whole row is the link home. -->
+    <NuxtLink to="/" class="pressable flex min-h-11 shrink-0 items-center gap-2 px-2.5">
+      <AppLogo class="size-[26px] shrink-0" />
+      <span class="gm-wordmark text-[17px]">{{ $t('app.name') }}</span>
     </NuxtLink>
 
     <div class="shrink-0">

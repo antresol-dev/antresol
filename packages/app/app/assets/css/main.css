@@ -57,6 +57,8 @@
  */
 
 /* The styles' own drawings: one @import per style, here (imports come first), e.g. @import "./styles/retro.css"; */
+@import "./styles/y2k.css";
+@import "./styles/tinkerer.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 

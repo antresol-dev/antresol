@@ -13,6 +13,7 @@ import {
   type Inventory,
   type InventorySnapshot,
   type Movement,
+  type PhotoFile,
   type RestoreMode,
   type RestoreResult,
   type SnapshotPatch,
@@ -26,7 +27,7 @@ import { markRaw, reactive } from 'vue'
 import { buildBackup, type BackupFile } from './backup'
 import { logError, secretsOf, setSecretSource } from './diagnostics'
 import { createDeviceFileStore, releaseDeviceUrls } from './device-files'
-import { prepareImage as defaultPrepareImage } from './images'
+import { prepareImage as defaultPrepareImage, uploadName } from './images'
 import { countUpload } from './uploads'
 import type { CachedSnapshot } from './device-db'
 import { defaultDeviceName } from './device-name'
@@ -1225,11 +1226,20 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   }
 
   /** Upload errors are FileErrors and never touch the source's status. */
-  async function uploadOne(sourceId: string, store: FileStore, file: File): Promise<{ provider: string; fileId: string; url: string }> {
-    const blob = await prepare(file)
-    const stored = await store.upload(blob, file.name)
+  async function uploadOne(sourceId: string, store: FileStore, file: File): Promise<PhotoFile> {
+    const prepared = await prepare(file)
+    // A neutral name: the original one can say when and where the photo was taken.
+    const stored = await store.upload(prepared.blob, uploadName(prepared.blob.type))
     countUpload(sourceId)
-    return stored
+    return {
+      provider: stored.provider,
+      fileId: stored.fileId,
+      url: stored.url,
+      urls: stored.urls ?? null,
+      deleteHandle: stored.deleteHandle ?? null,
+      width: prepared.width,
+      height: prepared.height,
+    }
   }
 
   async function addPhotos(itemId: Id, files: File[], onProgress?: (done: number) => void): Promise<void> {

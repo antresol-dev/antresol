@@ -64,6 +64,8 @@
 @import "./styles/acrylic.css";
 @import "./styles/liquid.css";
 @import "./styles/linear.css";
+@import "./styles/y2k.css";
+@import "./styles/tinkerer.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 

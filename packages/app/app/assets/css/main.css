@@ -710,10 +710,15 @@
     border-radius: var(--st-cur-r);
     color: var(--st-cur-fg);
   }
+  /* The highlight fills the row (tree, nav, palette): content keeps its padding from the drawn edge in every style.
+     Only a row the mock-up insets (the variant list's current row) adds .row-inset: the highlight is curM in. */
+  .row-inset {
+    --row-inset: var(--st-cur-m);
+  }
   .row-selected::after {
     content: '';
     position: absolute;
-    inset: var(--st-cur-m);
+    inset: var(--row-inset, 0);
     z-index: -1;
     border-radius: inherit;
     background: var(--st-cur);

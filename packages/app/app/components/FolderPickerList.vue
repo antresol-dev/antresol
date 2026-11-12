@@ -16,9 +16,9 @@ const emit = defineEmits<{ select: [id: Id | null] }>()
         type="button"
         :disabled="disableCurrent && choice.current"
         :aria-current="choice.current ? 'true' : undefined"
-        class="pressable flex min-h-11 w-full items-center gap-2 rounded-chip py-1.5 pr-2 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset disabled:pointer-events-none"
+        class="pressable flex min-h-11 w-full items-center gap-2 rounded-chip py-1.5 pr-3 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset disabled:pointer-events-none"
         :class="choice.current ? 'row-selected font-semibold' : ''"
-        :style="{ paddingLeft: `${8 + Math.min(choice.depth * 16, 64)}px` }"
+        :style="{ paddingLeft: `${12 + Math.min(choice.depth * 16, 64)}px` }"
         @click="emit('select', choice.id)"
       >
         <span class="min-w-0 flex-1 truncate">{{ choice.name }}</span>

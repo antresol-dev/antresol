@@ -16,14 +16,14 @@ const icons: Record<Exclude<Section, 'settings'>, Component> = { items: Boxes, d
 
 // The rail grows and its column scrolls; in the drawer the tree takes the free height and scrolls itself.
 // Rows are flat (pressable: the accent tint under the pointer); the current section is a selected row.
-const link = 'pressable flex min-h-11 items-center gap-2.5 px-2.5 text-sm font-semibold'
+const link = 'pressable flex min-h-11 items-center gap-2.5 px-3 text-sm font-semibold'
 const linkState = (key: Section): string => (section.value === key ? 'row-selected' : '')
 </script>
 
 <template>
   <div :class="['flex flex-col gap-3.5 px-2.5 py-3.5', props.variant === 'drawer' ? 'h-full min-h-0' : 'min-h-full']">
     <!-- A row like the nav rows below (width, height, radius, states): the whole row is the link home. -->
-    <NuxtLink to="/" class="pressable flex min-h-11 shrink-0 items-center gap-2 px-2.5">
+    <NuxtLink to="/" class="pressable flex min-h-11 shrink-0 items-center gap-2 px-3">
       <AppLogo class="size-[26px] shrink-0" />
       <span class="antresol-wordmark text-[17px]">{{ $t('app.name') }}</span>
     </NuxtLink>

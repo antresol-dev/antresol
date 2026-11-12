@@ -24,12 +24,12 @@ const forwardedProps = useForwardProps(delegatedProps)
     v-bind="forwardedProps"
     :class="
       cn(
-        `focus:bg-(--glass-hover) focus:text-(--glass-hover-foreground) data-[state=checked]:not-focus:text-accent-ink [&_svg:not([class*='text-'])]:text-muted-foreground relative flex w-full items-center gap-2 rounded-(--st-pop-item-r) py-1.5 pr-8 pl-2 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2`,
+        `focus:bg-(--glass-hover) focus:text-(--glass-hover-foreground) data-[state=checked]:not-focus:text-accent-ink [&_svg:not([class*='text-'])]:text-muted-foreground relative flex w-full items-center gap-2 rounded-(--st-pop-item-r) py-1.5 pr-9 pl-3 text-sm outline-hidden select-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 *:[span]:last:flex *:[span]:last:items-center *:[span]:last:gap-2`,
         props.class,
       )
     "
   >
-    <span class="absolute right-2 flex size-3.5 items-center justify-center">
+    <span class="absolute right-3 flex size-3.5 items-center justify-center">
       <SelectItemIndicator>
         <slot name="indicator-icon">
           <Check class="size-4" />

@@ -82,8 +82,9 @@ const pressHandlers = computed(() =>
          flat: a translucent tint under the pointer. -->
     <div
       :class="[
-        'group relative flex items-center gap-1.5 rounded-field pr-2 text-sm font-semibold transition-colors duration-150',
-        panel ? 'h-8 pl-1' : 'min-h-11',
+        'group relative flex items-center gap-1.5 rounded-field text-sm font-semibold transition-colors duration-150',
+        // Clear space from the highlight's edge and its rounded corners: 10 px on the 32 px panel rows, 12 px in the drawer.
+        panel ? 'h-8 pr-2.5 pl-2.5' : 'min-h-11 pr-3',
         row.current ? 'row-selected' : 'text-icon hover:bg-(--ghost-hover) hover:text-foreground',
       ]"
     >

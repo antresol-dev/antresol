@@ -1,5 +1,6 @@
 import { mix } from './color'
 import { accentOf, finish, K, MOCKUP_DEFAULTS, S } from './derive'
+import { stack, withFallbacks } from './fonts'
 import type { KindState, StyleBuild } from './types'
 
 /*
@@ -38,8 +39,8 @@ export const build: StyleBuild = (mode) => {
   const onP = '#111111'
   /** Muted ink on a Memphis colour (the mock-up's #2E2E2E, darkened for the blue). */
   const onPMuted = '#282828'
-  const unb = "'Unbounded', 'Rubik', system-ui, sans-serif"
-  const rub = "'Rubik', system-ui, sans-serif"
+  const unb = stack('Unbounded', `${withFallbacks('Rubik')}, system-ui, sans-serif`)
+  const rub = stack('Rubik')
   const lift = (bg: string, x: number): KindState => S(bg, 0, ring + ', ' + off(x), fg)
   const sink = (bg: string, x: number, c?: string): KindState => S(bg, 0, ring + ', 0 0 0 ' + lineC, c || onP, 'translate(' + x + 'px, ' + x + 'px)')
   // Hover is a pale version of the role's colour (ink text on it in both modes); press sinks into the shadow.

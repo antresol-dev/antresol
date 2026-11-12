@@ -1,6 +1,7 @@
 import { ACCENTS } from '../accent'
 import { mix, rgba } from './color'
 import { K, MOCKUP_DEFAULTS, S, finish } from './derive'
+import { stack } from './fonts'
 import type { Kind, StyleBuild } from './types'
 
 /*
@@ -23,11 +24,9 @@ import type { Kind, StyleBuild } from './types'
 const ZERO = '0px 0px 0px transparent, 0px 0px 0px transparent'
 const ZERO_INSET = 'inset 0px 0px 0px transparent, inset 0px 0px 0px transparent'
 const FLAT = `${ZERO}, ${ZERO_INSET}`
-/** The body font as the app drew it: @nuxt/fonts' rewrite of the mock-up's 'Manrope', system-ui, sans-serif with its
- *  metric-matched local fallbacks (they draw the glyphs Manrope lacks, such as →, and the text before it loads). The
- *  fallback faces exist because main.css names Manrope literally (its boot font); without them the stack is the
- *  mock-up's. */
-const MANROPE = `'Manrope', ${['Segoe UI', 'Helvetica Neue', 'Arial', 'Noto Sans', 'Liberation Sans'].map((f) => `"Manrope Fallback: ${f}"`).join(', ')}, system-ui, sans-serif`
+/** The body font as the app drew it: the mock-up's 'Manrope', system-ui, sans-serif with @nuxt/fonts' metric-matched
+ *  local fallbacks (they draw the glyphs Manrope lacks, such as →, and the text before it loads). */
+const MANROPE = stack('Manrope')
 /** Tailwind's shadow-lg, which sheets had. */
 const SHADOW_LG = '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1)'
 

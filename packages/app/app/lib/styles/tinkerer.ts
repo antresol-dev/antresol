@@ -1,5 +1,6 @@
 import { mix, rgba } from './color'
 import { accentOf, K, MOCKUP_DEFAULTS, S, finish } from './derive'
+import { stack } from './fonts'
 import type { StyleBuild } from './types'
 
 /*
@@ -17,8 +18,8 @@ import type { StyleBuild } from './types'
 
 export const build: StyleBuild = (mode, accent) => {
   const { dark, A, ink } = accentOf(mode, accent)
-  const plex = "'IBM Plex Sans', system-ui, sans-serif"
-  const mono = "'IBM Plex Mono', ui-monospace, monospace"
+  const plex = stack('IBM Plex Sans')
+  const mono = stack('IBM Plex Mono', 'ui-monospace, monospace')
   const C = A
   const surf = dark ? '#171A1D' : '#F6F5F2'
   const hair = dark ? '#2A2F35' : '#CFCBC2'

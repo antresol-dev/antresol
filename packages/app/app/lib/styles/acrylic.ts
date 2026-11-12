@@ -1,5 +1,6 @@
 import { mix, rot, solidOf } from './color'
 import { K, MOCKUP_DEFAULTS, S, accentOf, finish } from './derive'
+import { stack } from './fonts'
 import type { StyleBuild } from './types'
 
 /*
@@ -32,7 +33,7 @@ export const build: StyleBuild = (mode, accent) => {
   const subtle = dark ? 'rgba(255,255,255,0.0605)' : 'rgba(0,0,0,0.0373)'
   const subtleP = dark ? 'rgba(255,255,255,0.0419)' : 'rgba(0,0,0,0.0241)'
   const grain = 'repeating-radial-gradient(circle at 17% 32%, ' + (dark ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.02)') + ' 0 0.6px, transparent 0.6px 2.2px)'
-  const segoe = "'Segoe UI Variable Text', 'Segoe UI', 'Inter', system-ui, sans-serif"
+  const segoe = `'Segoe UI Variable Text', 'Segoe UI', ${stack('Inter')}`
   const winBg = dark ? 'rgba(32,32,32,0.84)' : 'rgba(243,243,243,0.82)'
   const card = dark ? 'rgba(255,255,255,0.0512)' : 'rgba(255,255,255,0.7)'
   /** The flyouts' acrylic blur. */
@@ -48,7 +49,7 @@ export const build: StyleBuild = (mode, accent) => {
     {
       ...MOCKUP_DEFAULTS,
       font: segoe,
-      headFont: "'Segoe UI Variable Display', 'Segoe UI', 'Inter', system-ui, sans-serif",
+      headFont: `'Segoe UI Variable Display', 'Segoe UI', ${stack('Inter')}`,
       headWeight: '600',
       headTrack: '0',
       labelFont: segoe,

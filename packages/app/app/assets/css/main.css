@@ -239,6 +239,38 @@
     font-family: 'Onest', system-ui, sans-serif;
   }
 
+  /* @nuxt/fonts writes its metric-matched "<Family> Fallback: …" faces only for the first family of a font-family
+     declaration it finds in CSS, and the styles name theirs in TypeScript (injected at runtime, never seen by the
+     module). These rules are never matched by an element: one per style family, so each gets its fallback faces, which
+     the styles' stacks then name (lib/styles/fonts.ts, test/fonts.test.ts). */
+  .gm-font-faces-onest {
+    font-family: 'Onest', system-ui, sans-serif;
+  }
+  .gm-font-faces-manrope {
+    font-family: 'Manrope', system-ui, sans-serif;
+  }
+  .gm-font-faces-inter {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  .gm-font-faces-rubik {
+    font-family: 'Rubik', system-ui, sans-serif;
+  }
+  .gm-font-faces-unbounded {
+    font-family: 'Unbounded', system-ui, sans-serif;
+  }
+  .gm-font-faces-exo-2 {
+    font-family: 'Exo 2', system-ui, sans-serif;
+  }
+  .gm-font-faces-jost {
+    font-family: 'Jost', system-ui, sans-serif;
+  }
+  .gm-font-faces-ibm-plex-sans {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  }
+  .gm-font-faces-ibm-plex-mono {
+    font-family: 'IBM Plex Mono', system-ui, sans-serif;
+  }
+
   /* The window layer between the page and the content (Acrylic's Mica): fixed, so it never moves a thing. */
   body::before {
     content: '';

@@ -1,3 +1,4 @@
+import { stack } from '../app/lib/styles/fonts'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -52,7 +53,7 @@ describe('Y2K: the mock-up\'s values at the style\'s accent (blue)', () => {
 
   it.each(MODES)('%s: type, icons, motion — Exo 2, the springy press', (mode) => {
     const t = build(mode, defaultAccent)
-    const exo = "'Exo 2', system-ui, sans-serif"
+    const exo = stack('Exo 2')
     expect({ font: t.font, headFont: t.headFont, labelFont: t.labelFont, stroke: t.stroke, cap: t.cap, join: t.join, tr: t.tr }).toEqual({
       font: exo,
       headFont: exo,

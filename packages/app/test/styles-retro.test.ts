@@ -1,3 +1,4 @@
+import { stack } from '../app/lib/styles/fonts'
 import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -65,7 +66,7 @@ const MOCKUP = {
     ink: '#93C1BE',
   },
 } as const
-const JOST = "'Jost', system-ui, sans-serif"
+const JOST = stack('Jost')
 const TR = 'background-color 200ms ease-in-out, color 200ms ease-in-out, transform 140ms ease-out, box-shadow 140ms ease-out'
 
 describe.each(MODES)('Retro atomic equals the mock-up (board S8): %s', (mode) => {

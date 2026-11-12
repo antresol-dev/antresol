@@ -1,5 +1,6 @@
 import { mix, rgba, rot } from './color'
 import { accentOf, K, MOCKUP_DEFAULTS, S, finish } from './derive'
+import { stack } from './fonts'
 import type { StyleBuild } from './types'
 
 /*
@@ -31,7 +32,7 @@ import type { StyleBuild } from './types'
 
 export const build: StyleBuild = (mode, accent) => {
   const { dark, AL, AD, A, ink } = accentOf(mode, accent)
-  const exo = "'Exo 2', system-ui, sans-serif"
+  const exo = stack('Exo 2')
   const fg = dark ? '#EEF0FF' : '#1B1A3A'
   const muted = dark ? '#B4B8E0' : '#4E4B78'
   const page = dark

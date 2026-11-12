@@ -1,5 +1,6 @@
 import { mix } from './color'
 import { accentOf, finish, K, MOCKUP_DEFAULTS, S } from './derive'
+import { stack } from './fonts'
 import type { StyleBuild } from './types'
 
 /*
@@ -22,7 +23,7 @@ import type { StyleBuild } from './types'
 
 export const build: StyleBuild = (mode) => {
   const { dark, A, ink } = accentOf(mode, 'teal')
-  const jost = "'Jost', system-ui, sans-serif"
+  const jost = stack('Jost')
   const teal = '#2A9D8F'
   const orange = '#E76F51'
   const mustard = '#E9C46A'

@@ -1,3 +1,4 @@
+import { stack } from '../app/lib/styles/fonts'
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import css from '../app/assets/css/main.css?raw'
@@ -23,8 +24,8 @@ const MOCKUP: Record<Mode, Record<string, string>> = {
     primary: '#2563EB',
     pop: 'repeating-radial-gradient(circle at 17% 32%, rgba(0,0,0,0.02) 0 0.6px, transparent 0.6px 2.2px), rgba(252,252,252,0.85)',
     popR: '8px',
-    font: "'Segoe UI Variable Text', 'Segoe UI', 'Inter', system-ui, sans-serif",
-    headFont: "'Segoe UI Variable Display', 'Segoe UI', 'Inter', system-ui, sans-serif",
+    font: `'Segoe UI Variable Text', 'Segoe UI', ${stack('Inter')}`,
+    headFont: `'Segoe UI Variable Display', 'Segoe UI', ${stack('Inter')}`,
     stroke: '1.5',
     cap: 'round',
     tr: 'background-color 83ms linear, color 83ms linear, box-shadow 83ms linear',
@@ -37,8 +38,8 @@ const MOCKUP: Record<Mode, Record<string, string>> = {
     primary: '#9DB9F6',
     pop: 'repeating-radial-gradient(circle at 17% 32%, rgba(255,255,255,0.025) 0 0.6px, transparent 0.6px 2.2px), rgba(44,44,44,0.88)',
     popR: '8px',
-    font: "'Segoe UI Variable Text', 'Segoe UI', 'Inter', system-ui, sans-serif",
-    headFont: "'Segoe UI Variable Display', 'Segoe UI', 'Inter', system-ui, sans-serif",
+    font: `'Segoe UI Variable Text', 'Segoe UI', ${stack('Inter')}`,
+    headFont: `'Segoe UI Variable Display', 'Segoe UI', ${stack('Inter')}`,
     stroke: '1.5',
     cap: 'round',
     tr: 'background-color 83ms linear, color 83ms linear, box-shadow 83ms linear',
@@ -87,7 +88,7 @@ describe.each(['light', 'dark'] as const)('Acrylic, %s', (mode) => {
   })
 
   it('type: Segoe UI Variable (system) with Inter as the fallback; buttons 600, numbers 700', () => {
-    expect(t.font).toMatch(/'Segoe UI Variable Text', 'Segoe UI', 'Inter', system-ui/)
+    expect(t.font).toContain("'Segoe UI Variable Text', 'Segoe UI', 'Inter', \"Inter Fallback: Segoe UI\"")
     expect(t.labelFont).toBe(t.font)
     expect(t.headWeight).toBe('600')
     expect(t.btnWeight).toBe('600')

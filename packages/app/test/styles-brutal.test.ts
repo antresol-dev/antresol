@@ -1,3 +1,4 @@
+import { stack, withFallbacks } from '../app/lib/styles/fonts'
 import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -56,8 +57,8 @@ const MOCKUP = {
     ink: '#B0ACF3',
   },
 } as const
-const RUBIK = "'Rubik', system-ui, sans-serif"
-const UNBOUNDED = "'Unbounded', 'Rubik', system-ui, sans-serif"
+const RUBIK = stack('Rubik')
+const UNBOUNDED = stack('Unbounded', `${withFallbacks('Rubik')}, system-ui, sans-serif`)
 const TR = 'background-color 80ms ease-out, transform 80ms ease-out, box-shadow 80ms ease-out'
 
 describe.each(MODES)('Neo-brutal equals the mock-up (board S6): %s', (mode) => {

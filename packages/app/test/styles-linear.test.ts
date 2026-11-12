@@ -1,3 +1,4 @@
+import { stack } from '../app/lib/styles/fonts'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -13,7 +14,7 @@ import { mixHex, parseColor } from './fixtures/color'
  * checked here. Contrast of every pair, theme and accent: test/styles.test.ts.
  */
 
-const INTER = "'Inter', system-ui, sans-serif"
+const INTER = stack('Inter')
 const TR = 'background-color 100ms ease, color 100ms ease, box-shadow 100ms ease'
 
 const MOCKUP: Record<Mode, Record<string, string>> = {

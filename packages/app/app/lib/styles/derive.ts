@@ -1,5 +1,6 @@
 import { ACCENTS, type AccentName } from '../accent'
 import { borderColor, mix, solidOf, topLevel } from './color'
+import { stack } from './fonts'
 import type { AppSurfaces, Kind, KindState, Mode, MockupTokens, StyleSource, StyleTokens } from './types'
 
 /*
@@ -10,9 +11,9 @@ import type { AppSurfaces, Kind, KindState, Mode, MockupTokens, StyleSource, Sty
 
 /** The mock-up's font stacks (fontLink). */
 export const FONT = {
-  onest: "'Onest', system-ui, sans-serif",
-  manrope: "'Manrope', system-ui, sans-serif",
-  inter: "'Inter', system-ui, sans-serif",
+  onest: stack('Onest'),
+  manrope: stack('Manrope'),
+  inter: stack('Inter'),
 } as const
 
 /** The mock-up's prelude of build(): the accent's light (AL) and dark (AD) values, the mode's accent (A), text on it

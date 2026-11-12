@@ -1,3 +1,4 @@
+import { stack } from '../app/lib/styles/fonts'
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import css from '../app/assets/css/main.css?raw'
@@ -27,8 +28,8 @@ const MOCKUP: Record<Mode, Record<string, string>> = {
     primary: 'rgba(37,99,235,0.95)',
     pop: 'linear-gradient(165deg, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.12) 38%, rgba(255,255,255,0) 62%, rgba(255,255,255,0.18) 100%), rgba(255,255,255,0.38)',
     popR: '22px',
-    font: "-apple-system, 'SF Pro Text', 'Inter', system-ui, sans-serif",
-    headFont: "-apple-system, 'SF Pro Display', 'Inter', system-ui, sans-serif",
+    font: `-apple-system, 'SF Pro Text', ${stack('Inter')}`,
+    headFont: `-apple-system, 'SF Pro Display', ${stack('Inter')}`,
     stroke: '1.75',
     cap: 'round',
     tr: `background-color 220ms ease, box-shadow 220ms ease, color 220ms ease, transform 420ms ${SPRING}`,
@@ -41,8 +42,8 @@ const MOCKUP: Record<Mode, Record<string, string>> = {
     primary: 'rgba(37,99,235,0.86)',
     pop: 'linear-gradient(165deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.03) 38%, rgba(255,255,255,0) 62%, rgba(255,255,255,0.05) 100%), rgba(44,48,58,0.48)',
     popR: '22px',
-    font: "-apple-system, 'SF Pro Text', 'Inter', system-ui, sans-serif",
-    headFont: "-apple-system, 'SF Pro Display', 'Inter', system-ui, sans-serif",
+    font: `-apple-system, 'SF Pro Text', ${stack('Inter')}`,
+    headFont: `-apple-system, 'SF Pro Display', ${stack('Inter')}`,
     stroke: '1.75',
     cap: 'round',
     tr: `background-color 220ms ease, box-shadow 220ms ease, color 220ms ease, transform 420ms ${SPRING}`,
@@ -91,7 +92,7 @@ describe.each(['light', 'dark'] as const)('Liquid glass, %s', (mode) => {
   })
 
   it('type: SF Pro (system) with Inter as the fallback; buttons 600, numbers 700', () => {
-    expect(t.font).toMatch(/^-apple-system, 'SF Pro Text', 'Inter', system-ui/)
+    expect(t.font).toMatch(/^-apple-system, 'SF Pro Text', 'Inter', /)
     expect(t.labelFont).toBe(t.font)
     expect(t.btnWeight).toBe('600')
     expect(t.numWeight).toBe('700')

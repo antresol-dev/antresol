@@ -1,5 +1,6 @@
 import { mix, rgba, rot, solidOf } from './color'
 import { K, MOCKUP_DEFAULTS, S, accentOf, finish, glass } from './derive'
+import { stack } from './fonts'
 import type { StyleBuild } from './types'
 
 /*
@@ -42,7 +43,7 @@ export const build: StyleBuild = (mode, accent) => {
   const c1 = dark ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.60)'
   const c2 = dark ? 'rgba(255,255,255,0.24)' : 'rgba(255,255,255,0.78)'
   const line = dark ? 'rgba(255,255,255,0.08)' : 'rgba(20,24,40,0.08)'
-  const sf = "-apple-system, 'SF Pro Text', 'Inter', system-ui, sans-serif"
+  const sf = `-apple-system, 'SF Pro Text', ${stack('Inter')}`
   const aSh = 'inset 0 1px 0 rgba(255,255,255,0.45), inset 0 0 0 1px rgba(255,255,255,0.25), 0 6px 16px -4px ' + rgba(AL, 0.5)
   // contrast: dark, a flat control pressed (and the row menu "⋯" open) lights 14 %, not c1's 16 %: the menu's accent ink
   // is 4.38:1 on rose and 4.49:1 on copper there.
@@ -57,7 +58,7 @@ export const build: StyleBuild = (mode, accent) => {
     {
       ...MOCKUP_DEFAULTS,
       font: sf,
-      headFont: "-apple-system, 'SF Pro Display', 'Inter', system-ui, sans-serif",
+      headFont: `-apple-system, 'SF Pro Display', ${stack('Inter')}`,
       labelFont: sf,
       stroke: '1.75',
       btnWeight: '600',

@@ -1,3 +1,4 @@
+import { stack } from '../app/lib/styles/fonts'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -59,8 +60,8 @@ describe('Tinkerer: the mock-up\'s values at the style\'s accent (copper)', () =
 
   it.each(MODES)('%s: IBM Plex, mono numbers, labels and chips; thin square icons; 90 ms linear response', (mode) => {
     const t = build(mode, defaultAccent)
-    const plex = "'IBM Plex Sans', system-ui, sans-serif"
-    const mono = "'IBM Plex Mono', ui-monospace, monospace"
+    const plex = stack('IBM Plex Sans')
+    const mono = stack('IBM Plex Mono', 'ui-monospace, monospace')
     expect({ font: t.font, headFont: t.headFont, labelFont: t.labelFont, numFont: t.numFont, chipFont: t.chipFont }).toEqual({
       font: plex,
       headFont: plex,

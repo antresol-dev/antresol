@@ -1,3 +1,4 @@
+import { stack } from '../app/lib/styles/fonts'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -13,7 +14,7 @@ import { contrast, mixHex, over, parseColor } from './fixtures/color'
  * header and checked here. Contrast of every pair, theme and accent: test/styles.test.ts.
  */
 
-const ONEST = "'Onest', system-ui, sans-serif"
+const ONEST = stack('Onest')
 const TR = 'background-color 150ms cubic-bezier(0.2,0,0,1), box-shadow 150ms cubic-bezier(0.2,0,0,1), color 150ms ease'
 
 const MOCKUP: Record<Mode, Record<string, string>> = {

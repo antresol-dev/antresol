@@ -106,7 +106,7 @@ watch(() => props.highlight, reveal)
         <div class="flex min-h-[46px] min-w-0 items-center gap-2.5">
           <PhotoImg
             v-if="row.photo"
-            :url="row.photo.url"
+            :photo="row.photo"
             size="thumb"
             alt=""
             class="size-10 shrink-0 rounded-icon object-cover"

@@ -160,7 +160,7 @@ function addNew(): void {
                 :aria-label="$t('share.open', { name: m.variantName ? `${m.name} · ${m.variantName}` : m.name })"
                 @click="openItem(m)"
               >
-                <ItemThumb :name="m.name" :cover-url="m.coverUrl" class="size-8 rounded-icon text-xs" />
+                <ItemThumb :name="m.name" :cover="m.cover" class="size-8 rounded-icon text-xs" />
                 <span class="flex min-w-0 flex-1 flex-col">
                   <span class="truncate text-sm font-bold" :class="m.outOfStock && 'text-dimmed-foreground'">
                     {{ m.name }}<span v-if="m.variantName" class="font-semibold text-muted-foreground"> · {{ m.variantName }}</span>

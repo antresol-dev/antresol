@@ -120,7 +120,7 @@ const arrow =
         <PhotoImg
           v-if="photo"
           :key="photo.id"
-          :url="photo.url"
+          :photo="photo"
           size="full"
           :alt="$t('photos.alt', { n: index + 1, total })"
           class="size-full object-contain"

@@ -352,7 +352,7 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
                 @click="run(row)"
               >
                 <template v-if="row.kind === 'item'">
-                  <ItemThumb :name="row.hit.name" :cover-url="row.hit.coverUrl" class="size-8 rounded-icon text-xs" />
+                  <ItemThumb :name="row.hit.name" :cover="row.hit.cover" class="size-8 rounded-icon text-xs" />
                   <span class="flex min-w-0 flex-1 flex-col">
                     <span class="flex min-w-0 items-center gap-1.5">
                       <span class="min-w-[min(7.5rem,100%)] truncate text-sm font-bold" :class="row.hit.outOfStock && 'text-dimmed-foreground'">

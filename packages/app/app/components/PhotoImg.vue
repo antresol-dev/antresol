@@ -2,18 +2,19 @@
 import { Image as ImageIcon } from '@lucide/vue'
 import { resolveDeviceUrl } from '~/lib/device-files'
 import { photoCrossorigin } from '~/lib/photo-cache'
-import { displayablePhotoUrl, isDeviceUrl, type PhotoSize } from '~/lib/photo-url'
+import { displayablePhotoUrl, isDeviceUrl, type PhotoRef, type PhotoSize } from '~/lib/photo-url'
 
-const props = defineProps<{ url: string; size: PhotoSize; alt: string }>()
+const props = defineProps<{ photo: PhotoRef; size: PhotoSize; alt: string }>()
 
 const src = ref<string | null>(null)
 const failed = ref(false)
 
 watch(
-  () => [props.url, props.size] as const,
-  ([url, size]) => {
+  () => [props.photo, props.size] as const,
+  ([photo, size]) => {
+    const { url } = photo
     failed.value = false
-    const shown = displayablePhotoUrl(url, size)
+    const shown = displayablePhotoUrl(photo, size)
     if (shown === null) {
       // Not Uploadcare and not on the device: never loaded.
       src.value = null
@@ -27,7 +28,7 @@ watch(
     src.value = null
     void resolveDeviceUrl(url).then((resolved) => {
       // Ignore an answer for a url the component has moved on from.
-      if (props.url !== url) return
+      if (props.photo.url !== url) return
       if (resolved === null) failed.value = true
       else src.value = resolved
     })

@@ -198,4 +198,27 @@ describe('photo renditions, size and delete handle (schema 5)', () => {
     ])
     for (const id of [x, y]) expect(fields(await photo(id))).toEqual({ ...RENDITION_FIELDS, urls: null })
   })
+
+  it('reads a hand-edited row clean: renditions that parse, a size with both sides in range, a delete handle not empty', async () => {
+    const { exec, run, item, photo } = await setup()
+    const [x, y] = [newId(), newId()]
+    for (const id of [x, y]) {
+      await run({ type: 'photo.add', id, itemId: item, variantId: null, provider: 'imgbb', fileId: id, url: `https://i.ibb.co/${id}`, ...RENDITION_FIELDS })
+    }
+    await exec.batch([
+      sql`update photos
+          set urls = '[null, {"url":"http://x/a.webp","role":"t","width":1,"height":1,"fit":"inside","type":null},
+                       {"url":"https://i.ibb.co/a/p.webp","role":"thumb","width":180,"height":180,"fit":"cover"}]'::jsonb,
+              width = 0, height = 100, delete_handle = ''
+          where id = ${x}`,
+      sql`update photos set width = 640, height = 20001, delete_handle = ${'h'.repeat(2049)} where id = ${y}`,
+    ])
+    expect(fields(await photo(x))).toEqual({
+      urls: [{ url: 'https://i.ibb.co/a/p.webp', role: 'thumb', width: 180, height: 180, fit: 'cover', type: null }],
+      width: null,
+      height: null,
+      deleteHandle: null,
+    })
+    expect(fields(await photo(y))).toEqual({ urls: RENDITION_FIELDS.urls, width: null, height: null, deleteHandle: null })
+  })
 })

@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import type { Command } from '../src/commands'
-import type { InventorySnapshot } from '../src/model'
+import {
+  isDeleteHandle,
+  isPhotoSide,
+  MAX_PHOTO_SIDE,
+  MAX_PHOTO_URL_LENGTH,
+  MAX_RENDITION_ROLE_LENGTH,
+  MAX_RENDITION_TYPE_LENGTH,
+  MAX_RENDITIONS,
+  normalizeRenditions,
+  parseRendition,
+  type InventorySnapshot,
+} from '../src/model'
 import { DomainError, MAX_PINNED_ATTRIBUTES, normalizeCommand, validateCommand, type DomainErrorCode } from '../src/validate'
 import { attribute, axis, electronics, folder, item, makeSnapshot, shared, stockLine, value, variant } from './fixtures'
 
@@ -690,12 +701,20 @@ describe('photo renditions on photo commands', () => {
   const replace = (extra: Record<string, unknown>): Command =>
     ({ type: 'photo.replace', variantId: 'v1', id: 'n', itemId: 'i1', replaces: null, provider: 'imgbb', fileId: 'f', url: 'https://x', ...extra }) as Command
 
+  const { type: _type, ...untyped } = rend()
   const accepted: [string, Record<string, unknown>][] = [
     ['no new fields', {}],
     ['all new fields null', { urls: null, width: null, height: null, deleteHandle: null }],
     ['three ImgBB renditions with size and delete handle', imgbb()],
+    // As parseRendition reads them: `type` absent is null, a key it does not know is left behind.
+    ['a rendition without type', { urls: [untyped] }],
+    ['a rendition with a key it does not know', { urls: [rend({ extra: 1 })] }],
   ]
   const rejected: [string, Record<string, unknown>, DomainErrorCode][] = [
+    ['a null rendition', { urls: [null] }, 'invalid_option'],
+    ['a rendition that is a string', { urls: [rend(), 'https://i.ibb.co/a/b.webp'] }, 'invalid_option'],
+    ['a rendition that is a list', { urls: [[rend()]] }, 'invalid_option'],
+    ['a rendition without url', { urls: [rend({ url: undefined })] }, 'invalid_url'],
     ['an http rendition', { urls: [rend({ url: 'http://i.ibb.co/a' })] }, 'invalid_url'],
     ['a 2049-character rendition url', { urls: [rend({ url: `https://i.ibb.co/${'a'.repeat(2049 - 17)}` })] }, 'invalid_url'],
     ['9 renditions', { urls: Array.from({ length: 9 }, () => rend()) }, 'invalid_option'],
@@ -721,4 +740,66 @@ describe('photo renditions on photo commands', () => {
       })
     })
   }
+})
+
+describe('parseRendition and normalizeRenditions', () => {
+  const good = { url: 'https://i.ibb.co/a/b.webp', role: 'thumb', width: 180, height: 180, fit: 'cover', type: 'image/webp' }
+  it('rebuilds exactly the six fields: a key it does not know is left behind, `type` absent is null', () => {
+    expect(parseRendition(good)).toEqual(good)
+    expect(parseRendition(good)).not.toBe(good)
+    expect(parseRendition({ ...good, extra: 1 })).toEqual(good)
+    const { type: _type, ...untyped } = good
+    expect(parseRendition(untyped)).toEqual({ ...good, type: null })
+    expect(parseRendition({ ...good, type: null })).toEqual({ ...good, type: null })
+  })
+  it('takes each limit to its edge', () => {
+    expect(parseRendition({ ...good, url: `https://i.ibb.co/${'a'.repeat(MAX_PHOTO_URL_LENGTH - 17)}` })).not.toBeNull()
+    expect(parseRendition({ ...good, role: 'r'.repeat(MAX_RENDITION_ROLE_LENGTH) })).not.toBeNull()
+    expect(parseRendition({ ...good, width: 1, height: MAX_PHOTO_SIDE })).not.toBeNull()
+    expect(parseRendition({ ...good, type: 't'.repeat(MAX_RENDITION_TYPE_LENGTH) })).not.toBeNull()
+    expect(parseRendition({ ...good, fit: 'inside' })).not.toBeNull()
+  })
+  it.each([
+    ['null', null],
+    ['a string', 'https://i.ibb.co/a/b.webp'],
+    ['a list', [good]],
+    ['no url', { ...good, url: undefined }],
+    ['an http url', { ...good, url: 'http://i.ibb.co/a/b.webp' }],
+    ['a url over the limit', { ...good, url: `https://i.ibb.co/${'a'.repeat(MAX_PHOTO_URL_LENGTH - 16)}` }],
+    ['an empty role', { ...good, role: '' }],
+    ['a role over the limit', { ...good, role: 'r'.repeat(MAX_RENDITION_ROLE_LENGTH + 1) }],
+    ['a role that is a number', { ...good, role: 1 }],
+    ['width 0', { ...good, width: 0 }],
+    ['a negative height', { ...good, height: -180 }],
+    ['width 1.5', { ...good, width: 1.5 }],
+    ['a width as text', { ...good, width: '180' }],
+    ['a height over the limit', { ...good, height: MAX_PHOTO_SIDE + 1 }],
+    ["fit 'contain'", { ...good, fit: 'contain' }],
+    ['a type over the limit', { ...good, type: 't'.repeat(MAX_RENDITION_TYPE_LENGTH + 1) }],
+    ['a type that is a number', { ...good, type: 1 }],
+  ])('gives null for %s', (_n, value) => {
+    expect(parseRendition(value)).toBeNull()
+  })
+  it('keeps the elements that parse, rebuilt, at most MAX_RENDITIONS of them', () => {
+    const second = { ...good, role: 'medium', fit: 'inside', width: 640, height: 480 }
+    expect(normalizeRenditions([null, { ...good, extra: 1 }, 'x', { ...good, width: 0 }, second])).toEqual([good, second])
+    const many = Array.from({ length: MAX_RENDITIONS + 2 }, (_, i) => ({ ...good, role: `r${i}` }))
+    expect(normalizeRenditions(many)).toEqual(many.slice(0, MAX_RENDITIONS))
+  })
+  it('gives null for what is not a list, or a list with nothing that parses', () => {
+    for (const v of [null, undefined, 'x', good, {}, [], [null], [{ ...good, url: 'http://x/a.webp' }]]) {
+      expect(normalizeRenditions(v), JSON.stringify(v)).toBeNull()
+    }
+  })
+})
+
+describe('photo size and delete handle checks', () => {
+  it('isPhotoSide: an integer from 1 to MAX_PHOTO_SIDE', () => {
+    for (const v of [1, 180, MAX_PHOTO_SIDE]) expect(isPhotoSide(v)).toBe(true)
+    for (const v of [0, -1, 1.5, MAX_PHOTO_SIDE + 1, '180', null, undefined, Number.NaN]) expect(isPhotoSide(v)).toBe(false)
+  })
+  it('isDeleteHandle: a string of 1 to MAX_PHOTO_URL_LENGTH characters', () => {
+    for (const v of ['h', 'h'.repeat(MAX_PHOTO_URL_LENGTH)]) expect(isDeleteHandle(v)).toBe(true)
+    for (const v of ['', 'h'.repeat(MAX_PHOTO_URL_LENGTH + 1), 1, null, undefined]) expect(isDeleteHandle(v)).toBe(false)
+  })
 })

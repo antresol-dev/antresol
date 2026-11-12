@@ -1,6 +1,6 @@
 import { PGlite } from '@electric-sql/pglite'
 import { newId, StorageError, type InventoryStorage, type Movement, type Quantity } from '@antresol/core'
-import { APP_SCHEMA_VERSION, createPgliteExecutor, openPostgresStorage, type PgExecutor } from '@antresol/storage-postgres'
+import { APP_SCHEMA_VERSION, createPgliteExecutor, openPostgresStorage, sql, type PgExecutor } from '@antresol/storage-postgres'
 import { createStore, set } from 'idb-keyval'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -234,14 +234,62 @@ describe('parseBackup: photo renditions', () => {
       [{ ...rendition('a', 100), role: '' }],
       [{ ...rendition('a', 100), width: 20001 }],
       [{ ...rendition('a', 100), type: 'x'.repeat(101) }],
-      [{ ...rendition('a', 100), extra: 1 }],
+      [rendition('a', 100), null],
     ]
     for (const urls of bad) {
       const { all } = await withPhoto({ urls })
-      expect(parseBackup(all)).toEqual({ error: 'format' })
+      expect(parseBackup(all), JSON.stringify(urls)).toEqual({ error: 'format' })
     }
-    const { all } = await withPhoto({ deleteHandle: '' })
-    expect(parseBackup(all)).toEqual({ error: 'format' })
+    for (const fields of [{ deleteHandle: '' }, { width: 0, height: 100 }]) {
+      const { all } = await withPhoto(fields)
+      expect(parseBackup(all), JSON.stringify(fields)).toEqual({ error: 'format' })
+    }
+  })
+
+  it('reads a rendition as a command does: a key it does not know is left behind, `type` absent is null', async () => {
+    const { type: _type, ...untyped } = rendition('medium', 640)
+    const { all, photo } = await withPhoto({ urls: [{ ...rendition('full', 2048), extra: 1 }, untyped] })
+    const parsed = parseBackup(all) as BackupFile
+    expect('error' in parsed).toBe(false)
+    const got = parsed.inventories.flatMap((e) => e.snapshot.photos).find((p) => p.id === photo.id)
+    expect(got!.urls).toEqual([rendition('full', 2048), { ...rendition('medium', 640), type: null }])
+  })
+
+  it('restores what the app exported from a hand-edited photo row: reads hand it over clean', async () => {
+    const { exec, storage } = await emptyStorage()
+    const actor = { device: 'test' }
+    const [inv, item, id] = [newId(), newId(), newId()]
+    await storage.apply({ type: 'inventory.create', id: inv, name: 'A', description: null, currency: 'USD' }, actor)
+    await storage.apply(
+      { type: 'item.create', id: item, inventoryId: inv, folderId: null, name: 'R', description: null, unitKey: 'pcs', tagIds: [], initialReceipt: null },
+      actor,
+    )
+    await storage.apply(
+      { type: 'photo.add', id, itemId: item, variantId: null, provider: 'imgbb', fileId: 'f', url: 'https://i.ibb.co/full/p.jpg' },
+      actor,
+    )
+    await exec.batch([
+      sql`update photos
+          set urls = '[null, {"url":"http://x/a.webp","role":"t","width":1,"height":1,"fit":"inside","type":null},
+                       {"url":"https://i.ibb.co/a/p.webp","role":"thumb","width":180,"height":180,"fit":"cover"}]'::jsonb,
+              width = 0, height = 100, delete_handle = ''
+          where id = ${id}`,
+    ])
+    const backup = buildBackup({
+      exportedAt: '2026-11-12T10:00:00.000Z', app: { schemaVersion: APP_SCHEMA_VERSION }, source: { name: 'A', kind: 'dev-pglite' },
+      inventories: [await storage.exportInventory(inv)],
+    })
+    const parsed = parseBackup(JSON.parse(JSON.stringify(backup)))
+    expect('error' in parsed).toBe(false)
+    expect((parsed as BackupFile).inventories[0]!.snapshot.photos).toEqual([
+      expect.objectContaining({
+        id,
+        urls: [{ url: 'https://i.ibb.co/a/p.webp', role: 'thumb', width: 180, height: 180, fit: 'cover', type: null }],
+        width: null,
+        height: null,
+        deleteHandle: null,
+      }),
+    ])
   })
 })
 

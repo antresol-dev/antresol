@@ -8,8 +8,9 @@ const EMPTY: Statement = { text: '', params: [] }
 /**
  * The schema-5 columns of a stored file, only those the command has (not null or undefined), as `, name...` and
  * `, value...` to append to an insert's column list and values. A command without them (from an older app, or queued
- * before the update) writes exactly the statement schema 4 wrote. `urls` goes as JSON text: `sql` would take the list for
- * nested statements. Typed casts: the replace inserts through a SELECT, whose parameters get no type from the columns.
+ * before the update) writes exactly the statement schema 4 wrote. `urls` goes as JSON text: a JS array parameter is sent
+ * by the drivers as a Postgres array literal, not as JSON (`sql` passes it on as a parameter: `isStatement` never matches
+ * an array). Typed casts: the replace inserts through a SELECT, whose parameters get no type from the columns.
  */
 function fileColumns(c: PhotoFile): { names: Statement; values: Statement } {
   const columns: [string, Statement][] = []

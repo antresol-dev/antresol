@@ -1,4 +1,16 @@
-import { MAX_RENDITIONS, parseQuantity, RENDITION_FITS, type InventoryExport, type InventorySnapshot, type Movement, type RestoreMode } from '@antresol/core'
+import {
+  isDeleteHandle,
+  isPhotoSide,
+  MAX_RENDITIONS,
+  normalizeRenditions,
+  parseQuantity,
+  parseRendition,
+  type InventoryExport,
+  type InventorySnapshot,
+  type Movement,
+  type Photo,
+  type RestoreMode,
+} from '@antresol/core'
 import { APP_SCHEMA_VERSION, backupProblems, SCHEMA_BASE } from '@antresol/storage-postgres'
 import { computed, watch, type WatchStopHandle } from 'vue'
 import type { BackupInfo, RestoreRun } from './device-db'
@@ -144,22 +156,10 @@ const listOf =
 
 type Shape = Record<string, Check>
 
-const size: Check = (v) => typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 20000
-/** The limits of a photo command's renditions (core's checkPhotoFile), for a file of any origin. */
-const RENDITION: Shape = {
-  url: (v) => typeof v === 'string' && /^https:\/\//i.test(v) && v.length <= 2048,
-  role: (v) => typeof v === 'string' && v.length >= 1 && v.length <= 40,
-  width: size,
-  height: size,
-  fit: oneOf(...RENDITION_FITS),
-  type: nullable((v) => typeof v === 'string' && v.length <= 100),
-}
-/** 1 to MAX_RENDITIONS objects with exactly the rendition's fields: anything else fails the file. */
+/** 1 to MAX_RENDITIONS renditions, each one core's parseRendition reads (the check of a photo command): a rendition it
+ *  does not read fails the file. The photo keeps them as parsed (see `photos`). */
 const renditions: Check = (v) =>
-  Array.isArray(v) &&
-  v.length >= 1 &&
-  v.length <= MAX_RENDITIONS &&
-  v.every((r) => isRecord(r) && Object.keys(r).length === Object.keys(RENDITION).length && record(r, RENDITION) !== null)
+  Array.isArray(v) && v.length >= 1 && v.length <= MAX_RENDITIONS && v.every((r) => parseRendition(r) !== null)
 
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 
@@ -210,8 +210,8 @@ const SHAPES = {
   variantAttributeValue: { variantId: uuid, attributeId: uuid, value: nullable(str) },
   photo: {
     id: uuid, itemId: uuid, variantId: nullable(uuid), provider: str, fileId: str, url: str, position: int,
-    createdAt: time, createdBy: str, urls: nullable(renditions), width: nullable(size), height: nullable(size),
-    deleteHandle: nullable((v) => typeof v === 'string' && v.length >= 1 && v.length <= 2048),
+    createdAt: time, createdBy: str, urls: nullable(renditions), width: nullable(isPhotoSide), height: nullable(isPhotoSide),
+    deleteHandle: nullable(isDeleteHandle),
   },
   stock: {
     itemId: uuid, variantId: nullable(uuid), quantity, pricedQuantity: quantity, pricedTotal: int,
@@ -231,6 +231,13 @@ const STOCK_DEFAULTS = { lastCountedAt: null }
 /** Schema 5 added renditions, size and delete handle to photos: a file of schema 4 or older has none. */
 const PHOTO_DEFAULTS = { urls: null, width: null, height: null, deleteHandle: null }
 
+/** The photos of a file, each rendition rebuilt as parseRendition reads it: a key it does not know is left behind, as
+ *  for every record, and `type` absent is null. */
+function photos(value: unknown): Photo[] | null {
+  const list = records<Photo>(value, SHAPES.photo, PHOTO_DEFAULTS)
+  return list && list.map((p) => ({ ...p, urls: normalizeRenditions(p.urls) }))
+}
+
 function inventoryExport(value: unknown): InventoryExport | null {
   if (!isRecord(value) || !isRecord(value.snapshot)) return null
   const s = value.snapshot
@@ -244,7 +251,7 @@ function inventoryExport(value: unknown): InventoryExport | null {
     units: records(s.units, SHAPES.unit),
     itemAttributes: records(s.itemAttributes, SHAPES.itemAttribute),
     variantAttributeValues: records(s.variantAttributeValues, SHAPES.variantAttributeValue),
-    photos: records(s.photos, SHAPES.photo, PHOTO_DEFAULTS),
+    photos: photos(s.photos),
     stock: records(s.stock, SHAPES.stock, STOCK_DEFAULTS),
   }
   const movements = records<Movement>(value.movements, SHAPES.movement)

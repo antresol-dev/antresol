@@ -138,7 +138,7 @@ async function archive(): Promise<void> {
 // Menu items show focus with their highlight (radius 10 inside the menu's 20 and 6 px padding); the sheet's rows are
 // flat pressable tiles with the base focus outline.
 const itemClass = computed(() => [
-  'flex min-h-11 w-full items-center gap-2 px-2 py-1.5 text-left text-sm disabled:pointer-events-none disabled:opacity-50',
+  'flex min-h-11 w-full items-center gap-2 px-3 py-1.5 text-left text-sm disabled:pointer-events-none disabled:opacity-50',
   desktop.value ? 'rounded-chip' : 'pressable',
 ])
 </script>
@@ -148,7 +148,7 @@ const itemClass = computed(() => [
   <DefineTrigger>
     <button
       type="button"
-      class="raised pressable flex min-h-11 w-full min-w-0 items-center gap-2.5 px-2.5 py-2 text-left"
+      class="raised pressable flex min-h-11 w-full min-w-0 items-center gap-2.5 px-4 py-2 text-left"
     >
       <span class="flex min-w-0 flex-1 flex-col">
         <span class="text-[11px] font-semibold text-subtle-foreground">{{ $t('inventory.label') }}</span>
@@ -163,7 +163,7 @@ const itemClass = computed(() => [
         <component
           :is="desktop ? DropdownMenuLabel : 'p'"
           v-if="group.label"
-          class="px-2 pt-1 text-xs font-semibold text-subtle-foreground"
+          class="px-3 pt-1 text-xs font-semibold text-subtle-foreground"
         >
           {{ group.label }}
         </component>

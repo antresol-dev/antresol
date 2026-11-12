@@ -854,8 +854,9 @@ describe('main.css reads the style (plan 10 Task 1)', () => {
 
   it.each([
     ['.glass', ['--st-pop)', '--st-pop-sh', '--st-pop-r', '--st-pop-blur', '--st-pop-fg', '--st-pop-border', '--st-pop-muted', '--st-pop-danger']],
+    ['.row-inset', ['--st-cur-m']],
     ['.row-selected', ['--st-cur-r', '--st-cur-fg', '--st-cur-muted']],
-    ['.row-selected::after', ['--st-cur)', '--st-cur-sh', '--st-cur-m']],
+    ['.row-selected::after', ['--st-cur)', '--st-cur-sh']],
     ['.raised-card', ['--st-card)', '--st-card-sh', '--st-card-r', '--st-card-fg', '--st-card-muted', '--st-surf-blur']],
     ['.surface-list', ['--st-list)', '--st-list-sh', '--st-list-r', '--st-surf-blur']],
     ['.surface-header', ['--st-hdr)', '--st-hdr-sh', '--st-hdr-line', '--st-hdr-blur']],

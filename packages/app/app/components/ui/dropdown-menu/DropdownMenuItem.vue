@@ -24,7 +24,7 @@ const forwardedProps = useForwardProps(delegatedProps)
     :data-inset="inset ? '' : undefined"
     :data-variant="variant"
     v-bind="forwardedProps"
-    :class="cn(`relative flex items-center gap-2 rounded-(--st-pop-item-r) px-2 py-1.5 text-sm outline-hidden select-none focus:bg-(--glass-hover) focus:text-(--glass-hover-foreground) data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-8 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:text-destructive [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4`, props.class)"
+    :class="cn(`relative flex items-center gap-2 rounded-(--st-pop-item-r) px-3 py-1.5 text-sm outline-hidden select-none focus:bg-(--glass-hover) focus:text-(--glass-hover-foreground) data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-9 data-[variant=destructive]:text-destructive data-[variant=destructive]:focus:text-destructive [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4`, props.class)"
   >
     <slot />
   </DropdownMenuItem>

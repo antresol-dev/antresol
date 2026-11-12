@@ -343,7 +343,7 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
                 :aria-selected="row.key === selected?.key"
                 :class="[
                   // The selected option is a selected row (spec 4.1): accent gradient, text and icons in its ink.
-                  'flex min-h-11 cursor-pointer items-center gap-2.5 rounded-field px-2.5 select-none',
+                  'flex min-h-11 cursor-pointer items-center gap-2.5 rounded-field px-3.5 select-none',
                   desktop ? 'py-1.5' : 'py-2',
                   row.key === selected?.key ? 'row-selected' : '',
                 ]"

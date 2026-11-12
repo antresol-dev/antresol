@@ -20,6 +20,7 @@ import {
   type SourceReceipt,
 } from '@antresol/core'
 import { createCloudinaryStore } from '@antresol/files-cloudinary'
+import { createImgbbStore } from '@antresol/files-imgbb'
 import { createImgurStore } from '@antresol/files-imgur'
 import { createUploadcareStore } from '@antresol/files-uploadcare'
 import { APP_SCHEMA_VERSION } from '@antresol/storage-postgres'
@@ -189,6 +190,10 @@ export function defaultFileStore(config: SourceConfig, fetchImpl?: typeof fetch)
     const cloudName = config.cloudinaryCloudName?.trim()
     const uploadPreset = config.cloudinaryUploadPreset?.trim()
     return cloudName && uploadPreset ? createCloudinaryStore({ cloudName, uploadPreset, ...opts }) : null
+  }
+  if (config.photoStore === 'imgbb') {
+    const apiKey = config.imgbbApiKey?.trim()
+    return apiKey ? createImgbbStore({ apiKey, ...opts }) : null
   }
   if (config.photoStore === 'imgur') {
     const clientId = config.imgurClientId?.trim()
@@ -1202,6 +1207,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       config.cloudinaryCloudName ?? '',
       config.cloudinaryUploadPreset ?? '',
       config.imgurClientId ?? '',
+      config.imgbbApiKey ?? '',
     ].join('|')
     const known = stores.get(sourceId)
     if (known?.key === key) return known.store

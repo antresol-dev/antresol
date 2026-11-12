@@ -13,6 +13,7 @@
   "dependencies": {
     "@antresol/core": "workspace:*",
     "@antresol/files-cloudinary": "workspace:*",
+    "@antresol/files-imgbb": "workspace:*",
     "@antresol/files-imgur": "workspace:*",
     "@antresol/files-uploadcare": "workspace:*",
     "@antresol/storage-postgres": "workspace:*",

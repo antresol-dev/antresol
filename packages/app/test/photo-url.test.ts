@@ -104,6 +104,28 @@ describe('displayablePhotoUrl with renditions', () => {
   })
 })
 
+describe('displayablePhotoUrl on ImgBB', () => {
+  const rend = (side: number, fit: 'inside' | 'cover', role: string, name: string): Rendition => ({
+    role, url: `https://i.ibb.co/c/${name}`, width: side, height: side, type: 'image/webp', fit,
+  })
+  const ibb = 'https://i.ibb.co/o/photo.webp'
+  const copies = [rend(2048, 'inside', 'original', 'o.webp'), rend(640, 'inside', 'medium', 'm.webp'), rend(180, 'cover', 'thumb', 'p.webp')]
+  it('marks only the copy chosen for thumb, so the service worker caches it with the thumbnails', () => {
+    expect(displayablePhotoUrl({ url: ibb, urls: copies }, 'thumb')).toBe('https://i.ibb.co/c/p.webp?antresol=thumb')
+    expect(displayablePhotoUrl({ url: ibb, urls: copies }, 'card')).toBe('https://i.ibb.co/c/o.webp')
+    expect(displayablePhotoUrl({ url: ibb, urls: copies }, 'full')).toBe('https://i.ibb.co/c/o.webp')
+  })
+  it('shows the url of a photo without copies as it is, unmarked', () => {
+    expect(displayablePhotoUrl({ url: ibb }, 'thumb')).toBe(ibb)
+    expect(displayablePhotoUrl({ url: ibb, urls: [] }, 'thumb')).toBe(ibb)
+    expect(displayablePhotoUrl({ url: ibb }, 'full')).toBe(ibb)
+  })
+  it('puts no marker on a thumb copy of another host', () => {
+    const t = { ...rend(160, 'cover', 'thumb', 'x'), url: 'https://ucarecdn.com/abc/-/preview/160x160/' }
+    expect(displayablePhotoUrl({ url: 'https://ucarecdn.com/abc/', urls: [t] }, 'thumb')).toBe(t.url)
+  })
+})
+
 describe('url kinds', () => {
   it('recognises Uploadcare hosts', () => {
     expect(isUploadcareUrl('https://ucarecdn.com/abc/')).toBe(true)

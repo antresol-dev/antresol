@@ -27,9 +27,10 @@ describe('error log', () => {
       cloudinaryCloudName: 'my-cloud-name',
       cloudinaryUploadPreset: 'unsigned-preset',
       imgurClientId: 'imgur-cid-5678',
+      imgbbApiKey: 'ibb-apikey-9012',
     }
     const log = make(secretsOf(config))
-    log.logError('upload', new Error('POST https://api.cloudinary.com/v1_1/my-cloud-name/image/upload with imgur-cid-5678, unsigned-preset, ucare-pub-1234'))
+    log.logError('upload', new Error('POST https://api.cloudinary.com/v1_1/my-cloud-name/image/upload with imgur-cid-5678, ibb-apikey-9012, unsigned-preset, ucare-pub-1234'))
     const [entry] = await log.readErrors()
     for (const secret of Object.values(config)) expect(entry!.message).not.toContain(secret)
   })

@@ -74,6 +74,7 @@ const PHOTO_FIELDS: ReadonlySet<string> = new Set([
   'cloudinaryCloudName',
   'cloudinaryUploadPreset',
   'imgurClientId',
+  'imgbbApiKey',
 ])
 /** Shorter values would blank out ordinary words. */
 const MIN_SECRET_LENGTH = 4

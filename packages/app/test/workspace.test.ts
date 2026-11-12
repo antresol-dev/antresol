@@ -2696,6 +2696,9 @@ describe('workspace photos', () => {
     expect(defaultFileStore({ ...base, photoStore: 'cloudinary', cloudinaryCloudName: 'c' })).toBeNull()
     expect(defaultFileStore({ ...base, photoStore: 'imgur', imgurClientId: 'id' })?.provider).toBe('imgur')
     expect(defaultFileStore({ ...base, photoStore: 'imgur', uploadcarePublicKey: 'pub' })).toBeNull()
+    expect(defaultFileStore({ ...base, photoStore: 'imgbb', imgbbApiKey: 'k' })?.provider).toBe('imgbb')
+    expect(defaultFileStore({ ...base, photoStore: 'imgbb', imgbbApiKey: ' ' })).toBeNull()
+    expect(defaultFileStore({ ...base, photoStore: 'imgbb', uploadcarePublicKey: 'pub' })).toBeNull()
     expect(defaultFileStore({ ...base, uploadcarePublicKey: 'pub' })?.provider).toBe('uploadcare')
   })
 

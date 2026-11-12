@@ -1,9 +1,10 @@
 import type { Rendition } from '@antresol/core'
 import { cloudinaryThumbUrl, isCloudinaryUrl } from '@antresol/files-cloudinary'
+import { isImgbbUrl } from '@antresol/files-imgbb'
 import { imgurThumbUrl, isImgurUrl } from '@antresol/files-imgur'
 import { isUploadcareUrl } from '@antresol/files-uploadcare'
 
-export { isCloudinaryUrl, isImgurUrl, isUploadcareUrl }
+export { isCloudinaryUrl, isImgbbUrl, isImgurUrl, isUploadcareUrl }
 export type PhotoSize = 'thumb' | 'card' | 'full'
 /** What display needs of a photo: its url and the stored renditions, if any (a `Photo` fits). */
 export type PhotoRef = { url: string; urls?: Rendition[] | null }
@@ -18,9 +19,9 @@ const CLOUDINARY_SIDE: Record<PhotoSize, number> = { thumb: 400, card: 800, full
 /** Imgur has no size above 'h' (1024 px); the full view takes the original, which is the stored url. */
 const IMGUR_SUFFIX = { thumb: 'm', card: 'l' } as const
 
-/** Hosts whose pictures may be put in an <img>: the three photo stores (ImgBB joins with its source). */
+/** Hosts whose pictures may be put in an <img>: the four photo stores. */
 export function isPhotoHostUrl(url: string): boolean {
-  return isUploadcareUrl(url) || isCloudinaryUrl(url) || isImgurUrl(url)
+  return isUploadcareUrl(url) || isCloudinaryUrl(url) || isImgbbUrl(url) || isImgurUrl(url)
 }
 
 /** Storage keeps any JSON array in `urls` unchecked, so an element may be anything; only a well-formed one is used. */
@@ -50,13 +51,17 @@ export function pickRendition(urls: readonly unknown[] | null | undefined, size:
   return null
 }
 
-/** What may be put in an <img>: a stored rendition, else the url of one of the three photo stores (transformed), and
+/** Query the service worker caches with the thumbnails (nuxt.config.ts matches it): ImgBB has no size in its urls and
+ *  ignores the query. Only hosts where this was checked get it; today that is ImgBB. */
+const THUMB_MARK = 'antresol=thumb'
+
+/** What may be put in an <img>: a stored rendition (an ImgBB one picked for thumb carries the cache mark), else the url of one of the four photo stores (transformed), and
  *  device: urls unchanged (resolved by the caller). Any other url in the data is never loaded (it would be a tracking
  *  pixel); null then. */
 export function displayablePhotoUrl(photo: PhotoRef, size: PhotoSize): string | null {
   if (isDeviceUrl(photo.url)) return photo.url
   const picked = pickRendition(photo.urls, size)
-  if (picked) return picked.url
+  if (picked) return size === 'thumb' && isImgbbUrl(picked.url) ? `${picked.url}?${THUMB_MARK}` : picked.url
   return isPhotoHostUrl(photo.url) ? photoUrl(photo.url, size) : null
 }
 

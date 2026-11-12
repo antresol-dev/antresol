@@ -149,13 +149,13 @@ describe('photoStoreProblem', () => {
 })
 
 describe('photoStoreChoices', () => {
-  it('offers Uploadcare and Cloudinary to a new source: Imgur no longer registers applications', () => {
-    expect(photoStoreChoices()).toEqual(['uploadcare', 'cloudinary'])
-    expect(photoStoreChoices('uploadcare')).toEqual(['uploadcare', 'cloudinary'])
-    expect(photoStoreChoices('cloudinary')).toEqual(['uploadcare', 'cloudinary'])
+  it('offers Uploadcare, Cloudinary and ImgBB to a new source: Imgur no longer registers applications', () => {
+    expect(photoStoreChoices()).toEqual(['uploadcare', 'cloudinary', 'imgbb'])
+    expect(photoStoreChoices('uploadcare')).toEqual(['uploadcare', 'cloudinary', 'imgbb'])
+    expect(photoStoreChoices('imgbb')).toEqual(['uploadcare', 'cloudinary', 'imgbb'])
   })
 
   it('keeps Imgur on a source that already uploads there, so its choice stays visible', () => {
-    expect(photoStoreChoices('imgur')).toEqual(['uploadcare', 'cloudinary', 'imgur'])
+    expect(photoStoreChoices('imgur')).toEqual(['uploadcare', 'cloudinary', 'imgbb', 'imgur'])
   })
 })

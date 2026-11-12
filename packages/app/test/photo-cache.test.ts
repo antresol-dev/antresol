@@ -36,11 +36,20 @@ describe('photo runtime caching', () => {
       expect(ruleFor(photoUrl(u, 'full'))?.options.cacheName).toBe(PHOTO_CACHE.full)
     }
   })
+  it('caches a marked ImgBB copy with the thumbnails and an unmarked one with the big photos', () => {
+    const marked = 'https://i.ibb.co/Ab1/thumb.webp?antresol=thumb'
+    expect(ruleFor(marked)?.options.cacheName).toBe(PHOTO_CACHE.thumbs)
+    expect(ruleFor('https://i.ibb.co/Ab1/medium.webp')?.options.cacheName).toBe(PHOTO_CACHE.full)
+    expect(ruleFor('https://i.ibb.co/Ab1/thumb.webp?other=1')?.options.cacheName).toBe(PHOTO_CACHE.full)
+    expect(ruleFor('https://i.ibb.co/Ab1/thumb.webp?antresol=thumb&x=1')?.options.cacheName).toBe(PHOTO_CACHE.full)
+  })
   it('leaves every other address alone (uploads, API, the app itself)', () => {
     for (const u of [
       'https://upload.uploadcare.com/base/',
       'https://api.cloudinary.com/v1_1/x/image/upload',
       'https://api.imgur.com/3/image',
+      'https://api.imgbb.com/1/upload',
+      'https://i.ibb.co.evil.test/a/b.webp',
       'https://example.com/ucarecdn.com/a.jpg',
       'https://ucarecdn.com.evil.test/a.jpg',
       'http://ucarecdn.com/a/',
@@ -52,10 +61,11 @@ describe('photo runtime caching', () => {
 })
 
 describe('photoCrossorigin', () => {
-  it('asks the three stores with CORS and nothing else', () => {
+  it('asks the four stores with CORS and nothing else', () => {
     expect(photoCrossorigin(UC)).toBe('anonymous')
     expect(photoCrossorigin(CL)).toBe('anonymous')
     expect(photoCrossorigin(IM)).toBe('anonymous')
+    expect(photoCrossorigin('https://i.ibb.co/Ab1/photo.webp')).toBe('anonymous')
     expect(photoCrossorigin('device:x')).toBeUndefined()
     expect(photoCrossorigin('https://example.com/a.jpg')).toBeUndefined()
   })

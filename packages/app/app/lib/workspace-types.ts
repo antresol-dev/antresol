@@ -183,6 +183,7 @@ export interface Workspace {
         | 'cloudinaryCloudName'
         | 'cloudinaryUploadPreset'
         | 'imgurClientId'
+        | 'imgbbApiKey'
       >>,
   ): Promise<void>
   /** Its saved list goes before the source itself: a removal that fails midway leaves no list without its source, and

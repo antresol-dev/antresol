@@ -1,4 +1,4 @@
-import { newId, normalizeCommand, patchSnapshot, type Command, type InventorySnapshot, type Quantity } from '@antresol/core'
+import { newId, normalizeCommand, patchSnapshot, type Command, type InventorySnapshot, type Photo, type Quantity } from '@antresol/core'
 import { neonConfig } from '@neondatabase/serverless'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { assertTestDatabase, createNeonHttpExecutor, createNeonWsExecutor, inspectSchema, type PgExecutor } from '../src'
@@ -7,7 +7,7 @@ import { ensureSchema, LOCK_REV, REV_BUMP } from '../src/migrator'
 import { sql } from '../src/sql'
 import { uuidV5 } from '../src/restore'
 import { openPostgresStorage } from '../src/storage'
-import { attributeCreate, itemCreate, normSnapshot, TEST_ACTOR, variantsCreate } from './helpers'
+import { attributeCreate, itemCreate, normSnapshot, RENDITION_FIELDS, TEST_ACTOR, variantsCreate } from './helpers'
 import { renamed, seedRich } from './restore-fixtures'
 
 describe('assertTestDatabase', () => {
@@ -262,7 +262,14 @@ describe.skipIf(!url)('Neon conformance', () => {
           { [cap]: '0.00000047', [volt]: '16' },
           { [cap]: '0.00000022', [volt]: '50' },
         ])
-        await step({ type: 'photo.add', id: p1, itemId: item, variantId: b, provider: 'imgbb', fileId: 'f1', url: 'https://i.example/f1' })
+        await step({
+          type: 'photo.add', id: p1, itemId: item, variantId: b, provider: 'imgbb', fileId: 'f1', url: 'https://i.example/f1',
+          ...RENDITION_FIELDS,
+        })
+        // jsonb comes back through this driver as a list of objects, not JSON text: in the write's reads and in a load.
+        const stored = (p: Photo | undefined) => p && { urls: p.urls, width: p.width, height: p.height, deleteHandle: p.deleteHandle }
+        expect(stored(copy.photos.find((p) => p.id === p1))).toEqual(RENDITION_FIELDS)
+        expect(stored((await storage.loadInventory(inv)).photos.find((p) => p.id === p1))).toEqual(RENDITION_FIELDS)
         const replace = (id: string, replaces: string | null): Command => ({
           type: 'photo.replace', variantId: b, id, itemId: item, replaces, provider: 'imgbb', fileId: id, url: `https://i.example/${id}`,
         })
@@ -408,14 +415,14 @@ describe.skipIf(!url)('Neon conformance', () => {
           ensureSchema(migrator),
           ...[0, 1, 2, 3].map((i) => write(attributeCreate(inv, newId(), `A${i}`))),
         ])
-        expect(status).toEqual({ state: 'ready', dbVersion: 4, appVersion: 4, minAppSchema: 3 })
+        expect(status).toEqual({ state: 'ready', dbVersion: 5, appVersion: 5, minAppSchema: 3 })
         const prevRevs = writes.map((rows) => rows[0]?.[0]?.value)
         const revs = writes.map((rows) => rows.at(-1)?.[0]?.value)
         // All went through (no deadlock), each after a different revision: none ran beside another.
         expect(new Set(prevRevs).size).toBe(writes.length)
         expect(new Set(revs).size).toBe(writes.length)
         // The app of schema 3 still writes: min_app_schema is 3.
-        expect(await ensureSchema(writer, 3)).toEqual({ state: 'ready', dbVersion: 4, appVersion: 3, minAppSchema: 3 })
+        expect(await ensureSchema(writer, 3)).toEqual({ state: 'ready', dbVersion: 5, appVersion: 3, minAppSchema: 3 })
 
         const { storage } = await openPostgresStorage(migrator)
         const snapshot = await storage.loadInventory(inv)

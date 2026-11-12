@@ -1,6 +1,19 @@
-import { newId, patchSnapshot, type Command, type Id } from '@antresol/core'
+import { newId, patchSnapshot, type Command, type Id, type Photo } from '@antresol/core'
 import { describe, expect, it } from 'vitest'
-import { itemCreate, makeStorage, sizeAxis, sliceOf, TEST_ACTOR, variantsCreate } from './helpers'
+import { toStatements } from '../src/commands'
+import { sql } from '../src/sql'
+import { openPostgresStorage } from '../src/storage'
+import * as schema4 from './fixtures/schema4-photo-writes'
+import {
+  itemCreate,
+  makeExecutor,
+  makeStorage,
+  RENDITION_FIELDS,
+  sizeAxis,
+  sliceOf,
+  TEST_ACTOR,
+  variantsCreate,
+} from './helpers'
 
 describe('photos', () => {
   it('adds at the end, reorders and removes', async () => {
@@ -106,5 +119,83 @@ describe('photo.replace', () => {
     // b has no photo: a photo named for it is not there.
     await run(replace(b, newId(), p2))
     expect(await photos()).toEqual(before)
+  })
+})
+
+describe('photo renditions, size and delete handle (schema 5)', () => {
+  /** An item with one variant, `a`, and no photo. */
+  async function setup() {
+    const exec = await makeExecutor()
+    const { storage } = await openPostgresStorage(exec)
+    const run = (c: Command) => storage.apply(c, TEST_ACTOR)
+    const [inv, item, size, a] = [newId(), newId(), newId(), newId()]
+    await run({ type: 'inventory.create', id: inv, name: 'A', description: null, currency: 'USD' })
+    await run(itemCreate(inv, item))
+    for (const c of sizeAxis(inv, item, size)) await run(c)
+    await run(variantsCreate(item, [[a, { [size]: 'S' }]]))
+    const photo = async (id: Id) => (await storage.loadInventory(inv)).photos.find((p) => p.id === id)
+    return { exec, storage, run, inv, item, a, photo }
+  }
+  const fields = (p: Photo | undefined) => p && { urls: p.urls, width: p.width, height: p.height, deleteHandle: p.deleteHandle }
+  const NONE = { urls: null, width: null, height: null, deleteHandle: null }
+
+  it('photo.add stores them; a load and the write’s own reads give them back, the renditions as a list of objects', async () => {
+    const { storage, run, inv, item, photo } = await setup()
+    const id = newId()
+    const copy = await storage.loadInventory(inv)
+    const r = await run({
+      type: 'photo.add', id, itemId: item, variantId: null, provider: 'imgbb', fileId: 'abc', url: 'https://i.ibb.co/abc/full.jpg',
+      ...RENDITION_FIELDS,
+    })
+    const stored = await photo(id)
+    expect(fields(stored)).toEqual(RENDITION_FIELDS)
+    expect(Array.isArray(stored!.urls)).toBe(true)
+    expect(typeof stored!.urls![0]).toBe('object')
+    expect(sliceOf(patchSnapshot(copy, r.patch!), item)).toEqual(sliceOf(await storage.loadInventory(inv), item))
+  })
+
+  it('photo.replace stores them on the new photo', async () => {
+    const { storage, run, inv, item, a, photo } = await setup()
+    const [old, id] = [newId(), newId()]
+    await run({ type: 'photo.add', id: old, itemId: item, variantId: a, provider: 'uploadcare', fileId: 'u1', url: 'https://u.example/u1' })
+    const copy = await storage.loadInventory(inv)
+    const r = await run({
+      type: 'photo.replace', variantId: a, id, itemId: item, replaces: old, provider: 'imgbb', fileId: 'abc',
+      url: 'https://i.ibb.co/abc/full.jpg', ...RENDITION_FIELDS,
+    })
+    expect(await photo(old)).toBeUndefined()
+    expect(fields(await photo(id))).toEqual(RENDITION_FIELDS)
+    expect(sliceOf(patchSnapshot(copy, r.patch!), item)).toEqual(sliceOf(await storage.loadInventory(inv), item))
+  })
+
+  it('a command without them (older app, older queue) reads null in all four and writes schema 4’s statement', async () => {
+    const { run, item, a, photo } = await setup()
+    const add: Extract<Command, { type: 'photo.add' }> = {
+      type: 'photo.add', id: newId(), itemId: item, variantId: null, provider: 'uploadcare', fileId: 'u1', url: 'https://u.example/u1',
+    }
+    const replace: Extract<Command, { type: 'photo.replace' }> = {
+      type: 'photo.replace', variantId: a, id: newId(), itemId: item, replaces: null, provider: 'uploadcare', fileId: 'u2',
+      url: 'https://u.example/u2',
+    }
+    expect(toStatements(add, TEST_ACTOR)).toEqual([schema4.photoAdd(add, TEST_ACTOR)])
+    expect(toStatements(replace, TEST_ACTOR)).toEqual([schema4.photoReplace(replace, TEST_ACTOR)])
+    // Null fields are the same as absent ones.
+    const nulls = { ...add, id: newId(), ...NONE }
+    expect(toStatements(nulls, TEST_ACTOR)).toEqual([schema4.photoAdd(nulls, TEST_ACTOR)])
+    for (const c of [add, replace, nulls]) await run(c)
+    for (const c of [add, replace, nulls]) expect(fields(await photo(c.id))).toEqual(NONE)
+  })
+
+  it('reads urls that are not a list (a hand-edited row) as none', async () => {
+    const { exec, run, item, photo } = await setup()
+    const [x, y] = [newId(), newId()]
+    for (const id of [x, y]) {
+      await run({ type: 'photo.add', id, itemId: item, variantId: null, provider: 'imgbb', fileId: id, url: `https://i.ibb.co/${id}`, ...RENDITION_FIELDS })
+    }
+    await exec.batch([
+      sql`update photos set urls = '"x"'::jsonb where id = ${x}`,
+      sql`update photos set urls = '{"url": "https://i.ibb.co/y"}'::jsonb where id = ${y}`,
+    ])
+    for (const id of [x, y]) expect(fields(await photo(id))).toEqual({ ...RENDITION_FIELDS, urls: null })
   })
 })

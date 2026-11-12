@@ -92,7 +92,7 @@ export const snapshotSql = {
           where ${where} order by va.variant_id, va.attribute_id`,
   photos: (where: Statement) =>
     sql`select p.id, p.item_id, p.variant_id, p.provider, p.file_id, p.url, p.position::text as position,
-                 p.created_at, p.created_by
+                 p.created_at, p.created_by, p.urls, p.width, p.height, p.delete_handle
           from photos p join items i on i.id = p.item_id
           where ${where} order by p.item_id, p.position, p.id`,
   stock: (where: Statement) =>

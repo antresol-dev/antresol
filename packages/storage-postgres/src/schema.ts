@@ -1,5 +1,6 @@
 // Drizzle is used ONLY to describe the schema and generate migrations (drizzle-kit).
 // Runtime queries are hand-written SQL via the `sql` tag.
+import type { Rendition } from '@antresol/core'
 import { sql } from 'drizzle-orm'
 import {
   bigint,
@@ -9,6 +10,7 @@ import {
   foreignKey,
   index,
   integer,
+  jsonb,
   numeric,
   pgTable,
   primaryKey,
@@ -213,6 +215,10 @@ export const photos = pgTable(
     provider: text('provider').notNull(),
     fileId: text('file_id').notNull(),
     url: text('url').notNull(),
+    urls: jsonb('urls').$type<Rendition[]>(),
+    width: integer('width'),
+    height: integer('height'),
+    deleteHandle: text('delete_handle'),
     position: integer('position').notNull(),
     createdAt: createdAt(),
     createdBy: createdBy(),

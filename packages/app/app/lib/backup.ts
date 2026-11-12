@@ -1,4 +1,4 @@
-import { parseQuantity, type InventoryExport, type InventorySnapshot, type Movement, type RestoreMode } from '@antresol/core'
+import { MAX_RENDITIONS, parseQuantity, RENDITION_FITS, type InventoryExport, type InventorySnapshot, type Movement, type RestoreMode } from '@antresol/core'
 import { APP_SCHEMA_VERSION, backupProblems, SCHEMA_BASE } from '@antresol/storage-postgres'
 import { computed, watch, type WatchStopHandle } from 'vue'
 import type { BackupInfo, RestoreRun } from './device-db'
@@ -144,6 +144,23 @@ const listOf =
 
 type Shape = Record<string, Check>
 
+const size: Check = (v) => typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 20000
+/** The limits of a photo command's renditions (core's checkPhotoFile), for a file of any origin. */
+const RENDITION: Shape = {
+  url: (v) => typeof v === 'string' && /^https:\/\//i.test(v) && v.length <= 2048,
+  role: (v) => typeof v === 'string' && v.length >= 1 && v.length <= 40,
+  width: size,
+  height: size,
+  fit: oneOf(...RENDITION_FITS),
+  type: nullable((v) => typeof v === 'string' && v.length <= 100),
+}
+/** 1 to MAX_RENDITIONS objects with exactly the rendition's fields: anything else fails the file. */
+const renditions: Check = (v) =>
+  Array.isArray(v) &&
+  v.length >= 1 &&
+  v.length <= MAX_RENDITIONS &&
+  v.every((r) => isRecord(r) && Object.keys(r).length === Object.keys(RENDITION).length && record(r, RENDITION) !== null)
+
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 
 /**
@@ -193,7 +210,8 @@ const SHAPES = {
   variantAttributeValue: { variantId: uuid, attributeId: uuid, value: nullable(str) },
   photo: {
     id: uuid, itemId: uuid, variantId: nullable(uuid), provider: str, fileId: str, url: str, position: int,
-    createdAt: time, createdBy: str,
+    createdAt: time, createdBy: str, urls: nullable(renditions), width: nullable(size), height: nullable(size),
+    deleteHandle: nullable((v) => typeof v === 'string' && v.length >= 1 && v.length <= 2048),
   },
   stock: {
     itemId: uuid, variantId: nullable(uuid), quantity, pricedQuantity: quantity, pricedTotal: int,
@@ -210,6 +228,8 @@ const SHAPES = {
 /** Fields newer than schema 3 (`pinned`: schema 4; `lastCountedAt`: Plan 8), absent from older files. */
 const ATTRIBUTE_DEFAULTS = { pinned: false }
 const STOCK_DEFAULTS = { lastCountedAt: null }
+/** Schema 5 added renditions, size and delete handle to photos: a file of schema 4 or older has none. */
+const PHOTO_DEFAULTS = { urls: null, width: null, height: null, deleteHandle: null }
 
 function inventoryExport(value: unknown): InventoryExport | null {
   if (!isRecord(value) || !isRecord(value.snapshot)) return null
@@ -224,7 +244,7 @@ function inventoryExport(value: unknown): InventoryExport | null {
     units: records(s.units, SHAPES.unit),
     itemAttributes: records(s.itemAttributes, SHAPES.itemAttribute),
     variantAttributeValues: records(s.variantAttributeValues, SHAPES.variantAttributeValue),
-    photos: records(s.photos, SHAPES.photo),
+    photos: records(s.photos, SHAPES.photo, PHOTO_DEFAULTS),
     stock: records(s.stock, SHAPES.stock, STOCK_DEFAULTS),
   }
   const movements = records<Movement>(value.movements, SHAPES.movement)

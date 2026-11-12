@@ -181,6 +181,70 @@ describe('parseBackup', () => {
   })
 })
 
+describe('parseBackup: photo renditions', () => {
+  type PhotoRaw = { app: { schemaVersion: number }; inventories: { snapshot: { inventory: Rec; items: Rec[]; photos: Rec[] } }[] }
+  const rendition = (role: string, side: number) => ({
+    url: `https://i.ibb.co/${role}/p.jpg`, role, width: side, height: side, fit: 'inside', type: 'image/jpeg',
+  })
+  async function withPhoto(extra: Rec) {
+    const { file } = await demoBackup()
+    const all = JSON.parse(JSON.stringify(file)) as PhotoRaw
+    const snap = all.inventories.find((e) => e.snapshot.inventory.name === 'Electronics')!.snapshot
+    const photo: Rec = {
+      id: newId(), itemId: snap.items[0]!.id, variantId: null, provider: 'imgbb', fileId: 'f1',
+      url: 'https://i.ibb.co/full/p.jpg', position: 0, createdAt: '2026-11-11T10:00:00Z', createdBy: 'me', ...extra,
+    }
+    snap.photos.push(photo)
+    return { all, snap, photo }
+  }
+
+  it('reads back a photo with renditions, size and delete handle without loss', async () => {
+    const fields = {
+      urls: [rendition('full', 2048), rendition('medium', 640), { ...rendition('thumb', 180), fit: 'cover', type: null }],
+      width: 2048, height: 1536, deleteHandle: 'https://ibb.co/del/abc',
+    }
+    const { all, photo } = await withPhoto(fields)
+    const parsed = parseBackup(all) as BackupFile
+    expect('error' in parsed).toBe(false)
+    const got = parsed.inventories.flatMap((e) => e.snapshot.photos).find((p) => p.id === photo.id)
+    expect(got).toMatchObject(fields)
+  })
+
+  it('reads a file of schema 4: photos without the new fields get null in all four', async () => {
+    const { all, photo } = await withPhoto({})
+    all.app.schemaVersion = 4
+    const parsed = parseBackup(all) as BackupFile
+    const got = parsed.inventories.flatMap((e) => e.snapshot.photos).find((p) => p.id === photo.id)
+    expect(got).toMatchObject({ urls: null, width: null, height: null, deleteHandle: null })
+  })
+
+  it('refuses urls that is a string, a rendition without width, or a fit that is not allowed', async () => {
+    const { width: _w, ...noWidth } = rendition('medium', 640)
+    for (const urls of ['[]', [noWidth], [{ ...rendition('medium', 640), fit: 'contain' }]]) {
+      const { all } = await withPhoto({ urls })
+      expect(parseBackup(all)).toEqual({ error: 'format' })
+    }
+  })
+
+  it('refuses renditions beyond the limits of a command', async () => {
+    const bad: unknown[] = [
+      [],
+      Array.from({ length: 9 }, (_, i) => rendition(`r${i}`, 100)),
+      [{ ...rendition('a', 100), url: 'http://i.ibb.co/a.jpg' }],
+      [{ ...rendition('a', 100), role: '' }],
+      [{ ...rendition('a', 100), width: 20001 }],
+      [{ ...rendition('a', 100), type: 'x'.repeat(101) }],
+      [{ ...rendition('a', 100), extra: 1 }],
+    ]
+    for (const urls of bad) {
+      const { all } = await withPhoto({ urls })
+      expect(parseBackup(all)).toEqual({ error: 'format' })
+    }
+    const { all } = await withPhoto({ deleteHandle: '' })
+    expect(parseBackup(all)).toEqual({ error: 'format' })
+  })
+})
+
 describe('parseBackup: what the schema cannot hold', () => {
   type Raw = { app: { schemaVersion: number }; inventories: { snapshot: Record<string, Rec[]> & { inventory: Rec } }[] }
   async function electronics() {

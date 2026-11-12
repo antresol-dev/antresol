@@ -416,6 +416,23 @@ function contrastProblems(t: StyleTokens, neumorphismGhostSel = false, stateInk:
   check('muted on field', t.muted, on(t.field, page))
   check('fg on sheet', t.fg, on(t.sheet, page))
   check('muted on sheet', t.muted, on(t.sheet, page))
+  // Sheets and dialogs are shown over the overlay scrim, as composited: page, then the scrim, then the sheet (a blur
+  // averages what is behind it, so the colours are the same). Everything a sheet holds is checked on that.
+  const scrim = on(t.overlay, page)
+  const sheet = on(t.sheet, scrim)
+  for (const text of ['fg', 'muted', 'icon', 'subtle', 'ink', 'destructive', 'warning'] as const) check(`${text} on sheet over the scrim`, t[text], sheet)
+  check('fg on field in a sheet', t.fg, on(t.field, sheet))
+  check('muted on field in a sheet', t.muted, on(t.field, sheet))
+  check('fg on chip in a sheet', t.fg, on(t.chip, sheet))
+  check('fg on rowHover in a sheet', t.fg, on(t.rowHover, sheet))
+  check('accentSoftFg on accentSoft in a sheet', t.accentSoftFg, on(t.accentSoft, sheet))
+  for (const kind of ['ib', 'btn', 'primary', 'ghost', 'painted', 'paintedDanger'] as const) {
+    for (const s of ['n', 'h', 'p'] as const) {
+      const state = k(t, kind)[s]
+      const fill = on(state.bg, sheet)
+      check(`${kind}.${s}.fg in a sheet`, state.fg, state.img === 'none' ? fill : backdrops(state.img, fill))
+    }
+  }
   check('fg on surface', t.fg, on(t.surface, page))
   check('fg on rail', t.fg, on(t.rail, page))
   check('fg on chip', t.fg, on(t.chip, page))

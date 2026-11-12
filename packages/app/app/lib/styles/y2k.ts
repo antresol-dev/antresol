@@ -16,6 +16,8 @@ import type { StyleBuild } from './types'
  *    press deepens it 10 %. The hover still glows (its halo is the mock-up's).
  *  - Danger text on light: #B8165A instead of #C0185D (4.37:1 on the lavender of the wallpaper).
  *  - Stepper pressed tint on light: 16 % instead of 24 %.
+ *  - Flat controls' text on hover and press, light: the accent 30 % deeper instead of 18 % (in a sheet, over the dark
+ *    scrim, the 20 % tint is darker and the ink on it read 4.0–4.4:1).
  *  - Dark chrome under the pointer: tinted with the deep accent instead of the pastel, and the label stays the
  *    foreground (the pastel on a pastel-tinted chrome reads 1.6:1); the stepper on the chrome likewise keeps the
  *    foreground on hover and press.
@@ -61,6 +63,9 @@ export const build: StyleBuild = (mode, accent) => {
   const cBg = dark ? '#2C3248' : '#E3E8F2'
   /** Text on chrome under the pointer: accent ink on light; the foreground on dark (the pastel ink on chrome is 1.6:1). */
   const chromeInk = dark ? fg : ink
+  /** Text of flat controls under the pointer: on light, in a sheet (over the dark scrim) the 20 % tint is darker than on
+   *  the wallpaper, and the accent ink on it read 4.0–4.4:1; the accent 30 % deeper reads 4.5:1 or better there. */
+  const ghostInk = dark ? ink : mix(AL, '#000000', 0.3)
 
   return finish(
     {
@@ -149,7 +154,7 @@ export const build: StyleBuild = (mode, accent) => {
           S(mix(paint, '#000000', 0.1), gelP, 'inset 0 0 0 1px ' + mix(AL, '#000000', 0.35) + ', inset 0 2px 5px rgba(0,0,0,0.3)', '#FFFFFF', 'scale(0.96)'),
         ),
         step: K(S('rgba(0,0,0,0)', 0, 0, fg), S(rgba(A, 0.14), 0, 0, chromeInk), S(rgba(A, dark ? 0.24 : 0.16), 0, cPress, chromeInk, 'scale(0.94)')),
-        ghost: K(S('rgba(0,0,0,0)', 0, 0, muted), S(rgba(A, 0.12), 0, 0, ink), S(rgba(A, 0.2), 0, 0, ink)),
+        ghost: K(S('rgba(0,0,0,0)', 0, 0, muted), S(rgba(A, 0.12), 0, 0, ghostInk), S(rgba(A, 0.2), 0, 0, ghostInk)),
       },
       ghostSel: K(
         S('rgba(0,0,0,0)', 0, 0, muted),

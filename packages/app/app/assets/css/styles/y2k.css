@@ -1,18 +1,11 @@
 /*
  * S7 Y2K: what its tokens cannot draw (lib/styles/y2k.ts holds the rest — the grid-and-star wallpaper is `page`, the
  * ✦ before section labels is `mark`, the frosted bubbles are `card`, `list` and `photo` with their blur, the springy
- * press is `tr` with each control's pressed scale). Here: the field radius's cap, and the pastel cycles of tag chips and
+ * press is `tr` with each control's pressed scale). Here: the pastel cycles of tag chips and
  * thumbnails, whose first colour main.css already paints (--st-chips-0, --st-thumbs-0).
  */
 
 @layer components {
-  /* rounded-field is the button radius (btnR, 999px here) and also shapes tall boxes: picker lists, notices, banners,
-     segmented grids, textareas. 26 px still makes a capsule of anything up to 52 px high (fields, buttons, rows); a
-     taller box keeps rounded corners instead of becoming a pill that clips its first and last lines. */
-  [data-style='y2k'] {
-    --radius-field: 26px;
-  }
-
   [data-style='y2k'] .tag-chip:nth-child(4n + 2) {
     background: var(--st-chips-1);
   }

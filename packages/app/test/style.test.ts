@@ -486,7 +486,7 @@ describe('base styles and utilities', () => {
 
   it('radius scale: 20 / 14 / 10 (Neumorphism), the style\'s numbers', () => {
     expect(css).toMatch(/--radius-card:\s*var\(--st-card-r\)/)
-    expect(css).toMatch(/--radius-field:\s*var\(--st-btn-r\)/)
+    expect(css).toMatch(/--radius-field:\s*min\(var\(--st-btn-r\), 26px\)/)
     expect(css).toMatch(/--radius-chip:\s*var\(--st-small-r\)/)
     for (const theme of ['light', 'dark'] as const) {
       const t = neumorphism(theme, 'indigo')

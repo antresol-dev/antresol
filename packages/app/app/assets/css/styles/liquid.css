@@ -13,12 +13,8 @@
   backdrop-filter: none;
 }
 
-/* Capsules are for controls. Blocks the markup rounds like a field — banners, notices, option rows, the multi-line text
-   area — would turn into capsules that wrap text into their ends: they take the selected row's 16 px instead. List
-   thumbnails and icon tiles stay rounded squares (12 px, the mock-up's item radius), not circles that crop photos. */
-[data-style='liquid'] .rounded-field:not(button, a, input, .pressable) {
-  --radius-field: 16px;
-}
+/* List thumbnails and icon tiles stay rounded squares (12 px, the mock-up's item radius), not circles that crop photos.
+   (Blocks the markup rounds like a field — banners, option rows, the text area — are bounded by main.css.) */
 [data-style='liquid'] {
   --radius-thumb: 12px;
   --radius-icon: 12px;

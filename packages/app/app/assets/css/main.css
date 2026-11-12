@@ -137,7 +137,10 @@
    A nested element is never rounder than its parent. The style sets the numbers. */
 @theme {
   --radius-card: var(--st-card-r);
-  --radius-field: var(--st-btn-r);
+  /* The button radius, bounded: --radius-field also shapes tall boxes (text areas, picker lists, notices, banners). A style
+     with pill ends (999px) would make them capsules that clip their first and last lines. 26px still makes a capsule of
+     anything up to 52px high (fields, buttons, rows) and a bounded rounded box of anything taller. */
+  --radius-field: min(var(--st-btn-r), 26px);
   --radius-chip: var(--st-small-r);
   --radius-thumb: var(--radius-chip);
   --radius-icon: var(--radius-chip);
@@ -405,7 +408,8 @@
     text-transform: var(--st-label-case);
   }
   .section-label::before {
-    content: var(--st-mark);
+    /* The mark is decoration: its alt text is empty, so screen readers do not read "✦" before every heading. */
+    content: var(--st-mark) / '';
     color: var(--st-mark-color);
   }
 

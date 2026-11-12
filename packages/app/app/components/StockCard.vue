@@ -52,7 +52,9 @@ const action = 'h-11 min-w-0 px-2 font-bold'
 </script>
 
 <template>
-  <section class="stock-card raised-card grid min-w-0 gap-3 p-4.5" :aria-label="$t('item.stock')">
+  <!-- data-stock is the card's state for the styles' CSS (Tinkerer's LED): "out" at zero or less, otherwise "ok". There is no
+       "low" state: the app has no reorder threshold. -->
+  <section class="stock-card raised-card grid min-w-0 gap-3 p-4.5" :data-stock="total.outOfStock ? 'out' : 'ok'" :aria-label="$t('item.stock')">
     <div class="flex min-w-0 items-start justify-between gap-3">
       <div class="grid min-w-0 gap-1.5">
         <!-- With a stepper the number is a flat button that opens Count. -->

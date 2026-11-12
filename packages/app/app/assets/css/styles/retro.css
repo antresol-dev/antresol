@@ -6,8 +6,8 @@
  *     here they are the mock-up's `divider`, a 1 px dashed border, in the same 1 px box.
  *  2. Tags and thumbnails take their colours in turn, as on the board.
  *  3. Field-sized things (inputs, select triggers, text areas, picker lists, rows under the pointer) take the selected
- *     row's boomerang instead of the controls' 999 px: a text area or a scrolling list drawn as a stadium would clip
- *     its corners. Buttons keep their kind's round ends, except the few the markup gives rounded-field (a sheet's main
+ *     row's boomerang instead of the controls' 999 px (main.css already bounds --radius-field at 26 px; the boomerang is
+ *     the style's own shape for them). Buttons keep their kind's round ends, except the few the markup gives rounded-field (a sheet's main
  *     button), which then match the fields above them.
  *  4. The phone sheet's top corners: rounded-t-card cannot take the card's four-value boomerang (each corner holds one
  *     radius), so they are its top-left and top-right.

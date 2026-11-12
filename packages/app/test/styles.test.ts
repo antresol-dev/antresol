@@ -671,7 +671,8 @@ describe('main.css reads the style (plan 10 Task 1)', () => {
   it('the body: the page, the font; the radius scale is the style\'s', () => {
     expect(code).toMatch(/body \{[^}]*background: var\(--st-page,/)
     expect(code).toMatch(/body \{[^}]*font-family: var\(--st-font,/)
-    for (const [radius, token] of [['card', 'card-r'], ['field', 'btn-r'], ['chip', 'small-r'], ['fab', 'prim-r']]) {
+    expect(code).toMatch(/--radius-field: min\(var\(--st-btn-r\), 26px\)/)
+    for (const [radius, token] of [['card', 'card-r'], ['chip', 'small-r'], ['fab', 'prim-r']]) {
       expect(code).toMatch(new RegExp(`--radius-${radius}: var\\(--st-${token}\\)`))
     }
     expect(code).toMatch(/\.lucide\[stroke-width='2'\] \{\s*stroke-width: var\(--st-stroke\)/)

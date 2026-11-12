@@ -1,2 +1,15 @@
 **/node_modules/
 **/.env
+node_modules/
+dist/
+.nuxt/
+.output/
+coverage/
+.env*
+!.env.example
+.neon
+spikes/*/results.jsonl
+packages/app/dist
+
+# Legacy TLS key: removed from history (it was public); never commit it again
+api/ssl/*.key

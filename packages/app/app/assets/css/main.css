@@ -1,0 +1,885 @@
+@import "tailwindcss";
+
+/*
+ * Antresol styles (spec 2026-11-12 "styles"): the look comes from the current style's tokens, CSS variables --st-*
+ * that lib/styles/apply.ts writes into <style id="antresol-style"> (light in :root, dark in .dark) from the style's
+ * TypeScript module (lib/styles/<name>.ts; the key list is lib/styles/types.ts). This file only reads them: no colour,
+ * radius, shadow or font of its own. A style's drawings that tokens cannot express live in assets/css/styles/<name>.css,
+ * under [data-style='<name>'] (data-style is on <html>).
+ *
+ * Utilities: plain classes in @layer components, so a Tailwind utility on the same element always wins (no variants
+ * such as md:raised). The interactive states are unlayered, so they also win over a bg-* utility.
+ *
+ *   Utility              The mock-up's role (tokens)                    Where
+ *   pressable            ghost (kinds.ghost; radius ghostR; motion tr)  flat controls; with a kind below: its states
+ *   raised               btn (kinds.btn; btnR; ctrlBlur)                Button outline/secondary, raised controls
+ *   raised-sm            ib (kinds.ib; ibR; ctrlBlur)                   Button outline icon sizes, small raised tiles
+ *   add-tile             add (kinds.add; thumbR; ctrlBlur)              the gallery's "Add photos" tile
+ *   accent-button        primary (kinds.primary; primR; ctrlBlur)       Button default, the dock's +
+ *   painted              painted (painted; primR)                       a surface painted in the accent
+ *   painted-destructive  paintedDanger                                  Button destructive (with painted)
+ *   pill                 pill (pillBg, pillImg, pillSh, pillR, ctrlBlur) the −/+ stepper's body
+ *   pill-step            step (kinds.step; pillRL / pillRR; seam)       its halves (`pill-step pressable`)
+ *   row-selected         cur (cur, curSh, curR, curM, curFg, curMuted)  selected row: current variant, tree folder,
+ *                        + pillSel*, stepSel, ghostSel inside it        palette row, nav link, folder pickers
+ *   glass                pop (pop, popSh, popR, popBlur, popFg, popBorder, popMuted, popDanger; items popHover,
+ *                        popHoverFg, popItemR; separators popDiv)       menus, select lists, combobox lists
+ *   raised-card          card (card, cardSh, cardR, cardFg, cardMuted, surfBlur)  cards: stock, settings, photo block
+ *   surface-list         list (list, listSh, listR, surfBlur)           lists of rows: variants, attributes, history,
+ *                                                                       folders, items, Tags & fields, archive
+ *   surface-header       hdr (hdr, hdrSh, hdrLine, hdrBlur)             the screen header
+ *   surface-bar          hdr, hdrLine, hdrBlur; barSh                   a bottom bar (the count screen's)
+ *   surface-sheet        sheet (sheet, sheetSh, sheetLine, sheetBlur)   sheets, dialogs, the search palette
+ *   surface-tip          tip (tip, tipFg, tipSh)                        tooltips
+ *   photo-cover          photo (photo, photoSh, photoR, photoFg, surfBlur)  the item's cover photo
+ *   photo-thumb          thumbs (thumbs-0, thumbSh, thumbR, thumbFg, surfBlur)  the gallery's thumbnails
+ *   tag-chip             chips (chips-0, chip-fgs-0, chipSh, chipR, chipFont)  the item's tags
+ *   screen-title         head (headFont, headWeight, headTrack, headCase)       the screen title (h1)
+ *   section-label        label (labelFont, labelWeight, labelTrack, labelCase, subtle; mark, markColor)  section
+ *                        headings ("Variants", "Attributes", "History", settings sections)
+ *   stock-card           (no rules: the hook for a style's LED, `led`, ledColor, ledGlow)  the stock card
+ *   tabular-nums         numFont                                        every number
+ *   amount               numWeight                                      the amounts the mock-up draws: stock total,
+ *                                                                       stepper count, list and history amounts
+ *   btn-text / btn-label plainBtnWeight / btnWeight                     every Button's label / the emphasised actions
+ *   .lucide              stroke, cap, join                              every icon (at Lucide's default width)
+ *   body                 page, fg, font; the window layer winBg, winBlur (body::before)
+ *   rounded-card / rounded-field / rounded-chip (= rounded-thumb, rounded-icon) / rounded-fab: cardR / btnR / smallR /
+ *                        primR; rounded-full.
+ *
+ * Not applied, on purpose (spec §3: sizes are the markup's): headSize, labelSize; the rest and pressed text colour (n.fg, p.fg) of ib, add, btn, step and ghost — the markup gives text its colour, hover
+ * turns text without a text-* utility to h.fg — and the shadows of ghost (flat controls keep their focus rings).
+ *
+ * Semantic tokens (Tailwind colours of the same names) are the style's: --background (pageColor), --surface, --hover
+ * (rowHover), --ghost-hover / --ghost-pressed (ghost h/p), --chip, --thumb, --field, --rail, --foreground (fg),
+ * --muted-foreground (muted), --subtle-foreground (subtle), --dimmed-foreground (dimmed), --icon, --accent-ink (ink),
+ * --accent, --accent-soft(-foreground), --primary(-foreground), --ring, --destructive(-foreground), --warning,
+ * --divider (dividerColor), --border, --input (fieldLine), --tree-line, --popover (popSolid), --glass-hover(-foreground)
+ * and --glass-divider (menus), --selected-pill (pillSelBg), --selected-muted (curMuted), --thumb-foreground (thumbFg).
+ * Contrast of every text/background pair, in every style, theme and accent: test/styles.test.ts.
+ */
+
+/* The styles' own drawings: one @import per style, here (imports come first), e.g. @import "./styles/retro.css"; */
+@import "./styles/base.css";
+@import "./styles/acrylic.css";
+@import "./styles/liquid.css";
+@import "./styles/linear.css";
+@import "./styles/brutal.css";
+@import "./styles/y2k.css";
+@import "./styles/retro.css";
+@import "./styles/tinkerer.css";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  color-scheme: light;
+  /* The page before the style is applied (only until the app's script runs): the default style's page colour. */
+  --boot-page: #F4F5F7;
+
+  --accent: var(--st-accent);
+  --accent-paint: var(--st-painted-n-bg);
+  --accent-foreground: var(--st-painted-n-fg);
+  --accent-ink: var(--st-ink);
+  --accent-soft: var(--st-accent-soft);
+  --accent-soft-foreground: var(--st-accent-soft-fg);
+
+  --background: var(--st-page-color, var(--boot-page));
+  --surface: var(--st-surface);
+  --hover: var(--st-row-hover);
+  --pressed: var(--st-btn-p-bg);
+  --ghost-hover: var(--st-ghost-h-bg);
+  --ghost-pressed: var(--st-ghost-p-bg);
+  --selected-pill: var(--st-pill-sel-bg);
+  --chip: var(--st-chip);
+  --thumb: var(--st-thumb);
+  --field: var(--st-field);
+  --rail: var(--st-rail);
+
+  --foreground: var(--st-fg);
+  --muted-foreground: var(--st-muted);
+  --subtle-foreground: var(--st-subtle);
+  --dimmed-foreground: var(--st-dimmed);
+  --selected-muted: var(--st-cur-muted);
+  --thumb-foreground: var(--st-thumb-fg);
+  --icon: var(--st-icon);
+  --destructive: var(--st-destructive);
+  --destructive-foreground: var(--st-destructive-fg);
+  --warning: var(--st-warning);
+
+  --divider: var(--st-divider-color);
+  --border: var(--st-border);
+  --input: var(--st-field-line);
+  --tree-line: var(--st-tree-line);
+
+  --glass-hover: var(--st-pop-hover);
+  --glass-hover-foreground: var(--st-pop-hover-fg);
+  --glass-divider: var(--st-pop-div);
+
+  /* shadcn-vue names */
+  --primary: var(--st-primary);
+  --primary-foreground: var(--st-primary-fg);
+  --card: var(--surface);
+  --card-foreground: var(--st-card-fg);
+  --popover: var(--st-pop-solid);
+  --popover-foreground: var(--st-pop-fg);
+  --secondary: var(--chip);
+  --secondary-foreground: var(--foreground);
+  --muted: var(--thumb);
+  --ring: var(--st-ring);
+}
+
+.dark {
+  color-scheme: dark;
+  --boot-page: #111216;
+}
+
+/* The radius scale (spec 4.2): cards and sheets, buttons/fields/row tiles, chips and nested elements, circles.
+   A nested element is never rounder than its parent. The style sets the numbers. */
+@theme {
+  --radius-card: var(--st-card-r);
+  /* The button radius, bounded: --radius-field also shapes tall boxes (text areas, picker lists, notices, banners). A style
+     with pill ends (999px) would make them capsules that clip their first and last lines. 26px still makes a capsule of
+     anything up to 52px high (fields, buttons, rows) and a bounded rounded box of anything taller. */
+  --radius-field: min(var(--st-btn-r), 26px);
+  --radius-chip: var(--st-small-r);
+  --radius-thumb: var(--radius-chip);
+  --radius-icon: var(--radius-chip);
+  --radius-fab: var(--st-prim-r);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-divider: var(--divider);
+  --color-foreground: var(--foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-subtle-foreground: var(--subtle-foreground);
+  --color-chip: var(--chip);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-soft-foreground: var(--accent-soft-foreground);
+  --color-accent-ink: var(--accent-ink);
+  --color-thumb: var(--thumb);
+  --color-thumb-foreground: var(--thumb-foreground);
+  --color-dimmed-foreground: var(--dimmed-foreground);
+  --color-icon: var(--icon);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-warning: var(--warning);
+  --color-hover: var(--hover);
+  --color-pressed: var(--pressed);
+  --color-field: var(--field);
+  --color-rail: var(--rail);
+  --color-tree-line: var(--tree-line);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Layers. Movement is used under motion-safe: only; backdrops fade (opacity only) in both modes. The same in every
+     style (spec §3). Navigation drawer: slides in from the left. Bottom sheets: slide up; from 768 px they are centred
+     windows that appear with a slight scale, like dropdown menus. Translate utilities use the `translate` property, so
+     these transforms add to them instead of replacing them. */
+  --animate-drawer-in: drawer-in 200ms ease-out;
+  --animate-drawer-out: drawer-out 200ms ease-in;
+  --animate-sheet-in: sheet-in 200ms ease-out;
+  --animate-sheet-out: sheet-out 160ms ease-in;
+  --animate-pop-in: pop-in 160ms ease-out;
+  --animate-pop-out: pop-out 120ms ease-in;
+  --animate-fade-in: fade-in 200ms ease-out;
+  --animate-fade-out: fade-out 200ms ease-in;
+
+  @keyframes drawer-in {
+    from { transform: translateX(-100%); }
+  }
+  @keyframes drawer-out {
+    to { transform: translateX(-100%); }
+  }
+  @keyframes sheet-in {
+    from { transform: translateY(100%); }
+  }
+  @keyframes sheet-out {
+    to { transform: translateY(100%); }
+  }
+  @keyframes pop-in {
+    from { opacity: 0; transform: scale(0.97); }
+  }
+  @keyframes pop-out {
+    to { opacity: 0; transform: scale(0.97); }
+  }
+  @keyframes fade-in {
+    from { opacity: 0; }
+  }
+  @keyframes fade-out {
+    to { opacity: 0; }
+  }
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  /* The page: the style's background (patterns and wallpapers included) fills the viewport; layouts are transparent. */
+  body {
+    background: var(--st-page, var(--boot-page));
+    color: var(--foreground);
+    font-family: var(--st-font, 'Onest', system-ui, sans-serif);
+  }
+
+  /* The font before the style is applied: the default style's (Base, Onest). Every style's family is served whether
+     or not CSS names it (nuxt.config.ts, fonts.families: global), since the styles name theirs in TypeScript. */
+  :root:not([data-style]) body {
+    font-family: 'Onest', system-ui, sans-serif;
+  }
+
+  /* @nuxt/fonts writes its metric-matched "<Family> Fallback: …" faces only for the first family of a font-family
+     declaration it finds in CSS, and the styles name theirs in TypeScript (injected at runtime, never seen by the
+     module). These rules are never matched by an element: one per style family, so each gets its fallback faces, which
+     the styles' stacks then name (lib/styles/fonts.ts, test/fonts.test.ts). */
+  .antresol-font-faces-onest {
+    font-family: 'Onest', system-ui, sans-serif;
+  }
+  .antresol-font-faces-manrope {
+    font-family: 'Manrope', system-ui, sans-serif;
+  }
+  .antresol-font-faces-inter {
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  .antresol-font-faces-rubik {
+    font-family: 'Rubik', system-ui, sans-serif;
+  }
+  .antresol-font-faces-unbounded {
+    font-family: 'Unbounded', system-ui, sans-serif;
+  }
+  .antresol-font-faces-exo-2 {
+    font-family: 'Exo 2', system-ui, sans-serif;
+  }
+  .antresol-font-faces-jost {
+    font-family: 'Jost', system-ui, sans-serif;
+  }
+  .antresol-font-faces-ibm-plex-sans {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  }
+  .antresol-font-faces-ibm-plex-mono {
+    font-family: 'IBM Plex Mono', system-ui, sans-serif;
+  }
+  .antresol-font-faces-fredoka {
+    font-family: 'Fredoka', system-ui, sans-serif;
+  }
+
+  /* The "Antresol" wordmark: Fredoka 600 in every style, with its metric fallback faces (lib/styles/fonts.ts). */
+  .antresol-wordmark {
+    font-family: 'Fredoka', "Fredoka Fallback: Segoe UI", "Fredoka Fallback: Helvetica Neue", "Fredoka Fallback: Arial", "Fredoka Fallback: Noto Sans", "Fredoka Fallback: Liberation Sans", system-ui, sans-serif;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  /* The window layer between the page and the content (Acrylic's Mica): fixed, so it never moves a thing. */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background: var(--st-win-bg, transparent);
+    -webkit-backdrop-filter: var(--st-win-blur, none);
+    backdrop-filter: var(--st-win-blur, none);
+    pointer-events: none;
+  }
+
+  /* Icons: the style's stroke on those drawn at Lucide's default width (a set :stroke-width stays), caps and joins. */
+  .lucide[stroke-width='2'] {
+    stroke-width: var(--st-stroke);
+  }
+  .lucide {
+    stroke-linecap: var(--st-cap);
+    stroke-linejoin: var(--st-join);
+  }
+
+  /* Keyboard focus: a visible accent ring; a shadow alone is not enough (spec 4.1). outline-none opts out. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+
+  /* Everything that can be clicked shows the pointer (spec 4.2); disabled things do not. Zero specificity, so a
+     cursor-* utility wins and the disabled rule wins over the pointer one. */
+  :where(button:not(:disabled), [role='button'], a[href], summary, label[for], select, [role='menuitem'], [role='menuitemcheckbox'], [role='menuitemradio'], [role='option'], [role='tab'], [role='radio'], [role='checkbox'], [role='switch']) {
+    cursor: pointer;
+  }
+  :where(:disabled, [aria-disabled='true'], [data-disabled]) {
+    cursor: default;
+  }
+}
+
+@layer components {
+  /* ---- Surfaces ---- */
+
+  .surface-header {
+    border-color: var(--st-hdr-line);
+    background: var(--st-hdr);
+    box-shadow: var(--st-hdr-sh);
+    -webkit-backdrop-filter: var(--st-hdr-blur);
+    backdrop-filter: var(--st-hdr-blur);
+  }
+
+  .raised-card {
+    --muted-foreground: var(--st-card-muted);
+    --subtle-foreground: var(--st-card-muted);
+    border-radius: var(--st-card-r);
+    background: var(--st-card);
+    box-shadow: var(--st-card-sh);
+    color: var(--st-card-fg);
+    -webkit-backdrop-filter: var(--st-surf-blur);
+    backdrop-filter: var(--st-surf-blur);
+  }
+
+  .surface-list {
+    border-radius: var(--st-list-r);
+    background: var(--st-list);
+    box-shadow: var(--st-list-sh);
+    -webkit-backdrop-filter: var(--st-surf-blur);
+    backdrop-filter: var(--st-surf-blur);
+  }
+
+  /* Sheets and dialogs: their 1 px border (top only on the phone) takes the sheet's line. */
+  .surface-sheet {
+    border-color: var(--st-sheet-line);
+    background: var(--st-sheet);
+    box-shadow: var(--st-sheet-sh);
+    -webkit-backdrop-filter: var(--st-sheet-blur);
+    backdrop-filter: var(--st-sheet-blur);
+  }
+
+  /* A bottom bar (the count screen's sticky bar): the header's surface, its line on the top edge. */
+  .surface-bar {
+    border-color: var(--st-hdr-line);
+    background: var(--st-hdr);
+    box-shadow: var(--st-bar-sh);
+    -webkit-backdrop-filter: var(--st-hdr-blur);
+    backdrop-filter: var(--st-hdr-blur);
+  }
+
+  .surface-tip {
+    background-color: var(--st-tip);
+    box-shadow: var(--st-tip-sh);
+    color: var(--st-tip-fg);
+  }
+
+  .photo-cover {
+    border-radius: var(--st-photo-r);
+    background: var(--st-photo);
+    box-shadow: var(--st-photo-sh);
+    color: var(--st-photo-fg);
+    -webkit-backdrop-filter: var(--st-surf-blur);
+    backdrop-filter: var(--st-surf-blur);
+  }
+
+  /* A style with several thumbnail colours cycles them in its own CSS (:nth-child with --st-thumbs-1…). */
+  .photo-thumb {
+    border-radius: var(--st-thumb-r);
+    background: var(--st-thumbs-0);
+    box-shadow: var(--st-thumb-sh);
+    color: var(--st-thumb-fg);
+    -webkit-backdrop-filter: var(--st-surf-blur);
+    backdrop-filter: var(--st-surf-blur);
+  }
+
+  /* A style with several chip colours cycles them in its own CSS (:nth-child with --st-chips-1…, --st-chip-fgs-1…). */
+  .tag-chip {
+    border-radius: var(--st-chip-r);
+    background: var(--st-chips-0);
+    box-shadow: var(--st-chip-sh);
+    color: var(--st-chip-fgs-0);
+    font-family: var(--st-chip-font);
+  }
+
+  .screen-title {
+    font-family: var(--st-head-font);
+    font-weight: var(--st-head-weight);
+    letter-spacing: var(--st-head-track);
+    text-transform: var(--st-head-case);
+  }
+
+  .section-label {
+    color: var(--subtle-foreground);
+    font-family: var(--st-label-font);
+    font-weight: var(--st-label-weight);
+    letter-spacing: var(--st-label-track);
+    text-transform: var(--st-label-case);
+  }
+  .section-label::before {
+    content: var(--st-mark);
+    color: var(--st-mark-color);
+  }
+  /* The mark is decoration: its alt text is empty, so screen readers do not read "✦" before every heading. An engine
+     without alt text in `content` would drop that whole declaration (and, a var() being valid at parse time, the one
+     above it would not stand in), so it is behind @supports: such an engine keeps the plain mark, and may read it. */
+  @supports (content: 'a' / 'b') {
+    .section-label::before {
+      content: var(--st-mark) / '';
+    }
+  }
+
+  .tabular-nums {
+    font-family: var(--st-num-font);
+  }
+
+  /* Weights (sizes stay the markup's): amounts the mock-up draws at numWeight; button labels — plain ones, and the
+     emphasised actions the mock-up draws (btn-label wins over btn-text on the same Button). */
+  .amount {
+    font-weight: var(--st-num-weight);
+  }
+  .btn-text {
+    font-weight: var(--st-plain-btn-weight);
+  }
+  .btn-label {
+    font-weight: var(--st-btn-weight);
+  }
+
+  /* Fields: their background (--field), border (--input) and radius (rounded-field) are the markup's utilities. */
+  :where([data-slot='input'], [data-slot='textarea'], [data-slot='select-trigger']) {
+    box-shadow: var(--st-field-sh);
+  }
+
+  /* Menus, select lists, combobox lists. Muted and destructive text inside take the menu's own shades (both read at
+     4.5:1 on it and on a hovered item). Items: rounded-(--st-pop-item-r), focus:bg-(--glass-hover). */
+  .glass {
+    --muted-foreground: var(--st-pop-muted);
+    --subtle-foreground: var(--st-pop-muted);
+    --destructive: var(--st-pop-danger);
+    border: 1px solid var(--st-pop-border);
+    border-radius: var(--st-pop-r);
+    background: var(--st-pop);
+    -webkit-backdrop-filter: var(--st-pop-blur);
+    backdrop-filter: var(--st-pop-blur);
+    box-shadow: var(--st-pop-sh);
+    color: var(--st-pop-fg);
+  }
+
+  /* Without backdrop blur a translucent pane would show the page through it unblurred: it takes its opaque colour. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass {
+      background: var(--st-pop-solid);
+    }
+  }
+
+  /* High-contrast preference: every blurred panel is opaque, nothing shows through it (popBlur, surfBlur, hdrBlur,
+     ctrlBlur, winBlur, the sheets' blur). */
+  @media (prefers-contrast: more) {
+    .glass {
+      background: var(--st-pop-solid);
+    }
+    .surface-header,
+    .surface-bar {
+      background: var(--st-hdr-solid);
+    }
+    .raised-card {
+      background: var(--st-card-solid);
+    }
+    .surface-list {
+      background: var(--st-list-solid);
+    }
+    .surface-sheet {
+      background: var(--st-sheet-solid);
+    }
+    .photo-cover {
+      background: var(--st-photo-solid);
+    }
+    .glass,
+    .surface-header,
+    .surface-bar,
+    .raised-card,
+    .surface-list,
+    .surface-sheet,
+    .photo-cover,
+    .photo-thumb,
+    .raised,
+    .raised-sm,
+    .add-tile,
+    .accent-button,
+    .pill {
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+  }
+
+  /* ---- Controls ----
+     Each kind sets its states' variables (--n-* rest, --h-* hover, --p-* pressed: bg, img, sh, fg, tf) from its
+     tokens; the shadowed kinds draw their rest state below, every state rule (after this layer) reads them.
+     Order matters: the kinds override the ghost defaults of .pressable. */
+  .pressable {
+    --n-bg: var(--st-ghost-n-bg);
+    --h-bg: var(--st-ghost-h-bg);
+    --h-img: var(--st-ghost-h-img);
+    --h-sh: var(--st-ghost-h-sh);
+    --h-fg: var(--st-ghost-h-fg);
+    --h-tf: var(--st-ghost-h-tf);
+    --p-bg: var(--st-ghost-p-bg);
+    --p-img: var(--st-ghost-p-img);
+    --p-sh: var(--st-ghost-p-sh);
+    --p-fg: var(--st-ghost-p-fg);
+    --p-tf: var(--st-ghost-p-tf);
+    border-radius: var(--st-ghost-r);
+    background-color: var(--n-bg);
+    /* The shadow and the sink share one duration and curve where the style says so (Neumorphism). */
+    transition: var(--st-tr);
+  }
+
+  .raised {
+    --n-bg: var(--st-btn-n-bg);
+    --n-img: var(--st-btn-n-img);
+    --n-sh: var(--st-btn-n-sh);
+    --h-bg: var(--st-btn-h-bg);
+    --h-img: var(--st-btn-h-img);
+    --h-sh: var(--st-btn-h-sh);
+    --h-fg: var(--st-btn-h-fg);
+    --h-tf: var(--st-btn-h-tf);
+    --p-bg: var(--st-btn-p-bg);
+    --p-img: var(--st-btn-p-img);
+    --p-sh: var(--st-btn-p-sh);
+    --p-fg: var(--st-btn-p-fg);
+    --p-tf: var(--st-btn-p-tf);
+    border-radius: var(--st-btn-r);
+  }
+
+  .raised-sm {
+    --n-bg: var(--st-ib-n-bg);
+    --n-img: var(--st-ib-n-img);
+    --n-sh: var(--st-ib-n-sh);
+    --h-bg: var(--st-ib-h-bg);
+    --h-img: var(--st-ib-h-img);
+    --h-sh: var(--st-ib-h-sh);
+    --h-fg: var(--st-ib-h-fg);
+    --h-tf: var(--st-ib-h-tf);
+    --p-bg: var(--st-ib-p-bg);
+    --p-img: var(--st-ib-p-img);
+    --p-sh: var(--st-ib-p-sh);
+    --p-fg: var(--st-ib-p-fg);
+    --p-tf: var(--st-ib-p-tf);
+    border-radius: var(--st-ib-r);
+  }
+
+  .add-tile {
+    --n-bg: var(--st-add-n-bg);
+    --n-img: var(--st-add-n-img);
+    --n-sh: var(--st-add-n-sh);
+    --h-bg: var(--st-add-h-bg);
+    --h-img: var(--st-add-h-img);
+    --h-sh: var(--st-add-h-sh);
+    --h-fg: var(--st-add-h-fg);
+    --h-tf: var(--st-add-h-tf);
+    --p-bg: var(--st-add-p-bg);
+    --p-img: var(--st-add-p-img);
+    --p-sh: var(--st-add-p-sh);
+    --p-fg: var(--st-add-p-fg);
+    --p-tf: var(--st-add-p-tf);
+    border-radius: var(--st-thumb-r);
+  }
+
+  /* The primary button: the same physics as every raised control, only its surface carries the accent. */
+  .accent-button {
+    --n-bg: var(--st-primary-n-bg);
+    --n-img: var(--st-primary-n-img);
+    --n-sh: var(--st-primary-n-sh);
+    --h-bg: var(--st-primary-h-bg);
+    --h-img: var(--st-primary-h-img);
+    --h-sh: var(--st-primary-h-sh);
+    --h-fg: var(--st-primary-h-fg);
+    --h-tf: var(--st-primary-h-tf);
+    --p-bg: var(--st-primary-p-bg);
+    --p-img: var(--st-primary-p-img);
+    --p-sh: var(--st-primary-p-sh);
+    --p-fg: var(--st-primary-p-fg);
+    --p-tf: var(--st-primary-p-tf);
+    border-radius: var(--st-prim-r);
+    color: var(--st-primary-n-fg);
+  }
+
+  .painted {
+    --n-bg: var(--st-painted-n-bg);
+    --n-img: var(--st-painted-n-img);
+    --n-sh: var(--st-painted-n-sh);
+    --h-bg: var(--st-painted-h-bg);
+    --h-img: var(--st-painted-h-img);
+    --h-sh: var(--st-painted-h-sh);
+    --h-fg: var(--st-painted-h-fg);
+    --h-tf: var(--st-painted-h-tf);
+    --p-bg: var(--st-painted-p-bg);
+    --p-img: var(--st-painted-p-img);
+    --p-sh: var(--st-painted-p-sh);
+    --p-fg: var(--st-painted-p-fg);
+    --p-tf: var(--st-painted-p-tf);
+    --paint-foreground: var(--st-painted-n-fg);
+    border-radius: var(--st-prim-r);
+    color: var(--paint-foreground);
+  }
+
+  .painted-destructive {
+    --n-bg: var(--st-painted-danger-n-bg);
+    --n-img: var(--st-painted-danger-n-img);
+    --n-sh: var(--st-painted-danger-n-sh);
+    --h-bg: var(--st-painted-danger-h-bg);
+    --h-img: var(--st-painted-danger-h-img);
+    --h-sh: var(--st-painted-danger-h-sh);
+    --h-fg: var(--st-painted-danger-h-fg);
+    --h-tf: var(--st-painted-danger-h-tf);
+    --p-bg: var(--st-painted-danger-p-bg);
+    --p-img: var(--st-painted-danger-p-img);
+    --p-sh: var(--st-painted-danger-p-sh);
+    --p-fg: var(--st-painted-danger-p-fg);
+    --p-tf: var(--st-painted-danger-p-tf);
+    --paint-foreground: var(--st-painted-danger-n-fg);
+  }
+
+  .pill {
+    display: inline-flex;
+    border-radius: var(--st-pill-r);
+    background-color: var(--st-pill-bg);
+    background-image: var(--st-pill-img);
+    box-shadow: var(--st-pill-sh);
+    -webkit-backdrop-filter: var(--st-ctrl-blur);
+    backdrop-filter: var(--st-ctrl-blur);
+  }
+
+  .pill-step {
+    --n-bg: var(--st-step-n-bg);
+    --n-img: var(--st-step-n-img);
+    --n-sh: var(--st-step-n-sh);
+    --h-bg: var(--st-step-h-bg);
+    --h-img: var(--st-step-h-img);
+    --h-sh: var(--st-step-h-sh);
+    --h-fg: var(--st-step-h-fg);
+    --h-tf: var(--st-step-h-tf);
+    --p-bg: var(--st-step-p-bg);
+    --p-img: var(--st-step-p-img);
+    --p-sh: var(--st-step-p-sh);
+    --p-fg: var(--st-step-p-fg);
+    --p-tf: var(--st-step-p-tf);
+  }
+
+  /* The rest state of every kind that draws a surface. */
+  .raised,
+  .raised-sm,
+  .add-tile,
+  .accent-button,
+  .painted,
+  .pill-step {
+    background-color: var(--n-bg);
+    background-image: var(--n-img);
+    box-shadow: var(--n-sh);
+  }
+  .raised,
+  .raised-sm,
+  .add-tile,
+  .accent-button {
+    -webkit-backdrop-filter: var(--st-ctrl-blur);
+    backdrop-filter: var(--st-ctrl-blur);
+  }
+
+  /* Each half is rounded on the pill's outer side only; the seam between them is a 1 px line. */
+  .pill > .pill-step:first-child {
+    border-radius: var(--st-pill-r-l);
+  }
+  .pill > .pill-step:last-child {
+    border-radius: var(--st-pill-r-r);
+  }
+  .pill > .pill-step + .pill-step {
+    border-left: var(--st-seam);
+  }
+
+  /* The selected row. Its background and ring are drawn behind its content, inset by curM: the row keeps its box. */
+  .row-selected {
+    --icon: var(--st-cur-fg);
+    --muted-foreground: var(--st-cur-muted);
+    --subtle-foreground: var(--st-cur-muted);
+    /* The markup's flat tints in the row (bg-(--ghost-hover), data-[state=open]:bg-(--ghost-pressed)) are ghostSel's. */
+    --ghost-hover: var(--st-ghost-sel-h-bg);
+    --ghost-pressed: var(--st-ghost-sel-p-bg);
+    position: relative;
+    isolation: isolate;
+    border-radius: var(--st-cur-r);
+    color: var(--st-cur-fg);
+  }
+  /* The highlight fills the row (tree, nav, palette): content keeps its padding from the drawn edge in every style.
+     Only a row the mock-up insets (the variant list's current row) adds .row-inset: the highlight is curM in. */
+  .row-inset {
+    --row-inset: var(--st-cur-m);
+  }
+  .row-selected::after {
+    content: '';
+    position: absolute;
+    inset: var(--row-inset, 0);
+    z-index: -1;
+    border-radius: inherit;
+    background: var(--st-cur);
+    box-shadow: var(--st-cur-sh);
+    pointer-events: none;
+  }
+
+  /* The stepper on a selected row and its halves, and flat controls in the row. */
+  .row-selected .pill {
+    background-color: var(--st-pill-sel-bg);
+    background-image: none;
+    box-shadow: var(--st-pill-sel-sh);
+  }
+  .row-selected :where(.pressable:not(.raised, .raised-sm, .add-tile, .accent-button, .painted, .pill-step)) {
+    --n-bg: var(--st-ghost-sel-n-bg);
+    --h-bg: var(--st-ghost-sel-h-bg);
+    --h-fg: var(--st-ghost-sel-h-fg);
+    --h-tf: var(--st-ghost-sel-h-tf);
+    --p-bg: var(--st-ghost-sel-p-bg);
+    --p-fg: var(--st-ghost-sel-p-fg);
+    --p-tf: var(--st-ghost-sel-p-tf);
+  }
+  .row-selected .pill-step {
+    --n-bg: var(--st-step-sel-n-bg);
+    --n-img: var(--st-step-sel-n-img);
+    --n-sh: var(--st-step-sel-n-sh);
+    --h-bg: var(--st-step-sel-h-bg);
+    --h-img: var(--st-step-sel-h-img);
+    --h-sh: var(--st-step-sel-h-sh);
+    --h-fg: var(--st-step-sel-h-fg);
+    --h-tf: var(--st-step-sel-h-tf);
+    --p-bg: var(--st-step-sel-p-bg);
+    --p-img: var(--st-step-sel-p-img);
+    --p-sh: var(--st-step-sel-p-sh);
+    --p-fg: var(--st-step-sel-p-fg);
+    --p-tf: var(--st-step-sel-p-tf);
+  }
+
+  /* Text without its own text-* utility takes the kind's hover colour. */
+  @media (hover: hover) {
+    .pressable:hover:not(:disabled, [aria-disabled='true'], [data-disabled]) {
+      color: var(--h-fg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pressable {
+      transition-property: background-color, color;
+    }
+  }
+}
+
+/* Interactive states. Unlayered on purpose: they must win over a bg-* utility on the same control (outline buttons
+   are passed bg-surface). Only the kinds that draw a surface change their image and shadow (a flat control keeps a
+   focus ring); transforms only without reduced motion. */
+@media (hover: hover) {
+  .pressable:hover:not(:disabled, [aria-disabled='true'], [data-disabled]) {
+    background-color: var(--h-bg);
+  }
+  .pressable:is(.raised, .raised-sm, .add-tile, .accent-button, .painted, .pill-step):hover:not(:disabled, [aria-disabled='true'], [data-disabled]) {
+    background-image: var(--h-img);
+    box-shadow: var(--h-sh);
+  }
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .pressable:hover:not(:disabled, [aria-disabled='true'], [data-disabled]) {
+    transform: var(--h-tf);
+  }
+}
+.pressable:active:not(:disabled, [aria-disabled='true'], [data-disabled]) {
+  background-color: var(--p-bg);
+}
+.pressable:is(.raised, .raised-sm, .add-tile, .accent-button, .painted, .pill-step):active:not(:disabled, [aria-disabled='true'], [data-disabled]) {
+  background-image: var(--p-img);
+  box-shadow: var(--p-sh);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .pressable:active:not(:disabled, [aria-disabled='true'], [data-disabled]) {
+    transform: var(--p-tf);
+  }
+}
+
+/* "⋯" and "+" in list and tree rows (design 6.7). The row carries `group`.
+   - With a pointer that hovers: hidden until the row is hovered, holds focus or its menu is open; fades in.
+   - Touch below 1024 px: not shown, a long press opens the same menu.
+   - Touch from 1024 px (three columns on a tablet): always shown, there is no hover to reveal them.
+   Unlayered on purpose: it must beat the display and transition utilities on the same element. */
+.row-action {
+  transition-property: opacity, background-color, color;
+  transition-duration: 150ms;
+  transition-timing-function: ease;
+}
+@media (hover: hover) {
+  .row-action {
+    opacity: 0;
+  }
+  .group:hover .row-action,
+  .group:focus-within .row-action,
+  .row-action[data-state='open'],
+  .row-action:has([data-state='open']) {
+    opacity: 1;
+  }
+}
+@media (hover: none) and (max-width: 1023.98px) {
+  .row-action {
+    display: none;
+  }
+}
+
+/* Below 1024 px the dock covers the bottom of the screen (its height and safe area come from MobileDock as --dock-h), so
+   toasts sit just above it. */
+@media (max-width: 1023.98px) {
+  [data-sonner-toaster][data-y-position='bottom'] {
+    bottom: calc(var(--dock-h, env(safe-area-inset-bottom, 0px)) + 8px) !important;
+  }
+}
+
+/* Toasts (vue-sonner): the box takes the menus' shadow, and the action ("Undo") is the style's secondary button (btn: its
+   fill, rim and shadow, the radius and weight of buttons, hover and press). Unlayered, with the toaster's attribute in
+   the selector, to win over the library's own rules wherever its stylesheet lands. */
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] {
+  box-shadow: var(--st-pop-sh);
+}
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button] {
+  border-radius: var(--st-btn-r);
+  background-color: var(--st-btn-n-bg);
+  background-image: var(--st-btn-n-img);
+  box-shadow: var(--st-btn-n-sh);
+  color: var(--popover-foreground);
+  font-weight: var(--st-plain-btn-weight);
+  -webkit-backdrop-filter: var(--st-ctrl-blur);
+  backdrop-filter: var(--st-ctrl-blur);
+}
+@media (hover: hover) {
+  [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button]:hover {
+    background-color: var(--st-btn-h-bg);
+    background-image: var(--st-btn-h-img);
+    box-shadow: var(--st-btn-h-sh);
+    color: var(--st-btn-h-fg);
+  }
+}
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button]:active {
+  background-color: var(--st-btn-p-bg);
+  background-image: var(--st-btn-p-img);
+  box-shadow: var(--st-btn-p-sh);
+  color: var(--st-btn-p-fg);
+}
+[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button]:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-button]:active {
+    transform: var(--st-btn-p-tf);
+  }
+}
+
+/* Dark: the navigation drawer is the page's colour and the scrim behind it nearly black, so its open edge would vanish
+   (Tailwind's shadow-xl does not show on dark): it takes the sheets' rim (--st-sheet-line, derived for dark in
+   derive.ts). Neumorphism keeps its own (owner-approved) edge; Neo-brutal draws a 2 px line (brutal.css). Unlayered, to
+   replace the shadow utility. */
+.dark:not([data-style='neumorphism'], [data-style='brutal']) #nav-drawer {
+  box-shadow: inset -1px 0 0 var(--st-sheet-line);
+}

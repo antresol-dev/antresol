@@ -1,0 +1,31 @@
+<script setup lang="ts">
+import type { DropdownMenuSubTriggerProps } from "reka-ui"
+import type { HTMLAttributes } from "vue"
+import { ChevronRight } from "@lucide/vue"
+import { reactiveOmit } from "@vueuse/core"
+import { cn } from "cn"
+import {
+  DropdownMenuSubTrigger,
+  useForwardProps,
+} from "reka-ui"
+
+const props = defineProps<DropdownMenuSubTriggerProps & { class?: HTMLAttributes["class"], inset?: boolean }>()
+
+const delegatedProps = reactiveOmit(props, "class", "inset")
+const forwardedProps = useForwardProps(delegatedProps)
+</script>
+
+<template>
+  <DropdownMenuSubTrigger
+    data-slot="dropdown-menu-sub-trigger"
+    v-bind="forwardedProps"
+    :data-inset="inset ? '' : undefined"
+    :class="cn(
+      `relative flex items-center gap-2 rounded-(--st-pop-item-r) px-3 py-1.5 text-sm outline-hidden select-none focus:bg-(--glass-hover) focus:text-(--glass-hover-foreground) data-[state=open]:bg-(--glass-hover) data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[inset]:pl-9 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4`,
+      props.class,
+    )"
+  >
+    <slot />
+    <ChevronRight class="ml-auto size-4" />
+  </DropdownMenuSubTrigger>
+</template>

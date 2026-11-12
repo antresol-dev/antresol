@@ -1,0 +1,22 @@
+/*
+ * S3 Acrylic: what its tokens (lib/styles/acrylic.ts) cannot say. Everything else — the wallpaper and the Mica window
+ * over it (body::before), the grain of the flyouts, the selected item's accent pill — is token-driven.
+ *
+ * Unlayered: these rules must win over the markup's utilities on the same element.
+ */
+
+/* High contrast: the Mica window is opaque too, like every blurred panel (main.css's fallback covers the panels, not
+   the window layer): the page's own opaque colour, no wallpaper showing through. */
+@media (prefers-contrast: more) {
+  [data-style='acrylic'] body::before {
+    background: var(--st-page-color);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* Unchecked checkboxes and radios take Fluent's strong stroke (the style's muted text colour): the fields' hairline
+   ring (--input, 6 % black) leaves an empty box all but invisible on the window. */
+[data-style='acrylic'] :is([data-slot='checkbox'], [data-slot='radio-group-item']):not([data-state='checked'], [aria-invalid='true']) {
+  border-color: var(--st-muted);
+}

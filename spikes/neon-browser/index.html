@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Neon browser spike</title>
+    <style>
+      body { font: 15px/1.4 system-ui, sans-serif; margin: 0; padding: 16px; background: #f7f7f8; color: #18181b; }
+      main { max-width: 760px; margin: 0 auto; }
+      h1 { font-size: 18px; margin: 0 0 12px; }
+      label { display: block; font-weight: 600; margin-bottom: 4px; }
+      input { width: 100%; box-sizing: border-box; padding: 10px; font: inherit; border: 1px solid #ededf0; border-radius: 8px; background: #fff; }
+      button { margin-top: 12px; padding: 10px 18px; font: inherit; font-weight: 600; color: #fff; background: #4f46e5; border: 0; border-radius: 8px; }
+      button:disabled { opacity: 0.5; }
+      #status { margin: 12px 0; color: #52525b; min-height: 1.4em; }
+      table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #ededf0; border-radius: 8px; overflow: hidden; }
+      td { padding: 6px 8px; border-top: 1px solid #ededf0; vertical-align: top; overflow-wrap: anywhere; }
+      td:nth-child(3) { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+      tr.fail td { background: #fef2f2; color: #b91c1c; }
+      #ua { margin-top: 12px; font-size: 12px; color: #71717a; overflow-wrap: anywhere; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Neon from the browser</h1>
+      <label for="url">Connection string (database name must end in _test)</label>
+      <input id="url" type="password" autocomplete="off" spellcheck="false" />
+      <button id="run" type="button">Run</button>
+      <div id="status"></div>
+      <table><tbody id="results"></tbody></table>
+      <div id="ua"></div>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

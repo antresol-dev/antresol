@@ -1,0 +1,15 @@
+{
+  "name": "neon-browser-spike",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@antresol/core": "workspace:*",
+    "@antresol/storage-postgres": "workspace:*",
+    "@neondatabase/serverless": "^1.2.0"
+  }
+}

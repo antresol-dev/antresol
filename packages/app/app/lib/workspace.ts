@@ -1,0 +1,1523 @@
+import {
+  DomainError,
+  FileError,
+  newId,
+  normalizeCommand,
+  patchSnapshot,
+  StorageError,
+  validateCommand,
+  type ApplyResult,
+  type Command,
+  type FileStore,
+  type Id,
+  type Inventory,
+  type InventorySnapshot,
+  type Movement,
+  type RestoreMode,
+  type RestoreResult,
+  type SnapshotPatch,
+  type SourceReceipt,
+} from '@antresol/core'
+import { createCloudinaryStore } from '@antresol/files-cloudinary'
+import { createImgurStore } from '@antresol/files-imgur'
+import { createUploadcareStore } from '@antresol/files-uploadcare'
+import { APP_SCHEMA_VERSION } from '@antresol/storage-postgres'
+import { markRaw, reactive } from 'vue'
+import { buildBackup, type BackupFile } from './backup'
+import { logError, secretsOf, setSecretSource } from './diagnostics'
+import { createDeviceFileStore, releaseDeviceUrls } from './device-files'
+import { prepareImage as defaultPrepareImage } from './images'
+import { countUpload } from './uploads'
+import type { CachedSnapshot } from './device-db'
+import { defaultDeviceName } from './device-name'
+import { classifyFailure, redactSecret, type FailureReason, type SourceConnection } from './sources'
+import type { InventoryRef, SourceConfig } from './types'
+import type {
+  CheckInterval,
+  InventoryEntry,
+  SourceState,
+  SourceStatus,
+  Workspace,
+  WorkspaceDeps,
+  WorkspaceState,
+} from './workspace-types'
+
+export type {
+  CheckInterval,
+  InventoryEntry,
+  ReadOnlyReason,
+  SourceState,
+  SourceStatus,
+  Workspace,
+  WorkspaceDeps,
+  WorkspaceState,
+} from './workspace-types'
+
+/** Bumped when the shape of a cached snapshot changes. With the schema version it prefixes the revision stored in the
+ *  cache: a snapshot cached by an older app (other shape, or before a data migration) never matches the source's
+ *  revision, so it is reloaded once instead of being kept. */
+export const SNAPSHOT_FORMAT = 2
+const FORMAT_MARK = `${SNAPSHOT_FORMAT}:${APP_SCHEMA_VERSION}`
+const REV_PREFIX = `${FORMAT_MARK}:`
+/** A copy saved by another app format or schema version is never shown, not even offline: its shape may differ. */
+const shownCopy = (cached: CachedSnapshot | null | undefined): CachedSnapshot | null =>
+  cached?.format === FORMAT_MARK ? cached : null
+const cachedRev = (rev: string): string => REV_PREFIX + rev
+const cacheRev = (rev: string | null): string | null => (rev === null ? null : cachedRev(rev))
+const uncacheRev = (stored: string | null | undefined): string | null =>
+  stored?.startsWith(REV_PREFIX) ? stored.slice(REV_PREFIX.length) : null
+
+/** syncIfDue retries a failing source that is not the current one at most this often, whatever the interval. */
+export const FAILED_RETRY_MS = 5 * 60_000
+
+export const DEFAULT_CHECK_INTERVAL: CheckInterval = '15m'
+/** How long a successful check holds before syncIfDue checks again. */
+export const CHECK_INTERVAL_MS: Record<Exclude<CheckInterval, 'never'>, number> = {
+  '5m': 5 * 60_000,
+  '15m': 15 * 60_000,
+  '1h': 60 * 60_000,
+  '6h': 360 * 60_000,
+  '1d': 1440 * 60_000,
+}
+const isCheckInterval = (value: unknown): value is CheckInterval =>
+  value === 'never' || (typeof value === 'string' && Object.hasOwn(CHECK_INTERVAL_MS, value))
+
+/** A copy changed by writes is saved on the device at most this often, and at once by flushCache. */
+export const CACHE_PUT_DELAY_MS = 2_000
+
+/** The rows of an own write put into the shown copy while a full load of it was running. `after`: the last load
+ *  token issued then; loads up to it started before the rows were applied and may have read the source before the write.
+ *  `patch` null: a write whose rows the copy cannot take (a wide one, kept because a load read its result); a load that
+ *  read before it cannot be brought past it. */
+interface OwnRows {
+  after: number
+  prevRev: string | null
+  rev: string
+  patch: SnapshotPatch | null
+}
+
+/** How many revisions an own write moved a source past are remembered (see takeListing): a listing still on its way
+ *  across more own writes than this is unheard of; one that is costs a load, never a wrong copy. */
+const PASSED_REVS_KEPT = 32
+
+/**
+ * A load (`snapshot` at `rev`) plus the own rows it may miss, oldest first. They go on top from the write that starts
+ * at the load's revision, or from the one after the write that ends there. Null when the load's revision is neither:
+ * it cannot be ordered against them. The resulting revision is exact while each write starts where the previous one
+ * ended; a write by another device in between leaves it unknown (null).
+ */
+function catchUp(
+  snapshot: InventorySnapshot,
+  rev: string,
+  missed: OwnRows[],
+): { snapshot: InventorySnapshot; rev: string | null } | null {
+  if (missed.length === 0) return { snapshot, rev }
+  let from = missed.findIndex((w) => w.prevRev === rev)
+  if (from < 0) {
+    const ended = missed.findLastIndex((w) => w.rev === rev)
+    if (ended < 0) return null
+    from = ended + 1
+  }
+  let label: string | null = rev
+  for (const w of missed.slice(from)) {
+    if (!w.patch) return null
+    snapshot = patchSnapshot(snapshot, w.patch)
+    label = label !== null && label === w.prevRev ? w.rev : null
+  }
+  return { snapshot, rev: label }
+}
+
+/** The copy of an inventory as it was shown when another one was selected. Writes queued while it was shown (`selection`)
+ *  that run after the switch are checked against it, and their rows go into it and onto the device (see carriedFor).
+ *  `rev`: the revision it is exactly at; null once a write could not be put on top. */
+interface Carried {
+  ref: InventoryRef
+  snapshot: InventorySnapshot
+  rev: string | null
+  selection: number
+  generation: number
+}
+
+type Outcome =
+  /** `fresh`: opened by this attempt rather than the source's open connection. `started`: the tick its listing started
+   *  at (see takeListing). */
+  | { ok: true; conn: SourceConnection; inventories: Inventory[]; rev: string; fresh: boolean; started: number }
+  | { ok: false; error: unknown }
+
+const sameRef = (a: InventoryRef | null, b: InventoryRef | null): boolean =>
+  !!a && !!b && a.sourceId === b.sourceId && a.inventoryId === b.inventoryId
+
+const errorMessage = (e: unknown): string => (e instanceof Error ? e.message : String(e))
+
+/** A StorageError whose text is free of the connection string's password. */
+function sanitize(error: unknown, connectionString: string): StorageError {
+  const code = error instanceof StorageError ? error.code : 'failed'
+  return new StorageError(code, redactSecret(errorMessage(error), connectionString))
+}
+
+function isRelistCommand(c: Command): boolean {
+  return c.type.startsWith('inventory.') || c.type === 'restore' ||
+    (c.type === 'archive' && c.target === 'inventory') ||
+    (c.type === 'deletePermanently' && c.target === 'inventory')
+}
+
+/** One stock bucket of an item: the stock kept under a variant, or without one (variantId null). */
+export const bucketKey = (itemId: Id, variantId: Id | null): string => `${itemId}:${variantId ?? ''}`
+
+/** The stock buckets a command writes to; empty for every other command. */
+function bucketsOf(c: Command): string[] {
+  switch (c.type) {
+    case 'stock.receive':
+    case 'stock.use':
+    case 'stock.return':
+    case 'stock.set':
+      return [bucketKey(c.itemId, c.variantId)]
+    case 'stock.transfer':
+      return [bucketKey(c.itemId, c.fromVariantId), bucketKey(c.itemId, c.toVariantId)]
+    default:
+      return []
+  }
+}
+
+/** Demo source: the device store. Neon: the chosen photo store (Uploadcare by default) when its keys are set. Anything else: none. */
+export function defaultFileStore(config: SourceConfig, fetchImpl?: typeof fetch): FileStore | null {
+  if (config.kind === 'dev-pglite') return createDeviceFileStore()
+  if (config.kind !== 'neon') return null
+  const opts = fetchImpl ? { fetch: fetchImpl } : {}
+  if (config.photoStore === 'cloudinary') {
+    const cloudName = config.cloudinaryCloudName?.trim()
+    const uploadPreset = config.cloudinaryUploadPreset?.trim()
+    return cloudName && uploadPreset ? createCloudinaryStore({ cloudName, uploadPreset, ...opts }) : null
+  }
+  if (config.photoStore === 'imgur') {
+    const clientId = config.imgurClientId?.trim()
+    return clientId ? createImgurStore({ clientId, ...opts }) : null
+  }
+  const key = config.uploadcarePublicKey?.trim()
+  return key ? createUploadcareStore({ publicKey: key, cdnBase: config.uploadcareCdnBase ?? undefined, ...opts }) : null
+}
+
+export function createWorkspace(deps: WorkspaceDeps): Workspace {
+  const { db } = deps
+  const now = deps.now ?? (() => new Date())
+  const nowIso = (): string => now().toISOString()
+
+  const state = reactive<WorkspaceState>({
+    started: false,
+    persistent: db.persistent,
+    deviceName: defaultDeviceName(deps.userAgent),
+    sources: [],
+    inventories: [],
+    archivedInventories: [],
+    current: null,
+    snapshot: null,
+    snapshotOrigin: null,
+    snapshotSavedAt: null,
+    lastRefreshAt: null,
+    checkInterval: DEFAULT_CHECK_INTERVAL,
+    refreshing: false,
+    saving: false,
+    writeCount: 0,
+    readOnly: null,
+  })
+
+  // The error log never holds the secrets of the sources' settings.
+  setSecretSource(() => state.sources.flatMap((s) => secretsOf(s.config)))
+
+  /** When each source last answered a request, in ms: the warm-up (see warmUp) looks at it. */
+  const answeredAt = new Map<string, number>()
+  const noteAnswer = (sourceId: string): void => {
+    answeredAt.set(sourceId, now().getTime())
+  }
+  /** The warm-up's request while it runs; writes wait for it. */
+  let warming: Promise<void> | null = null
+
+  /** Open connections; refreshes reuse them until one fails. */
+  const conns = new Map<string, SourceConnection>()
+  /** The connection string each connection was opened with: its errors are redacted with it, even after the source
+   *  was edited or removed. */
+  const openedWith = new WeakMap<SourceConnection, string>()
+  const connectionStringOf = (conn: SourceConnection): string => openedWith.get(conn) ?? ''
+  /** Last known inventories (active and archived) per source; also kept on the device and while the source is unreachable. */
+  const listings = new Map<string, Inventory[]>()
+  /** Revision of each source as last read by listInventories, or moved on by an own write that started from it (see
+   *  loadCurrent for how it is used). */
+  const sourceRevs = new Map<string, string>()
+  /** Orders listings against own writes (see takeListing): bumped when a listing starts and when an own write settles. */
+  let tick = 0
+  /** Per source: revisions an own write moved the source past (its revision before), with the tick it settled at; the
+   *  latest PASSED_REVS_KEPT. Revisions never repeat, so a listing at one of them read the source before that write. */
+  const passedRevs = new Map<string, Map<string, number>>()
+  /** Per source: the tick the listing of its stored list (`listings`) started at; the latest such tick, never lowered. */
+  const listedAt = new Map<string, number>()
+  /** Per source: the tick at which a write refused for a newer schema (AN003) turned it read-only. A check that
+   *  started before looked at the schema before that: it does not make the source writable again (applyOutcome). */
+  const schemaNewerAt = new Map<string, number>()
+  /** Per source: removals under way (overlapping calls count each); an edit is refused meanwhile. */
+  const removing = new Map<string, number>()
+  /** Per source: the saves of its config on their way (updateSource). A removal waits for them, so it deletes what
+   *  they wrote rather than the other way round. */
+  const sourceSaves = new Map<string, Promise<unknown>>()
+  /** The revision the shown `state.snapshot` is known to be at least as new as; null when unknown (stale). */
+  let shownRev: string | null = null
+  let queue: Promise<void> = Promise.resolve()
+  let pendingWrites = 0
+  /** Queued or running writes per stock bucket (bucketKey); reactive, read by isBucketSaving. */
+  const savingBuckets = reactive(new Map<string, number>())
+  const beforeWrite = new Set<() => void>()
+  let refreshing: Promise<void> | null = null
+  let refreshEpoch = 0
+  let refreshingEpoch = -1
+  /** Number of the last started snapshot load, and of the last one written to state. */
+  let loadSeq = 0
+  let appliedSeq = 0
+  /** Bumped whenever another inventory (or none) becomes current. A load started before is never shown, even when its
+   *  inventory is selected again: the own rows it might miss are only remembered for the selection they were put in. */
+  let selection = 0
+  /** Full loads still running, and the own rows put into the shown copy meanwhile (see catchUp). */
+  let loadsRunning = 0
+  let ownRows: OwnRows[] = []
+  /** Writes applyTo queued while their target was shown, by the selection they were queued under, until they end. */
+  const shownWrites = new Map<number, number>()
+  /** The copy shown until the last switch, while writes queued under it still run (see carriedFor). */
+  let carried: Carried | null = null
+  /** The shown copy has rows a write put into it that are not saved on the device yet. */
+  let unsaved: { ref: InventoryRef; generation: number } | null = null
+  let saveTimer: ReturnType<typeof setTimeout> | undefined
+  let lastSave: Promise<void> = Promise.resolve()
+  /** When the last refresh started, in ms. */
+  let lastAttemptAt: number | null = null
+  /** Bumped whenever a source is added, edited or removed; stale connect outcomes are discarded. */
+  const generations = new Map<string, number>()
+  const generationOf = (id: string): number => generations.get(id) ?? 0
+  const bumpGeneration = (id: string): void => {
+    generations.set(id, generationOf(id) + 1)
+    refreshEpoch++
+    // The source may now be another database: revisions read from, or cached under, the old one prove nothing.
+    sourceRevs.delete(id)
+    passedRevs.delete(id)
+    listedAt.delete(id)
+    schemaNewerAt.delete(id)
+    if (state.current?.sourceId === id) {
+      shownRev = null
+      ownRows = []
+    }
+  }
+
+  const statusOf = (sourceId: string): SourceStatus | null =>
+    state.sources.find((s) => s.config.id === sourceId)?.status ?? null
+
+  function recompute(): void {
+    const status = state.current ? statusOf(state.current.sourceId) : null
+    state.readOnly =
+      status === 'unreachable' ? 'offline' : status === 'read_only' ? 'schema_newer' : status === 'error' ? 'source_error' : null
+  }
+
+  function setSource(
+    config: SourceConfig,
+    status: SourceStatus,
+    error: string | null,
+    reason: FailureReason | null,
+  ): void {
+    const entry: SourceState = { config, status, error, reason }
+    const index = state.sources.findIndex((s) => s.config.id === config.id)
+    if (index >= 0) state.sources[index] = entry
+    else state.sources.push(entry)
+    recompute()
+  }
+
+  /** Saves a source's config on the device; a removal of the source waits for it (sourceSaves). */
+  function saveSource(config: SourceConfig): Promise<void> {
+    const saving = db.putSource(config)
+    const all = Promise.allSettled([sourceSaves.get(config.id), saving])
+    sourceSaves.set(config.id, all)
+    void all.then(() => {
+      if (sourceSaves.get(config.id) === all) sourceSaves.delete(config.id)
+    })
+    return saving
+  }
+
+  function setCurrent(ref: InventoryRef | null): void {
+    // Another inventory's snapshot is never shown, nor validates a write, under the new current.
+    if (!sameRef(state.current, ref)) {
+      // Written rows of the copy shown so far go to the device first: opening it again then loads nothing.
+      void saveShown()
+      const left = state.current
+      carried =
+        left && state.snapshot?.inventory.id === left.inventoryId && (shownWrites.get(selection) ?? 0) > 0
+          ? {
+              ref: { sourceId: left.sourceId, inventoryId: left.inventoryId },
+              snapshot: state.snapshot,
+              rev: shownRev,
+              selection,
+              generation: generationOf(left.sourceId),
+            }
+          : null
+      selection++
+      state.snapshot = null
+      state.snapshotOrigin = null
+      state.snapshotSavedAt = null
+      shownRev = null
+      ownRows = []
+    }
+    state.current = ref
+    recompute()
+  }
+
+  /** Saves the shown copy with its revision if a write changed it since it was last saved. Not after its source was
+   *  edited or removed. */
+  function saveShown(): Promise<void> {
+    clearTimeout(saveTimer)
+    saveTimer = undefined
+    const pending = unsaved
+    unsaved = null
+    const snapshot = state.snapshot
+    if (
+      pending &&
+      sameRef(state.current, pending.ref) &&
+      snapshot?.inventory.id === pending.ref.inventoryId &&
+      generationOf(pending.ref.sourceId) === pending.generation
+    ) {
+      const value = { snapshot, savedAt: state.snapshotSavedAt ?? nowIso(), rev: cacheRev(shownRev), format: FORMAT_MARK }
+      // A copy that could not be saved keeps its older rows and revision on the device: it is loaded again.
+      lastSave = db.putSnapshot(pending.ref, value).catch(() => {})
+    }
+    return lastSave
+  }
+
+  /** The shown copy of `ref` got rows from a write: saved within CACHE_PUT_DELAY_MS. */
+  function markUnsaved(ref: InventoryRef): void {
+    unsaved = { ref: { sourceId: ref.sourceId, inventoryId: ref.inventoryId }, generation: generationOf(ref.sourceId) }
+    saveTimer ??= setTimeout(() => void saveShown(), CACHE_PUT_DELAY_MS)
+  }
+
+  /** Deletes the device copy of an inventory that is gone; its unsaved rows are never saved after this. */
+  async function dropCopy(ref: InventoryRef): Promise<void> {
+    if (unsaved && sameRef(unsaved.ref, ref)) unsaved = null
+    if (carried && sameRef(carried.ref, ref)) carried = null
+    await db.deleteSnapshot(ref)
+  }
+
+  function rebuildInventories(): void {
+    const active: InventoryEntry[] = []
+    const archived: InventoryEntry[] = []
+    for (const { config } of state.sources) {
+      for (const inventory of listings.get(config.id) ?? []) {
+        const entry = { ref: { sourceId: config.id, inventoryId: inventory.id }, inventory, sourceName: config.name }
+        ;(inventory.archivedAt === null ? active : archived).push(entry)
+      }
+    }
+    const byName = (a: InventoryEntry, b: InventoryEntry): number =>
+      a.inventory.name.localeCompare(b.inventory.name, undefined, { numeric: true, sensitivity: 'base' }) ||
+      (a.inventory.id < b.inventory.id ? -1 : a.inventory.id > b.inventory.id ? 1 : 0)
+    state.inventories = active.sort(byName)
+    state.archivedInventories = archived.sort(byName)
+  }
+
+  /** Closes a connection no longer the source's, once the writes queued so far are done: one of them may have taken it
+   *  before it was let go, and must not meet it closed. Writes queued later take the source's connection then. */
+  function retire(conn: SourceConnection): void {
+    void queue.then(() => conn.close()).catch(() => {})
+  }
+
+  function dropConnection(sourceId: string): void {
+    const old = conns.get(sourceId)
+    conns.delete(sourceId)
+    sourceRevs.delete(sourceId)
+    if (old) retire(old)
+  }
+
+  /** Sets a source's inventories and keeps them on the device; only while the source's generation is still current. */
+  function storeListing(sourceId: string, inventories: Inventory[]): Promise<void> {
+    listings.set(sourceId, inventories)
+    return db.putListing(sourceId, inventories)
+  }
+
+  /**
+   * A listing of the source (`rev`, `inventories`), started at tick `started`, becomes its known revision and stored
+   * list, unless an own write made what is known newer. A listing at a revision an own write moved past read the source
+   * before that write committed: the revision known since is newer, or unknown, and is not rolled back to it; the list
+   * stays too when a listing started after that write settled stored it (a write that changes the list relists so).
+   * Only while the source's generation is the one the listing was made under. Resolves when the list is on the device.
+   */
+  function takeListing(sourceId: string, started: number, rev: string, inventories: Inventory[]): Promise<void> {
+    const passedAt = passedRevs.get(sourceId)?.get(rev)
+    const listed = listedAt.get(sourceId) ?? -1
+    if (passedAt === undefined) sourceRevs.set(sourceId, rev)
+    else if (listed > passedAt) return Promise.resolve()
+    // Listings answer out of order: one that started earlier must not make a later stale one look newer than a write.
+    listedAt.set(sourceId, Math.max(listed, started))
+    return storeListing(sourceId, inventories)
+  }
+
+  /** An own write took the source from `rev` on (see takeListing). */
+  function notePassed(sourceId: string, rev: string): void {
+    let passed = passedRevs.get(sourceId)
+    if (!passed) passedRevs.set(sourceId, (passed = new Map()))
+    passed.set(rev, ++tick)
+    if (passed.size > PASSED_REVS_KEPT) passed.delete(passed.keys().next().value!)
+  }
+
+  async function attempt(config: SourceConfig): Promise<Outcome> {
+    const driver = deps.drivers[config.kind]
+    if (!driver) return { ok: false, error: new StorageError('failed', 'unsupported_source') }
+    let conn: SourceConnection | undefined
+    try {
+      const started = ++tick
+      conn = await driver.connect(config)
+      openedWith.set(conn, config.connectionString)
+      const { inventories, rev } = await conn.storage.listInventories()
+      noteAnswer(config.id)
+      return { ok: true, conn, inventories, rev, fresh: true, started }
+    } catch (error) {
+      logError('connect', error)
+      await conn?.close().catch(() => {})
+      return { ok: false, error }
+    }
+  }
+
+  /** Lists on the source's open connection while the schema is still the one it opened on (checked through it);
+   *  otherwise, or if that fails, the connection is closed and opened again, once, which re-evaluates the schema. */
+  async function reconnect(config: SourceConfig): Promise<Outcome> {
+    const open = conns.get(config.id)
+    if (open && connectionStringOf(open) === config.connectionString) {
+      try {
+        const started = ++tick
+        const [inspection, listing] = await Promise.all([open.inspect(), open.storage.listInventories()])
+        const opened = open.status.state === 'newer' ? 'newer' : 'current'
+        if (inspection.state === opened) return { ok: true, conn: open, ...listing, fresh: false, started }
+      } catch {
+        // Opened again below.
+      }
+      if (conns.get(config.id) === open) conns.delete(config.id)
+      retire(open)
+    }
+    return attempt(config)
+  }
+
+  function failureStatus(
+    error: unknown,
+    connectionString: string,
+  ): { status: SourceStatus; error: string | null; reason: FailureReason } {
+    const reason = classifyFailure(error)
+    if (error instanceof StorageError && error.code === 'unavailable') return { status: 'unreachable', error: null, reason }
+    return { status: 'error', error: redactSecret(errorMessage(error), connectionString), reason }
+  }
+
+  /** Only while the source's generation is the one the outcome was attempted under. */
+  async function applyOutcome(config: SourceConfig, outcome: Outcome): Promise<void> {
+    // State first, the awaits last: nothing can change the source in between.
+    if (outcome.ok) {
+      const old = conns.get(config.id)
+      conns.set(config.id, outcome.conn)
+      // Read-only only when the schema needs a newer app to write (min_app_schema above this app's version): a newer
+      // schema that keeps older apps writing is `ready` (soft migrations). A check that started before a write was
+      // refused for a newer schema looked at the schema before that refusal: it keeps the source read-only.
+      const refusedSince = (schemaNewerAt.get(config.id) ?? -1) > outcome.started
+      if (outcome.conn.status.state === 'newer' || refusedSince) turnReadOnly(config)
+      else setSource(config, 'ready', null, null)
+      const saving = takeListing(config.id, outcome.started, outcome.rev, outcome.inventories)
+      if (old && old !== outcome.conn) retire(old)
+      await saving
+    } else {
+      const { status, error, reason } = failureStatus(outcome.error, config.connectionString)
+      setSource(config, status, error, reason)
+      dropConnection(config.id)
+    }
+  }
+
+  /** The source's schema needs a newer app to write: read-only, with "Update to keep editing". Turning so, a new
+   *  version of the app may be out already: looked for now, once, rather than at the next periodic check. */
+  function turnReadOnly(config: SourceConfig): void {
+    const wasReadOnly = statusOf(config.id) === 'read_only'
+    setSource(config, 'read_only', null, null)
+    if (!wasReadOnly) deps.checkForUpdate?.()
+  }
+
+  /** The source's open connection is still `conn`: what a call on it found out is about the source now. A connection
+   *  an edit or a reconnect let go says nothing about the one that replaced it. */
+  const isOpen = (sourceId: string, conn: SourceConnection): boolean => conns.get(sourceId) === conn
+
+  /** A call on `conn` failed: the source is marked failing, its error redacted with the connection string `conn` was
+   *  opened with. Only while `conn` is the source's open connection. */
+  function markFailure(sourceId: string, error: unknown, conn: SourceConnection): void {
+    const config = state.sources.find((s) => s.config.id === sourceId)?.config
+    if (!config) return
+    logError('source', error)
+    if (!isOpen(sourceId, conn)) return
+    const { status, error: text, reason } = failureStatus(error, connectionStringOf(conn))
+    setSource(config, status, text, reason)
+  }
+
+  /** A write on `conn` was refused because the source's schema now needs a newer app (AN003): as if the connection had
+   *  opened on it. Only while `conn` is the source's open connection; the next check that starts after this reconnects
+   *  and finds the same, and one already on its way does not undo it (schemaNewerAt). */
+  function markSchemaNewer(sourceId: string, conn: SourceConnection): void {
+    const config = state.sources.find((s) => s.config.id === sourceId)?.config
+    if (!config || !isOpen(sourceId, conn)) return
+    schemaNewerAt.set(sourceId, ++tick)
+    turnReadOnly(config)
+  }
+
+  async function relist(sourceId: string): Promise<void> {
+    const conn = conns.get(sourceId)
+    if (!conn) return
+    const generation = generationOf(sourceId)
+    const started = ++tick
+    let inventories: Inventory[]
+    let rev: string
+    try {
+      ;({ inventories, rev } = await conn.storage.listInventories())
+    } catch (error) {
+      if (generationOf(sourceId) === generation) markFailure(sourceId, error, conn)
+      return
+    }
+    // Edited or removed meanwhile: the list is no longer this connection's to set.
+    if (generationOf(sourceId) !== generation) return
+    noteAnswer(sourceId)
+    const saving = takeListing(sourceId, started, rev, inventories)
+    rebuildInventories()
+    await saving
+  }
+
+  /**
+   * Loads the current inventory's snapshot and shows and caches it.
+   *
+   * `skipIfUnchanged`: do nothing but mark the shown copy live (its saved time stays as persisted) when it is already at the source's revision. Only the
+   * refresh paths ask for this; the load after a wide write never does (it must reload).
+   *
+   * Ordering argument: the revision stored with a snapshot is the one `loadInventoryWithRev` read in the same
+   * transaction as the snapshot, so it is exactly the revision the data is at. A write by another device that lands
+   * between the listing and the load is therefore recorded as seen (it is in the snapshot), and the next refresh does
+   * not load again. The skip check compares the source's known revision (`sourceRevs`, from the last listInventories)
+   * with `shownRev`: a different one means the source changed since this copy was read.
+   *
+   * Own writes put their rows into the shown copy without a load. A load that started before such rows were put in may
+   * have read the source before that write: it gets them on top (catchUp), or, when its revision cannot be ordered
+   * against them, the shown copy stays and is marked stale.
+   */
+  async function loadCurrent(skipIfUnchanged = false): Promise<void> {
+    const ref = state.current
+    const conn = ref && conns.get(ref.sourceId)
+    if (!ref || !conn) return
+    const knownRev = sourceRevs.get(ref.sourceId) ?? null
+    if (skipIfUnchanged && knownRev !== null && shownRev === knownRev && state.snapshot?.inventory.id === ref.inventoryId) {
+      state.snapshotOrigin = 'live'
+      return
+    }
+    const token = ++loadSeq
+    const generation = generationOf(ref.sourceId)
+    const selected = selection
+    // Another inventory selected (even if this one was selected again since), or the source edited or removed
+    // meanwhile: the result is nobody's.
+    const gone = (): boolean =>
+      selection !== selected || !sameRef(state.current, ref) || generationOf(ref.sourceId) !== generation
+    loadsRunning++
+    const loaded = await conn.storage.loadInventoryWithRev(ref.inventoryId).then(
+      (value) => ({ ok: true as const, ...value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    )
+    // Own rows put into the shown copy after this load started.
+    const missed = ownRows.filter((w) => w.after >= token)
+    if (--loadsRunning === 0) ownRows = []
+    if (!loaded.ok) {
+      // Only the most recently started load reports a failure.
+      if (token !== loadSeq || gone()) return
+      if (loaded.error instanceof StorageError && loaded.error.code === 'not_found') {
+        await dropMissing(ref)
+        return
+      }
+      markFailure(ref.sourceId, loaded.error, conn)
+      return
+    }
+    // A load newer than the shown one replaces it, even while a later-started load still runs or has failed.
+    if (token <= appliedSeq || gone()) return
+    const caught = catchUp(loaded.snapshot, loaded.rev, missed)
+    if (!caught) {
+      // It may be older than own rows already shown: they stay, and the copy is not proven current.
+      shownRev = null
+      return
+    }
+    const { snapshot, rev } = caught
+    appliedSeq = token
+    // Saved below, with these rows.
+    if (unsaved && sameRef(unsaved.ref, ref)) unsaved = null
+    const savedAt = nowIso()
+    state.snapshot = markRaw(snapshot)
+    state.snapshotOrigin = 'live'
+    state.snapshotSavedAt = savedAt
+    shownRev = rev
+    await db.putSnapshot(ref, { snapshot, savedAt, rev: cacheRev(rev), format: FORMAT_MARK })
+  }
+
+  /** The current inventory vanished from its (reachable) source: forget it and move to the first remaining one. */
+  async function dropMissing(ref: InventoryRef): Promise<void> {
+    const generation = generationOf(ref.sourceId)
+    await dropCopy(ref)
+    if (generationOf(ref.sourceId) === generation) {
+      const saving = storeListing(ref.sourceId, (listings.get(ref.sourceId) ?? []).filter((i) => i.id !== ref.inventoryId))
+      rebuildInventories()
+      await saving
+    }
+    // The user picked another inventory meanwhile: keep it.
+    if (!sameRef(state.current, ref)) return
+    const first = state.inventories[0]
+    if (first) {
+      await selectInventory(first.ref)
+    } else {
+      setCurrent(null)
+      await db.putSettings({ current: null })
+    }
+  }
+
+  const isConnected = (status: SourceStatus | null): boolean => status === 'ready' || status === 'read_only'
+
+  /** Keeps `current` valid after sources or inventories changed and loads its live snapshot. */
+  async function resolveCurrent(): Promise<void> {
+    const cur = state.current
+    if (cur) {
+      const status = statusOf(cur.sourceId)
+      // A source that did not answer keeps its inventory and cached copy.
+      if (status !== null && !isConnected(status)) return
+      if (state.inventories.some((e) => sameRef(e.ref, cur))) {
+        await loadCurrent(true)
+        return
+      }
+      await dropCopy(cur)
+    }
+    const first = state.inventories[0]
+    if (first) {
+      await selectInventory(first.ref)
+    } else if (cur) {
+      setCurrent(null)
+      await db.putSettings({ current: null })
+    }
+  }
+
+  async function selectInventory(ref: InventoryRef): Promise<void> {
+    // A stepper's pending delta goes out now, while its inventory is still the shown one: it is checked against that
+    // copy and its rows go into it (carriedFor), so the switch loads nothing for it.
+    if (!sameRef(state.current, ref)) runBeforeWrite()
+    setCurrent(ref)
+    // A plain copy: refs taken from reactive state are proxies, which IndexedDB cannot clone.
+    await db.putSettings({ current: { sourceId: ref.sourceId, inventoryId: ref.inventoryId } })
+    const cached = shownCopy(await db.getSnapshot(ref))
+    if (!sameRef(state.current, ref)) return
+    // A live snapshot of this inventory that landed meanwhile is newer than the cached copy.
+    if (state.snapshot?.inventory.id !== ref.inventoryId) {
+      state.snapshot = cached ? markRaw(cached.snapshot) : null
+      state.snapshotOrigin = cached ? 'cache' : null
+      state.snapshotSavedAt = cached?.savedAt ?? null
+      shownRev = uncacheRev(cached?.rev)
+    }
+    if (isConnected(statusOf(ref.sourceId))) await loadCurrent(true)
+  }
+
+  async function startFromCache(): Promise<void> {
+    const [settings, configs, stored] = await Promise.all([db.getSettings(), db.getSources(), db.getListings()])
+    state.persistent = db.persistent
+    state.deviceName = settings.deviceName ?? defaultDeviceName(deps.userAgent)
+    // A value this app does not know (stored by a newer one) counts as unset.
+    state.checkInterval = isCheckInterval(settings.checkInterval) ? settings.checkInterval : DEFAULT_CHECK_INTERVAL
+    state.sources = configs.map((config) => ({ config, status: 'connecting', error: null, reason: null }))
+    // Lists of the last refresh: inventories can be switched before the first refresh and offline.
+    for (const { id } of configs) {
+      const list = stored[id]
+      if (list && !listings.has(id)) listings.set(id, list)
+    }
+    rebuildInventories()
+    state.current = settings.current
+    recompute()
+    const cached = settings.current ? shownCopy(await db.getSnapshot(settings.current)) : null
+    if (cached && sameRef(state.current, settings.current)) {
+      state.snapshot = markRaw(cached.snapshot)
+      state.snapshotOrigin = 'cache'
+      state.snapshotSavedAt = cached.savedAt
+      shownRev = uncacheRev(cached.rev)
+    }
+    state.started = true
+  }
+
+  async function doRefresh(): Promise<void> {
+    state.refreshing = true
+    lastAttemptAt = now().getTime()
+    const startGenerations = new Map(generations)
+    try {
+      const configs = await db.getSources()
+      const previous = new Map(state.sources.map((s) => [s.config.id, s]))
+      for (const id of [...conns.keys()]) if (!configs.some((c) => c.id === id)) dropConnection(id)
+      for (const id of [...listings.keys()]) {
+        if (configs.some((c) => c.id === id)) continue
+        listings.delete(id)
+        await db.deleteListing(id)
+      }
+      state.sources = configs.map((config) => ({
+        config,
+        status: previous.get(config.id)?.status ?? 'connecting',
+        error: previous.get(config.id)?.error ?? null,
+        reason: previous.get(config.id)?.reason ?? null,
+      }))
+      recompute()
+      const outcomes = await Promise.all(
+        configs.map(async (config) => ({ config, generation: startGenerations.get(config.id) ?? 0, outcome: await reconnect(config) })),
+      )
+      let complete = true
+      for (const { config, generation, outcome } of outcomes) {
+        if (!(await settle(config, generation, outcome))) complete = false
+      }
+      rebuildInventories()
+      await resolveCurrent()
+      noteCheck(complete)
+    } finally {
+      state.refreshing = false
+    }
+  }
+
+  /** Applies a source's reconnect outcome unless the source was edited or removed since `generation`. True when the
+   *  source answered and that was applied. */
+  async function settle(config: SourceConfig, generation: number, outcome: Outcome): Promise<boolean> {
+    if (generation !== generationOf(config.id)) {
+      // The source was edited or removed while connecting: this outcome is stale. A reused connection stays open.
+      if (outcome.ok && outcome.fresh) await outcome.conn.close().catch(() => {})
+      return false
+    }
+    await applyOutcome(config, outcome)
+    return outcome.ok
+  }
+
+  /**
+   * A check of one source: lists it (reconnecting if needed) and, when it holds the current inventory, brings the
+   * shown copy to the listed revision as refresh does (a full load only when it is not there). Never waits for, or
+   * retries, another source.
+   */
+  async function checkSource(sourceId: string): Promise<void> {
+    const config = state.sources.find((s) => s.config.id === sourceId)?.config
+    if (!config) return
+    const generation = generationOf(sourceId)
+    await settle(config, generation, await reconnect(config))
+    rebuildInventories()
+    if (state.current?.sourceId !== sourceId) return
+    await resolveCurrent()
+    noteCheck(false)
+  }
+
+  /** The shown copy is at the revision last known for its source. */
+  const shownIsCurrent = (sourceId: string): boolean => shownRev !== null && shownRev === sourceRevs.get(sourceId)
+
+  /**
+   * A check counts (the interval starts again) when the current inventory's source answered and the shown copy is at
+   * its revision; other sources failing do not matter (syncIfDue retries them on their own). Not one that leaves the
+   * shown copy behind (a load that could not be placed against own rows): the interval must not hold off the load
+   * it still needs. Without a current inventory: when every source answered (`allAnswered`).
+   */
+  function noteCheck(allAnswered: boolean): void {
+    const cur = state.current
+    if (cur ? isConnected(statusOf(cur.sourceId)) && shownIsCurrent(cur.sourceId) : allAnswered) {
+      state.lastRefreshAt = nowIso()
+    }
+  }
+
+  function refresh(): Promise<void> {
+    // A run that started before the latest source change (or explicit check) cannot satisfy this call.
+    if (refreshing && refreshingEpoch === refreshEpoch) return refreshing
+    const previous = refreshing
+    const run: Promise<void> = (async () => {
+      await previous?.catch(() => {})
+      await doRefresh()
+    })().finally(() => {
+      if (refreshing === run) refreshing = null
+    })
+    refreshing = run
+    refreshingEpoch = refreshEpoch
+    return run
+  }
+
+  /** A refresh that starts after this call: a run already going may have listed the sources before it. */
+  function freshRefresh(): Promise<void> {
+    refreshEpoch++
+    return refresh()
+  }
+
+  const requireConnected = (sourceId: string): void => {
+    if (!isConnected(statusOf(sourceId))) throw new StorageError('unavailable')
+  }
+
+  /** After a check the user asked for: the shown copy is at its source's revision, or `unavailable`. A copy the check
+   *  left behind (its load could not be placed against own rows, or an own write made the revision unknown) gets one
+   *  more check of its source alone, which lists it and loads the copy in full. */
+  async function requireShownCurrent(): Promise<void> {
+    let cur = state.current
+    if (!cur) {
+      // Nothing shown to vouch for: "up to date" needs every configured source to have answered.
+      if (state.sources.some((s) => !isConnected(s.status))) throw new StorageError('unavailable')
+      return
+    }
+    requireConnected(cur.sourceId)
+    if (shownIsCurrent(cur.sourceId)) return
+    await checkSource(cur.sourceId)
+    cur = state.current
+    if (cur && !(isConnected(statusOf(cur.sourceId)) && shownIsCurrent(cur.sourceId))) {
+      throw new StorageError('unavailable')
+    }
+  }
+
+  async function sync(): Promise<'unchanged' | 'updated'> {
+    const applied = appliedSeq
+    await freshRefresh()
+    await requireShownCurrent()
+    return appliedSeq !== applied ? 'updated' : 'unchanged'
+  }
+
+  async function reloadSource(sourceId: string): Promise<void> {
+    if (!state.sources.some((s) => s.config.id === sourceId)) throw new StorageError('not_found')
+    // Not trusted at any revision: the shown copy loads in full in the refresh below, the device copies when opened.
+    // An own write in between cannot vouch for them again (it only moves copies at the revision it started from).
+    if (state.current?.sourceId === sourceId) shownRev = null
+    const ids = (listings.get(sourceId) ?? []).map((inventory) => inventory.id)
+    await Promise.all(ids.map((inventoryId) => db.markSnapshotStale({ sourceId, inventoryId })))
+    await freshRefresh()
+    requireConnected(sourceId)
+    if (state.current?.sourceId === sourceId) await requireShownCurrent()
+  }
+
+  async function syncIfDue(): Promise<void> {
+    const time = now().getTime()
+    const failing = (s: SourceState): boolean => s.status === 'unreachable' || s.status === 'error'
+    const cur = state.current
+    // The current source failing: retry at once.
+    if (cur && state.sources.some((s) => s.config.id === cur.sourceId && failing(s))) return refresh()
+    if (state.sources.some(failing)) {
+      // Another source keeps failing: retry it now and then; the last attempt checked the current inventory too.
+      if (lastAttemptAt === null || time - lastAttemptAt >= FAILED_RETRY_MS) await refresh()
+      return
+    }
+    if (checkDue(time)) await refresh()
+  }
+
+  /** The device's interval has passed since the last successful check. */
+  function checkDue(time: number): boolean {
+    if (state.checkInterval === 'never') return false
+    const last = state.lastRefreshAt ? Date.parse(state.lastRefreshAt) : null
+    return last === null || time - last >= CHECK_INTERVAL_MS[state.checkInterval]
+  }
+
+  /** The gate before a write to, or the journal of, `sourceId`: a check of that source alone (checkSource) when it is
+   *  healthy and the interval has passed. Other sources are never waited for or retried here: start, `online`, the
+   *  return to the app, sync and reloadSource cover all of them. A failing source is refused by the caller without
+   *  a network call. */
+  async function checkIfDue(sourceId: string): Promise<void> {
+    if (isConnected(statusOf(sourceId)) && checkDue(now().getTime())) await checkSource(sourceId)
+  }
+
+  /** Runs `job` after all earlier writes; a failed job does not block later ones. A write to stock buckets marks only
+   *  those buckets as saving (spec 4.12): the rest of the app is not locked by it; any other write sets `saving`. */
+  function enqueue<T>(job: () => Promise<T>, buckets: string[] = []): Promise<T> {
+    if (buckets.length > 0) for (const key of buckets) savingBuckets.set(key, (savingBuckets.get(key) ?? 0) + 1)
+    else {
+      pendingWrites++
+      state.saving = true
+    }
+    const run = queue.then(job)
+    queue = run.then(
+      () => {},
+      () => {},
+    )
+    return run.finally(() => {
+      if (buckets.length > 0) {
+        for (const key of buckets) {
+          const left = (savingBuckets.get(key) ?? 1) - 1
+          if (left > 0) savingBuckets.set(key, left)
+          else savingBuckets.delete(key)
+        }
+      } else {
+        pendingWrites--
+        state.saving = pendingWrites > 0
+      }
+    })
+  }
+
+  /** Called before any write is queued, so what they write goes first (a stepper's pending delta, spec 4.12). */
+  function runBeforeWrite(): void {
+    for (const hook of [...beforeWrite]) {
+      try {
+        hook()
+      } catch {
+        // A hook never stops the write it runs before.
+      }
+    }
+  }
+
+  /**
+   * One write to `target` (the inventory the command goes to), in call order with the others. The source answers with
+   * its revision before and after the write and the rows the command touched; they go into the shown copy instead of a
+   * load. See settleWrite for the rules.
+   */
+  function write(
+    target: InventoryRef,
+    command: Command,
+    snapshotFor: (conn: SourceConnection) => Promise<InventorySnapshot | null>,
+    queuedUnder: number | null = null,
+  ): Promise<void> {
+    const { sourceId } = target
+    runBeforeWrite()
+    return enqueue(async () => {
+      // First refresh still connecting: wait for it rather than failing with a misleading "can't reach".
+      if (!conns.has(sourceId) && refreshing) await refreshing.catch(() => {})
+      // A warm-up's listing answering between this write and its rows would move the source's revision under them.
+      if (warming) await warming
+      // A check of the target's source that is due goes first: a copy it loads is the one the command is validated
+      // against. No deadlock: a check never waits for the queue. A failing source is refused below without one.
+      await checkIfDue(sourceId).catch(() => {})
+      const status = statusOf(sourceId)
+      if (status === 'unreachable' || status === 'read_only' || status === 'error') throw new StorageError('read_only')
+      const conn = conns.get(sourceId)
+      if (!conn) throw new StorageError('unavailable')
+      const normalized = normalizeCommand(command)
+      // Mostly the shown copy: no answer of the source (snapshotFor notes one when it reads the source).
+      const snapshot = await guarded(sourceId, conn, () => snapshotFor(conn), false)
+      const invalid = validateCommand(normalized, snapshot)
+      if (invalid) throw invalid
+      const generation = generationOf(sourceId)
+      const seq = appliedSeq
+      let result: ApplyResult
+      try {
+        result = await guarded(sourceId, conn, () => conn.storage.apply(normalized, { device: state.deviceName }))
+      } catch (error) {
+        await writeFailed(sourceId, error)
+        throw error
+      }
+      // For the backup reminder, which looks again once the count is stored; a lost count only delays it.
+      void db
+        .countWrite(sourceId)
+        .catch(() => {})
+        .then(() => {
+          state.writeCount++
+        })
+      let reload: boolean
+      if (generationOf(sourceId) === generation) {
+        const settled = settleWrite(target, result, seq)
+        reload = settled.reload
+        // Queued while the target was shown and another inventory selected since: into its carried copy, if they fit.
+        // Not a change of the list of inventories (archive, delete…): those are read again below.
+        const kept = settled.markStale && !isRelistCommand(command) ? carriedFor(target, queuedUnder) : null
+        const carriedOn = kept ? await carryRows(kept, result) : false
+        // The device copies' revisions; a failure leaves an older revision there, which only costs a load.
+        if (settled.markStale && !carriedOn) await db.markSnapshotStale(target).catch(() => {})
+        if (settled.advance) {
+          const [from, to] = settled.advance
+          await db.advanceSnapshotRevs(sourceId, from, to, target.inventoryId).catch(() => {})
+        }
+      } else {
+        // Edited or removed while the write was on its way: the answer belongs to the old connection.
+        if (state.current?.sourceId === sourceId) shownRev = null
+        reload = sameRef(state.current, target)
+      }
+      // 7. The list of inventories changed: read it again. A shown copy left to reload (stale) loads there, once.
+      if (isRelistCommand(command)) {
+        await relist(sourceId)
+        await resolveCurrent()
+        if (command.type === 'deletePermanently') await dropCopy({ sourceId, inventoryId: command.id })
+      } else if (reload) {
+        await loadCurrent()
+      }
+    }, bucketsOf(command))
+  }
+
+  /**
+   * Rules for a write the source took, applied to state in one go (no await in between).
+   *
+   * - 1. In sync: the revision before the write is the one known for the source, so no other write landed since it.
+   * - 2. The target is shown and no load replaced it during the write: the rows go on top.
+   * - 3. A load replaced it during the write. Exactly at this write's result: kept. Read right before this write: the
+   *   rows go on top. Otherwise it may be newer than the rows: kept, and marked stale.
+   * - 4. No rows (a wide command, or the target gone): marked stale and reloaded.
+   * - 5. The target is not shown: its device copy is marked stale.
+   * - 6. In sync: the source's known revision and the shown copy's (if it was at the revision before) move to the one
+   *   after, and so do the device copies of other inventories saved at the one before; the write counts as a check
+   *   when it proves the shown copy current. Not in sync: the shown copy of this source is marked stale and the
+   *   source's revision is unknown again, so no cached copy of it is trusted before the next listing.
+   */
+  function settleWrite(
+    target: InventoryRef,
+    { prevRev, rev, patch }: ApplyResult,
+    seq: number,
+  ): { reload: boolean; markStale: boolean; advance: [string, string] | null } {
+    const { sourceId } = target
+    const inSync = prevRev !== null && prevRev === sourceRevs.get(sourceId)
+    // A listing still on its way at the revision before is older than this write (takeListing).
+    if (prevRev !== null) notePassed(sourceId, prevRev)
+    const snapshot = state.snapshot
+    const shown = sameRef(state.current, target) && snapshot?.inventory.id === target.inventoryId ? snapshot : null
+    let reload = false
+    if (shown) {
+      const loaded = appliedSeq !== seq
+      if (loaded && shownRev === rev) {
+        // 3. The load read exactly this write's result: kept. A load still running may have read before the write:
+        // it gets these rows on top, as with rule 2 (or, when the copy cannot take them, is not shown).
+        const rows = patch && patch.inventoryId === target.inventoryId ? patch : null
+        if (loadsRunning > 0) ownRows.push({ after: loadSeq, prevRev, rev, patch: rows })
+      } else if (!patch || patch.inventoryId !== target.inventoryId) {
+        // 4.
+        shownRev = null
+        reload = true
+      } else if (!loaded || shownRev === prevRev) {
+        // 2, or 3 with a load read right before this write.
+        state.snapshot = markRaw(patchSnapshot(shown, patch))
+        if (loadsRunning > 0) ownRows.push({ after: loadSeq, prevRev, rev, patch })
+        markUnsaved(target)
+      } else {
+        // 3. The load may be newer than these rows.
+        shownRev = null
+      }
+    }
+    // 5.
+    const markStale = !shown
+    // 6.
+    const ofSource = state.current?.sourceId === sourceId
+    if (!inSync) {
+      sourceRevs.delete(sourceId)
+      if (ofSource) shownRev = null
+      return { reload, markStale, advance: null }
+    }
+    sourceRevs.set(sourceId, rev)
+    if (ofSource && shownRev === prevRev) shownRev = rev
+    if (ofSource && shownRev === rev) {
+      const at = nowIso()
+      state.lastRefreshAt = at
+      state.snapshotSavedAt = at
+    }
+    return { reload, markStale, advance: [cachedRev(prevRev), cachedRev(rev)] }
+  }
+
+  /** 8. Unknown outcome (`unavailable`): the write may have landed, so no revision known for the source holds. 9. The
+   *  source refused the write the shown copy allowed (`failed`; `conflict`: refused as made on a copy that is behind,
+   *  nothing written): the copy disagrees with it, so it is refreshed before the error is thrown. 10. Refused because
+   *  the schema needs a newer app (`read_only`): nothing was written; guarded has made the source read-only. */
+  async function writeFailed(sourceId: string, error: unknown): Promise<void> {
+    if (error instanceof StorageError && error.code === 'unavailable') {
+      sourceRevs.delete(sourceId)
+      if (state.current?.sourceId === sourceId) shownRev = null
+    } else if (
+      (error instanceof StorageError && (error.code === 'failed' || error.code === 'conflict')) ||
+      error instanceof DomainError
+    ) {
+      // Only the source that refused, and a listing that starts now: a run going may have listed before the refusal.
+      await checkSource(sourceId).catch(() => {})
+    }
+  }
+
+  async function applyTo(ref: InventoryRef, command: Command): Promise<void> {
+    const isShown = (): boolean => sameRef(state.current, ref) && state.snapshot?.inventory.id === ref.inventoryId
+    // Queued while the target is shown: should another inventory be selected before it runs, its copy is carried.
+    const queuedUnder = isShown() ? selection : null
+    if (queuedUnder !== null) shownWrites.set(queuedUnder, (shownWrites.get(queuedUnder) ?? 0) + 1)
+    try {
+      // Read when the job runs: earlier queued writes have put their rows into the snapshot by then. Only this
+      // inventory's own snapshot counts; until selectInventory shows it, the target is read from the source.
+      await write(
+        ref,
+        command,
+        async (conn) => {
+          if (isShown()) return state.snapshot
+          const kept = carriedFor(ref, queuedUnder)
+          if (kept) return kept.snapshot
+          const loaded = await conn.storage.loadInventory(ref.inventoryId)
+          noteAnswer(ref.sourceId)
+          return loaded
+        },
+        queuedUnder,
+      )
+    } finally {
+      if (queuedUnder !== null) {
+        const left = (shownWrites.get(queuedUnder) ?? 1) - 1
+        if (left > 0) shownWrites.set(queuedUnder, left)
+        else {
+          shownWrites.delete(queuedUnder)
+          // The last write that could use the carried copy is done: it is not kept in memory.
+          if (carried?.selection === queuedUnder) carried = null
+        }
+      }
+    }
+  }
+
+  /** The carried copy of `ref` for a write queued under selection `queuedUnder` (while `ref` was shown), when that is
+   *  the copy left at the latest switch and its source was not edited since; otherwise null. A stepper's pending delta
+   *  flushed by the switch is checked against it instead of a load of the inventory. */
+  function carriedFor(ref: InventoryRef, queuedUnder: number | null): Carried | null {
+    const kept = carried
+    return kept && queuedUnder !== null && kept.selection === queuedUnder && sameRef(kept.ref, ref) &&
+      kept.generation === generationOf(ref.sourceId)
+      ? kept
+      : null
+  }
+
+  /** A write's rows on top of the carried copy, saved on the device at the write's revision (after the save of the
+   *  switch): opening the inventory again then loads nothing. Only on the exact revision it started from (as rule 2 of
+   *  settleWrite); otherwise, or without rows, false, and the copy takes no more rows. */
+  async function carryRows(kept: Carried, { prevRev, rev, patch }: ApplyResult): Promise<boolean> {
+    if (kept.rev === null || kept.rev !== prevRev || !patch || patch.inventoryId !== kept.ref.inventoryId) {
+      kept.rev = null
+      return false
+    }
+    kept.snapshot = patchSnapshot(kept.snapshot, patch)
+    kept.rev = rev
+    const value = { snapshot: kept.snapshot, savedAt: nowIso(), rev: cacheRev(rev), format: FORMAT_MARK }
+    await lastSave
+    // Dropped (the inventory is gone) or left behind by another switch meanwhile: the device copy is not this one's.
+    if (carried !== kept) return false
+    try {
+      await db.putSnapshot(kept.ref, value)
+      return true
+    } catch {
+      kept.rev = null
+      return false
+    }
+  }
+
+  async function apply(command: Command): Promise<void> {
+    const cur = state.current
+    if (!cur) throw new StorageError('not_found')
+    await applyTo({ sourceId: cur.sourceId, inventoryId: cur.inventoryId }, command)
+  }
+
+  const prepare = deps.prepareImage ?? defaultPrepareImage
+  const stores = new Map<string, { key: string; store: FileStore | null }>()
+
+  function fileStoreFor(sourceId: string): FileStore | null {
+    const config = state.sources.find((s) => s.config.id === sourceId)?.config
+    if (!config) return null
+    if (deps.fileStores) {
+      try {
+        return deps.fileStores(config)
+      } catch {
+        return null
+      }
+    }
+    const key = [
+      config.kind,
+      config.photoStore ?? '',
+      config.uploadcarePublicKey ?? '',
+      config.uploadcareCdnBase ?? '',
+      config.cloudinaryCloudName ?? '',
+      config.cloudinaryUploadPreset ?? '',
+      config.imgurClientId ?? '',
+    ].join('|')
+    const known = stores.get(sourceId)
+    if (known?.key === key) return known.store
+    let store: FileStore | null
+    try {
+      store = defaultFileStore(config)
+    } catch {
+      store = null
+    }
+    stores.set(sourceId, { key, store })
+    return store
+  }
+
+  /** Checks that must pass before anything is uploaded. */
+  function photoTarget(): { cur: InventoryRef; store: FileStore } {
+    if (state.readOnly) throw new StorageError('read_only')
+    const cur = state.current
+    if (!cur || !state.snapshot) throw new StorageError('not_found')
+    const store = fileStoreFor(cur.sourceId)
+    if (!store) throw new FileError('no_store')
+    return { cur, store }
+  }
+
+  /** Upload errors are FileErrors and never touch the source's status. */
+  async function uploadOne(sourceId: string, store: FileStore, file: File): Promise<{ provider: string; fileId: string; url: string }> {
+    const blob = await prepare(file)
+    const stored = await store.upload(blob, file.name)
+    countUpload(sourceId)
+    return stored
+  }
+
+  async function addPhotos(itemId: Id, files: File[], onProgress?: (done: number) => void): Promise<void> {
+    // The target is fixed before the first upload: switching inventory meanwhile must not redirect the writes.
+    const { cur, store } = photoTarget()
+    let done = 0
+    for (const file of files) {
+      const stored = await uploadOne(cur.sourceId, store, file)
+      await applyTo(cur, { type: 'photo.add', id: newId(), itemId, variantId: null, ...stored })
+      onProgress?.(++done)
+    }
+  }
+
+  /** One `photo.replace`: the new photo takes the old one's place in one transaction (the variant has at most one). It
+   *  names the photo the variant has now, as the user saw it: only that one is replaced, so the same command arriving
+   *  late (a retry) never takes away a photo set since. */
+  async function setVariantPhoto(itemId: Id, variantId: Id, file: File): Promise<void> {
+    const { cur, store } = photoTarget()
+    const replaces = state.snapshot?.photos.find((p) => p.variantId === variantId)?.id ?? null
+    // Upload first: a failed upload leaves the old photo in place.
+    const stored = await uploadOne(cur.sourceId, store, file)
+    await applyTo(cur, { type: 'photo.replace', id: newId(), itemId, variantId, replaces, ...stored })
+  }
+
+  async function removePhoto(photoId: Id): Promise<void> {
+    await apply({ type: 'photo.remove', id: photoId })
+  }
+
+  async function makeCover(itemId: Id, photoId: Id): Promise<void> {
+    const own = (state.snapshot?.photos ?? []).filter((p) => p.itemId === itemId).sort((a, b) => a.position - b.position)
+    const orderedIds = [photoId, ...own.map((p) => p.id).filter((id) => id !== photoId)]
+    await apply({ type: 'photo.reorder', itemId, orderedIds })
+  }
+
+  /** The current inventory's source and connection; `unavailable` while it has none or is failing. */
+  function journalSource(): { sourceId: string; conn: SourceConnection } {
+    const cur = state.current
+    const status = cur ? statusOf(cur.sourceId) : null
+    const conn = cur && conns.get(cur.sourceId)
+    if (!cur || !conn || status === 'unreachable' || status === 'error') throw new StorageError('unavailable')
+    return { sourceId: cur.sourceId, conn }
+  }
+
+  async function loadMovements(itemId: Id): Promise<Movement[]> {
+    // Fails fast first: a failing source is not retried for the journal.
+    await checkIfDue(journalSource().sourceId).catch(() => {})
+    const { sourceId, conn } = journalSource()
+    return guarded(sourceId, conn, () => conn.storage.loadMovements(itemId))
+  }
+
+  /** Earlier receipts of a shop lot in the current inventory (spec 4.10); rejects like loadMovements while offline. */
+  async function findReceiptsBySource(key: string): Promise<SourceReceipt[]> {
+    const { sourceId, conn } = journalSource()
+    const inventoryId = state.current!.inventoryId
+    return guarded(sourceId, conn, () => conn.storage.findReceiptsBySource(inventoryId, key))
+  }
+
+  async function exportSource(sourceId: string): Promise<BackupFile> {
+    const entry = state.sources.find((s) => s.config.id === sourceId)
+    const conn = conns.get(sourceId)
+    if (!entry) throw new StorageError('not_found')
+    if (!conn || entry.status === 'unreachable' || entry.status === 'error' || entry.status === 'connecting') {
+      throw new StorageError('unavailable')
+    }
+    // Everything is read before anything is returned: a failure midway leaves no partial file.
+    return guarded(sourceId, conn, async () => {
+      const inventories = []
+      for (const { id } of (await conn.storage.listInventories()).inventories) {
+        try {
+          // One read transaction per inventory: the snapshot and its movements agree.
+          inventories.push(await conn.storage.exportInventory(id))
+        } catch (e) {
+          // Removed since the list was read: not part of the backup.
+          if (e instanceof StorageError && e.code === 'not_found') continue
+          throw e
+        }
+      }
+      return buildBackup({
+        exportedAt: nowIso(),
+        app: { schemaVersion: APP_SCHEMA_VERSION },
+        source: { name: entry.config.name, kind: entry.config.kind },
+        inventories,
+      })
+    })
+  }
+
+  /**
+   * A wide write: the backup's rows go into the source in batches (InventoryStorage.restore), after the writes queued
+   * before it and before those queued after. Then, as "Reload everything", no copy of the source is trusted (a run that
+   * failed midway may have written some batches too), and the first restored active inventory is shown.
+   *
+   * The device keeps the run of each file (DeviceDb.beginRestoreRun): a run that did not finish into this source in this
+   * mode goes on with the same run id, so new ids come out the same and nothing is added twice; with the same ids it may
+   * write into the source that run left non-empty. Anything else is a new run: the storage refuses the same ids into a
+   * source that holds inventories. The run is recorded only once the source is ready, and forgotten when refused that way
+   * (it wrote nothing), so a refused run is never gone on with.
+   */
+  async function restoreSource(
+    sourceId: string,
+    backup: BackupFile,
+    mode: RestoreMode,
+    fileSha256: string,
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<RestoreResult> {
+    if (!state.sources.some((s) => s.config.id === sourceId)) throw new StorageError('not_found')
+    /** Set when the run is recorded, right before the storage is called. */
+    const started: { runId?: string } = {}
+    let result: RestoreResult
+    try {
+      result = await enqueue(async () => {
+        const status = statusOf(sourceId)
+        if (status === 'read_only') throw new StorageError('read_only')
+        const conn = conns.get(sourceId)
+        if (status !== 'ready' || !conn) throw new StorageError('unavailable')
+        const { run, resumed } = await db.beginRestoreRun(fileSha256, sourceId, mode)
+        started.runId = run.runId
+        const options = { onProgress, resumeSameIds: resumed && mode === 'same-ids' }
+        return guarded(sourceId, conn, () => conn.storage.restore(backup, mode, run.runId, options))
+      })
+    } catch (error) {
+      if (started.runId === undefined) throw error
+      if (error instanceof StorageError && error.code === 'not_empty') {
+        await db.dropRestoreRun(fileSha256, started.runId).catch(() => {})
+      }
+      await reloadSource(sourceId).catch(() => {})
+      throw error
+    }
+    // Lost (the device database failed), the next run of this file into this source would count as going on with this
+    // one: new ids add nothing, but the same ids would be let in next to what the source holds by then. Rare enough.
+    if (started.runId !== undefined) await db.finishRestoreRun(fileSha256, started.runId).catch(() => {})
+    await reloadSource(sourceId).catch(() => {})
+    const first = state.inventories.find((e) => e.ref.sourceId === sourceId && result.inventoryIds.includes(e.inventory.id))
+    if (first) await selectInventory(first.ref)
+    return result
+  }
+
+  /** Runs a storage call on `conn`: an `unavailable` failure marks the source failing, a write refused for a schema that
+   *  needs a newer app (`read_only`, AN003) marks it read-only, both only while `conn` is still its connection. Any
+   *  failure is redacted with the connection string `conn` was opened with, even if the source was edited or removed
+   *  since. `network`: the call always reads the source, so its success is an answer (for the warm-up); a call that may
+   *  stay on the device notes its own. */
+  async function guarded<T>(sourceId: string, conn: SourceConnection, call: () => Promise<T>, network = true): Promise<T> {
+    const connectionString = connectionStringOf(conn)
+    try {
+      const result = await call()
+      if (network) noteAnswer(sourceId)
+      return result
+    } catch (error) {
+      if (error instanceof StorageError && error.code === 'unavailable') markFailure(sourceId, error, conn)
+      else if (error instanceof StorageError && error.code === 'read_only') markSchemaNewer(sourceId, conn)
+      else logError('storage', error)
+      if (error instanceof DomainError) throw new DomainError(error.code, redactSecret(error.message, connectionString))
+      throw sanitize(error, connectionString)
+    }
+  }
+
+  /** Neon's compute sleeps after minutes of quiet: the first request after that is slow. Before a form that is about to
+   *  write, one light request wakes it, only when the source has been silent for longer than this. */
+  const WARM_AFTER_MS = 4 * 60_000
+  function warmUp(): Promise<void> {
+    const sourceId = state.current?.sourceId
+    if (!sourceId || !isConnected(statusOf(sourceId))) return Promise.resolve()
+    // A write on its way wakes the source by itself, and a listing answering amid it would move the revision under it.
+    if (pendingWrites > 0 || savingBuckets.size > 0) return Promise.resolve()
+    const last = answeredAt.get(sourceId)
+    if (last !== undefined && now().getTime() - last <= WARM_AFTER_MS) return Promise.resolve()
+    return (warming ??= relist(sourceId).catch(() => {}).finally(() => {
+      warming = null
+    }))
+  }
+
+  return {
+    state,
+    warmUp,
+    startFromCache,
+    refresh,
+    sync,
+    reloadSource,
+    syncIfDue,
+    async start() {
+      await startFromCache()
+      await refresh()
+    },
+    flushCache: saveShown,
+    selectInventory,
+    apply,
+    applyTo,
+    isBucketSaving: (itemId, variantId) => savingBuckets.has(bucketKey(itemId, variantId)),
+    onBeforeWrite(hook) {
+      beforeWrite.add(hook)
+      return () => {
+        beforeWrite.delete(hook)
+      }
+    },
+    loadMovements,
+    findReceiptsBySource,
+    exportSource,
+    restoreSource,
+    restoreRun: (fileSha256) => db.getRestoreRun(fileSha256),
+    backupInfo: (sourceId) => db.getBackupInfo(sourceId),
+    noteBackup: (sourceId) => db.noteBackup(sourceId, nowIso()),
+    fileStoreFor,
+    addPhotos,
+    setVariantPhoto,
+    removePhoto,
+    makeCover,
+    async createInventory({ sourceId, name, currency, id: given }) {
+      const id = given ?? newId()
+      const ref = { sourceId, inventoryId: id }
+      await write(ref, { type: 'inventory.create', id, name, description: null, currency }, async () => null)
+      await selectInventory(ref)
+      return ref
+    },
+    async addSource(input) {
+      const config: SourceConfig = { ...input, id: newId(), createdAt: nowIso() }
+      const outcome = await attempt(config)
+      if (!outcome.ok) throw sanitize(outcome.error, config.connectionString)
+      await db.putSource(config)
+      bumpGeneration(config.id)
+      await applyOutcome(config, outcome)
+      rebuildInventories()
+      await resolveCurrent()
+      return config
+    },
+    async updateSource(id, patch) {
+      const old = state.sources.find((s) => s.config.id === id)?.config
+      // Being removed: nothing to edit (saved now, it could land after the removal and bring the source back).
+      if (!old || (removing.get(id) ?? 0) > 0) throw new StorageError('not_found')
+      const config: SourceConfig = { ...old, ...patch }
+      bumpGeneration(id)
+      const saved = generationOf(id)
+      // Shown at once, so an overlapping update builds on this one.
+      setSource(config, 'connecting', null, null)
+      await saveSource(config)
+      // Removed or edited again meanwhile: the later call decides.
+      if (generationOf(id) !== saved) return
+      // A refresh that read the device before this save must not apply the old config.
+      bumpGeneration(id)
+      const generation = generationOf(id)
+      const outcome = await attempt(config)
+      if (generationOf(id) !== generation) {
+        // Removed or edited again meanwhile: the later call decides.
+        if (outcome.ok) await outcome.conn.close().catch(() => {})
+        return
+      }
+      await applyOutcome(config, outcome)
+      rebuildInventories()
+      await resolveCurrent()
+      if (!outcome.ok) throw sanitize(outcome.error, config.connectionString)
+    },
+    async removeSource(id) {
+      // Counted: of two overlapping removals, the one that ends first (or fails) leaves the other's guard in place.
+      removing.set(id, (removing.get(id) ?? 0) + 1)
+      try {
+        bumpGeneration(id)
+        dropConnection(id)
+        listings.delete(id)
+        // An edit's save on its way lands first, and is deleted below.
+        await sourceSaves.get(id)
+        // The list first, the source (with its copies) last: a removal that fails midway leaves a source with less on
+        // the device, which the next refresh lists again or a second removal takes away, never a list without it.
+        await db.deleteListing(id)
+        await db.deleteSource(id)
+      } finally {
+        const left = (removing.get(id) ?? 1) - 1
+        if (left > 0) removing.set(id, left)
+        else removing.delete(id)
+      }
+      // Object URLs of device photos (the demo source) are no longer needed.
+      releaseDeviceUrls()
+      // A refresh that read the device before this removal was saved must not bring the source back.
+      bumpGeneration(id)
+      state.sources = state.sources.filter((s) => s.config.id !== id)
+      rebuildInventories()
+      if (state.current?.sourceId === id) {
+        setCurrent(null)
+        await db.putSettings({ current: null })
+        await resolveCurrent()
+      }
+    },
+    async setDeviceName(name) {
+      const trimmed = name.trim()
+      await db.putSettings({ deviceName: trimmed || null })
+      state.deviceName = trimmed || defaultDeviceName(deps.userAgent)
+    },
+    async setCheckInterval(value) {
+      await db.putSettings({ checkInterval: value })
+      state.checkInterval = value
+    },
+  }
+}

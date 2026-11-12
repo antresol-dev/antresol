@@ -1,0 +1,176 @@
+/*
+ * S6 Neo-brutal / Memphis: what its tokens (lib/styles/brutal.ts) cannot say. Every colour here is a token.
+ *
+ *  1. Tags, thumbnails and cards take the Memphis colours in turn: tags from blue and thumbnails from mint, as on the
+ *     board; the stock card stays the board's pink, other cards (settings) go round the palette from blue by their
+ *     section's place on the screen.
+ *  2. A Memphis colour is light in both themes, so what sits on it is drawn as in the light theme: ink text and muted
+ *     ink, ink lines, white controls with the ink line and offset (the mock-up's stepper on the selected row). The
+ *     engine gives a card and the selected row their text and muted colours; here everything else in them follows —
+ *     text-foreground, icons, links, the destructive red (ink, as the mock-up draws a hovered danger item), badges,
+ *     fields, the stepper, raised and flat buttons.
+ *  3. A control under the pointer or pressed is painted in its role's (pale) Memphis colour with the mock-up's ink
+ *     text in both themes (its h.fg / p.fg), and so is what is inside it; the open row menu's "⋯" likewise.
+ *  4. The tree's rows under the pointer use the row hover (rowHover: the mock-up's pale yellow in light, a dark yellow
+ *     in dark, where those rows keep their light text) rather than the flat controls' pale yellow.
+ */
+
+[data-style='brutal']:root {
+  /* The Memphis colours as the tokens carry them (MEMPHIS in lib/styles/brutal.ts). */
+  --brutal-p0: var(--st-primary-n-bg);
+  --brutal-p1: var(--st-card);
+  --brutal-p2: var(--st-chips-0);
+  --brutal-p3: var(--st-chips-1);
+  --brutal-p4: var(--st-chips-2);
+  --brutal-p5: var(--st-chips-3);
+  /* On a Memphis colour, in both themes: the mock-up's ink (onP), its muted ink, and white for a control. */
+  --brutal-ink: var(--st-card-fg);
+  --brutal-ink-muted: var(--st-card-muted);
+  --brutal-paper: var(--st-pill-sel-bg);
+  --brutal-ring: inset 0 0 0 2px var(--brutal-ink);
+  --ghost-hover: var(--st-row-hover);
+}
+
+@layer components {
+  /* 1. Colours in turn. */
+  [data-style='brutal'] .tag-chip:nth-child(4n + 2) {
+    background: var(--st-chips-1);
+  }
+  [data-style='brutal'] .tag-chip:nth-child(4n + 3) {
+    background: var(--st-chips-2);
+  }
+  [data-style='brutal'] .tag-chip:nth-child(4n) {
+    background: var(--st-chips-3);
+  }
+  [data-style='brutal'] .photo-thumb:nth-child(3n + 2) {
+    background: var(--st-thumbs-1);
+  }
+  [data-style='brutal'] .photo-thumb:nth-child(3n) {
+    background: var(--st-thumbs-2);
+  }
+  [data-style='brutal'] section:nth-of-type(5n + 1) > .raised-card:not(.stock-card) {
+    background: var(--brutal-p2);
+  }
+  [data-style='brutal'] section:nth-of-type(5n + 2) > .raised-card:not(.stock-card) {
+    background: var(--brutal-p3);
+  }
+  [data-style='brutal'] section:nth-of-type(5n + 3) > .raised-card:not(.stock-card) {
+    background: var(--brutal-p4);
+  }
+  [data-style='brutal'] section:nth-of-type(5n + 4) > .raised-card:not(.stock-card) {
+    background: var(--brutal-p5);
+  }
+  [data-style='brutal'] section:nth-of-type(5n) > .raised-card:not(.stock-card) {
+    background: var(--brutal-p1);
+  }
+
+  /* 2. On a card or the selected row: fields white with the ink line (a focus ring utility still wins). */
+  [data-style='brutal'] :is(.raised-card, .row-selected) :where([data-slot='input'], [data-slot='textarea'], [data-slot='select-trigger']) {
+    box-shadow: inset 0 0 0 1px var(--brutal-ink);
+  }
+}
+
+/* 2. Ink on a Memphis colour. Unlayered: these must beat the components layer's own (main.css) and utilities that
+   read the variables resolve to them. */
+[data-style='brutal'] :is(.raised-card, .row-selected) {
+  --foreground: var(--brutal-ink);
+  --icon: var(--brutal-ink);
+  --accent-ink: var(--brutal-ink);
+  --muted-foreground: var(--brutal-ink-muted);
+  --subtle-foreground: var(--brutal-ink-muted);
+  --dimmed-foreground: var(--brutal-ink-muted);
+  --destructive: var(--brutal-ink);
+  --warning: var(--brutal-ink);
+  --accent-soft: var(--brutal-paper);
+  --accent-soft-foreground: var(--brutal-ink);
+  --surface: var(--brutal-paper);
+  --field: var(--brutal-paper);
+  --chip: var(--st-ghost-sel-h-bg);
+  --hover: var(--st-ghost-sel-h-bg);
+  --input: var(--brutal-ink);
+  --divider: var(--brutal-ink);
+  --border: var(--brutal-ink);
+  --ring: var(--brutal-ink);
+}
+
+/* Raised controls on a card or the selected row: white, the ink line, the light theme's offsets. */
+[data-style='brutal'] :is(.raised-card, .row-selected) :is(.raised, .raised-sm, .add-tile) {
+  --n-bg: var(--brutal-paper);
+}
+[data-style='brutal'] :is(.raised-card, .row-selected) :is(.raised, .accent-button) {
+  --n-sh: var(--brutal-ring), 4px 4px 0 var(--brutal-ink);
+  --h-sh: var(--brutal-ring), 4px 4px 0 var(--brutal-ink);
+  --p-sh: var(--brutal-ring), 0 0 0 var(--brutal-ink);
+}
+[data-style='brutal'] :is(.raised-card, .row-selected) :is(.raised-sm, .add-tile) {
+  --n-sh: var(--brutal-ring), 3px 3px 0 var(--brutal-ink);
+  --h-sh: var(--brutal-ring), 3px 3px 0 var(--brutal-ink);
+  --p-sh: var(--brutal-ring), 0 0 0 var(--brutal-ink);
+}
+
+/* The stepper on a card is the selected row's (main.css): white with the ink line, its halves stepSel. */
+[data-style='brutal'] .raised-card .pill {
+  background-color: var(--st-pill-sel-bg);
+  background-image: none;
+  box-shadow: var(--st-pill-sel-sh);
+}
+[data-style='brutal'] .raised-card .pill-step {
+  --n-bg: var(--st-step-sel-n-bg);
+  --n-img: var(--st-step-sel-n-img);
+  --n-sh: var(--st-step-sel-n-sh);
+  --h-bg: var(--st-step-sel-h-bg);
+  --h-img: var(--st-step-sel-h-img);
+  --h-sh: var(--st-step-sel-h-sh);
+  --h-fg: var(--st-step-sel-h-fg);
+  --h-tf: var(--st-step-sel-h-tf);
+  --p-bg: var(--st-step-sel-p-bg);
+  --p-img: var(--st-step-sel-p-img);
+  --p-sh: var(--st-step-sel-p-sh);
+  --p-fg: var(--st-step-sel-p-fg);
+  --p-tf: var(--st-step-sel-p-tf);
+}
+/* Flat controls on a card: ghostSel, as in the selected row (white under the pointer). */
+[data-style='brutal'] .raised-card :where(.pressable:not(.raised, .raised-sm, .add-tile, .accent-button, .painted, .pill-step)) {
+  --n-bg: var(--st-ghost-sel-n-bg);
+  --h-bg: var(--st-ghost-sel-h-bg);
+  --h-fg: var(--st-ghost-sel-h-fg);
+  --h-tf: var(--st-ghost-sel-h-tf);
+  --p-bg: var(--st-ghost-sel-p-bg);
+  --p-fg: var(--st-ghost-sel-p-fg);
+  --p-tf: var(--st-ghost-sel-p-tf);
+  --ghost-pressed: var(--st-ghost-sel-p-bg);
+}
+
+/* 3. A control under the pointer, pressed, or (flat) with its menu open: its state's text, and ink inside it. */
+@media (hover: hover) {
+  [data-style='brutal'] .pressable:hover:not(:disabled, [aria-disabled='true'], [data-disabled]) {
+    --foreground: var(--h-fg);
+    --icon: var(--h-fg);
+    --accent-ink: var(--h-fg);
+    --muted-foreground: var(--brutal-ink-muted);
+    --subtle-foreground: var(--brutal-ink-muted);
+    --dimmed-foreground: var(--brutal-ink-muted);
+    --destructive: var(--h-fg);
+    --accent-soft-foreground: var(--brutal-ink);
+    --chip: var(--st-ghost-sel-h-bg);
+    color: var(--h-fg);
+  }
+}
+[data-style='brutal'] .pressable:active:not(:disabled, [aria-disabled='true'], [data-disabled]),
+[data-style='brutal'] .pressable[data-state='open']:not(.raised, .raised-sm, .add-tile, .accent-button, .painted, .pill-step, :disabled) {
+  --foreground: var(--p-fg);
+  --icon: var(--p-fg);
+  --accent-ink: var(--p-fg);
+  --muted-foreground: var(--brutal-ink-muted);
+  --subtle-foreground: var(--brutal-ink-muted);
+  --dimmed-foreground: var(--brutal-ink-muted);
+  --destructive: var(--p-fg);
+  --accent-soft-foreground: var(--brutal-ink);
+  --chip: var(--st-ghost-sel-h-bg);
+  color: var(--p-fg);
+}
+
+/* 4. Dark: the navigation drawer's open edge, 2 px in the sheets' line (main.css gives every other style 1 px). */
+.dark[data-style='brutal'] #nav-drawer {
+  box-shadow: inset -2px 0 0 var(--st-sheet-line);
+}

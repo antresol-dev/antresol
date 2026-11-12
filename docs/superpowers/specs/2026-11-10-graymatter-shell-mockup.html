@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GrayMatter shell mockup</title>
+<style>body { margin: 0; padding: 32px; background: #1C1C1F; color: #E4E4E7; font-family: system-ui, sans-serif; } h2 { margin: 0 0 6px; } .subtitle { color: #A1A1AA; margin: 0 0 24px; } :root { --text-secondary: #A1A1AA; }</style>
+</head>
+<body>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  .gm { --bg:#F7F7F8; --surface:#FFFFFF; --border:#EDEDF0; --divider:#F0F0F2; --fg:#18181B; --muted:#71717A; --subtle:#63636B;
+        --chip:#ECECEF; --hover:#F1F1F4; --primary:#4F46E5; --primary-h:#4338CA; --soft:#EEF2FF; --soft-fg:#4F46E5; --thumb:#F4F4F5;
+        --thumb-fg:#A1A1AA; --icon:#3F3F46; --line:#DCDCE2; --rail:#EFEFF2;
+        font-family: Manrope, system-ui, sans-serif; color: var(--fg); font-size: 14px; line-height: 1.35; }
+  .gm * { box-sizing: border-box; }
+  .gm svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+  .gm svg.i.s { width: 15px; height: 15px; }
+  :where(.gm button) { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+  .gm .t { transition: background-color .15s ease, color .15s ease, opacity .15s ease, transform .15s ease, box-shadow .15s ease, border-color .15s ease; }
+  .gm :focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+  .gm .lbl { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: .02em; }
+  .caption { font-size: 13px; color: var(--text-secondary, #888); margin: 0 0 8px; }
+
+  /* neutral actions: outline on desktop, ghost in the phone top bar, chip squares in menus */
+  .tn-new, .tn-ren, .tn-mov, .tn-arc { background: var(--surface); color: var(--icon); border: 1px solid var(--border); }
+  .tn-new:hover, .tn-ren:hover, .tn-mov:hover, .tn-arc:hover { background: var(--hover); border-color: #D4D4DA; color: var(--fg); }
+  .mtop .tn { background: none; border: 0; } .mtop .tn:hover { background: var(--chip); }
+  .ac.tn-new, .ac.tn-ren, .ac.tn-mov, .ac.tn-arc { background: var(--chip); border: 0; }
+
+  /* ---------- desktop ---------- */
+  .desk { position: relative; display: grid; grid-template-columns: 212px 264px minmax(0,1fr); height: 640px; border: 1px solid var(--border);
+          border-radius: 14px; overflow: hidden; background: var(--bg); }
+  .rail { background: var(--rail); display: flex; flex-direction: column; padding: 14px 10px; gap: 14px; }
+  .logo { display: flex; align-items: center; gap: 8px; font-weight: 800; font-size: 16px; letter-spacing: -.02em; padding: 4px 6px; }
+  .logo b { width: 26px; height: 26px; border-radius: 9px; background: var(--primary); color: #fff; display: grid; place-items: center; font-size: 13px; }
+  .inv { position: relative; }
+  .inv-btn { width: 100%; display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); text-align: left; }
+  .inv-btn:hover { border-color: #D4D4DA; }
+  .inv-btn .n { font-weight: 800; font-size: 14px; } .inv-btn .k { font-size: 11px; color: var(--muted); font-weight: 600; }
+  .inv-btn .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .menu { position: absolute; z-index: 5; left: 0; right: -40px; top: calc(100% + 6px); background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+          box-shadow: 0 10px 30px rgba(0,0,0,.12); padding: 6px; display: none; flex-direction: column; gap: 2px; animation: pop .16s ease; }
+  .menu.open { display: flex; }
+  .menu .mi { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 9px; border-radius: 8px; font-weight: 600; text-align: left; }
+  .menu .mi:hover { background: var(--hover); }
+  .menu .sep { height: 1px; background: var(--divider); margin: 4px 2px; }
+  .nav { display: flex; flex-direction: column; gap: 2px; }
+  .nav a { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 10px; font-weight: 650; color: var(--icon); text-decoration: none; }
+  .nav a:hover { background: rgba(0,0,0,.045); color: var(--fg); }
+  .nav a.on { background: var(--surface); color: var(--primary); }
+  .rail .bottom { margin-top: auto; }
+
+  .tree-panel { background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+  .search-trigger { margin: 14px 12px 8px; display: flex; align-items: center; gap: 8px; padding: 9px 11px; border-radius: 12px; background: var(--bg);
+                    border: 1px solid var(--border); color: var(--muted); font-weight: 600; text-align: left; flex-shrink: 0; }
+  .search-trigger:hover { border-color: #D4D4DA; color: var(--fg); background: var(--surface); }
+  .search-trigger .grow { flex: 1; }
+  kbd { font: 600 11px Manrope, sans-serif; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 6px; padding: 1px 5px; color: var(--subtle); background: var(--surface); }
+  .tree-head { display: flex; align-items: center; justify-content: space-between; padding: 6px 14px 6px 16px; flex-shrink: 0; }
+  .ib { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; color: var(--icon); position: relative; }
+  .ib:hover { background: var(--chip); color: var(--fg); }
+  .tree { list-style: none; margin: 0; padding: 0 8px 12px; overflow: auto; flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 2px; }
+  .tree ul { list-style: none; margin: 2px 0 0 17px; padding: 0; border-left: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
+  .tree li.collapsed > ul { display: none; }
+  .row { position: relative; display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px 0 4px; border-radius: 9px; cursor: pointer; font-weight: 600; color: var(--icon); }
+  .tree ul .row { margin-left: 4px; }
+  .row:hover { background: var(--hover); color: var(--fg); }
+  .row.on { background: var(--soft); color: var(--soft-fg); }
+  .chev { width: 18px; height: 18px; display: grid; place-items: center; border-radius: 5px; color: var(--muted); }
+  .chev:hover { background: var(--chip); color: var(--fg); }
+  .chev svg { width: 14px; height: 14px; transition: transform .15s ease; transform: rotate(90deg); }
+  li.collapsed > .row .chev svg { transform: rotate(0deg); }
+  .chev.none { visibility: hidden; }
+  .row .fi { width: 16px; height: 16px; color: #8B8BF5; }
+  .row.on .fi { color: var(--primary); }
+  .row .nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .cnt { font-size: 12px; color: var(--subtle); font-weight: 700; min-width: 18px; text-align: right; font-variant-numeric: tabular-nums; }
+  .row.on .cnt { color: var(--soft-fg); }
+  .row .acts { display: flex; gap: 1px; opacity: 0; }
+  .row:hover .acts, .row:focus-within .acts { opacity: 1; }
+  .row .acts .ib { width: 22px; height: 22px; border-radius: 6px; }
+  .row.on .acts .ib:hover { background: #E0E7FF; }
+  .row.root .fi { color: var(--icon); }
+
+  .main { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+  .main-head { flex-shrink: 0; border-bottom: 1px solid var(--border); background: var(--bg); }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 0 28px; }
+  .main-head .wrap { padding-top: 14px; padding-bottom: 14px; display: grid; gap: 12px; }
+  .main-body { flex: 1; min-height: 0; overflow: auto; }
+  .main-body .wrap { padding-top: 16px; padding-bottom: 28px; display: grid; gap: 16px; }
+  .topbar { display: flex; align-items: center; gap: 4px; }
+  .crumbs { display: flex; align-items: center; gap: 4px; margin-left: 8px; color: var(--muted); font-weight: 600; }
+  .crumbs a { color: var(--muted); text-decoration: none; padding: 2px 5px; border-radius: 6px; }
+  .crumbs a:hover { background: var(--chip); color: var(--fg); }
+  .crumbs svg { width: 13px; height: 13px; }
+  .ib.off { opacity: .35; pointer-events: none; }
+  .title-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  h1.ft { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -.02em; }
+  .ft-sub { color: var(--muted); font-weight: 600; font-size: 13px; margin-top: 2px; }
+  .acts-bar { display: flex; align-items: center; gap: 6px; }
+  .btn { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 13px; border-radius: 11px; font-weight: 700; }
+  .btn.pri { background: var(--primary); color: #fff; }
+  .btn.pri:hover { background: var(--primary-h); box-shadow: 0 4px 12px rgba(79,70,229,.28); }
+  .acts-bar .ib { width: 36px; height: 36px; border-radius: 11px; }
+  [data-tip]:hover::after { content: attr(data-tip); position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); white-space: nowrap;
+                            background: #18181B; color: #fff; font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 7px; z-index: 9; pointer-events: none; }
+  .lst { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; overflow: hidden; }
+  .sec-h { font-size: 13px; font-weight: 700; color: var(--subtle); padding: 0 4px 6px; }
+  .li { display: flex; align-items: center; gap: 12px; padding: 0 10px 0 14px; height: 60px; cursor: pointer; position: relative; }
+  .li + .li::before { content: ""; position: absolute; top: 0; right: 0; left: 68px; height: 1px; background: var(--divider); }
+  .li:hover { background: var(--hover); }
+  .li.f { height: 50px; } .li.f + .li.f::before { left: 58px; }
+  .th { width: 42px; height: 42px; border-radius: 12px; background: var(--thumb); color: var(--thumb-fg); display: grid; place-items: center; flex-shrink: 0; }
+  .li:hover .th { background: #EAEAEE; }
+  .fth { width: 32px; height: 32px; border-radius: 10px; background: var(--soft); color: var(--soft-fg); display: grid; place-items: center; flex-shrink: 0; }
+  .li .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .li .nm { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .li .sub { font-size: 13px; color: var(--muted); }
+  .li .q { font-weight: 800; font-size: 16px; font-variant-numeric: tabular-nums; white-space: nowrap; } .li .q small { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .li .cnt { font-size: 13px; color: var(--subtle); font-weight: 700; }
+  .li.dim .nm, .li.dim .q { color: var(--muted); }
+  .li .more { width: 30px; height: 30px; border-radius: 8px; opacity: 0; }
+  .li:hover .more, .li:focus-within .more { opacity: 1; }
+  .li .more:hover { background: var(--chip); }
+
+  /* palette (shared) */
+  .scrim { position: absolute; inset: 0; background: rgba(24,24,27,.28); display: none; z-index: 20; }
+  .scrim.open { display: block; animation: fade .15s ease; }
+  .pal { position: absolute; left: 50%; top: 72px; width: 580px; transform: translateX(-50%); background: var(--surface); border-radius: 16px; border: 1px solid var(--border);
+         box-shadow: 0 24px 60px rgba(0,0,0,.22); overflow: hidden; animation: popc .16s ease; }
+  .pal-in { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--divider); }
+  .pal-in input { flex: 1; border: 0; outline: 0; font: 600 16px Manrope, sans-serif; color: var(--fg); background: transparent; }
+  .pal-scope { font-size: 12px; font-weight: 700; color: var(--soft-fg); background: var(--soft); padding: 3px 8px; border-radius: 999px; }
+  .pal-body { padding: 6px; max-height: 380px; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
+  .pg { padding: 8px 10px 4px; font-size: 11px; font-weight: 800; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  .pr { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 10px; cursor: pointer; }
+  .pr:hover { background: var(--hover); }
+  .pr.sel { background: var(--soft); }
+  .pr .grow { flex: 1; min-width: 0; } .pr .nm { font-weight: 700; } .pr .sub { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .pr .q { font-weight: 800; font-variant-numeric: tabular-nums; } .pr mark { background: #FDE68A; color: inherit; border-radius: 3px; padding: 0 1px; }
+  .pr .th { width: 32px; height: 32px; border-radius: 9px; } .pr .fth { width: 32px; height: 32px; }
+  .pr .ac { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; }
+  .pal-foot { display: flex; gap: 14px; padding: 9px 14px; border-top: 1px solid var(--divider); color: var(--muted); font-size: 12px; font-weight: 600; }
+
+  @keyframes popc { from { opacity: 0; transform: translateX(-50%) scale(.97); } to { opacity: 1; transform: translateX(-50%) scale(1); } }
+  @keyframes pop { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: scale(1); } }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(0); } }
+  @keyframes rise { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+  @keyframes up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+  /* ---------- phone ---------- */
+  .phones { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+  .ph-wrap { display: grid; gap: 8px; }
+  .ph-cap { font-size: 12px; font-weight: 700; color: var(--text-secondary, #999); padding-left: 6px; }
+  .phone { position: relative; width: 360px; height: 740px; border-radius: 36px; border: 10px solid #18181B; background: var(--bg); overflow: hidden; display: flex; flex-direction: column; }
+  .sb { height: 26px; flex-shrink: 0; display: flex; justify-content: space-between; padding: 6px 20px 0; font-size: 12px; font-weight: 700; }
+  .mhead { flex-shrink: 0; padding: 0 8px 10px; border-bottom: 1px solid var(--border); background: var(--bg); }
+  .mtop { display: flex; align-items: center; gap: 2px; padding: 4px 0; }
+  .mtop .ib { width: 40px; height: 40px; border-radius: 12px; }
+  .mtop .ib svg { width: 21px; height: 21px; }
+  .mtop .sp { flex: 1; }
+  .mtop .tn { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; margin-left: 4px; }
+  .mtop .tn svg { width: 19px; height: 19px; }
+  .mtitle { padding: 2px 8px 0; }
+  .mscroll { flex: 1; min-height: 0; overflow: auto; padding: 14px 16px 96px; display: grid; grid-template-columns: minmax(0, 1fr); grid-auto-rows: max-content; gap: 14px; align-content: start; }
+  .mcrumb { font-size: 13px; color: var(--muted); font-weight: 600; display: flex; gap: 4px; align-items: center; }
+  .mcrumb svg { width: 12px; height: 12px; }
+  .dock { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 14px 16px; display: flex; gap: 10px; align-items: center;
+          background: linear-gradient(to top, var(--bg) 72%, rgba(247,247,248,0)); }
+  .sbar { flex: 1; height: 52px; border-radius: 18px; background: var(--surface); border: 1px solid var(--border); box-shadow: 0 6px 20px rgba(0,0,0,.08);
+          display: flex; align-items: center; gap: 10px; padding: 0 16px; color: var(--muted); font-weight: 650; font-size: 15px; text-align: left; }
+  .fab { width: 52px; height: 52px; border-radius: 18px; background: var(--primary); color: #fff; display: grid; place-items: center; box-shadow: 0 8px 20px rgba(79,70,229,.35); }
+  .fab svg { width: 24px !important; height: 24px !important; stroke-width: 2.2 !important; }
+
+  .mpal { position: absolute; inset: 0; background: var(--surface); z-index: 20; display: none; flex-direction: column; animation: rise .18s ease; }
+  .mpal.open { display: flex; }
+  .mpal-res { flex: 1; overflow: auto; display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; padding: 8px; }
+  .mpal-bar { display: flex; align-items: center; gap: 6px; margin: 0 8px 8px 10px; }
+  .mpal-in { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 14px; height: 50px; border-radius: 16px; border: 2px solid var(--primary); }
+  .mpal-in input { flex: 1; min-width: 0; border: 0; outline: 0; font: 600 16px Manrope, sans-serif; background: transparent; color: var(--fg); }
+  .mpal-in .ib { width: 32px; height: 32px; border-radius: 10px; color: var(--muted); }
+  .cancel { height: 44px; padding: 0 8px; font-weight: 700; color: var(--primary); border-radius: 10px; }
+  .kbd { height: 236px; background: #D1D3D9; flex-shrink: 0; display: grid; place-items: center; color: #6b6f78; font-weight: 700; font-size: 13px; }
+  .mpal .pr { padding: 10px; }
+
+  .drawer-scrim { position: absolute; inset: 0; background: rgba(24,24,27,.32); z-index: 15; display: none; }
+  .drawer-scrim.open { display: block; animation: fade .15s ease; }
+  .drawer { position: absolute; top: 0; bottom: 0; left: 0; width: 86%; background: var(--rail); z-index: 16; display: none; flex-direction: column; padding: 34px 10px 14px; gap: 12px; animation: slide .2s ease; }
+  .drawer.open { display: flex; }
+  .drawer .tree-box { background: var(--surface); border-radius: 14px; flex: 1; min-height: 0; display: flex; flex-direction: column; padding-top: 6px; }
+
+  .lp-scrim { position: absolute; inset: 0; background: rgba(24,24,27,.32); z-index: 15; display: none; }
+  .lp-scrim.open { display: block; }
+  .li.pressed { z-index: 16; background: var(--surface); transform: scale(1.02); box-shadow: 0 10px 30px rgba(0,0,0,.18); border-radius: 14px; }
+  .li.pressed::before { display: none; }
+  .sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 17; background: var(--surface); border-radius: 22px 22px 0 0; padding: 8px 12px 18px; display: none; animation: up .2s ease; }
+  .sheet.open { display: block; }
+  .grab { width: 36px; height: 4px; border-radius: 4px; background: #D4D4D8; margin: 0 auto 10px; }
+  .sheet .sh-t { font-weight: 800; font-size: 15px; padding: 0 6px 8px; }
+  .sheet .sa { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 6px; border-radius: 12px; font-weight: 700; font-size: 15px; text-align: left; }
+  .sheet .sa + .sa { margin-top: 2px; }
+  .sheet .sa .ac { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; }
+
+  .notes { margin-top: 10px; font-size: 13px; color: var(--text-secondary, #777); }
+</style>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+    <symbol id="i-folder-plus" viewBox="0 0 24 24"><path d="M12 10v6"/><path d="M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+    <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+    <symbol id="i-updown" viewBox="0 0 24 24"><path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+    <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></symbol>
+    <symbol id="i-move" viewBox="0 0 24 24"><path d="M2 9V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-1"/><path d="M2 13h10"/><path d="m9 16 3-3-3-3"/></symbol>
+    <symbol id="i-archive" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/></symbol>
+    <symbol id="i-box" viewBox="0 0 24 24"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="M3.29 7 12 12l8.71-5"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 12h16"/><path d="M4 18h16"/><path d="M4 6h16"/></symbol>
+    <symbol id="i-cpu" viewBox="0 0 24 24"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  </defs>
+</svg>
+
+<h2>Раскладка, версия 3</h2>
+<p class="subtitle">Кнопки действий снова нейтральные. Списков стало больше, чтобы было видно прокрутку: дерево и список предметов прокручиваются сами, заголовок и кнопки остаются на месте.</p>
+
+<div class="gm">
+  <p class="caption">Компьютер. ⌘K / Ctrl+K открывает палитру.</p>
+  <div class="desk" id="desk">
+    <aside class="rail">
+      <div class="logo"><b>G</b>GrayMatter</div>
+      <div class="inv">
+        <button class="inv-btn t" onclick="gmToggle('invmenu')">
+          <span class="grow"><span class="k">Inventory</span><span class="n">Electronics</span></span>
+          <svg class="i s"><use href="#i-updown"/></svg>
+        </button>
+        <div class="menu" id="invmenu">
+          <button class="mi t"><svg class="i s"><use href="#i-check"/></svg>Electronics</button>
+          <button class="mi t"><span style="width:15px"></span>Workshop</button>
+          <div class="sep"></div>
+          <button class="mi t"><svg class="i s"><use href="#i-plus"/></svg>New inventory</button>
+          <button class="mi t"><svg class="i s"><use href="#i-pencil"/></svg>Rename Electronics</button>
+          <button class="mi t"><svg class="i s"><use href="#i-archive"/></svg>Archive Electronics</button>
+        </div>
+      </div>
+      <nav class="nav">
+        <a class="on t" href="javascript:void 0"><svg class="i"><use href="#i-box"/></svg>Items</a>
+        <a class="t" href="javascript:void 0"><svg class="i"><use href="#i-tag"/></svg>Tags &amp; fields</a>
+        <a class="t" href="javascript:void 0"><svg class="i"><use href="#i-archive"/></svg>Archive</a>
+      </nav>
+      <nav class="nav bottom">
+        <a class="t" href="javascript:void 0"><svg class="i"><use href="#i-settings"/></svg>Settings</a>
+      </nav>
+    </aside>
+
+    <section class="tree-panel">
+      <button class="search-trigger t" onclick="gmOpen('pal')">
+        <svg class="i s"><use href="#i-search"/></svg><span class="grow">Search</span><kbd>⌘K</kbd>
+      </button>
+      <div class="tree-head"><span class="lbl">FOLDERS</span><button class="ib t" data-tip="New folder"><svg class="i s"><use href="#i-folder-plus"/></svg></button></div>
+      <ul class="tree" id="tree"></ul>
+    </section>
+
+    <section class="main">
+      <div class="main-head"><div class="wrap">
+        <div class="topbar">
+          <button class="ib t" data-tip="Back"><svg class="i"><use href="#i-left"/></svg></button>
+          <button class="ib t off" data-tip="Forward"><svg class="i"><use href="#i-right"/></svg></button>
+          <div class="crumbs"><a class="t" href="javascript:void 0">Electronics</a><svg class="i"><use href="#i-right"/></svg><a class="t" href="javascript:void 0">Components</a><svg class="i"><use href="#i-right"/></svg><span style="color:var(--fg)">Capacitors</span></div>
+        </div>
+        <div class="title-row">
+          <div><h1 class="ft">Capacitors</h1><div class="ft-sub">1 folder · 14 items</div></div>
+          <div class="acts-bar">
+            <button class="btn pri t"><svg class="i s"><use href="#i-plus"/></svg>Add item</button>
+            <button class="btn tn-new t"><svg class="i s"><use href="#i-folder-plus"/></svg>New folder</button>
+            <button class="ib tn-ren t" data-tip="Rename"><svg class="i s"><use href="#i-pencil"/></svg></button>
+            <button class="ib tn-mov t" data-tip="Move"><svg class="i s"><use href="#i-move"/></svg></button>
+            <button class="ib tn-arc t" data-tip="Archive"><svg class="i s"><use href="#i-archive"/></svg></button>
+          </div>
+        </div>
+      </div></div>
+      <div class="main-body"><div class="wrap">
+        <div class="lst">
+          <div class="li f t"><span class="fth"><svg class="i s"><use href="#i-folder"/></svg></span><span class="grow"><span class="nm" style="font-weight:650">SMD</span></span><span class="cnt">6</span><button class="ib more t" data-tip="More"><svg class="i s"><use href="#i-more"/></svg></button></div>
+        </div>
+        <div>
+          <div class="sec-h">14 items</div>
+          <div class="lst" id="items-desk"></div>
+        </div>
+      </div></div>
+    </section>
+
+    <div class="scrim" id="pal" onclick="if (event.target === this) gmClose('pal')">
+      <div class="pal">
+        <div class="pal-in"><svg class="i"><use href="#i-search"/></svg><input value="cap" aria-label="Search"><span class="pal-scope">Electronics</span></div>
+        <div class="pal-body">
+          <div class="pg">Items</div>
+          <div class="pr sel t"><span class="th"><svg class="i s"><use href="#i-cpu"/></svg></span><span class="grow"><div class="nm">Electrolytic <mark>cap</mark>acitor</div><div class="sub">Components › Capacitors</div></span><span class="q">230 pcs</span></div>
+          <div class="pr t"><span class="th"><svg class="i s"><use href="#i-cpu"/></svg></span><span class="grow"><div class="nm">Ceramic <mark>cap</mark>acitor 100nF</div><div class="sub">Components › Capacitors</div></span><span class="q">500 pcs</span></div>
+          <div class="pr t"><span class="th"><svg class="i s"><use href="#i-cpu"/></svg></span><span class="grow"><div class="nm">Super<mark>cap</mark>acitor 1F</div><div class="sub">Components › Capacitors</div></span><span class="q">2 pcs</span></div>
+          <div class="pg">Folders</div>
+          <div class="pr t"><span class="fth"><svg class="i s"><use href="#i-folder"/></svg></span><span class="grow"><div class="nm"><mark>Cap</mark>acitors</div><div class="sub">Components</div></span></div>
+          <div class="pg">Actions</div>
+          <div class="pr t"><span class="ac tn-new"><svg class="i s"><use href="#i-folder-plus"/></svg></span><span class="grow"><div class="nm">New folder in Capacitors</div></span></div>
+          <div class="pr t"><span class="ac tn-new"><svg class="i s"><use href="#i-plus"/></svg></span><span class="grow"><div class="nm">Add item “cap”</div></span></div>
+        </div>
+        <div class="pal-foot"><span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>↵</kbd> open</span><span><kbd>esc</kbd> close</span></div>
+      </div>
+    </div>
+  </div>
+
+  <p class="caption" style="margin-top:28px">Телефон. Первый экран кликабельный, остальные три — его состояния.</p>
+  <div class="phones" id="phones">
+    <div class="ph-wrap"><div class="ph-cap">Папка</div>
+    <div class="phone" id="phone">
+      <div class="sb"><span>9:41</span><span>▮▮▮ 82%</span></div>
+      <div class="mhead">
+        <div class="mtop">
+          <button class="ib t" aria-label="Menu" onclick="gmOpen('drawer'); gmOpen('dscrim')"><svg class="i"><use href="#i-menu"/></svg></button>
+          <button class="ib t" aria-label="Back"><svg class="i"><use href="#i-left"/></svg></button>
+          <button class="ib t off" aria-label="Forward"><svg class="i"><use href="#i-right"/></svg></button>
+          <span class="sp"></span>
+          <button class="tn tn-new t" aria-label="New folder"><svg class="i"><use href="#i-folder-plus"/></svg></button>
+          <button class="tn tn-ren t" aria-label="Rename"><svg class="i"><use href="#i-pencil"/></svg></button>
+          <button class="tn tn-mov t" aria-label="Move"><svg class="i"><use href="#i-move"/></svg></button>
+          <button class="tn tn-arc t" aria-label="Archive"><svg class="i"><use href="#i-archive"/></svg></button>
+        </div>
+        <div class="mtitle">
+          <div class="mcrumb">Electronics <svg class="i"><use href="#i-right"/></svg> Components</div>
+          <h1 class="ft" style="font-size:24px">Capacitors</h1>
+        </div>
+      </div>
+      <div class="mscroll">
+        <div class="lst"><div class="li f"><span class="fth"><svg class="i s"><use href="#i-folder"/></svg></span><span class="grow"><span class="nm" style="font-weight:650">SMD</span></span><span class="cnt">6</span></div></div>
+        <div>
+          <div class="sec-h">14 items</div>
+          <div class="lst" id="items-phone"></div>
+        </div>
+      </div>
+      <div class="dock">
+        <button class="sbar t" onclick="gmOpen('mpal')"><svg class="i"><use href="#i-search"/></svg>Search Electronics</button>
+        <button class="fab t" aria-label="Add item"><svg class="i"><use href="#i-plus"/></svg></button>
+      </div>
+
+      <div class="mpal" id="mpal">
+        <div class="mpal-res">
+          <div class="pg">Actions</div>
+          <div class="pr"><span class="ac tn-new"><svg class="i s"><use href="#i-plus"/></svg></span><span class="grow"><div class="nm">Add item “cap”</div></span></div>
+          <div class="pg">Folders</div>
+          <div class="pr"><span class="fth"><svg class="i s"><use href="#i-folder"/></svg></span><span class="grow"><div class="nm"><mark>Cap</mark>acitors</div><div class="sub">Components</div></span></div>
+          <div class="pg">Items</div>
+          <div class="pr"><span class="th"><svg class="i s"><use href="#i-cpu"/></svg></span><span class="grow"><div class="nm">Super<mark>cap</mark>acitor 1F</div><div class="sub">Components › Capacitors</div></span><span class="q">2 pcs</span></div>
+          <div class="pr"><span class="th"><svg class="i s"><use href="#i-cpu"/></svg></span><span class="grow"><div class="nm">Ceramic <mark>cap</mark>acitor 100nF</div><div class="sub">Components › Capacitors</div></span><span class="q">500 pcs</span></div>
+          <div class="pr sel"><span class="th"><svg class="i s"><use href="#i-cpu"/></svg></span><span class="grow"><div class="nm">Electrolytic <mark>cap</mark>acitor</div><div class="sub">Components › Capacitors</div></span><span class="q">230 pcs</span></div>
+        </div>
+        <div class="mpal-bar">
+          <div class="mpal-in"><svg class="i"><use href="#i-search"/></svg><input value="cap" aria-label="Search"><button class="ib" aria-label="Clear"><svg class="i s"><use href="#i-x"/></svg></button></div>
+          <button class="cancel t" onclick="gmClose('mpal')">Cancel</button>
+        </div>
+        <div class="kbd">клавиатура</div>
+      </div>
+
+      <div class="drawer-scrim" id="dscrim" onclick="gmClose('drawer'); gmClose('dscrim')"></div>
+      <div class="drawer" id="drawer">
+        <div class="logo"><b>G</b>GrayMatter</div>
+        <button class="inv-btn t"><span class="grow"><span class="k">Inventory</span><span class="n">Electronics</span></span><svg class="i s"><use href="#i-updown"/></svg></button>
+        <nav class="nav">
+          <a class="on" href="javascript:void 0"><svg class="i"><use href="#i-box"/></svg>Items</a>
+          <a href="javascript:void 0"><svg class="i"><use href="#i-tag"/></svg>Tags &amp; fields</a>
+          <a href="javascript:void 0"><svg class="i"><use href="#i-archive"/></svg>Archive</a>
+        </nav>
+        <div class="tree-box"><ul class="tree tree-m"></ul></div>
+        <nav class="nav"><a href="javascript:void 0"><svg class="i"><use href="#i-settings"/></svg>Settings</a></nav>
+      </div>
+
+      <div class="lp-scrim"></div>
+      <div class="sheet">
+        <div class="grab"></div>
+        <div class="sh-t">Electrolytic capacitor</div>
+        <button class="sa"><span class="ac tn-ren"><svg class="i"><use href="#i-pencil"/></svg></span>Edit</button>
+        <button class="sa"><span class="ac tn-mov"><svg class="i"><use href="#i-move"/></svg></span>Move</button>
+        <button class="sa"><span class="ac tn-arc"><svg class="i"><use href="#i-archive"/></svg></span>Archive</button>
+      </div>
+    </div></div>
+  </div>
+  <p class="notes">Данные выдуманные. Цвета, шрифт и скругления взяты из приложения, кнопки действий нейтральные.</p>
+</div>
+
+<script>
+  function gmOpen(id) { document.getElementById(id).classList.add('open') }
+  function gmClose(id) { document.getElementById(id).classList.remove('open') }
+  function gmToggle(id) { document.getElementById(id).classList.toggle('open') }
+  function gmTree(el, e) { el.closest('li').classList.toggle('collapsed'); e.stopPropagation() }
+
+  var TREE = [
+    ['All of Electronics', 214, null, 'root'],
+    ['Components', 152, [['Capacitors', 15, null, 'on'], ['Resistors', 31], ['ICs', 40, [['Op-amps', 12], ['Logic', 28]], 'collapsed'], ['Transistors', 21], ['Diodes', 14], ['LEDs', 19], ['Connectors', 8], ['Sensors', 4]]],
+    ['Cables', 18, [['USB', 11], ['Audio', 7]]],
+    ['Tools', 22, [['Soldering', 9], ['Measurement', 13]], 'collapsed'],
+    ['Hardware', 9, [['Screws', 4], ['Standoffs', 5]], 'collapsed'],
+    ['Projects', 12, [['Synth', 7], ['Clock', 5]], 'collapsed'],
+    ['Power supplies', 3], ['Enclosures', 6], ['Spare parts', 2],
+  ]
+  function svg(id, cls) { return '<svg class="i ' + (cls || '') + '"><use href="#' + id + '"/></svg>' }
+  function treeHtml(nodes, acts) {
+    return nodes.map(function (n) {
+      var kids = n[2], flag = n[3] || ''
+      var chev = kids ? '<span class="chev t" onclick="gmTree(this, event)">' + svg('i-right') + '</span>' : '<span class="chev none"></span>'
+      var icon = flag === 'root' ? svg('i-box', 'fi') : svg('i-folder', 'fi')
+      var a = acts && flag !== 'root' ? '<span class="acts"><button class="ib t" data-tip="New subfolder">' + svg('i-plus', 's') + '</button><button class="ib t" data-tip="More">' + svg('i-more', 's') + '</button></span>' : ''
+      var row = '<div class="row t ' + (flag === 'on' ? 'on' : '') + (flag === 'root' ? ' root' : '') + '" tabindex="0">' + chev + icon + '<span class="nm">' + n[0] + '</span>' + a + '<span class="cnt">' + n[1] + '</span></div>'
+      return '<li class="' + (flag === 'collapsed' ? 'collapsed' : '') + '">' + row + (kids ? '<ul>' + treeHtml(kids, acts) + '</ul>' : '') + '</li>'
+    }).join('')
+  }
+  document.getElementById('tree').innerHTML = treeHtml(TREE, true)
+  document.querySelector('.tree-m').innerHTML = treeHtml(TREE, false)
+
+  var ITEMS = [
+    ['Electrolytic capacitor', '6 variants · 25V', 230], ['Ceramic capacitor 100nF', '0805 · smd', 500], ['Supercapacitor 1F', '5.5V', 2],
+    ['Tantalum capacitor 10µF', 'out of stock', 0], ['Film capacitor 1µF', '63V', 40], ['Ceramic capacitor 10nF', '0603 · smd', 1200],
+    ['Electrolytic capacitor 1000µF', '35V', 12], ['Mica capacitor 100pF', 'audio', 25], ['Ceramic capacitor 22pF', 'crystal load', 80],
+    ['Polymer capacitor 470µF', '16V', 6], ['Trimmer capacitor', '5–30pF', 4], ['X2 safety capacitor', '275VAC', 3],
+    ['Ceramic capacitor 1µF', '0805 · smd', 300], ['Electrolytic capacitor 47µF', '50V', 60],
+  ]
+  function itemsHtml(more) {
+    return ITEMS.map(function (it) {
+      return '<div class="li t' + (it[2] === 0 ? ' dim' : '') + '" tabindex="0"><span class="th">' + svg('i-cpu') + '</span><span class="grow"><span class="nm">' + it[0] + '</span><span class="sub">' + it[1] + '</span></span><span class="q">' + it[2].toLocaleString('en') + ' <small>pcs</small></span>' + (more ? '<button class="ib more t" data-tip="More">' + svg('i-more', 's') + '</button>' : '') + '</div>'
+    }).join('')
+  }
+  document.getElementById('items-desk').innerHTML = itemsHtml(true)
+  document.getElementById('items-phone').innerHTML = itemsHtml(false)
+
+  ;(function () {
+    var wrap = document.querySelector('.ph-wrap')
+    var states = [['Палитра: «Cancel» закрывает, × очищает', function (p) { p.querySelector('.mpal').classList.add('open') }],
+                  ['Меню по ☰', function (p) { p.querySelector('.drawer').classList.add('open'); p.querySelector('.drawer-scrim').classList.add('open') }],
+                  ['Долгое нажатие на предмет', function (p) { p.querySelector('.lp-scrim').classList.add('open'); p.querySelector('.sheet').classList.add('open'); p.querySelectorAll('#items-phone .li, .lst .li')[1].classList.add('pressed') }]]
+    states.forEach(function (s) {
+      var c = wrap.cloneNode(true)
+      c.querySelector('.ph-cap').textContent = s[0]
+      s[1](c)
+      c.querySelectorAll('[id]').forEach(function (n) { n.removeAttribute('id') })
+      c.querySelectorAll('[onclick]').forEach(function (n) { n.removeAttribute('onclick') })
+      wrap.parentNode.append(c)
+    })
+  })()
+
+  document.addEventListener('keydown', function (e) {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); gmOpen('pal'); var i = document.querySelector('#pal input'); i && i.focus() }
+    if (e.key === 'Escape') { ['pal', 'mpal', 'invmenu', 'drawer', 'dscrim'].forEach(gmClose) }
+  })
+  document.addEventListener('click', function (e) {
+    var m = document.getElementById('invmenu'); if (m && !e.target.closest('.inv')) m.classList.remove('open')
+  })
+</script>
+</body>
+</html>

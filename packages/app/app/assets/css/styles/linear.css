@@ -1,0 +1,5 @@
+/*
+ * S5 Linear: what its tokens cannot express (lib/styles/linear.ts). Linear is flat: no page pattern, no mark before
+ * section labels, labels in their own case; hairlines, radii and the menus' blur are all tokens. Nothing is left for CSS:
+ * the dark drawer's edge is main.css's for every style.
+ */

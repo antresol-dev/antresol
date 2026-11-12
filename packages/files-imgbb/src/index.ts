@@ -1,4 +1,13 @@
-import { FileError, type FileErrorCode, type FileStore, type Rendition, type StoredFile } from '@antresol/core'
+import {
+  FileError,
+  isDeleteHandle,
+  isPhotoSide,
+  MAX_RENDITION_TYPE_LENGTH,
+  type FileErrorCode,
+  type FileStore,
+  type Rendition,
+  type StoredFile,
+} from '@antresol/core'
 
 export interface ImgbbOptions {
   apiKey: string
@@ -22,12 +31,13 @@ function codeForStatus(status: number): FileErrorCode {
   return 'failed'
 }
 
-/** A photo URL on ImgBB: `https://i.ibb.co/<id>/<file>.<ext>`. */
+/** A photo URL on ImgBB: `https://i.ibb.co/<id>/<file>.<ext>`, with no query or fragment (the app appends its cache mark
+ *  to these urls). Not even an empty one, which `URL` reports as an empty `search`/`hash`: the text has no `?` or `#`. */
 export function isImgbbUrl(url: string): boolean {
   try {
     const u = new URL(url)
     return u.protocol === 'https:' && u.hostname === 'i.ibb.co' && !u.username && !u.password && !u.port &&
-      PHOTO_PATH.test(u.pathname)
+      !/[?#]/.test(url) && PHOTO_PATH.test(u.pathname)
   } catch {
     return false
   }
@@ -40,7 +50,7 @@ interface ImgbbCopy {
 
 function toSide(value: unknown): number | null {
   const n = typeof value === 'string' && value.trim() ? Number(value) : value
-  return typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= 20000 ? n : null
+  return isPhotoSide(n) ? n : null
 }
 
 /** The size of a `width`×`height` picture fitted inside a `side` square, never enlarged. */
@@ -50,7 +60,7 @@ function fitWithin(width: number, height: number, side: number): { width: number
 }
 
 function mimeOf(copy: ImgbbCopy | undefined): string | null {
-  return typeof copy?.mime === 'string' && copy.mime && copy.mime.length <= 100 ? copy.mime : null
+  return typeof copy?.mime === 'string' && copy.mime && copy.mime.length <= MAX_RENDITION_TYPE_LENGTH ? copy.mime : null
 }
 
 function urlOf(copy: ImgbbCopy | undefined): string | null {
@@ -91,7 +101,7 @@ function toStoredFile(data: Record<string, unknown> | undefined): StoredFile {
   }
 
   const deleteUrl = data?.delete_url
-  const deleteHandle = typeof deleteUrl === 'string' && deleteUrl && deleteUrl.length <= 2048 ? deleteUrl : null
+  const deleteHandle = isDeleteHandle(deleteUrl) ? deleteUrl : null
   return { provider: 'imgbb', fileId: id, url, urls, deleteHandle }
 }
 

@@ -86,6 +86,23 @@ describe('pickRendition', () => {
     expect(pickRendition(bad, 'thumb')).toBe(thumb)
     expect(pickRendition([null] as unknown as Rendition[], 'thumb')).toBeNull()
   })
+  it('skips every element core’s parseRendition refuses, as reads do', () => {
+    const refused = [
+      { ...thumb, width: 0 },
+      { ...thumb, height: 20001 },
+      { ...thumb, role: '' },
+      { ...thumb, type: 't'.repeat(101) },
+      { ...thumb, url: `${HOST}${'a'.repeat(2048)}` },
+    ]
+    for (const r of refused) expect(pickRendition([r], 'thumb'), JSON.stringify(r).slice(0, 80)).toBeNull()
+    expect(pickRendition([...refused, medium], 'thumb')).toBe(medium)
+  })
+  it('reads urls that are not a list as none', () => {
+    for (const urls of ['x', {}, 42, { length: 1, 0: thumb }]) {
+      expect(pickRendition(urls as unknown as Rendition[], 'thumb')).toBeNull()
+      expect(displayablePhotoUrl({ url: HOST, urls: urls as unknown as Rendition[] }, 'thumb')).toBe(photoUrl(HOST, 'thumb'))
+    }
+  })
 })
 
 describe('displayablePhotoUrl with renditions', () => {
@@ -114,6 +131,16 @@ describe('displayablePhotoUrl on ImgBB', () => {
     expect(displayablePhotoUrl({ url: ibb, urls: copies }, 'thumb')).toBe('https://i.ibb.co/c/p.webp?antresol=thumb')
     expect(displayablePhotoUrl({ url: ibb, urls: copies }, 'card')).toBe('https://i.ibb.co/c/o.webp')
     expect(displayablePhotoUrl({ url: ibb, urls: copies }, 'full')).toBe('https://i.ibb.co/c/o.webp')
+  })
+  it('marks a copy picked for thumb only when it is small (short side up to 320), not a big one picked for lack of a thumb', () => {
+    const [original, medium] = copies
+    // No thumb copy: the 640×640 medium is the smallest big enough, then the original.
+    expect(displayablePhotoUrl({ url: ibb, urls: [original!, medium!] }, 'thumb')).toBe('https://i.ibb.co/c/m.webp')
+    expect(displayablePhotoUrl({ url: ibb, urls: [original!] }, 'thumb')).toBe('https://i.ibb.co/c/o.webp')
+    expect(displayablePhotoUrl({ url: ibb, urls: [rend(320, 'inside', 'small', 's.webp')] }, 'thumb')).toBe('https://i.ibb.co/c/s.webp?antresol=thumb')
+    expect(displayablePhotoUrl({ url: ibb, urls: [rend(321, 'inside', 'small', 's.webp')] }, 'thumb')).toBe('https://i.ibb.co/c/s.webp')
+    const wide = { ...rend(0, 'inside', 'wide', 'w.webp'), width: 1200, height: 300 }
+    expect(displayablePhotoUrl({ url: ibb, urls: [wide] }, 'thumb')).toBe('https://i.ibb.co/c/w.webp?antresol=thumb')
   })
   it('shows the url of a photo without copies as it is, unmarked', () => {
     expect(displayablePhotoUrl({ url: ibb }, 'thumb')).toBe(ibb)

@@ -212,6 +212,10 @@ describe('isImgbbUrl', () => {
     ['a port', 'https://i.ibb.co:8443/rR77PCpR/a.webp'],
     ['credentials', 'https://user:pw@i.ibb.co/rR77PCpR/a.webp'],
     ['an unknown extension', 'https://i.ibb.co/rR77PCpR/a.svg'],
+    ['a query', 'https://i.ibb.co/rR77PCpR/p.webp?x'],
+    ['an empty query', 'https://i.ibb.co/rR77PCpR/p.webp?'],
+    ['a fragment', 'https://i.ibb.co/rR77PCpR/p.webp#x'],
+    ['an empty fragment', 'https://i.ibb.co/rR77PCpR/p.webp#'],
     ['not a URL', 'nope'],
   ])('rejects %s', (_name, url) => {
     expect(isImgbbUrl(url)).toBe(false)

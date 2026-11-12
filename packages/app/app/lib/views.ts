@@ -87,7 +87,7 @@ export interface Index {
   buckets: Map<string, StockLine>
   variants: Map<Id, { name: string; archived: boolean }>
   activeVariantCount: Map<Id, number>
-  /** url of the photo with the lowest position and no variant. */
+  /** The photo with the lowest position and no variant, as display needs it (PhotoRef: url and renditions). */
   covers: Map<Id, PhotoRef>
   /** Lowest-position photo of each variant. */
   variantCovers: Map<Id, PhotoRef>

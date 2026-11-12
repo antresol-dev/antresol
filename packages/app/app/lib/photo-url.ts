@@ -1,4 +1,4 @@
-import type { Rendition } from '@antresol/core'
+import { parseRendition, type Rendition } from '@antresol/core'
 import { cloudinaryThumbUrl, isCloudinaryUrl } from '@antresol/files-cloudinary'
 import { isImgbbUrl } from '@antresol/files-imgbb'
 import { imgurThumbUrl, isImgurUrl } from '@antresol/files-imgur'
@@ -24,24 +24,13 @@ export function isPhotoHostUrl(url: string): boolean {
   return isUploadcareUrl(url) || isCloudinaryUrl(url) || isImgbbUrl(url) || isImgurUrl(url)
 }
 
-/** Storage keeps any JSON array in `urls` unchecked, so an element may be anything; only a well-formed one is used. */
-function isUsableRendition(r: unknown): r is Rendition {
-  if (typeof r !== 'object' || r === null) return false
-  const c = r as Record<string, unknown>
-  return (
-    typeof c.url === 'string' &&
-    Number.isInteger(c.width) &&
-    Number.isInteger(c.height) &&
-    (c.fit === 'inside' || c.fit === 'cover')
-  )
-}
-
 /** The stored copy to show at a size (spec 6): the smallest by area whose side reaches the size, else the largest there is.
- *  Only `inside` copies serve card and full (a `cover` copy is cropped); thumb takes any. A copy on a foreign host or a
- *  malformed one is never chosen. null: no usable copy, the caller falls back to the url. */
-export function pickRendition(urls: readonly unknown[] | null | undefined, size: PhotoSize): Rendition | null {
-  const allowed = (urls ?? []).filter(
-    (r): r is Rendition => isUsableRendition(r) && isPhotoHostUrl(r.url) && (size === 'thumb' || r.fit === 'inside'),
+ *  Only `inside` copies serve card and full (a `cover` copy is cropped); thumb takes any. A copy on a foreign host, or one
+ *  core's parseRendition refuses, is never chosen (reads drop those, but an inventory saved on the device may be older);
+ *  `urls` that is not a list is none. null: no usable copy, the caller falls back to the url. */
+export function pickRendition(urls: unknown, size: PhotoSize): Rendition | null {
+  const allowed = (Array.isArray(urls) ? urls : []).filter(
+    (r): r is Rendition => parseRendition(r) !== null && isPhotoHostUrl(r.url) && (size === 'thumb' || r.fit === 'inside'),
   )
   const side = (r: Rendition) => (size === 'thumb' ? Math.min(r.width, r.height) : Math.max(r.width, r.height))
   const area = (r: Rendition) => r.width * r.height
@@ -53,15 +42,26 @@ export function pickRendition(urls: readonly unknown[] | null | undefined, size:
 
 /** Query the service worker caches with the thumbnails (nuxt.config.ts matches it): ImgBB has no size in its urls and
  *  ignores the query. Only hosts where this was checked get it; today that is ImgBB. */
-const THUMB_MARK = 'antresol=thumb'
+const THUMB_MARK = '?antresol=thumb'
+/** Only a small copy is marked: one picked for thumb for want of a thumb copy (an original) stays out of the 600
+ *  thumbnails. */
+const THUMB_MARK_MAX_SIDE = 2 * SIDE.thumb
 
-/** What may be put in an <img>: a stored rendition (an ImgBB one picked for thumb carries the cache mark), else the url of one of the four photo stores (transformed), and
- *  device: urls unchanged (resolved by the caller). Any other url in the data is never loaded (it would be a tracking
- *  pixel); null then. */
+/** `url` without the thumbnail cache mark displayablePhotoUrl may have put on it. */
+export function withoutThumbMark(url: string): string {
+  return url.endsWith(THUMB_MARK) ? url.slice(0, -THUMB_MARK.length) : url
+}
+
+/** What may be put in an <img>: a stored rendition (a small ImgBB one picked for thumb carries the cache mark), else the
+ *  url of one of the four photo stores (transformed), and device: urls unchanged (resolved by the caller). Any other url
+ *  in the data is never loaded (it would be a tracking pixel); null then. */
 export function displayablePhotoUrl(photo: PhotoRef, size: PhotoSize): string | null {
   if (isDeviceUrl(photo.url)) return photo.url
   const picked = pickRendition(photo.urls, size)
-  if (picked) return size === 'thumb' && isImgbbUrl(picked.url) ? `${picked.url}?${THUMB_MARK}` : picked.url
+  if (picked) {
+    const small = Math.min(picked.width, picked.height) <= THUMB_MARK_MAX_SIDE
+    return size === 'thumb' && small && isImgbbUrl(picked.url) ? `${picked.url}${THUMB_MARK}` : picked.url
+  }
   return isPhotoHostUrl(photo.url) ? photoUrl(photo.url, size) : null
 }
 

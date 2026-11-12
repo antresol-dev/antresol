@@ -43,7 +43,7 @@ const actions = computed(() => [
         />
       </div>
     </dl>
-    <Button variant="outline" class="mt-1 h-11 justify-self-start px-4.5 font-bold" :disabled="locked" @click="emit('add')">
+    <Button variant="outline" class="mt-1 h-11 justify-self-start px-4.5 btn-label" :disabled="locked" @click="emit('add')">
       <Plus class="size-5" aria-hidden="true" />
       {{ $t('item.addAttribute') }}
     </Button>

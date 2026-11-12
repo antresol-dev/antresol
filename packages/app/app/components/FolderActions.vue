@@ -58,11 +58,11 @@ const iconButton = 'size-9'
   </template>
 
   <template v-else>
-    <Button class="h-9 gap-[7px] px-3.5 font-bold" :disabled="locked" @click="quickAdd.open()">
+    <Button class="h-9 gap-[7px] px-3.5 btn-label" :disabled="locked" @click="quickAdd.open()">
       <Plus aria-hidden="true" />
       {{ $t('quickAdd.title') }}
     </Button>
-    <Button variant="outline" class="h-9 gap-[7px] px-3.5 font-bold" :disabled="locked" @click="newFolder">
+    <Button variant="outline" class="h-9 gap-[7px] px-3.5 btn-label" :disabled="locked" @click="newFolder">
       <FolderPlus aria-hidden="true" />
       {{ $t('folderMenu.new') }}
     </Button>

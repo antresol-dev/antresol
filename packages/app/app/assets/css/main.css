@@ -28,6 +28,7 @@
  *   surface-list         list (list, listSh, listR, surfBlur)           lists of rows: variants, attributes, history,
  *                                                                       folders, items, Tags & fields, archive
  *   surface-header       hdr (hdr, hdrSh, hdrLine, hdrBlur)             the screen header
+ *   surface-bar          hdr, hdrLine, hdrBlur; barSh                   a bottom bar (the count screen's)
  *   surface-sheet        sheet (sheet, sheetSh, sheetLine, sheetBlur)   sheets, dialogs, the search palette
  *   surface-tip          tip (tip, tipFg, tipSh)                        tooltips
  *   photo-cover          photo (photo, photoSh, photoR, photoFg, surfBlur)  the item's cover photo
@@ -38,13 +39,15 @@
  *                        headings ("Variants", "Attributes", "History", settings sections)
  *   stock-card           (no rules: the hook for a style's LED, `led`, ledColor, ledGlow)  the stock card
  *   tabular-nums         numFont                                        every number
+ *   amount               numWeight                                      the amounts the mock-up draws: stock total,
+ *                                                                       stepper count, list and history amounts
+ *   btn-text / btn-label plainBtnWeight / btnWeight                     every Button's label / the emphasised actions
  *   .lucide              stroke, cap, join                              every icon (at Lucide's default width)
  *   body                 page, fg, font; the window layer winBg, winBlur (body::before)
  *   rounded-card / rounded-field / rounded-chip (= rounded-thumb, rounded-icon) / rounded-fab: cardR / btnR / smallR /
  *                        primR; rounded-full.
  *
- * Not applied, on purpose (spec §3: sizes and weights are the markup's): headSize, labelSize, numWeight, btnWeight; the
- * rest and pressed text colour (n.fg, p.fg) of ib, add, btn, step and ghost — the markup gives text its colour, hover
+ * Not applied, on purpose (spec §3: sizes are the markup's): headSize, labelSize; the rest and pressed text colour (n.fg, p.fg) of ib, add, btn, step and ghost — the markup gives text its colour, hover
  * turns text without a text-* utility to h.fg — and the shadows of ghost (flat controls keep their focus rings).
  *
  * Semantic tokens (Tailwind colours of the same names) are the style's: --background (pageColor), --surface, --hover
@@ -305,6 +308,15 @@
     backdrop-filter: var(--st-sheet-blur);
   }
 
+  /* A bottom bar (the count screen's sticky bar): the header's surface, its line on the top edge. */
+  .surface-bar {
+    border-color: var(--st-hdr-line);
+    background: var(--st-hdr);
+    box-shadow: var(--st-bar-sh);
+    -webkit-backdrop-filter: var(--st-hdr-blur);
+    backdrop-filter: var(--st-hdr-blur);
+  }
+
   .surface-tip {
     background-color: var(--st-tip);
     box-shadow: var(--st-tip-sh);
@@ -362,6 +374,18 @@
     font-family: var(--st-num-font);
   }
 
+  /* Weights (sizes stay the markup's): amounts the mock-up draws at numWeight; button labels — plain ones, and the
+     emphasised actions the mock-up draws (btn-label wins over btn-text on the same Button). */
+  .amount {
+    font-weight: var(--st-num-weight);
+  }
+  .btn-text {
+    font-weight: var(--st-plain-btn-weight);
+  }
+  .btn-label {
+    font-weight: var(--st-btn-weight);
+  }
+
   /* Fields: their background (--field), border (--input) and radius (rounded-field) are the markup's utilities. */
   :where([data-slot='input'], [data-slot='textarea'], [data-slot='select-trigger']) {
     box-shadow: var(--st-field-sh);
@@ -395,7 +419,8 @@
     .glass {
       background: var(--st-pop-solid);
     }
-    .surface-header {
+    .surface-header,
+    .surface-bar {
       background: var(--st-hdr-solid);
     }
     .raised-card {
@@ -412,6 +437,7 @@
     }
     .glass,
     .surface-header,
+    .surface-bar,
     .raised-card,
     .surface-list,
     .surface-sheet,

@@ -181,7 +181,7 @@ describe('validateCommand', () => {
 
 describe('final review fixes', () => {
   const photo = (id: string, itemId: string, variantId: string | null = null) => ({
-    id, itemId, variantId, provider: 'p', fileId: id, url: 'https://x', position: 0, createdAt: '', createdBy: '',
+    id, itemId, variantId, provider: 'p', fileId: id, url: 'https://x', urls: null, width: null, height: null, deleteHandle: null, position: 0, createdAt: '', createdBy: '',
   })
   const withPhotos = () => ({ ...snap(), photos: [photo('p1', 'i1'), photo('p2', 'i1'), photo('p3', 'i1', 'v1')] })
 
@@ -642,7 +642,7 @@ describe('Plan 9 commands', () => {
 
   describe('photo.replace', () => {
     const photo = (id: string, itemId: string, variantId: string | null, position: number) => ({
-      id, itemId, variantId, provider: 'imgbb', fileId: id, url: `https://x/${id}`, position, createdAt: '', createdBy: '',
+      id, itemId, variantId, provider: 'imgbb', fileId: id, url: `https://x/${id}`, urls: null, width: null, height: null, deleteHandle: null, position, createdAt: '', createdBy: '',
     })
     const withPhotos = () => ({ ...electronics(), photos: [photo('p1', 'R', null, 0), photo('p2', 'R', 'r1k', 1), photo('p3', 'C', 'c50', 0)] })
     const replace = (variantId: string, id: string, replaces: string | null, itemId = 'R'): Command => ({
@@ -671,4 +671,54 @@ describe('Plan 9 commands', () => {
       expect(ec(replace('r4k7', U('300'), null), withPhotos())).toBe('archived')
     })
   })
+})
+
+describe('photo renditions on photo commands', () => {
+  const rend = (o: Record<string, unknown> = {}) => ({ url: 'https://i.ibb.co/a/b.webp', role: 'medium', width: 640, height: 480, fit: 'inside', type: null, ...o })
+  const imgbb = () => ({
+    urls: [
+      rend({ role: 'original', width: 2048, height: 1536, type: 'image/webp' }),
+      rend(),
+      rend({ role: 'thumb', width: 180, height: 180, fit: 'cover' }),
+    ],
+    width: 2048,
+    height: 1536,
+    deleteHandle: 'https://ibb.co/x/y',
+  })
+  const add = (extra: Record<string, unknown>): Command =>
+    ({ type: 'photo.add', id: 'n', itemId: 'i1', variantId: null, provider: 'imgbb', fileId: 'f', url: 'https://x', ...extra }) as Command
+  const replace = (extra: Record<string, unknown>): Command =>
+    ({ type: 'photo.replace', variantId: 'v1', id: 'n', itemId: 'i1', replaces: null, provider: 'imgbb', fileId: 'f', url: 'https://x', ...extra }) as Command
+
+  const accepted: [string, Record<string, unknown>][] = [
+    ['no new fields', {}],
+    ['all new fields null', { urls: null, width: null, height: null, deleteHandle: null }],
+    ['three ImgBB renditions with size and delete handle', imgbb()],
+  ]
+  const rejected: [string, Record<string, unknown>, DomainErrorCode][] = [
+    ['an http rendition', { urls: [rend({ url: 'http://i.ibb.co/a' })] }, 'invalid_url'],
+    ['a 2049-character rendition url', { urls: [rend({ url: `https://i.ibb.co/${'a'.repeat(2049 - 17)}` })] }, 'invalid_url'],
+    ['9 renditions', { urls: Array.from({ length: 9 }, () => rend()) }, 'invalid_option'],
+    ['an empty list', { urls: [] }, 'invalid_option'],
+    ['an empty role', { urls: [rend({ role: '' })] }, 'invalid_option'],
+    ['a 41-character role', { urls: [rend({ role: 'r'.repeat(41) })] }, 'invalid_option'],
+    ['rendition width 0', { urls: [rend({ width: 0 })] }, 'invalid_option'],
+    ['rendition width 1.5', { urls: [rend({ width: 1.5 })] }, 'invalid_option'],
+    ['rendition height 20001', { urls: [rend({ height: 20001 })] }, 'invalid_option'],
+    ["fit 'contain'", { urls: [rend({ fit: 'contain' })] }, 'invalid_option'],
+    ['a 101-character type', { urls: [rend({ type: 't'.repeat(101) })] }, 'invalid_option'],
+    ['width without height', { width: 10, height: null }, 'invalid_option'],
+    ['an empty delete handle', { deleteHandle: '' }, 'invalid_option'],
+    ['a 2049-character delete handle', { deleteHandle: 'h'.repeat(2049) }, 'invalid_option'],
+  ]
+  for (const [name, make] of [['photo.add', add], ['photo.replace', replace]] as const) {
+    describe(name, () => {
+      it.each(accepted)('accepts %s', (_n, extra) => {
+        expect(code(make(extra))).toBeNull()
+      })
+      it.each(rejected)('refuses %s', (_n, extra, expected) => {
+        expect(code(make(extra))).toBe(expected)
+      })
+    })
+  }
 })

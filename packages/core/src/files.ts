@@ -1,7 +1,11 @@
+import type { Rendition } from './model'
+
 export interface StoredFile {
   provider: string
   fileId: string
   url: string
+  urls?: Rendition[] | null
+  deleteHandle?: string | null
 }
 
 export interface FileStore {

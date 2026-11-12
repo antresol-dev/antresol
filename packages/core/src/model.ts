@@ -89,9 +89,26 @@ export interface Photo {
   provider: string
   fileId: string
   url: string
+  /** Other sizes of the picture the store made; null: none, `url` is all there is. */
+  urls: Rendition[] | null
+  width: number | null
+  height: number | null
+  /** What the store needs to delete the file (ImgBB: a delete URL); null: none. */
+  deleteHandle: string | null
   position: number
   createdAt: string
   createdBy: string
+}
+export const RENDITION_FITS = ['inside', 'cover'] as const
+export const MAX_RENDITIONS = 8
+/** One stored size of a photo: `inside` fits the picture into the box, `cover` fills it (cropped). */
+export interface Rendition {
+  url: string
+  role: string
+  width: number
+  height: number
+  fit: (typeof RENDITION_FITS)[number]
+  type: string | null
 }
 export type MovementKind = 'receipt' | 'usage' | 'return' | 'adjustment' | 'transfer'
 export interface Movement {

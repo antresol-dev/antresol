@@ -145,6 +145,11 @@ export const toPhoto = (r: Row): Photo => ({
   provider: r.provider as string,
   fileId: r.file_id as string,
   url: r.url as string,
+  // Placeholder until the renditions columns are read.
+  urls: null,
+  width: null,
+  height: null,
+  deleteHandle: null,
   position: toNumber(r.position),
   createdAt: toIso(r.created_at),
   createdBy: r.created_by as string,

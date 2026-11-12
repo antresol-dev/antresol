@@ -379,7 +379,10 @@
       "system": "System",
       "light": "Light",
       "dark": "Dark",
+      "style": "Style",
       "accent": "Accent",
+      "styleDefault": "Style default",
+      "fixedPalette": "This style has its own colours",
       "accents": {
         "indigo": "Indigo",
         "violet": "Violet",
@@ -390,7 +393,8 @@
         "orange": "Orange",
         "rose": "Rose",
         "pink": "Pink",
-        "slate": "Slate"
+        "slate": "Slate",
+        "copper": "Copper"
       }
     }
   },

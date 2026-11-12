@@ -152,6 +152,14 @@ describe('Retro atomic: shades changed for contrast (spec §8), and app surfaces
     expect([t.popHover, t.popDanger]).toEqual(['#3a4a5e', '#F4A58A'])
   })
 
+  it('dark: a flat control pressed sinks 20 % darker (#425466 → #354352; the open row menu\'s accent ink was 3.94:1)', () => {
+    expect(contrast('#93C1BE', '#425466')).toBeLessThan(4.5)
+    const t = build('dark', 'teal')
+    expect([t.kinds.ghost.p.bg, t.ghostSel.p.bg]).toEqual(['#354352', '#354352'])
+    expect(contrast(t.ink, t.kinds.ghost.p.bg)).toBeGreaterThanOrEqual(4.5)
+    expect(build('light', 'teal').kinds.ghost.p.bg).toBe('#c0d5c8')
+  })
+
   it.each(MODES)('%s: the neutral chip is a shade of the page (the mustard tag colour does not carry muted text)', (mode) => {
     const t = build(mode, 'teal')
     expect(t.chip).toBe(mode === 'dark' ? '#363b49' : '#e3dac5')
@@ -194,13 +202,6 @@ describe('retro.css', () => {
 
   it('the phone sheet keeps the boomerang on its top corners (a 4-value radius is not valid per corner)', () => {
     expect(retroCss()).toMatch(/\.surface-sheet\.rounded-t-card[^{]*\{[^}]*border-top-left-radius:[^}]*border-top-right-radius:/)
-  })
-
-  it('an open row menu\'s "⋯" shows the pressed text colour (accent-ink on the dark pressed tint is 3.94:1)', () => {
-    const t = build('dark', 'teal')
-    expect(contrast(t.ink, t.kinds.ghost.p.bg)).toBeLessThan(4.5)
-    expect(contrast(t.kinds.ghost.p.fg, t.kinds.ghost.p.bg)).toBeGreaterThanOrEqual(4.5)
-    expect(retroCss()).toMatch(/\.pressable\[data-state='open'\][^{]*\{[^}]*--accent-ink: var\(--p-fg\)/)
   })
 })
 

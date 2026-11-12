@@ -11,11 +11,13 @@ import type { StyleBuild } from './types'
  *    #24232B (4.26:1 on the teal thumbnail); light: the primary button's hover lightened the teal 12 %, which takes its
  *    cream text to 4.0:1, so it darkens to the pressed teal instead (pressing still sinks into the offset); dark: muted
  *    text on the selected row #C9C1AE → #dad2bf (3.89:1 on its teal), a hovered menu item is teal 18 % instead of 25 %
- *    (#425466 → #3a4a5e: the danger red #F4A58A was 3.94:1, muted text 4.36:1 on it);
+ *    (#425466 → #3a4a5e: the danger red #F4A58A was 3.94:1, muted text 4.36:1 on it); a flat control pressed (the
+ *    open row menu's "⋯", in its accent ink) sinks 20 % darker instead of a stronger teal (#425466 → #354352: the ink
+ *    was 3.94:1 on it);
  *  - app surfaces the board does not show (spec §5): the neutral chip (pinned values, skeletons, the switch's track) is
  *    a shade of the page — the first tag colour, mustard, does not carry the muted text.
  * assets/css/styles/retro.css draws the rest: dashed row dividers, the tags' and thumbnails' colours in turn, the
- * phone sheet's boomerang corners.
+ * field-sized radius, the phone sheet's boomerang corners.
  */
 
 export const build: StyleBuild = (mode) => {
@@ -123,7 +125,7 @@ export const build: StyleBuild = (mode) => {
           S(primaryPressed, 0, ring + ', 0 0 0 ' + orange, onPrimary, 'translate(3px, 3px)'),
         ),
         step: K(S('rgba(0,0,0,0)', 0, 0, fg), S(tnt(0.15), 0, 0, fg), S(tnt(0.28), 0, 'inset 2px 2px 0 rgba(43,42,51,0.18)', fg)),
-        ghost: K(S('rgba(0,0,0,0)', 0, 0, muted), S(tnt(0.15), 0, 0, fg), S(tnt(0.25), 0, 0, fg)),
+        ghost: K(S('rgba(0,0,0,0)', 0, 0, muted), S(tnt(0.15), 0, 0, fg), S(dark ? mix(tnt(0.25), '#000000', 0.2) : tnt(0.25), 0, 0, fg)),
       },
 
       // App surfaces (spec §5), where the derived default does not suit Retro atomic (header comment).

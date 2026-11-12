@@ -1,5 +1,9 @@
 import type { Id, InventorySnapshot } from '@graymatter/core'
 import type { InventoryRef } from './types'
+import type { AccentName } from './accent'
+import { solidOf } from './styles/color'
+import { STYLES } from './styles/registry'
+import type { Mode, StyleName } from './styles/types'
 import { pathOf, snapshotIndex } from './views'
 import type { InventoryEntry } from './workspace'
 
@@ -120,18 +124,25 @@ export function launchReady(state: { current: InventoryRef | null; sources: { co
   return status !== 'connecting'
 }
 
-const THEME_COLOR = { light: '#EDEFF3', dark: '#2A2E37' } as const // the --background tokens
+/** The browser chrome colour of a style and theme: its header, made opaque over the page. */
+function themeColorOf(style: StyleName, mode: Mode, accent: AccentName): string {
+  const t = STYLES[style].build(mode, accent)
+  return solidOf(t.hdr, t.pageColor)
+}
 
-/** `theme-color` metas: both media-scoped ones while the preference is "system"; otherwise one for the chosen theme. */
+/** `theme-color` metas: both media-scoped ones while the preference is "system"; otherwise one for the chosen theme.
+ *  The colour is the current style's header (lib/styles/), so it follows the style and the accent. */
 export function themeColorMeta(
   preference: string,
   resolved: string,
+  style: StyleName,
+  accent: AccentName,
 ): { key: string; name: string; content: string; media?: string }[] {
   if (preference === 'system') {
     return [
-      { key: 'theme-color-light', name: 'theme-color', content: THEME_COLOR.light, media: '(prefers-color-scheme: light)' },
-      { key: 'theme-color-dark', name: 'theme-color', content: THEME_COLOR.dark, media: '(prefers-color-scheme: dark)' },
+      { key: 'theme-color-light', name: 'theme-color', content: themeColorOf(style, 'light', accent), media: '(prefers-color-scheme: light)' },
+      { key: 'theme-color-dark', name: 'theme-color', content: themeColorOf(style, 'dark', accent), media: '(prefers-color-scheme: dark)' },
     ]
   }
-  return [{ key: 'theme-color', name: 'theme-color', content: resolved === 'dark' ? THEME_COLOR.dark : THEME_COLOR.light }]
+  return [{ key: 'theme-color', name: 'theme-color', content: themeColorOf(style, resolved === 'dark' ? 'dark' : 'light', accent) }]
 }

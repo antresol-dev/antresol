@@ -148,6 +148,8 @@ async function confirmRemove(): Promise<void> {
         <div class="raised-card grid gap-2 px-4.5 pt-2 pb-4.5">
           <ThemeSwitch />
           <div class="h-px bg-divider" aria-hidden="true" />
+          <StylePicker class="pt-2" />
+          <div class="h-px bg-divider" aria-hidden="true" />
           <AccentPicker class="pt-2" />
         </div>
       </section>

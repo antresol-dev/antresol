@@ -47,7 +47,7 @@ const counted = computed(() => {
 })
 
 const amountClass = 'flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-1 text-left'
-const numberClass = 'text-[32px] leading-none font-bold tracking-[-0.02em] tabular-nums wrap-anywhere'
+const numberClass = 'amount text-[32px] leading-none tracking-[-0.02em] tabular-nums wrap-anywhere'
 const action = 'h-11 min-w-0 px-2 font-bold'
 </script>
 

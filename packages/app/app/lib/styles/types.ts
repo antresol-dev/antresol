@@ -51,7 +51,8 @@ export interface MockupTokens {
   font: string
   /** font-family of the screen title (h1). */
   headFont: string
-  /** The mock-up's title size. NOT applied in the app (sizes are the markup's, spec §3); for previews only. */
+  /** The mock-up's title size. NOT applied in the app: sizes are the markup's (spec §3: a style changes weights, not
+   *  sizes); for previews only. */
   headSize: string
   /** font-weight of the screen title. */
   headWeight: string
@@ -61,7 +62,7 @@ export interface MockupTokens {
   headCase: string
   /** font-family of section labels ("Variants", "Attributes", settings section headings). */
   labelFont: string
-  /** The mock-up's label size. NOT applied in the app (sizes are the markup's); for previews only. */
+  /** The mock-up's label size. NOT applied in the app: sizes are the markup's (spec §3); for previews only. */
   labelSize: string
   /** font-weight of section labels. */
   labelWeight: string
@@ -75,11 +76,13 @@ export interface MockupTokens {
   markColor: string
   /** font-family of numbers (every .tabular-nums element); 'inherit' keeps the body font. */
   numFont: string
-  /** The mock-up's number weight. NOT applied (the markup sets weights); for previews only. */
+  /** font-weight of the amounts the mock-up draws in numFont (.amount: the stock total, the stepper's count, list and
+   *  history amounts). */
   numWeight: string
   /** font-family of tag chips; 'inherit' keeps the body font. */
   chipFont: string
-  /** The mock-up's button weight. NOT applied (the markup sets weights); for previews only. */
+  /** font-weight of the labelled actions the mock-up draws (.btn-label: "Add variants", "Add attribute", "Edit",
+   *  "Add item"…). Other buttons take plainBtnWeight. */
   btnWeight: string
 
   // ---- Icons (Lucide) ----
@@ -344,6 +347,11 @@ export interface AppSurfaces {
   /** Small radius of nested things: chips, tooltips, crumb links, row menu buttons, folder icons, list thumbnails
    *  (the app's --radius-chip, --radius-thumb, --radius-icon). Default: ghostR. */
   smallR: string
+  /** font-weight of every other button label (.btn-text: sheet and form buttons). Default: btnWeight. */
+  plainBtnWeight: string
+  /** Shadow of a bottom bar (.surface-bar: the count screen's sticky bar), which otherwise wears the header's surface
+   *  (hdr, hdrBlur, its 1 px top border in hdrLine). Default: hdrSh mirrored top to bottom (its line on the top edge). */
+  barSh: string
 }
 
 /** Everything a style gives the app. */

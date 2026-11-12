@@ -136,7 +136,7 @@ const arrow =
         <Button
           type="button"
           variant="outline"
-          class="h-11 px-4 font-bold"
+          class="h-11 px-4 btn-label"
           :disabled="locked || index === 0"
           @click="makeCover"
         >
@@ -146,7 +146,7 @@ const arrow =
         <Button
           type="button"
           variant="outline"
-          class="h-11 px-4 font-bold"
+          class="h-11 px-4 btn-label"
           :disabled="locked"
           @click="confirmOpen = true"
         >

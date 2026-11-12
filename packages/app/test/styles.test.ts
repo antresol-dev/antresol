@@ -9,6 +9,7 @@ import { createAppearance } from '../app/lib/appearance'
 import { createMemoryDeviceDb, type DeviceSettings } from '../app/lib/device-db'
 import { applyStyle, STYLE_ELEMENT_ID, styleCss, styleVars } from '../app/lib/styles/apply'
 import { topLevel } from '../app/lib/styles/color'
+import { deriveSurfaces, mirrorY } from '../app/lib/styles/derive'
 import { build as neumorphism } from '../app/lib/styles/neumorphism'
 import { DEFAULT_STYLE, effectiveAccent, isStyleName, STYLE_NAMES, STYLES } from '../app/lib/styles/registry'
 import type { Kind, KindName, Mode, StyleName, StyleTokens } from '../app/lib/styles/types'
@@ -272,6 +273,9 @@ describe.each(MODES)('Neumorphism equals main.css before styles: %s', (mode) => 
       expect([t.headFont, t.labelFont]).toEqual([t.font, t.font])
       expect([t.headWeight, t.headTrack, t.headCase, t.labelWeight, t.labelCase, t.mark]).toEqual(['700', '-0.02em', 'none', '600', 'none', ''])
       expect([t.numFont, t.chipFont, t.stroke, t.cap, t.join]).toEqual(['inherit', 'inherit', '2', 'round', 'round'])
+      // Weights as the markup had them: amounts and emphasised actions font-bold, other buttons font-medium.
+      expect([t.numWeight, t.btnWeight, t.plainBtnWeight]).toEqual(['700', '700', '500'])
+      expect(t.barSh).toBe('none')
       expect([t.winBg, t.winBlur, t.hdrBlur, t.surfBlur, t.ctrlBlur, t.sheetBlur, t.led]).toEqual(['transparent', 'none', 'none', 'none', 'none', 'none', false])
       expect([t.list, t.listR, t.curM, t.pillImg, t.hdr]).toEqual(['transparent', '0', '0', 'none', t.pageColor])
       expect(t.overlay).toBe('rgba(0, 0, 0, 0.8)')
@@ -363,7 +367,11 @@ const parseColor0 = (s: string): Rgba | null => {
 const stops = (gradient: string): Rgba[] => [...gradient.matchAll(/#[0-9a-fA-F]{3,8}\b|rgba?\([^()]*\)|\btransparent\b/g)].map((m) => parseColor(m[0]))
 const WHITE: Rgba = { r: 255, g: 255, b: 255, a: 1 }
 
-function contrastProblems(t: StyleTokens): string[] {
+/**
+ * `neumorphismGhostSel`: Neumorphism's (and the stubs', which draw it) "⋯" in a selected row on hover and open is
+ * 3.9–4.5:1 since before styles — a known exception (plan 10 Task 1 report, concern 1), checked for no other style.
+ */
+function contrastProblems(t: StyleTokens, neumorphismGhostSel = false): string[] {
   const problems: string[] = []
   const page = backdrops(`${t.winBg}, ${t.page}`, [WHITE])
   const on = (bg: string, under: Rgba[]) => backdrops(bg, under)
@@ -424,14 +432,17 @@ function contrastProblems(t: StyleTokens): string[] {
   const pillSel = on(t.pillSelBg, cur)
   const under: Record<string, Rgba[]> = { step: pill, ghost: list, stepSel: pillSel, ghostSel: cur }
   for (const kind of [...KINDS, 'stepSel', 'ghostSel', 'painted', 'paintedDanger'] as const) {
-    // ghostSel hover and pressed: the "⋯" in a selected row takes its text colour from the markup (hover:text-accent-ink,
-    // data-[state=open]:text-accent-ink), 3.9–4.5:1 on the accent's tint in Neumorphism since before styles. Not checked
-    // here (plan 10 Task 1 report: a concern for the owner); its rest state is.
-    for (const s of kind === 'ghostSel' ? (['n'] as const) : (['n', 'h', 'p'] as const)) {
+    for (const s of kind === 'ghostSel' && neumorphismGhostSel ? (['n'] as const) : (['n', 'h', 'p'] as const)) {
       const state = k(t, kind)[s]
       const fill = on(state.bg, under[kind] ?? page)
       check(`${kind}.${s}.fg`, state.fg, state.img === 'none' ? fill : backdrops(state.img, fill))
     }
+  }
+  // The row menu "⋯" draws its hover and open text in the markup's accent ink (hover:text-accent-ink,
+  // data-[state=open]:text-accent-ink) on the ghost tints (in a selected row, ghostSel's).
+  for (const s of ['h', 'p'] as const) {
+    check(`ink on ghost.${s}.bg (row menu)`, t.ink, on(t.kinds.ghost[s].bg, list))
+    if (!neumorphismGhostSel) check(`ink on ghostSel.${s}.bg (row menu in a selected row)`, t.ink, on(t.ghostSel[s].bg, cur))
   }
   return problems
 }
@@ -440,7 +451,18 @@ describe.each(STYLE_NAMES)('contrast: %s', (name) => {
   const info = STYLES[name]
   const accents: AccentName[] = info.fixedPalette ? [info.defaultAccent] : ACCENT_NAMES
   it.each(MODES.flatMap((mode) => accents.map((accent) => [mode, accent] as const)))('%s, %s: every text on its background at 4.5:1 or better', (mode, accent) => {
-    expect(contrastProblems(info.build(mode, accent))).toEqual([])
+    const t = info.build(mode, accent)
+    // Neumorphism's own tokens (itself, or a stub that still draws it) carry the one known exception.
+    const own = name === 'neumorphism' || JSON.stringify(t) === JSON.stringify(neumorphism(mode, effectiveAccent(name, accent)))
+    expect(contrastProblems(t, own)).toEqual([])
+  })
+})
+
+describe('the contrast gate', () => {
+  it('a style other than Neumorphism is held to its selected row\'s "⋯" too', () => {
+    const t = neumorphism('light', 'blue')
+    expect(contrastProblems(t, true)).toEqual([])
+    expect(contrastProblems(t).some((p) => p.startsWith('ghostSel.p.fg') || p.startsWith('ink on ghostSel'))).toBe(true)
   })
 })
 
@@ -600,6 +622,10 @@ describe('main.css reads the style (plan 10 Task 1)', () => {
     ['.section-label', ['--st-label-font', '--st-label-weight', '--st-label-track', '--st-label-case']],
     ['.screen-title', ['--st-head-font', '--st-head-weight', '--st-head-track', '--st-head-case']],
     ['.tag-chip', ['--st-chips-0', '--st-chip-fgs-0', '--st-chip-sh', '--st-chip-r', '--st-chip-font']],
+    ['.surface-bar', ['--st-hdr)', '--st-hdr-line', '--st-bar-sh', '--st-hdr-blur']],
+    ['.amount', ['--st-num-weight']],
+    ['.btn-text', ['--st-plain-btn-weight']],
+    ['.btn-label', ['--st-btn-weight']],
   ] as const)('%s reads its tokens', (selector, names) => {
     const body = ruleBody(code, selector)
     for (const name of names) expect(body, name).toContain(name)
@@ -616,10 +642,11 @@ describe('main.css reads the style (plan 10 Task 1)', () => {
 
   it('the high-contrast fallback makes every blurred panel opaque (popBlur, surfBlur, hdrBlur, ctrlBlur)', () => {
     const block = /@media \(prefers-contrast: more\) \{([\s\S]*?)\n {2}\}\n/.exec(code)?.[1] ?? ''
-    for (const [selector, solid] of [['.glass', 'pop-solid'], ['.surface-header', 'hdr-solid'], ['.raised-card', 'card-solid'], ['.surface-list', 'list-solid'], ['.surface-sheet', 'sheet-solid'], ['.photo-cover', 'photo-solid']]) {
+    for (const [selector, solid] of [['.glass', 'pop-solid'], ['.surface-bar', 'hdr-solid'], ['.raised-card', 'card-solid'], ['.surface-list', 'list-solid'], ['.surface-sheet', 'sheet-solid'], ['.photo-cover', 'photo-solid']]) {
       expect(block).toMatch(new RegExp(`\\${selector} \\{\\s*background: var\\(--st-${solid}\\)`))
     }
-    for (const selector of ['.glass', '.surface-header', '.raised-card', '.surface-list', '.surface-sheet', '.photo-thumb', '.raised', '.raised-sm', '.add-tile', '.accent-button', '.pill']) {
+    expect(block).toMatch(/\.surface-header,\s*\.surface-bar \{/)
+    for (const selector of ['.glass', '.surface-header', '.surface-bar', '.raised-card', '.surface-list', '.surface-sheet', '.photo-thumb', '.raised', '.raised-sm', '.add-tile', '.accent-button', '.pill']) {
       expect(block).toMatch(new RegExp(`\\${selector}[,\\s]`))
     }
     expect(block).toMatch(/(^|[^-])backdrop-filter: none/)
@@ -673,5 +700,154 @@ describe('the appearance plugin (Review Focus 2)', () => {
     const source = readFileSync(fileURLToPath(new URL('../app/plugins/appearance.client.ts', import.meta.url)), 'utf8')
     expect(source).toMatch(/await appearance\.load\(\)/)
     expect(source).not.toMatch(/dependsOn|enforce:\s*'post'|hooks:/)
+  })
+})
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Fix round 1 (task 1 review).
+
+describe('weights are the style\'s, sizes the markup\'s (spec §3)', () => {
+  const app = fileURLToPath(new URL('../app/', import.meta.url))
+  const WEIGHT = /(^|[\s'"`:])font-(thin|extralight|light|normal|medium|semibold|bold|extrabold|black)(?=$|[\s'"`])/
+  function* vue(dir: string): Generator<{ name: string; source: string }> {
+    for (const name of readdirSync(dir)) {
+      const path = join(dir, name)
+      if (statSync(path).isDirectory()) yield* vue(path)
+      else if (name.endsWith('.vue')) yield { name: path.slice(app.length), source: readFileSync(path, 'utf8') }
+    }
+  }
+  const files = ['components', 'pages', 'layouts'].flatMap((d) => [...vue(join(app, d))])
+  /** Every class string literal of a file (attributes and script constants). */
+  const classStrings = (source: string) => [...source.matchAll(/class="([^"]*)"|(['`])([^'`\n]*)\2/g)].map((m) => m[1] ?? m[3]!)
+
+  it('a hooked amount or button label carries no weight utility of its own (the utility would beat the style)', () => {
+    const problems = files.flatMap((f) =>
+      classStrings(f.source)
+        .filter((c) => /(^|\s)(amount|btn-label|btn-text)(\s|$)/.test(c) && WEIGHT.test(c))
+        .map((c) => `${f.name}: ${c}`),
+    )
+    expect(problems).toEqual([])
+  })
+
+  it('every Button\'s label weight comes from the style: btn-text in its base, btn-label on the emphasised actions', () => {
+    const variants = readFileSync(join(app, 'components/ui/button/index.ts'), 'utf8')
+    const base = /cva\(\s*"([^"]*)"/.exec(variants)?.[1] ?? ''
+    expect(base).toMatch(/(^|\s)btn-text(\s|$)/)
+    expect(base).not.toMatch(WEIGHT)
+    const problems = files.flatMap((f) =>
+      [...f.source.matchAll(/<Button\b[^>]*>/g)].filter((m) => /class="[^"]*\bfont-(medium|bold)\b/.test(m[0])).map((m) => `${f.name}: ${m[0].slice(0, 80)}`),
+    )
+    expect(problems).toEqual([])
+    const labelled = files.filter((f) => /\bbtn-label\b/.test(f.source)).map((f) => f.name)
+    for (const name of ['components/ItemScreen.vue', 'components/ItemAttributes.vue', 'components/ItemActions.vue', 'components/FolderActions.vue', 'components/PhotoPicker.vue']) {
+      expect(labelled).toContain(name)
+    }
+  })
+
+  it('the amounts the mock-up draws at numWeight: stock total, stepper count, list and history amounts', () => {
+    for (const name of ['components/StockCard.vue', 'components/StepperPill.vue', 'components/ItemList.vue', 'components/JournalList.vue']) {
+      expect(readFileSync(join(app, name), 'utf8'), name).toMatch(/['"`\s]amount\s/)
+    }
+  })
+})
+
+describe('applying a style: a long realistic run (Review Focus 1)', () => {
+  it('lists of different lengths: other <head> nodes untouched, no variable or value of an earlier style left', () => {
+    const root = fakeRoot([
+      { tagName: 'link' },
+      { tagName: 'style', id: 'nuxt-fonts', textContent: '@font-face{font-family:Manrope}' },
+    ])
+    const others = root.head.slice()
+    const saved = { brutal: STYLES.brutal.build, retro: STYLES.retro.build }
+    // Shapes like the mock-up's: Brutal four chips, three thumbnails, a dotted page, a mark and the LED; Retro three.
+    STYLES.brutal.build = (mode) => ({
+      ...neumorphism(mode, 'blue'),
+      page: 'radial-gradient(rgba(17,17,17,0.14) 1.2px, transparent 1.6px) 0 0 / 22px 22px, #FFF4DC',
+      chips: ['#5B8CFF', '#3DDCAA', '#FF8C42', '#B08CFF'],
+      chipFgs: ['#111111'],
+      thumbs: ['#3DDCAA', '#FF8C42', '#FF7AB6'],
+      mark: '✦ ',
+      led: true,
+    })
+    STYLES.retro.build = (mode) => ({ ...neumorphism(mode, 'teal'), chips: ['#E9C46A', '#9FD3C7', '#F4A58A'], thumbs: ['#E9C46A', '#E76F51', '#2A9D8F'] })
+    try {
+      const run: [StyleName, AccentName][] = [
+        ['base', 'indigo'],
+        ['brutal', 'blue'],
+        ['retro', 'teal'],
+        ['neumorphism', 'rose'],
+        ['base', 'teal'],
+      ]
+      const texts = run.map(([name, accent]) => {
+        applyStyle(root.el, name, accent)
+        const mine = root.head.filter((e) => e.id === STYLE_ELEMENT_ID)
+        expect(mine, name).toHaveLength(1)
+        // The other nodes of <head> are the same objects, in the same order.
+        expect(root.head.filter((e) => e.id !== STYLE_ELEMENT_ID)).toEqual(others)
+        expect(root.head.filter((e) => e.id !== STYLE_ELEMENT_ID).every((e, i) => e === others[i])).toBe(true)
+        expect(root.attributes.get('data-style')).toBe(name)
+        return mine[0]!.textContent
+      })
+      // Brutal had them…
+      expect(texts[1]).toMatch(/--st-chips-3:#B08CFF/)
+      expect(texts[1]).toMatch(/--st-thumbs-2:#FF7AB6/)
+      expect(texts[1]).toContain('#FFF4DC')
+      expect(texts[1]).toContain('--st-mark:"✦ "')
+      expect(texts[1]).toContain('--st-led:1')
+      // …and after Brutal → Retro none of it is left: its fourth chip, its page, its mark, its LED.
+      expect(texts[2]).not.toMatch(/--st-chips-3:/)
+      expect(texts[2]).not.toContain('#FFF4DC')
+      expect(texts[2]).not.toContain('--st-mark:"✦ "')
+      expect(texts[2]).not.toContain('--st-led:1')
+      expect(texts[2]).toMatch(/--st-chips-2:#F4A58A/)
+      // After Retro → Neumorphism: Retro's second and third chips and thumbnails are gone.
+      expect(texts[3]).not.toMatch(/--st-(chips|thumbs)-[12]:/)
+      expect(texts[4]).toBe(styleCss('base', 'teal'))
+      expect([...root.attributes.keys()]).toEqual(['data-style'])
+      expect(root.inline.size).toBe(0)
+    } finally {
+      STYLES.brutal.build = saved.brutal
+      STYLES.retro.build = saved.retro
+    }
+  })
+})
+
+describe('a style that cannot be drawn', () => {
+  it('falls back to the default style: the app still starts, the stored choice stays', async () => {
+    const saved = STYLES.retro.build
+    // A bad token (apply.ts refuses ; { } <), as a broken build of a newer app could have.
+    STYLES.retro.build = (mode) => ({ ...neumorphism(mode, 'teal'), fg: 'red; color: blue' })
+    try {
+      const db = createMemoryDeviceDb()
+      await db.putSettings({ style: 'retro' })
+      const root = fakeRoot()
+      const a = createAppearance(db, root.el)
+      await expect(a.load()).resolves.toBeUndefined()
+      expect(a.style.value).toBe('base')
+      expect(root.attributes.get('data-style')).toBe('base')
+      expect(root.head.filter((e) => e.id === STYLE_ELEMENT_ID).map((e) => e.textContent)).toEqual([styleCss('base', 'indigo')])
+      expect((await db.getSettings()).style).toBe('retro')
+      // Choosing it later does the same instead of leaving the page without a style.
+      await a.setStyle('neumorphism')
+      await a.setStyle('retro')
+      expect(root.attributes.get('data-style')).toBe('base')
+    } finally {
+      STYLES.retro.build = saved
+    }
+  })
+})
+
+describe('derived: the bottom bar and plain button labels', () => {
+  it('mirrorY turns a header\'s bottom line into a bar\'s top line', () => {
+    expect(mirrorY('none')).toBe('none')
+    expect(mirrorY('inset 0 -1px 0 #E4E7EC')).toBe('inset 0 1px 0 #E4E7EC')
+    expect(mirrorY('inset 0 -1.5px 0 rgba(43,42,51,0.85)')).toBe('inset 0 1.5px 0 rgba(43,42,51,0.85)')
+    expect(mirrorY('inset 0 -1px 0 rgba(255, 255, 255, 0.5), 0 1px 0 rgba(20,24,40,0.06)')).toBe('inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 -1px 0 rgba(20,24,40,0.06)')
+  })
+  it('barSh defaults to the header\'s shadow mirrored, plainBtnWeight to btnWeight', () => {
+    const { barSh: _b, plainBtnWeight: _p, ...rest } = neumorphism('light', 'indigo')
+    const t = deriveSurfaces({ ...rest, hdrSh: 'inset 0 -2px 0 #111111', btnWeight: '600' }, 'light')
+    expect(t.barSh).toBe('inset 0 2px 0 #111111')
+    expect(t.plainBtnWeight).toBe('600')
   })
 })

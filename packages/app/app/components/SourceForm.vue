@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { errorMessageKey } from '~/lib/errors'
-import { canSaveSource, checkConnectionString, createNeonDriver, photoStoreProblem, type SourceProbe } from '~/lib/sources'
+import { canSaveSource, checkConnectionString, createNeonDriver, photoStoreChoices, photoStoreProblem, type SourceProbe } from '~/lib/sources'
 import type { PhotoStore, SourceConfig } from '~/lib/types'
 
 const props = defineProps<{ source?: SourceConfig }>()
@@ -17,7 +17,7 @@ const driver = createNeonDriver()
 
 const name = ref(props.source?.name ?? t('sourceForm.defaultName'))
 const connectionString = ref(props.source?.connectionString ?? '')
-const PHOTO_STORES: readonly PhotoStore[] = ['uploadcare', 'cloudinary', 'imgur']
+const PHOTO_STORES: readonly PhotoStore[] = photoStoreChoices(props.source?.photoStore)
 const KEY_LINKS: Record<PhotoStore, string> = {
   uploadcare: 'https://app.uploadcare.com/',
   cloudinary: 'https://console.cloudinary.com/settings/upload/presets',

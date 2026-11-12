@@ -2,7 +2,7 @@ import { PGlite } from '@electric-sql/pglite'
 import { StorageError } from '@antresol/core'
 import { createPgliteExecutor, inspectSchema, type PgExecutor } from '@antresol/storage-postgres'
 import { describe, expect, it } from 'vitest'
-import { canSaveSource, checkConnectionString, classifyFailure, createNeonDriver, photoStoreProblem, redactSecret } from '../app/lib/sources'
+import { canSaveSource, checkConnectionString, classifyFailure, createNeonDriver, photoStoreChoices, photoStoreProblem, redactSecret } from '../app/lib/sources'
 import type { SourceConfig } from '../app/lib/types'
 
 const cfg = (connectionString = 'postgresql://u:secret@h/db'): SourceConfig => ({
@@ -145,5 +145,17 @@ describe('photoStoreProblem', () => {
   it('has nothing to cross-check for the other stores', () => {
     expect(photoStoreProblem({ photoStore: 'imgur', cloudinaryCloudName: 'bad name', cloudinaryUploadPreset: null })).toBeNull()
     expect(photoStoreProblem({ cloudinaryCloudName: null, cloudinaryUploadPreset: null })).toBeNull()
+  })
+})
+
+describe('photoStoreChoices', () => {
+  it('offers Uploadcare and Cloudinary to a new source: Imgur no longer registers applications', () => {
+    expect(photoStoreChoices()).toEqual(['uploadcare', 'cloudinary'])
+    expect(photoStoreChoices('uploadcare')).toEqual(['uploadcare', 'cloudinary'])
+    expect(photoStoreChoices('cloudinary')).toEqual(['uploadcare', 'cloudinary'])
+  })
+
+  it('keeps Imgur on a source that already uploads there, so its choice stays visible', () => {
+    expect(photoStoreChoices('imgur')).toEqual(['uploadcare', 'cloudinary', 'imgur'])
   })
 })

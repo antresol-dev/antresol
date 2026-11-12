@@ -10,7 +10,7 @@ import {
   openPostgresStorage,
   type PgExecutor,
 } from '@antresol/storage-postgres'
-import type { SourceConfig } from './types'
+import type { PhotoStore, SourceConfig } from './types'
 
 export type ConnectionStringProblem = 'empty' | 'not_postgres_url' | 'missing_password' | 'missing_database'
 
@@ -27,6 +27,14 @@ export function checkConnectionString(input: string): ConnectionStringProblem | 
   if (!url.password) return 'missing_password'
   if (url.pathname === '' || url.pathname === '/') return 'missing_database'
   return null
+}
+
+/** Photo stores the source form offers. Imgur is hidden: it stopped registering new API applications (late 2025), so a
+ *  Client-ID can no longer be had. A source already set to Imgur keeps it, so its choice stays visible and editable. */
+export function photoStoreChoices(current?: PhotoStore | null): PhotoStore[] {
+  const choices: PhotoStore[] = ['uploadcare', 'cloudinary']
+  if (current === 'imgur') choices.push('imgur')
+  return choices
 }
 
 /** A Cloudinary store takes two fields and is useless with one: the store would silently be none. Both empty is fine

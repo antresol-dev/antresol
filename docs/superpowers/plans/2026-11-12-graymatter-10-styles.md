@@ -73,7 +73,7 @@
 
 ### Task 1: Движок стилей и Neumorphism (спека §3, §4, §6, §8)
 
-Вид приложения после задачи не меняется. Меняется только то, откуда берутся числа.
+Вид приложения после задачи не меняется. Меняется только то, откуда берутся числа. Стиль по умолчанию — `base`, но до задачи 3 его заглушка отдаёт токены Neumorphism.
 
 **Files:**
 - Create:
@@ -107,7 +107,7 @@ export type StyleBuild = (mode: Mode, accent: AccentName) => StyleTokens
 export interface StyleInfo { name: StyleName; label: string; fixedPalette: boolean; defaultAccent: AccentName; fonts: string[]; build: StyleBuild }
 export const STYLES: Record<StyleName, StyleInfo>
 export const STYLE_NAMES: StyleName[]            // порядок S1…S9: base, neumorphism, acrylic, liquid, linear, brutal, y2k, retro, tinkerer
-export const DEFAULT_STYLE: StyleName            // 'neumorphism'
+export const DEFAULT_STYLE: StyleName            // 'base' (решение владельца)
 export function styleCss(name: StyleName, accent: AccentName): string   // ':root{--st-…}.dark{--st-…}'
 export function applyStyle(root: HTMLElement, name: StyleName, accent: AccentName): void
 export interface Appearance {
@@ -151,7 +151,7 @@ export interface Appearance {
   - Ни один токен не содержит `padding`, `margin`, `gap`, `width:`, `height:`, `border-width` (Review Focus 3).
   - `Appearance`:
     - rose в `base` → `retro` даёт `effectiveAccent` teal → снова `base` даёт rose (Review Focus 4);
-    - неизвестное сохранённое значение стиля → `neumorphism`, значение в хранилище не стирается.
+    - неизвестное или не сохранённое значение стиля → `base`, значение в хранилище не стирается.
 - [ ] **Step 2: Порт** `color.ts` (функции `hex`, `mix`, `rgba`, `rot` макета) и `neumorphism.ts` из ветки `style === 'neumorphism'` макета. Где значение приложения отличается от макета, побеждает приложение, тест из шага 1 это фиксирует. Например, тень и вдавливание 160 ms `cubic-bezier(0.4,0,0.2,1)`, а не 200 ms `ease-out` макета.
 - [ ] **Step 3:** `registry.ts`, `apply.ts`, `appearance.ts`, плагин (стиль и акцент применяются до монтирования, Review Focus 2), `useAppearance`. Тест плагина: сохранённый стиль стоит на `<html>` до первого рендера.
 - [ ] **Step 4:** `main.css` переводится на `--st-*`. Заглушки восьми стилей. Запасной вариант стекла при `prefers-contrast: more` распространяется на все панели с размытием (`popBlur`, `surfBlur`, `hdrBlur`, `ctrlBlur`).
@@ -168,11 +168,11 @@ export interface Appearance {
   - в `fonts.families` есть все семейства спеки §2: Manrope, Onest, Inter, Rubik, Unbounded, Exo 2, Jost, IBM Plex Sans, IBM Plex Mono;
   - у каждого семейства подмножества `latin`, `latin-ext`, `cyrillic` и насыщенности из ссылки Google Fonts макета;
   - `font-display: swap`;
-  - предзагружается только Manrope;
-  - в `globPatterns` попадают `woff2` только Manrope;
+  - предзагружается только Onest (шрифт Base — стиля по умолчанию);
+  - в `globPatterns` попадают `woff2` только Onest;
   - `runtimeCaching` для путей шрифтов `@nuxt/fonts` — `CacheFirst`, только статус 200 (Review Focus 5).
 - [ ] **Step 2:** настройка `@nuxt/fonts`. Шрифты скачиваются при сборке и лежат в приложении, в рантайме запросов к Google нет. Проверка: в собранном `.output/public` нет ссылок на `fonts.googleapis.com` и `fonts.gstatic.com`.
-- [ ] **Step 3:** Workbox: Manrope в precache, остальные `woff2` — `CacheFirst` в своём кэше (`gm-fonts`, до 60 файлов).
+- [ ] **Step 3:** Workbox: Onest в precache, остальные `woff2` — `CacheFirst` в своём кэше (`gm-fonts`, до 60 файлов).
 - [ ] **Step 4:** `pnpm test --maxWorkers=3`, `pnpm typecheck`, `pnpm lint`, `pnpm --filter @graymatter/app generate`. Размер precache до и после — в отчёт.
 - [ ] **Step 5: Commit** `build(app): style fonts self-hosted; only the default style's fonts precached, the rest cached on first use`.
 

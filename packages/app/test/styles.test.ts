@@ -380,6 +380,9 @@ function contrastProblems(t: StyleTokens): string[] {
     }
   }
   for (const [name, surface] of [['page', page], ['card', card], ['list', list], ['pop', pop]] as const) {
+    // A card with text of its own (Neo-brutal's Memphis cards: ink in both themes, where its dark page text is light)
+    // gives everything in it that text in the style's CSS (brutal.css); cardFg and cardMuted are checked below.
+    if (name === 'card' && t.cardFg !== t.fg) continue
     for (const text of ['fg', 'muted', 'icon'] as const) check(`${text} on ${name}`, t[text], surface)
   }
   check('subtle on page', t.subtle, page)

@@ -67,13 +67,13 @@ const action = 'h-11 min-w-0 px-2 font-bold'
           @click="emit('count')"
         >
           <span :class="[numberClass, total.outOfStock && 'text-muted-foreground']">{{ total.number }}</span>
-          <span class="text-sm font-semibold text-muted-foreground">{{ total.unit }}</span>
-          <span v-if="total.outOfStock" class="ml-1.5 text-sm font-semibold text-muted-foreground">{{ $t('item.outOfStock') }}</span>
+          <span class="text-sm leading-none font-semibold text-muted-foreground">{{ total.unit }}</span>
+          <span v-if="total.outOfStock" class="ml-1.5 text-sm leading-none font-semibold text-muted-foreground">{{ $t('item.outOfStock') }}</span>
         </button>
         <p v-else :class="amountClass">
           <span :class="[numberClass, total.outOfStock && 'text-muted-foreground']">{{ total.number }}</span>
-          <span class="text-sm font-semibold text-muted-foreground">{{ total.unit }}</span>
-          <span v-if="total.outOfStock" class="ml-1.5 text-sm font-semibold text-muted-foreground">{{ $t('item.outOfStock') }}</span>
+          <span class="text-sm leading-none font-semibold text-muted-foreground">{{ total.unit }}</span>
+          <span v-if="total.outOfStock" class="ml-1.5 text-sm leading-none font-semibold text-muted-foreground">{{ $t('item.outOfStock') }}</span>
         </p>
         <p v-if="prices" class="text-[13px] text-muted-foreground tabular-nums">{{ prices }}</p>
         <p v-if="counted" class="text-[13px] text-muted-foreground">{{ counted }}</p>

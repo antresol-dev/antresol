@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import css from '../app/assets/css/main.css?raw'
 import { parseColor, topLevel } from '../app/lib/styles/color'
-import { glass } from '../app/lib/styles/derive'
 import { STYLES } from '../app/lib/styles/registry'
 import type { Mode, StyleTokens } from '../app/lib/styles/types'
 
@@ -27,6 +26,8 @@ const MOCKUP: Record<Mode, Record<string, string>> = {
     cardSh: 'inset 0 1px 0 rgba(255,255,255,0.85), inset 0 -1px 0 rgba(255,255,255,0.25), inset 0 0 0 1px rgba(255,255,255,0.45), 0 8px 24px -6px rgba(20,24,40,0.18)',
     primary: 'rgba(37,99,235,0.95)',
     pop: 'linear-gradient(165deg, rgba(255,255,255,0.6) 0%, rgba(255,255,255,0.12) 38%, rgba(255,255,255,0) 62%, rgba(255,255,255,0.18) 100%), rgba(255,255,255,0.38)',
+    popBlur: 'blur(14px) saturate(180%)',
+    popSh: '0 18px 40px -14px rgba(28,32,48,0.35), 0 4px 12px -4px rgba(28,32,48,0.14), inset 0 1px 0 rgba(255,255,255,0.95), inset 0 -1px 1px rgba(255,255,255,0.3), inset 0 0 0 1px rgba(255,255,255,0.65)',
     popR: '22px',
     font: `-apple-system, 'SF Pro Text', ${stack('Inter')}`,
     headFont: `-apple-system, 'SF Pro Display', ${stack('Inter')}`,
@@ -41,6 +42,8 @@ const MOCKUP: Record<Mode, Record<string, string>> = {
     cardSh: 'inset 0 1px 0 rgba(255,255,255,0.22), inset 0 0 0 1px rgba(255,255,255,0.10), 0 8px 24px -6px rgba(0,0,0,0.5)',
     primary: 'rgba(37,99,235,0.86)',
     pop: 'linear-gradient(165deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.03) 38%, rgba(255,255,255,0) 62%, rgba(255,255,255,0.05) 100%), rgba(44,48,58,0.48)',
+    popBlur: 'blur(16px) saturate(160%)',
+    popSh: '0 20px 44px -12px rgba(0,0,0,0.6), 0 4px 12px -4px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -1px 1px rgba(255,255,255,0.04), inset 0 0 0 1px rgba(255,255,255,0.12)',
     popR: '22px',
     font: `-apple-system, 'SF Pro Text', ${stack('Inter')}`,
     headFont: `-apple-system, 'SF Pro Display', ${stack('Inter')}`,
@@ -57,6 +60,8 @@ const picked = (t: StyleTokens) => ({
   cardSh: t.cardSh,
   primary: t.kinds.primary.n.bg,
   pop: t.pop,
+  popBlur: t.popBlur,
+  popSh: t.popSh,
   popR: t.popR,
   font: t.font,
   headFont: t.headFont,
@@ -105,9 +110,6 @@ describe.each(['light', 'dark'] as const)('Liquid glass, %s', (mode) => {
     expect(t.hdrBlur).toBe('blur(24px) saturate(180%)')
     expect(t.surfBlur).toBe('blur(20px) saturate(180%)')
     expect(t.ctrlBlur).toBe('blur(12px) saturate(180%)')
-    const g = glass(mode === 'dark')
-    expect(t.popBlur).toBe(g.popBlur)
-    expect(t.popSh).toBe(g.popSh)
     expect(t.popItemR).toBe('14px')
     expect(t.popHoverFg).toBe(t.ink)
   })

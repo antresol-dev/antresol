@@ -80,6 +80,7 @@
   --subtle-foreground: var(--brutal-ink-muted);
   --dimmed-foreground: var(--brutal-ink-muted);
   --destructive: var(--brutal-ink);
+  --warning: var(--brutal-ink);
   --accent-soft: var(--brutal-paper);
   --accent-soft-foreground: var(--brutal-ink);
   --surface: var(--brutal-paper);
@@ -167,4 +168,9 @@
   --accent-soft-foreground: var(--brutal-ink);
   --chip: var(--st-ghost-sel-h-bg);
   color: var(--p-fg);
+}
+
+/* 4. Dark: the navigation drawer's open edge, 2 px in the sheets' line (main.css gives every other style 1 px). */
+.dark[data-style='brutal'] #nav-drawer {
+  box-shadow: inset -2px 0 0 var(--st-sheet-line);
 }

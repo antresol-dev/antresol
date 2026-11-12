@@ -371,7 +371,7 @@ const WHITE: Rgba = { r: 255, g: 255, b: 255, a: 1 }
  * `neumorphismGhostSel`: Neumorphism's (and the stubs', which draw it) "⋯" in a selected row on hover and open is
  * 3.9–4.5:1 since before styles — a known exception (plan 10 Task 1 report, concern 1), checked for no other style.
  */
-function contrastProblems(t: StyleTokens, neumorphismGhostSel = false, stateInk: StateInk = { h: false, p: false }): string[] {
+function contrastProblems(t: StyleTokens, neumorphismGhostSel = false, stateInk: StateInk = { h: false, p: false }, cardInk: ReadonlySet<string> = new Set()): string[] {
   const problems: string[] = []
   const page = backdrops(`${t.winBg}, ${t.page}`, [WHITE])
   const on = (bg: string, under: Rgba[]) => backdrops(bg, under)
@@ -387,11 +387,16 @@ function contrastProblems(t: StyleTokens, neumorphismGhostSel = false, stateInk:
       if (c < 4.5) problems.push(`${label}: ${fg} on rgba(${[b.r, b.g, b.b].map(Math.round)},${b.a.toFixed(2)}) = ${c.toFixed(2)}`)
     }
   }
-  for (const [name, surface] of [['page', page], ['card', card], ['list', list], ['pop', pop]] as const) {
-    // A card with text of its own (Neo-brutal's Memphis cards: ink in both themes, where its dark page text is light)
-    // gives everything in it that text in the style's CSS (brutal.css); cardFg and cardMuted are checked below.
-    if (name === 'card' && t.cardFg !== t.fg) continue
+  for (const [name, surface] of [['page', page], ['list', list], ['pop', pop]] as const) {
     for (const text of ['fg', 'muted', 'icon'] as const) check(`${text} on ${name}`, t[text], surface)
+  }
+  // A card's text is the card's: main.css gives every card cardMuted, and a style whose CSS re-points a colour inside
+  // `.raised-card` (Neo-brutal's Memphis cards: ink in both themes, where its dark page text is light) draws cardFg there
+  // instead (cardInk, read from the style's own CSS). What its CSS does not re-point is the page's own colour.
+  const onCard = (variable: string, own: string) => (cardInk.has(variable) ? { label: 'cardFg', value: t.cardFg } : { label: own, value: t[own as 'fg'] })
+  for (const [variable, own] of [['--foreground', 'fg'], ['--icon', 'icon'], ['--accent-ink', 'ink'], ['--destructive', 'destructive'], ['--warning', 'warning']] as const) {
+    const c = onCard(variable, own)
+    check(`${c.label} (${own}) on card`, c.value, card)
   }
   check('subtle on page', t.subtle, page)
   check('dimmed on page', t.dimmed, page)
@@ -399,6 +404,8 @@ function contrastProblems(t: StyleTokens, neumorphismGhostSel = false, stateInk:
   check('ink on list', t.ink, list)
   check('destructive on page', t.destructive, page)
   check('warning on page', t.warning, page)
+  check('destructive on list', t.destructive, list)
+  check('warning on list', t.warning, list)
   check('cardFg on card', t.cardFg, card)
   check('cardMuted on card', t.cardMuted, card)
   check('curFg on cur', t.curFg, cur)
@@ -450,6 +457,21 @@ function contrastProblems(t: StyleTokens, neumorphismGhostSel = false, stateInk:
   // Controls: the text of each state on its fill (and image), over what the control sits on.
   const pill = on(t.pillBg, page)
   const pillSel = on(t.pillSelBg, cur)
+  // The count and the unit inside the stepper (a variant row): the row's own text, over the pill's fill, over the row.
+  // On a selected row that is curFg / curMuted over pillSelBg over the selected tint over the list; otherwise fg / muted
+  // over pillBg over the list.
+  check('curFg on pillSelBg over cur (the count on a selected row)', t.curFg, pillSel)
+  check('curMuted on pillSelBg over cur (the unit on a selected row)', t.curMuted, pillSel)
+  const pillOnList = on(t.pillBg, list)
+  check('fg on pillBg over list (the count)', t.fg, pillOnList)
+  check('muted on pillBg over list (the unit)', t.muted, pillOnList)
+  // The toast's action ("Undo") is the btn kind on the menu colour: the toast's text over each state's fill.
+  const toast = backdrops(t.popSolid, [WHITE])
+  for (const s of ['n', 'h', 'p'] as const) {
+    const state = t.kinds.btn[s]
+    const fill = on(state.bg, toast)
+    check(`btn.${s} text over popSolid (the toast's action)`, s === 'n' ? t.popFg : state.fg, state.img === 'none' ? fill : backdrops(state.img, fill))
+  }
   const under: Record<string, Rgba[]> = { step: pill, ghost: list, stepSel: pillSel, ghostSel: cur }
   for (const kind of [...KINDS, 'stepSel', 'ghostSel', 'painted', 'paintedDanger'] as const) {
     for (const s of kind === 'ghostSel' && neumorphismGhostSel ? (['n'] as const) : (['n', 'h', 'p'] as const)) {
@@ -478,20 +500,35 @@ interface StateInk {
  *  open (p) control to that state's text colour (Neo-brutal: ink on its Memphis fills, where no accent reads in the
  *  dark theme): the row menu's "⋯" then shows that colour, not the accent ink. */
 function stateInkOf(name: StyleName): StateInk {
-  const path = fileURLToPath(new URL(`../app/assets/css/styles/${name}.css`, import.meta.url))
-  const code = existsSync(path) ? readFileSync(path, 'utf8') : ''
+  const code = styleCode(name)
   return { h: code.includes('--accent-ink: var(--h-fg)'), p: code.includes('--accent-ink: var(--p-fg)') }
+}
+/** The style's own CSS without comments ('' when it has none). */
+function styleCode(name: StyleName): string {
+  const path = fileURLToPath(new URL(`../app/assets/css/styles/${name}.css`, import.meta.url))
+  return existsSync(path) ? readFileSync(path, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '') : ''
+}
+/** The colour variables the style's CSS re-points on the card itself (a rule for `[data-style='x'] .raised-card`, alone or in
+ *  an :is() list): inside a card the text then takes the card's colours (cardFg), not the page's. */
+function cardInkOf(name: StyleName): Set<string> {
+  const out = new Set<string>()
+  for (const m of styleCode(name).matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    if (!new RegExp(`\\[data-style='${name}'\\]\\s+(:is\\([^)]*\\.raised-card[^)]*\\)|\\.raised-card)\\s*$`).test(m[1]!.trim())) continue
+    for (const v of m[2]!.matchAll(/(--[\w-]+)\s*:/g)) out.add(v[1]!)
+  }
+  return out
 }
 
 describe.each(STYLE_NAMES)('contrast: %s', (name) => {
   const info = STYLES[name]
   const stateInk = stateInkOf(name)
+  const cardInk = cardInkOf(name)
   const accents: AccentName[] = info.fixedPalette ? [info.defaultAccent] : ACCENT_NAMES
   it.each(MODES.flatMap((mode) => accents.map((accent) => [mode, accent] as const)))('%s, %s: every text on its background at 4.5:1 or better', (mode, accent) => {
     const t = info.build(mode, accent)
     // Neumorphism's own tokens (itself, or a stub that still draws it) carry the one known exception.
     const own = name === 'neumorphism' || JSON.stringify(t) === JSON.stringify(neumorphism(mode, effectiveAccent(name, accent)))
-    expect(contrastProblems(t, own, stateInk)).toEqual([])
+    expect(contrastProblems(t, own, stateInk, cardInk)).toEqual([])
   })
 })
 
@@ -500,6 +537,68 @@ describe('the contrast gate', () => {
     const t = neumorphism('light', 'blue')
     expect(contrastProblems(t, true)).toEqual([])
     expect(contrastProblems(t).some((p) => p.startsWith('ghostSel.p.fg') || p.startsWith('ink on ghostSel'))).toBe(true)
+  })
+})
+
+describe('the contrast gate, composited layers and the card exemption (plan 10 final review)', () => {
+  it('the count on a selected row is checked over the pill over the row tint: a white lift under it is caught', () => {
+    const t = STYLES.liquid.build('dark', 'blue')
+    expect(contrastProblems(t)).toEqual([])
+    // The pill's white lift (what Liquid dark had: pillBg's 10 % on the selected row) takes the accent ink under 4.5:1.
+    const lifted = { ...t, pillSelBg: 'rgba(255,255,255,0.1)' }
+    expect(contrastProblems(lifted).some((p) => p.startsWith('curFg on pillSelBg over cur'))).toBe(true)
+  })
+
+  it('the card exemption follows the CSS: only Neo-brutal re-points colours inside .raised-card', () => {
+    for (const name of STYLE_NAMES) {
+      const re = cardInkOf(name)
+      if (name === 'brutal') expect([...re].sort(), name).toEqual(expect.arrayContaining(['--foreground', '--icon', '--accent-ink', '--destructive']))
+      else expect([...re], name).toEqual([])
+    }
+    // A style whose card text differs but whose CSS re-points nothing is held to the page's colours: no silent skip.
+    const t = { ...STYLES.base.build('light', 'indigo'), cardFg: '#111111' }
+    expect(contrastProblems({ ...t, fg: '#DDDDDD', ink: '#DDDDDD' })).not.toEqual([])
+    // Ink, destructive and warning are checked on the card.
+    const weak = { ...STYLES.base.build('light', 'indigo'), destructive: '#FF8080' }
+    expect(contrastProblems(weak).some((p) => p.includes('(destructive) on card'))).toBe(true)
+    expect(contrastProblems({ ...weak, destructive: STYLES.base.build('light', 'indigo').destructive }).filter((p) => p.includes('on card'))).toEqual([])
+  })
+})
+
+/**
+ * Field outlines (WCAG 1.4.11, non-text contrast 3:1): the 1 px outline of text fields, textareas, select triggers and
+ * the Camera / Gallery buttons (--input) against every surface they sit on. Acrylic, Liquid and Y2K had a 1.1–1.2:1
+ * hairline and now pass; the other six styles keep their owner-approved outlines (1.3–1.5:1, or ink lines), which this
+ * does not hold them to.
+ */
+function fieldRingProblems(t: StyleTokens): string[] {
+  const page = backdrops(`${t.winBg}, ${t.page}`, [WHITE])
+  const scrim = backdrops(t.overlay, page)
+  const line = parseColor0(t.fieldLine)
+  if (!line) return [`fieldLine ${t.fieldLine} is not a colour`]
+  const problems: string[] = []
+  for (const [name, bgs] of [
+    ['page', page],
+    ['card', backdrops(t.card, page)],
+    ['list', backdrops(t.list, page)],
+    ['photo', backdrops(t.photo, page)],
+    ['sheet', backdrops(t.sheet, page)],
+    ['sheet over the scrim', backdrops(t.sheet, scrim)],
+  ] as const) {
+    for (const b of bgs) {
+      const c = contrast(over(line, b), b)
+      if (c < 3) problems.push(`fieldLine ${t.fieldLine} on ${name} = ${c.toFixed(2)}`)
+    }
+  }
+  return problems
+}
+const FIELD_RING_3_1: StyleName[] = ['acrylic', 'liquid', 'y2k']
+describe.each(FIELD_RING_3_1)('field outline at 3:1: %s', (name) => {
+  it.each(MODES.flatMap((mode) => ACCENT_NAMES.map((accent) => [mode, accent] as const)))('%s, %s', (mode, accent) => {
+    expect(fieldRingProblems(STYLES[name].build(mode, accent))).toEqual([])
+  })
+  it('the check bites: the style\'s old hairline fails it', () => {
+    expect(fieldRingProblems({ ...STYLES[name].build('light', 'blue'), fieldLine: 'rgba(20,24,40,0.08)' }).length).toBeGreaterThan(0)
   })
 })
 
@@ -528,6 +627,112 @@ describe('a style changes no layout (Review Focus 3)', () => {
 })
 
 // ---------------------------------------------------------------------------------------------------------------------
+
+describe('style CSS changes no layout (Review Focus 3, every assets/css/styles/*.css)', () => {
+  const dir = fileURLToPath(new URL('../app/assets/css/styles/', import.meta.url))
+  const files = readdirSync(dir).filter((f) => f.endsWith('.css'))
+  /** Declarations of every rule, with the selector: `{ selector, name, value }`. */
+  function declarations(code: string): { selector: string; name: string; value: string }[] {
+    const out: { selector: string; name: string; value: string }[] = []
+    for (const m of code.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+      for (const d of m[2]!.split(';')) {
+        const i = d.indexOf(':')
+        if (i > 0) out.push({ selector: m[1]!.trim(), name: d.slice(0, i).trim(), value: d.slice(i + 1).trim() })
+      }
+    }
+    return out
+  }
+  const LAYOUT = /^(padding|margin|gap|row-gap|column-gap|width|height|min-width|max-width|min-height|max-height|inline-size|block-size|border(-top|-right|-bottom|-left)?(-width)?|border-(inline|block)(-start|-end)?(-width)?|inset|top|right|bottom|left|display|flex|grid|float|line-height|font-size)$/
+  it('there is a CSS file for every style that has one', () => {
+    expect(files.length).toBeGreaterThanOrEqual(8)
+  })
+  it.each(files)('%s: no padding, margin, gap, width, height or border-width outside an absolutely positioned drawing', (file) => {
+    const code = readFileSync(join(dir, file), 'utf8')
+    const rules = [...code.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    const bad: string[] = []
+    for (const [, selector, body] of rules) {
+      const drawn = /position\s*:\s*absolute/.test(body!) || /::(before|after)/.test(selector!)
+      for (const d of declarations(`${selector}{${body}}`)) {
+        // Sizes of a drawing (a pseudo-element, or a box positioned absolutely) are not layout.
+        if (drawn && /^(width|height|top|right|bottom|left|inset|display)$/.test(d.name)) continue
+        // The divider token is a 1 px line (asserted above): a rule that draws the divider as a border is not a width.
+        if (/^border(-top|-bottom)?$/.test(d.name) && d.value === 'var(--st-divider)') continue
+        if (/^(padding|margin|gap|row-gap|column-gap|width|height|min-width|max-width|min-height|max-height|border-width)/.test(d.name) || /^border(-(top|right|bottom|left|inline|block)(-(start|end))?)?(-width)?$/.test(d.name) || /(^|\s)(width|height|padding|margin|gap)\s*:/.test(d.value)) bad.push(`${selector!.trim()} { ${d.name}: ${d.value} }`)
+      }
+    }
+    expect(bad).toEqual([])
+  })
+  it('the scan bites: padding, a margin, a gap, a width, a height and a border width are all caught', () => {
+    const probe = (decl: string) => /^(padding|margin|gap|width|height|border(-top)?)/.test(decl)
+    for (const d of ['padding: 4px', 'margin: 0 4px', 'gap: 2px', 'width: 10px', 'height: 10px', 'border-width: 2px', 'border-top: 1px solid red']) expect(probe(d), d).toBe(true)
+    void LAYOUT
+  })
+})
+
+describe('apply: a token that is not a string is a bug in a style module (final review M9)', () => {
+  it('styleVars throws for undefined, numbers and null', () => {
+    const t = STYLES.base.build('light', 'indigo')
+    for (const bad of [undefined, 12, null]) expect(() => styleVars({ ...t, fg: bad as unknown as string }), String(bad)).toThrow(/must not contain|Style token/)
+  })
+  it('a style that builds a missing token falls back to Base, like one that throws', async () => {
+    const real = STYLES.liquid.build
+    STYLES.liquid.build = ((mode, accent) => ({ ...real(mode, accent), muted: undefined as unknown as string })) as typeof real
+    try {
+      const db = createMemoryDeviceDb()
+      await db.putSettings({ style: 'liquid' })
+      const root = fakeRoot()
+      const a = createAppearance(db, root.el)
+      await expect(a.load()).resolves.toBeUndefined()
+      expect(a.style.value).toBe('base')
+      expect(root.attributes.get('data-style')).toBe('base')
+      expect(await db.getSettings()).toMatchObject({ style: 'liquid' })
+    } finally {
+      STYLES.liquid.build = real
+    }
+  })
+})
+
+describe('dark sheets and the drawer keep a visible edge (final review)', () => {
+  it('every style but the two that draw their own gets the 16 % white rim in dark, and none in light', () => {
+    for (const name of STYLE_NAMES) {
+      const [light, dark] = MODES.map((mode) => STYLES[name].build(mode, STYLES[name].defaultAccent).sheetLine)
+      if (name === 'brutal' || name === 'neumorphism') {
+        expect(dark, name).not.toBe('rgba(255,255,255,0.16)')
+        expect(dark, name).not.toBe('transparent')
+      } else {
+        expect(dark, name).toBe('rgba(255,255,255,0.16)')
+        expect(light, name).toBe('transparent')
+      }
+    }
+  })
+  it('the drawer takes it in main.css for every style but Neumorphism and Neo-brutal (brutal.css: 2 px)', () => {
+    expect(code0(css)).toMatch(/\.dark:not\(\[data-style='neumorphism'\], \[data-style='brutal'\]\) #nav-drawer\s*\{\s*box-shadow: inset -1px 0 0 var\(--st-sheet-line\)/)
+    expect(styleCode('brutal')).toMatch(/\.dark\[data-style='brutal'\] #nav-drawer\s*\{\s*box-shadow: inset -2px 0 0 var\(--st-sheet-line\)/)
+  })
+})
+
+/** CSS without comments. */
+function code0(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '')
+}
+
+describe('section marks on engines without alt text in content (final review)', () => {
+  it('a plain content declaration stands for them; the alt-text one is behind @supports', () => {
+    const c = code0(css)
+    const plain = c.indexOf('.section-label::before {')
+    expect(c.slice(plain, c.indexOf('}', plain))).toMatch(/content: var\(--st-mark\);/)
+    expect(c).toMatch(/@supports \(content: 'a' \/ 'b'\) \{\s*\.section-label::before \{\s*content: var\(--st-mark\) \/ '';/)
+  })
+})
+
+describe('toasts follow the style (final review)', () => {
+  it('the toast takes the menus\' shadow and its action is the btn kind', () => {
+    const c = code0(css)
+    expect(c).toMatch(/\[data-sonner-toast\]\[data-styled='true'\] \{\s*box-shadow: var\(--st-pop-sh\);/)
+    const action = /\[data-button\] \{([^}]*)\}/.exec(c)![1]!
+    for (const v of ['--st-btn-r', '--st-btn-n-bg', '--st-btn-n-img', '--st-btn-n-sh']) expect(action, v).toContain(v)
+  })
+})
 
 describe('appearance (device setting)', () => {
   const settings = async (patch: Partial<DeviceSettings>) => {

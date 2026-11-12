@@ -104,9 +104,8 @@ describe('linear.css', () => {
     expect(main().match(/@import "\.\/styles\/linear\.css";/g)).toHaveLength(1)
   })
 
-  it('every rule is scoped to [data-style=\'linear\']', () => {
-    const selectors = [...css().replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{};]+)\{/g)].map((s) => s[1]!.trim()).filter((s) => !s.startsWith('@'))
-    expect(selectors.length).toBeGreaterThan(0)
-    for (const list of selectors) for (const s of list.split(',')) expect(s.trim(), list).toMatch(/^(\.dark)?\[data-style='linear'\]/)
+  it('has no rules of its own: the dark drawer\'s edge is main.css\'s for every style, and nothing else is left', () => {
+    const selectors = [...css().replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{};]+)\{/g)].map((s) => s[1]!.trim())
+    expect(selectors).toEqual([])
   })
 })

@@ -144,6 +144,9 @@ export const build: StyleBuild = (mode, accent) => {
       // Chips, row "⋯" buttons, folder icons and list thumbnails (none taller than 44 px) stay capsules and circles as
       // with the mock-up's 999px; a two-line tooltip or a skeleton block becomes a rounded box instead of a pill.
       smallR: '22px',
+      // contrast: the field's outline (and Camera / Gallery's) is 3:1 on every surface it sits on (WCAG 1.4.11): it was the list's
+      // white rim, 1.0–1.3:1 in light. Light 68 % of the style's violet-ink, dark 40 % white.
+      fieldLine: dark ? 'rgba(255,255,255,0.4)' : 'rgba(70,60,130,0.68)',
       kinds: {
         ib: K(S(cBg, chrome, cRing, fg), S(cBg, chromeH, cRing, chromeInk), S(cBg, chromeP, cPress, ink, 'scale(0.95)')),
         add: K(S(cBg, chrome, cRing, fg), S(cBg, chromeH, cRing, chromeInk), S(cBg, chromeP, cPress, ink, 'scale(0.95)')),

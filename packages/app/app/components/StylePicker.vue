@@ -7,7 +7,8 @@ import { effectiveAccent, isStyleName } from '~/lib/styles/registry'
 
 // Settings → Appearance → Style: nine cards, each a small scene drawn with the style's own tokens in the current theme
 // (page, card, primary button, chip, the name in the style's label font). The tokens are CSS variables on the card
-// element alone. Every card has the same size; the style never changes it (spec §3).
+// element alone. Every card has the same size; the style never changes it (spec §3). The checked card wears a ring;
+// keyboard focus is the global outline, 6 px out (past the ring), so a focused card is never mistaken for the checked one.
 const { t } = useI18n()
 const appearance = useAppearance()
 const colorMode = useColorMode()
@@ -50,7 +51,7 @@ async function choose(value: unknown): Promise<void> {
         :value="scene.name"
         :aria-label="scene.label"
         :style="scene.vars"
-        class="style-card group relative block h-24 min-w-0 cursor-pointer overflow-hidden rounded-card text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background data-[state=checked]:ring-2 data-[state=checked]:ring-ring data-[state=checked]:ring-offset-2 data-[state=checked]:ring-offset-background"
+        class="style-card group relative block h-24 min-w-0 cursor-pointer overflow-hidden rounded-card text-left focus-visible:outline-offset-[6px] data-[state=checked]:ring-2 data-[state=checked]:ring-ring data-[state=checked]:ring-offset-2 data-[state=checked]:ring-offset-background"
       >
         <span class="style-card-page absolute inset-0 grid content-between p-2.5" aria-hidden="true">
           <span class="style-card-label truncate">{{ scene.label }}</span>

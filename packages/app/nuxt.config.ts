@@ -52,7 +52,21 @@ export default defineNuxtConfig({
     storageKey: 'gm-color-mode',
   },
   fonts: {
-    families: [{ name: 'Manrope', provider: 'google', weights: [400, 500, 600, 700, 800] }],
+    defaults: { subsets: ['latin', 'latin-ext', 'cyrillic'] },
+    families: [
+      // Onest is the Base style's font (the default style): preloaded and precached.
+      { name: 'Onest', provider: 'google', weights: [400, 500, 600, 700], global: true, display: 'swap', preload: { subsets: ['latin', 'cyrillic'], weights: [400, 600] } },
+      // The rest are declared (global: every @font-face is in the CSS, the browser fetches a face only when a style uses it),
+      // never preloaded; the service worker caches them on first use (gm-fonts).
+      { name: 'Manrope', provider: 'google', weights: [400, 500, 600, 700, 800], global: true, display: 'swap', preload: false },
+      { name: 'Inter', provider: 'google', weights: [400, 500, 600, 700], global: true, display: 'swap', preload: false },
+      { name: 'Rubik', provider: 'google', weights: [400, 500, 600, 700], global: true, display: 'swap', preload: false },
+      { name: 'Unbounded', provider: 'google', weights: [600, 700, 800], global: true, display: 'swap', preload: false },
+      { name: 'Exo 2', provider: 'google', weights: [400, 500, 600, 700], global: true, display: 'swap', preload: false },
+      { name: 'Jost', provider: 'google', weights: [400, 500, 600], global: true, display: 'swap', preload: false },
+      { name: 'IBM Plex Sans', provider: 'google', weights: [400, 500, 600], global: true, display: 'swap', preload: false },
+      { name: 'IBM Plex Mono', provider: 'google', weights: [400, 500, 600], global: true, display: 'swap', preload: false },
+    ],
   },
   i18n: {
     defaultLocale: 'en',
@@ -83,6 +97,28 @@ export default defineNuxtConfig({
     },
     workbox: {
       globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
+      // Only the default style's font (Onest) is precached; the other families' woff2 files are cached on first use (gm-fonts below).
+      // @nuxt/fonts hashes the file names, so Onest's files are the ones its @font-face rules in the built CSS point at.
+      manifestTransforms: [
+        async (entries) => {
+          const isFont = (url: string) => url.endsWith('.woff2')
+          const fontEntries = entries.filter(e => isFont(e.url))
+          if (!fontEntries.length) return { manifest: entries }
+          const { readFileSync, existsSync } = await import('node:fs')
+          const { join } = await import('node:path')
+          const outDir = ['.output/public', 'dist'].map(d => join(process.cwd(), d)).find(d => existsSync(d))
+          if (!outDir) throw new Error('Cannot find the build output to tell the default style\'s font files apart')
+          const onest = new Set<string>()
+          for (const e of entries.filter(e => e.url.endsWith('.css'))) {
+            for (const [, family, body] of readFileSync(join(outDir, e.url), 'utf8').matchAll(/@font-face\{font-family:"?([^;"]+)"?;([^}]*)\}/g)) {
+              if (family !== 'Onest') continue
+              for (const [, file] of body!.matchAll(/url\(([^)]+\.woff2)\)/g)) onest.add(file!.split('/').pop()!)
+            }
+          }
+          if (!onest.size) throw new Error('No Onest @font-face found in the built CSS: the default style\'s font would not be precached')
+          return { manifest: entries.filter(e => !isFont(e.url) || onest.has(e.url.split('/').pop()!)) }
+        },
+      ],
       // The app shell is precached under the base URL itself ("/graymatter/"), not under "index.html".
       navigateFallback: baseURL,
       // Files with an extension (assets, manifest, sw) are never navigations to the app shell.
@@ -107,6 +143,17 @@ export default defineNuxtConfig({
           options: {
             cacheName: 'gm-photos-full',
             expiration: { maxEntries: 150, purgeOnQuotaError: true },
+            cacheableResponse: { statuses: [200] },
+          },
+        },
+        {
+          // Fonts of the other styles (@nuxt/fonts emits them under _nuxt/fonts/): cache first, real 200 responses only, so a
+          // style's font works offline once it has been used. Onest is already in the precache and answered from there.
+          urlPattern: /\/_nuxt\/fonts\/[^/]+\.woff2(?:\?.*)?$/,
+          handler: 'CacheFirst',
+          options: {
+            cacheName: 'gm-fonts',
+            expiration: { maxEntries: 60 },
             cacheableResponse: { statuses: [200] },
           },
         },

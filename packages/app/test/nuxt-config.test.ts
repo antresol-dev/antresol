@@ -37,6 +37,6 @@ describe('nuxt config', () => {
   })
 
   it('loads Manrope 800 (font-extrabold)', () => {
-    expect(config.fonts?.families?.[0]).toMatchObject({ name: 'Manrope', weights: [400, 500, 600, 700, 800] })
+    expect(config.fonts?.families?.find(f => f.name === 'Manrope')).toMatchObject({ name: 'Manrope', weights: [400, 500, 600, 700, 800] })
   })
 })

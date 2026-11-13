@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { effectScope, type EffectScope } from 'vue'
 import { useLongPress, type LongPressHandlers } from '../app/composables/useLongPress'
+import { longPressExpands } from '../app/lib/tree-state'
 
 const touch = (x: number, y: number) => ({ pointerType: 'touch', clientX: x, clientY: y })
 const event = () => ({ preventDefault: vi.fn(), stopImmediatePropagation: vi.fn() })
@@ -140,5 +141,41 @@ describe('useLongPress', () => {
     vi.advanceTimersByTime(300)
     expect(n).toBe(1)
     custom.stop()
+  })
+})
+
+describe('long press on a tree folder (handler composition)', () => {
+  function folderHandler(hasChildren: boolean, isOpen: boolean) {
+    const calls: string[] = []
+    const hh = scope.run(() =>
+      useLongPress(() => {
+        if (longPressExpands(hasChildren, isOpen)) calls.push('expand')
+        calls.push('menu')
+      }),
+    )!
+    return { hh, calls }
+  }
+
+  it('a closed folder with children expands and opens the menu', () => {
+    const { hh, calls } = folderHandler(true, false)
+    hh.onPointerdown(touch(0, 0))
+    vi.advanceTimersByTime(500)
+    expect(calls).toEqual(['expand', 'menu'])
+  })
+
+  it('a folder without children only opens the menu', () => {
+    const { hh, calls } = folderHandler(false, false)
+    hh.onPointerdown(touch(0, 0))
+    vi.advanceTimersByTime(500)
+    expect(calls).toEqual(['menu'])
+  })
+
+  it('a press shorter than the threshold expands nothing', () => {
+    const { hh, calls } = folderHandler(true, false)
+    hh.onPointerdown(touch(0, 0))
+    vi.advanceTimersByTime(300)
+    hh.onPointerup()
+    vi.advanceTimersByTime(600)
+    expect(calls).toEqual([])
   })
 })

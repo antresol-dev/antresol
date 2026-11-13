@@ -1,7 +1,7 @@
 import { newId, type InventorySnapshot, type InventoryStorage } from '@antresol/core'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
-import { loadTreeOpen, openPath, rowClickAction, saveTreeOpen, toggleOpen, treeRows } from '../app/lib/tree-state'
+import { longPressExpands, loadTreeOpen, openPath, rowClickAction, saveTreeOpen, toggleOpen, treeRows } from '../app/lib/tree-state'
 import type { SourceConfig } from '../app/lib/types'
 
 const cfg: SourceConfig = {
@@ -91,6 +91,12 @@ describe('treeRows', () => {
     const rows = treeRows(snap, { [opamps]: true, [ics]: true }, null)
     expect(rows[0]!.children[0]!.hasChildren).toBe(false)
     expect(rows[0]!.children[0]!.open).toBe(false)
+  })
+
+  it('a long press expands only a closed folder with children', () => {
+    expect(longPressExpands(true, false)).toBe(true)
+    expect(longPressExpands(true, true)).toBe(false)
+    expect(longPressExpands(false, false)).toBe(false)
   })
 
   it('toggles a folder open and closed', () => {

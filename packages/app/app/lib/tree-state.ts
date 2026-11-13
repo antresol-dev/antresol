@@ -22,6 +22,11 @@ export function rowClickAction(isPage: boolean): 'select' | 'toggle' {
   return isPage ? 'toggle' : 'select'
 }
 
+/** A fired long press on a folder row also opens it when it has children and is closed; the menu opens either way. */
+export function longPressExpands(hasChildren: boolean, isOpen: boolean): boolean {
+  return hasChildren && !isOpen
+}
+
 export function treeRows(s: InventorySnapshot, open: TreeOpen, current: Id | 'root' | null): TreeRow[] {
   const build = (nodes: TreeNode[]): TreeRow[] =>
     nodes.map((n) => {

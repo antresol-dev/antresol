@@ -484,3 +484,47 @@ export function folderChoices(s: InventorySnapshot, selected: Id | null): MoveTa
   walk(null, 1)
   return out
 }
+
+export type UsageTarget = { kind: 'tag' | 'attribute' | 'unit'; id: string }
+export interface UsedByRow {
+  id: Id
+  name: string
+  /** The name of the item's folder (its thumbnail's letters); null in the inventory root. */
+  folderName: string | null
+  /** Folder names from the root, " / "-joined; '' in the inventory root. */
+  path: string
+  cover: PhotoRef | null
+}
+
+/** Active items that use a tag, an attribute (a value on the item or on one of its variants, or an axis) or a unit (a
+ *  unit key: a built-in's or a custom unit's `custom:<id>`), by name. Archived items and those under an archived folder are left out. */
+export function usedBy(s: InventorySnapshot, target: UsageTarget): UsedByRow[] {
+  const ix = snapshotIndex(s)
+  const used = new Set<Id>()
+  if (target.kind === 'attribute') {
+    const filled = (v: string | null): boolean => v !== null && v.trim() !== ''
+    for (const a of s.itemAttributes) if (a.attributeId === target.id && (a.axisPosition !== null || filled(a.value))) used.add(a.itemId)
+    const variantItem = new Map(s.variants.map((v) => [v.id, v.itemId] as const))
+    for (const v of s.variantAttributeValues) {
+      const itemId = variantItem.get(v.variantId)
+      if (v.attributeId === target.id && filled(v.value) && itemId !== undefined) used.add(itemId)
+    }
+  }
+  const rows: UsedByRow[] = []
+  for (const item of s.items) {
+    if (item.archivedAt !== null) continue
+    const path = item.folderId === null ? [] : pathOf(ix, item.folderId)
+    if (item.folderId !== null && path.length === 0) continue
+    const uses =
+      target.kind === 'tag' ? item.tagIds.includes(target.id) : target.kind === 'unit' ? item.unitKey === target.id : used.has(item.id)
+    if (!uses) continue
+    rows.push({
+      id: item.id,
+      name: item.name,
+      folderName: folderNameOf(ix, item),
+      path: path.map((f) => f.name).join(' / '),
+      cover: ix.covers.get(item.id) ?? null,
+    })
+  }
+  return rows.sort(byName)
+}

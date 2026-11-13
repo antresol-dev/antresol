@@ -28,7 +28,7 @@ const props = defineProps<{
 }>()
 defineEmits<{ open: [] }>()
 
-const { t } = useI18n()
+const { t, te } = useI18n()
 
 const ix = computed(() => snapshotIndex(props.snapshot))
 const newItem = computed(() => props.content.newItems.find((n) => n.id === props.line.itemId) ?? null)
@@ -47,6 +47,11 @@ const values = computed(() =>
 )
 
 const problemCode = computed(() => props.problem ?? (props.resolution.kind === 'problem' ? props.resolution.code : null))
+/** Copy for a problem code; one this version has no words for reads as a general one, never as a raw key. */
+const problemText = computed(() => {
+  const key = `intakes.problem.${problemCode.value}`
+  return te(key) ? t(key) : t('intakes.problem.unknown')
+})
 const kind = computed(() => (problemCode.value ? 'problem' : props.resolution.kind))
 
 const folderName = (folderId: string | null): string =>
@@ -103,7 +108,7 @@ const tag = computed(() => {
       <span class="min-w-0 text-[15px] font-bold wrap-anywhere">
         {{ name }}<span v-if="values" class="font-semibold text-muted-foreground"> · {{ values }}</span>
       </span>
-      <span v-if="problemCode" class="text-[13px] font-semibold text-destructive wrap-anywhere">{{ $t(`intakes.problem.${problemCode}`) }}</span>
+      <span v-if="problemCode" class="text-[13px] font-semibold text-destructive wrap-anywhere">{{ problemText }}</span>
       <span v-else class="truncate text-[13px] text-muted-foreground">{{ caption }}</span>
     </span>
     <span class="shrink-0 rounded-chip px-1.5 py-px text-[11px] font-bold tracking-[0.04em] uppercase" :class="tag.class">

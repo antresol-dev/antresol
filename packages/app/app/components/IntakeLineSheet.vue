@@ -125,6 +125,7 @@ function startNew(from: typeof defaults.value): void {
   replacing.value = false
   editingAxis.value = null
   error.value = null
+  attributeError.value = null
 }
 
 function load(): void {
@@ -409,6 +410,7 @@ const variantPhoto = computed(() => {
   if (newItem.value || (h?.kind !== 'existing' && h?.kind !== 'archived')) return null
   return s.value.photos.find((p) => p.variantId === h.variantId) ?? null
 })
+/** `replace`: picked through "Replace photo" (buildDraftLine keeps it only while the variant has a photo). */
 async function upload(files: File[], replace: boolean): Promise<void> {
   const file = files[0]
   if (!file) return
@@ -735,7 +737,12 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-2.5 
             <div v-if="photoOpen" class="grid gap-2 py-3">
               <div v-if="photo" class="flex items-center gap-3">
                 <PhotoImg :url="photo.url" size="thumb" alt="" class="size-[42px] shrink-0 rounded-thumb object-cover" />
-                <span class="min-w-0 flex-1 text-sm text-muted-foreground">{{ photo.replace && variantPhoto ? $t('intakes.line.replaces') : $t('intakes.line.photoSet') }}</span>
+                <span class="min-w-0 flex-1 text-sm text-muted-foreground">
+                  {{ variantPhoto ? $t(photo.replace ? 'intakes.line.replaces' : 'intakes.line.keepsPhoto') : $t('intakes.line.photoSet') }}
+                </span>
+                <Button v-if="variantPhoto && !photo.replace" type="button" variant="outline" class="h-9" :disabled="disabled" @click="photo = { ...photo, replace: true }">
+                  {{ $t('intakes.line.replacePhoto') }}
+                </Button>
                 <Button type="button" variant="ghost" size="icon" class="size-11 shrink-0" :aria-label="$t('quickAdd.removePhoto')" :disabled="disabled" @click="photo = null">
                   <X class="size-4" aria-hidden="true" />
                 </Button>
@@ -748,7 +755,7 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-2.5 
                 </div>
               </template>
               <p v-else-if="uploading" class="text-sm text-muted-foreground">{{ $t('intakes.line.uploading') }}</p>
-              <PhotoPicker v-else :disabled="disabled" @pick="upload($event, !!variantPhoto)" />
+              <PhotoPicker v-else :disabled="disabled" @pick="upload($event, replacing)" />
             </div>
           </template>
         </div>

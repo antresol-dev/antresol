@@ -80,7 +80,8 @@
       "item_archived": "The item or its folder is archived",
       "missing_axis_value": "A value is missing",
       "invalid_value": "Something here doesn’t fit: check the name, unit and values",
-      "unknown_item": "The item was deleted"
+      "unknown_item": "The item was deleted",
+      "unknown": "This line can’t be committed as it is: open it to check"
     },
     "line": {
       "addTitle": "Add line",
@@ -127,6 +128,7 @@
       "replacePhoto": "Replace photo",
       "currentPhoto": "The variant’s current photo",
       "replaces": "Replaces the current photo",
+      "keepsPhoto": "The variant keeps its current photo",
       "uploading": "Uploading…",
       "photoFailed": "The photo didn’t upload.",
       "photoSet": "1 photo",

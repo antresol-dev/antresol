@@ -33,10 +33,26 @@ const rows = computed(() => attributes.value.flatMap((x) => {
 const choices = computed(() => props.snapshot.attributes.filter((a) => !attributes.value.some((x) => x.attributeId === a.id)).sort(byName))
 const similarAttributes = computed(() => (props.similar ? attributesFrom(props.snapshot, props.similar.itemId) : []))
 
+/** Why a shared value field's text does not read, per attribute; the first one shown goes to the sheet. A field that
+ *  goes away (the attribute removed or made an axis, the section closed) takes its error with it. */
+const errors = ref<Record<Id, string>>({})
+const shownError = computed(() => {
+  const row = rows.value.find((r) => !r.axis && errors.value[r.attributeId])
+  return row ? errors.value[row.attributeId]! : null
+})
+watch(shownError, (key) => emit('update:error', key), { immediate: true })
+onBeforeUnmount(() => emit('update:error', null))
+function setError(attributeId: Id, key: string | null): void {
+  const { [attributeId]: _gone, ...rest } = errors.value
+  errors.value = key ? { ...rest, [attributeId]: key } : rest
+}
+
 function update(attributeId: Id, change: Partial<DraftNewItem['attributes'][number]>): void {
+  if (change.axis !== undefined) setError(attributeId, null)
   attributes.value = attributes.value.map((x) => (x.attributeId === attributeId ? { ...x, ...change } : x))
 }
 function remove(attributeId: Id): void {
+  setError(attributeId, null)
   attributes.value = attributes.value.filter((x) => x.attributeId !== attributeId)
 }
 function add(id: unknown): void {
@@ -95,8 +111,9 @@ function created(id: Id): void {
           :model-value="row.value"
           :disabled="disabled"
           @update:model-value="update(row.attributeId, { value: $event })"
-          @update:error="emit('update:error', $event)"
+          @update:error="setError(row.attributeId, $event)"
         />
+        <p v-if="!row.axis && errors[row.attributeId]" class="text-sm text-destructive">{{ $t(errors[row.attributeId]!) }}</p>
       </li>
     </ul>
 

@@ -306,6 +306,48 @@ describe('buildDraftLine', () => {
   })
 })
 
+describe('buildDraftLine: shared values and photos', () => {
+  const form = (over: Partial<LineForm> = {}): LineForm => ({
+    lineId: newId(),
+    ids: ids(),
+    itemId: resistor,
+    newItem: null,
+    axisValues: [{ attributeId: resistance, value: '4k7' }],
+    amount: '10',
+    price: '',
+    url: '',
+    urlPrefix: null,
+    photo: null,
+    ...over,
+  })
+  const photo = (replace: boolean) => ({ provider: 'uploadcare', fileId: 'f1', url: 'https://ucarecdn.com/f1/', replace })
+
+  it('a shared value of a new item that does not fit is refused', () => {
+    const n = newItem({ name: 'Resistor 2 W', attributes: [{ attributeId: power, value: 'lots', axis: false }] })
+    expect(buildDraftLine(form({ itemId: n.id, newItem: n, axisValues: [] }), snap, emptyIntakeDraft())).toEqual({
+      errorKey: 'intakes.line.invalidValue',
+      params: { name: 'Power' },
+    })
+  })
+
+  it('replaces a photo only when asked and only when the variant the line goes to has one', async () => {
+    await run({ type: 'photo.add', id: newId(), itemId: resistor, variantId: v.r4k7, provider: 'uploadcare', fileId: 'old', url: 'https://ucarecdn.com/old/' })
+    const withPhoto = await storage.loadInventory(inventoryId)
+    const replaceOf = (f: LineForm, s: InventorySnapshot): boolean | undefined => {
+      const built = buildDraftLine(f, s, emptyIntakeDraft())
+      return 'line' in built ? built.line.photo?.replace : undefined
+    }
+    // Asked, and 4.7 kΩ has a photo: replaced.
+    expect(replaceOf(form({ photo: photo(true) }), withPhoto)).toBe(true)
+    // Not asked: kept.
+    expect(replaceOf(form({ photo: photo(false) }), withPhoto)).toBe(false)
+    // Asked while on 4.7 kΩ, then the value changed to one without a photo: nothing to replace.
+    expect(replaceOf(form({ photo: photo(true), axisValues: [{ attributeId: resistance, value: '10k' }] }), withPhoto)).toBe(false)
+    // A new value: no photo yet.
+    expect(replaceOf(form({ photo: photo(true), axisValues: [{ attributeId: resistance, value: '33k' }] }), withPhoto)).toBe(false)
+  })
+})
+
 describe('withLine, withoutLine, restoreLine', () => {
   it('puts a line in place, drops new items left without lines, and Undo brings both back', () => {
     const fuse = newItem()

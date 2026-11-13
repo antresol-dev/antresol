@@ -294,6 +294,7 @@ export interface LineForm {
   url: string
   /** The shop's address the link field was started with ("Add & next"): left as it is, it is no link. */
   urlPrefix: string | null
+  /** `replace`: the person chose "Replace photo"; kept only while the variant the line goes to has a photo. */
   photo: DraftLinePhoto | null
 }
 export type BuiltLine = { line: DraftLine; newItem: DraftNewItem | null } | { errorKey: string; params?: Record<string, string> }
@@ -321,6 +322,10 @@ export function buildDraftLine(form: LineForm, s: InventorySnapshot, draft: Inta
     if (!('value' in parsed)) return { errorKey: 'intakes.line.invalidValue', params: { name: a.name } }
     axisValues.push({ attributeId: a.id, value: parsed.value })
   }
+  for (const x of n?.attributes ?? []) {
+    const a = !x.axis && x.value?.trim() ? s.attributes.find((y) => y.id === x.attributeId) : undefined
+    if (a && !('value' in parseAttributeInput(a, x.value!))) return { errorKey: 'intakes.line.invalidValue', params: { name: a.name } }
+  }
 
   const unit = resolveUnit(n ? n.unitKey : item!.unitKey, s.units)
   if (!unit) return { errorKey: 'intakes.problem.invalid_value' }
@@ -345,8 +350,13 @@ export function buildDraftLine(form: LineForm, s: InventorySnapshot, draft: Inta
         attributes: n.attributes.map((x) => (x.axis ? { ...x, value: null } : { ...x, value: x.value?.trim() ? x.value.trim() : null })),
       }
     : null
+  // A variant has one photo (spec §9): the line's photo replaces it only when the person asked to replace it and the
+  // variant the line goes to now has one. An archived variant counts: it comes back with its photo.
+  const target = n || axes.length === 0 ? null : duplicateOf(s, form.itemId, new Map(axisValues.map((x) => [x.attributeId, x.value] as const)))
+  const hasPhoto = !!target && s.photos.some((p) => p.variantId === target.id)
+  const photo = form.photo ? { ...form.photo, replace: form.photo.replace && hasPhoto } : null
   return {
-    line: { id: form.lineId, itemId: form.itemId, axisValues, quantity, totalPrice, sourceUrl, photo: form.photo, ids: form.ids },
+    line: { id: form.lineId, itemId: form.itemId, axisValues, quantity, totalPrice, sourceUrl, photo, ids: form.ids },
     newItem,
   }
 }

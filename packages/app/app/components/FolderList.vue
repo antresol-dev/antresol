@@ -46,11 +46,11 @@ function pointerdown(id: Id, e: PointerEvent): void {
     <li
       v-for="f in folders"
       :key="f.id"
-      class="group relative flex items-center rounded-field transition-colors duration-150 not-first:before:absolute not-first:before:top-0 not-first:before:right-3.5 not-first:before:left-[58px] not-first:before:h-px not-first:before:bg-divider not-first:before:content-[''] hover:bg-hover"
+      class="group relative flex items-center rounded-field transition-colors duration-(--dur-fast) not-first:before:absolute not-first:before:top-0 not-first:before:right-3 not-first:before:left-15 not-first:before:h-px not-first:before:bg-divider not-first:before:content-[''] hover:bg-hover"
     >
       <NuxtLink
         :to="`/folder/${f.id}`"
-        class="flex h-[50px] min-w-0 flex-1 items-center gap-3 rounded-field px-3.5 select-none [-webkit-touch-callout:none]"
+        class="flex h-14 min-w-0 flex-1 items-center gap-3 rounded-field px-3 select-none [-webkit-touch-callout:none]"
         @pointerdown="pointerdown(f.id, $event)"
         @pointermove="press.onPointermove"
         @pointerup="press.onPointerup"
@@ -58,16 +58,16 @@ function pointerdown(id: Id, e: PointerEvent): void {
         @contextmenu="press.onContextmenu"
         @click.capture="press.onClickCapture"
       >
-        <span class="flex size-8 shrink-0 items-center justify-center rounded-icon bg-accent-soft text-accent-soft-foreground">
-          <Folder class="size-[17px]" aria-hidden="true" />
+        <span class="flex size-9 shrink-0 items-center justify-center rounded-thumb bg-accent-soft text-accent-soft-foreground">
+          <Folder class="size-5" aria-hidden="true" />
         </span>
-        <span class="min-w-0 grow truncate text-[15px] font-semibold">{{ f.name }}</span>
-        <span v-if="f.pieces !== null" class="shrink-0 text-[13px] font-semibold text-muted-foreground tabular-nums">{{ piecesLabel(f.pieces) }}</span>
+        <span class="min-w-0 grow truncate text-base font-semibold">{{ f.name }}</span>
+        <span v-if="f.pieces !== null" class="min-w-18 shrink-0 text-right text-sm font-semibold text-muted-foreground tabular-nums">{{ piecesLabel(f.pieces) }}</span>
       </NuxtLink>
       <!-- Always in the layout where it can show (hidden only on touch below 1024 px), so the count never moves. -->
       <RowMenu
         :ref="(el) => setMenu(f.id, el)"
-        class="row-action -ml-1 mr-2.5 size-[30px]"
+        class="row-action -ml-1 mr-3 size-8"
         :label="f.name"
         :actions="actions"
         @select="select(f.id, $event)"

@@ -8,6 +8,12 @@ describe('monogram', () => {
     expect(monogram('1N4148')).toBe('1N')
   })
 
+  it('gives the folder names of a list their letters', () => {
+    expect(monogram('ICs')).toBe('IC')
+    expect(monogram('Op-amps')).toBe('Op')
+    expect(monogram('🔧')).toBe('')
+  })
+
   it('takes the first two letters of a single word', () => {
     expect(monogram('Резистор')).toBe('Ре')
     expect(monogram('resistor')).toBe('Re')

@@ -31,24 +31,24 @@ onBeforeUnmount(() => document.documentElement.style.removeProperty('--dock-h'))
   <div
     v-if="shown"
     ref="dock"
-    class="pointer-events-none fixed inset-x-0 bottom-0 z-30 bg-linear-to-t from-background from-70% to-transparent pt-3.5 pb-[calc(1rem+env(safe-area-inset-bottom))] lg:hidden"
+    class="pointer-events-none fixed inset-x-0 bottom-0 z-30 bg-linear-to-t from-background from-70% to-transparent pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] lg:hidden"
   >
-    <div class="mx-auto flex w-full max-w-[720px] items-center gap-2.5 px-4">
+    <div class="mx-auto flex w-full max-w-[720px] items-center gap-2 px-4">
       <button
         type="button"
         aria-haspopup="dialog"
         :aria-expanded="paletteOpen"
-        class="raised pressable pointer-events-auto flex h-[52px] min-w-0 flex-1 items-center gap-2.5 px-4 text-left text-[15px] font-semibold text-muted-foreground hover:text-accent-ink"
+        class="raised pressable pointer-events-auto flex h-14 min-w-0 flex-1 items-center gap-2 px-4 text-left text-base font-semibold text-muted-foreground hover:text-accent-ink"
         @click="paletteOpen = true"
       >
-        <Search class="size-[18px] shrink-0" aria-hidden="true" />
+        <Search class="size-5 shrink-0" aria-hidden="true" />
         <span class="truncate">{{ $t('search.field', { name }) }}</span>
       </button>
       <button
         v-if="canAdd"
         type="button"
         :aria-label="$t('quickAdd.title')"
-        class="accent-button pressable pointer-events-auto grid size-[52px] shrink-0 place-items-center"
+        class="accent-button pressable pointer-events-auto grid size-14 shrink-0 place-items-center"
         @click="quickAdd.open()"
       >
         <Plus class="size-6" aria-hidden="true" />

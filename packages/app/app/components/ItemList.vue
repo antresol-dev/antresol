@@ -49,17 +49,17 @@ const rows = computed(() =>
 
 <template>
   <section class="grid min-w-0 grid-cols-1 gap-2">
-    <h2 class="section-label text-[13px]">{{ $t('folder.items', { count: items.length }) }}</h2>
+    <h2 class="section-label text-xs">{{ $t('folder.items', { count: items.length }) }}</h2>
     <!-- A flat list on the page: rows divided by lines, a row tile tinted under the pointer. -->
     <ul class="surface-list">
       <li
         v-for="item in rows"
         :key="item.id"
-        class="group relative flex items-center rounded-field transition-colors duration-150 hover:bg-hover not-first:before:absolute not-first:before:top-0 not-first:before:right-3.5 not-first:before:left-[68px] not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
+        class="group relative flex items-center rounded-field transition-colors duration-(--dur-fast) hover:bg-hover not-first:before:absolute not-first:before:top-0 not-first:before:right-3 not-first:before:left-15 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
       >
         <NuxtLink
           :to="`/item/${item.id}`"
-          class="flex h-[62px] min-w-0 flex-1 items-center gap-3 rounded-field px-3.5 select-none [-webkit-touch-callout:none]"
+          class="flex h-14 min-w-0 flex-1 items-center gap-3 rounded-field px-3 select-none [-webkit-touch-callout:none]"
           @pointerdown="pointerdown(item.id, $event)"
           @pointermove="press.onPointermove"
           @pointerup="press.onPointerup"
@@ -67,35 +67,34 @@ const rows = computed(() =>
           @contextmenu="press.onContextmenu"
           @click.capture="press.onClickCapture"
         >
-          <ItemThumb :name="item.name" :cover="item.cover" class="size-[42px] rounded-thumb text-[15px]" />
+          <ItemThumb :id="item.id" :folder-name="item.folderName" :cover="item.cover" class="size-9 rounded-thumb text-sm" />
           <span class="flex min-w-0 grow flex-col gap-0.5">
             <span class="flex min-w-0 items-center gap-1.5">
-              <span class="min-w-[min(7.5rem,100%)] truncate text-[15px] font-bold" :class="item.outOfStock && 'text-dimmed-foreground'">{{ item.name }}</span>
+              <span class="min-w-[min(7.5rem,100%)] truncate text-base font-semibold" :class="item.outOfStock && 'text-dimmed-foreground'">{{ item.name }}</span>
               <span
                 v-for="(value, i) in item.pinned"
                 :key="i"
                 class="max-w-32 min-w-0 shrink truncate rounded-chip bg-chip px-1.5 py-px text-xs font-semibold text-subtle-foreground"
               >{{ value }}</span>
             </span>
-            <span v-if="item.buckets.length > 0" class="truncate text-[13px] text-muted-foreground">
+            <span v-if="item.buckets.length > 0" class="truncate text-sm text-muted-foreground">
               <template v-for="(b, i) in item.buckets" :key="i"><template v-if="i > 0"> · </template>{{ b.label ?? $t('item.noVariant') }}
                 <span class="font-semibold tabular-nums" :class="b.empty ? '' : 'text-foreground'">{{ b.empty ? '—' : b.number }}</span></template>
               <template v-if="item.moreBuckets > 0"> · {{ $t('list.more', { count: item.moreBuckets }) }}</template>
             </span>
-            <span v-else-if="item.sub" class="truncate text-[13px] text-muted-foreground">{{ item.sub }}</span>
+            <span v-else-if="item.sub" class="truncate text-sm text-muted-foreground">{{ item.sub }}</span>
           </span>
-          <span
-            v-if="item.outOfStock"
-            class="shrink-0 rounded-chip bg-chip px-2 py-0.5 text-xs font-bold text-subtle-foreground"
-          >{{ $t('list.out') }}</span>
-          <span v-else class="amount shrink-0 text-base tabular-nums">
-            {{ item.number }}<span v-if="item.unit" class="text-xs font-semibold text-muted-foreground" :class="item.unitGap && 'ml-0.5'">{{ item.unit }}</span>
+          <span class="min-w-18 shrink-0 text-right">
+            <StockStatus v-if="item.outOfStock" />
+            <span v-else class="amount text-base tabular-nums">
+              {{ item.number }}<span v-if="item.unit" class="text-xs font-semibold text-muted-foreground" :class="item.unitGap && 'ml-0.5'">{{ item.unit }}</span>
+            </span>
           </span>
         </NuxtLink>
         <!-- Always in the layout where it can show (hidden only on touch below 1024 px), so the number never moves. -->
         <RowMenu
           :ref="(el) => setMenu(item.id, el)"
-          class="row-action -ml-1 mr-2.5 size-[30px]"
+          class="row-action -ml-1 mr-3 size-8"
           :label="item.name"
           :actions="actions"
           @select="select(item.id, $event)"

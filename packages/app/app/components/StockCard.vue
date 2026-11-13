@@ -49,14 +49,14 @@ const counted = computed(() => {
 })
 
 const amountClass = 'flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-1 text-left'
-const numberClass = 'amount text-[32px] leading-none tracking-[-0.02em] tabular-nums wrap-anywhere'
-const action = 'h-11 min-w-0 px-2 font-bold'
+const numberClass = 'amount num-font text-4xl leading-none tracking-[-0.02em] wrap-anywhere'
+const action = 'h-11 min-w-0 px-2 font-semibold'
 </script>
 
 <template>
   <!-- data-stock is the card's state for the styles' CSS (Tinkerer's LED): "out" at zero or less, otherwise "ok". There is no
        "low" state: the app has no reorder threshold. -->
-  <section class="stock-card raised-card grid min-w-0 gap-3 p-4.5" :data-stock="total.outOfStock ? 'out' : 'ok'" :aria-label="$t('item.stock')">
+  <section class="stock-card raised-card grid min-w-0 gap-3 p-4" :data-stock="total.outOfStock ? 'out' : 'ok'" :aria-label="$t('item.stock')">
     <div class="flex min-w-0 items-start justify-between gap-3">
       <div class="grid min-w-0 gap-1.5">
         <!-- With a stepper the number is a flat button that opens Count. -->
@@ -78,8 +78,8 @@ const action = 'h-11 min-w-0 px-2 font-bold'
           <span v-if="total.outOfStock" class="ml-1.5 text-sm leading-none font-semibold text-muted-foreground">{{ $t('item.outOfStock') }}</span>
           <span v-if="variantCount" class="text-sm leading-none text-subtle-foreground">· {{ $t('item.variants', variantCount) }}</span>
         </p>
-        <p v-if="prices" class="text-[13px] text-muted-foreground tabular-nums">{{ prices }}</p>
-        <p v-if="counted" class="text-[13px] text-muted-foreground">{{ counted }}</p>
+        <p v-if="prices" class="text-sm text-muted-foreground tabular-nums">{{ prices }}</p>
+        <p v-if="counted" class="text-sm text-muted-foreground">{{ counted }}</p>
       </div>
       <StepperPill v-if="stepper" :stepper="stepper" :name="null" />
     </div>

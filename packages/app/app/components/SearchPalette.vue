@@ -380,7 +380,7 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
                 :class="[
                   // The selected option is a selected row (spec 4.1): accent gradient, text and icons in its ink.
                   // min-w-0 and the one-column grids above: a long name truncates instead of widening the list past its edge.
-                  'flex min-h-11 min-w-0 cursor-pointer items-center gap-2.5 rounded-field px-3.5 select-none',
+                  'flex min-h-11 min-w-0 cursor-pointer items-center gap-3 rounded-field px-3 select-none',
                   desktop ? 'py-1.5' : 'py-2',
                   row.key === selected?.key ? 'row-selected' : '',
                 ]"
@@ -389,10 +389,10 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
                 @click="run(row)"
               >
                 <template v-if="row.kind === 'item'">
-                  <ItemThumb :name="row.hit.name" :cover="row.hit.cover" class="size-8 rounded-icon text-xs" />
+                  <ItemThumb :id="row.hit.itemId" :folder-name="row.hit.folderName" :cover="row.hit.cover" class="size-9 rounded-thumb text-xs" />
                   <span class="flex min-w-0 flex-1 flex-col">
                     <span class="flex min-w-0 items-center gap-1.5">
-                      <span class="min-w-[min(7.5rem,100%)] truncate text-sm font-bold" :class="row.hit.outOfStock && 'text-dimmed-foreground'">
+                      <span class="min-w-[min(7.5rem,100%)] truncate text-sm font-semibold" :class="row.hit.outOfStock && 'text-dimmed-foreground'">
                         <template v-for="(p, i) in row.name" :key="i"><mark v-if="p.match" :class="markClass">{{ p.text }}</mark><template v-else>{{ p.text }}</template></template>
                         <span v-if="row.variant" class="font-semibold text-muted-foreground">
                           · <template v-for="(p, i) in row.variant" :key="i"><mark v-if="p.match" :class="markClass">{{ p.text }}</mark><template v-else>{{ p.text }}</template></template>
@@ -401,12 +401,13 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
                       <span
                         v-for="(value, i) in row.hit.pinned"
                         :key="`pin${i}`"
-                        class="max-w-28 min-w-0 shrink truncate rounded-chip bg-chip px-1.5 py-px text-[11px] font-semibold text-subtle-foreground"
+                        class="max-w-28 min-w-0 shrink truncate rounded-chip bg-chip px-1.5 py-px text-xs font-semibold text-subtle-foreground"
                       >{{ value }}</span>
                     </span>
                     <span v-if="row.hit.path" class="truncate text-xs font-semibold text-muted-foreground">{{ row.hit.path }}</span>
                   </span>
-                  <span class="shrink-0 text-sm font-extrabold tabular-nums" :class="row.hit.outOfStock && 'text-muted-foreground'">
+                  <StockStatus v-if="row.hit.outOfStock" class="shrink-0" />
+                  <span v-else class="shrink-0 text-sm font-semibold tabular-nums">
                     {{ row.hit.number }}
                     <span class="text-xs font-semibold text-muted-foreground">{{ row.hit.unit }}</span>
                   </span>

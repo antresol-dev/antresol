@@ -16,11 +16,11 @@ describe('highlight fills the row', () => {
     expect(/\.row-selected::after \{([^}]*)\}/.exec(css)?.[1]).toMatch(/inset:\s*var\(--row-inset,\s*0\)/)
     expect(/\.row-inset \{([^}]*)\}/.exec(css)?.[1]).toMatch(/--row-inset:\s*var\(--st-cur-m\)/)
   })
-  // Right: 14 px, where the dividers end (right-3.5), so the "⋯" button's hover clears the list's rounded corner.
-  it('only the variant list insets its current row, and pads for the largest inset (8 px) plus 12', () => {
+  // Right: 12 px, where the dividers end (right-3), so the "⋯" button's hover clears the list's rounded corner.
+  it('only the variant list insets its current row, and pads for the largest inset (8 px) plus 12 (20 on the left)', () => {
     const bucket = read('components/BucketList.vue')
     expect(bucket).toContain('row-selected row-inset')
-    expect(bucket).toMatch(/pr-3\.5 pl-5/)
+    expect(bucket).toMatch(/pr-3 pl-5/)
     for (const f of ['AppNav', 'FolderTreeNode', 'SearchPalette', 'FolderPickerList'])
       expect(read(`components/${f}.vue`)).not.toContain('row-inset')
   })
@@ -35,8 +35,16 @@ describe('rows pad their content', () => {
   it('tree rows: 10 px on the panel, 12 px in the drawer', () => {
     has('components/FolderTreeNode.vue', /'h-8 pr-2\.5 pl-2\.5' : 'min-h-11 pr-3'/)
   })
-  it('palette rows: 14 px, clear of a pill-shaped highlight\'s corners', () => {
-    has('components/SearchPalette.vue', /rounded-field px-3\.5 select-none/)
+  it('palette rows: 12 px, clear of a pill-shaped highlight\'s corners', () => {
+    has('components/SearchPalette.vue', /rounded-field px-3 select-none/)
+  })
+  it('list rows (folders, items): 56 px high, 12 px of padding, dividers from the text (12 + 36 + 12) to 12 px of the edge', () => {
+    for (const f of ['FolderList', 'ItemList']) {
+      const src = read(`components/${f}.vue`)
+      expect(src).toMatch(/h-14 min-w-0 flex-1 items-center gap-3 rounded-field px-3 /)
+      expect(src).toMatch(/before:right-3 not-first:before:left-15/)
+      expect(src).toMatch(/size-8"/)
+    }
   })
   it('menu, select and combobox items: 12 px', () => {
     for (const f of ['dropdown-menu/DropdownMenuItem', 'dropdown-menu/DropdownMenuSubTrigger', 'combobox/ComboboxItem'])

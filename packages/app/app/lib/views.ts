@@ -45,6 +45,8 @@ export interface ListBucket {
 export interface ItemRow {
   id: Id
   name: string
+  /** The name of the item's folder (its thumbnail's letters); null in the inventory root. */
+  folderName: string | null
   description: string | null
   variantCount: number
   number: string
@@ -293,11 +295,14 @@ function listBuckets(s: InventorySnapshot, ix: Index, item: Item): { buckets: Li
   return { buckets: all.slice(0, LIST_BUCKETS), moreBuckets: Math.max(0, all.length - LIST_BUCKETS) }
 }
 
+const folderNameOf = (ix: Index, item: Item): string | null => (item.folderId === null ? null : (ix.folders.get(item.folderId)?.name ?? null))
+
 function itemRow(s: InventorySnapshot, ix: Index, item: Item): ItemRow {
   const quantity = itemQuantity(ix, item.id)
   return {
     id: item.id,
     name: item.name,
+    folderName: folderNameOf(ix, item),
     description: item.description,
     variantCount: ix.activeVariantCount.get(item.id) ?? 0,
     ...suffixAmount(quantity, unitOf(s, item)),
@@ -348,6 +353,8 @@ export interface SearchRow {
   unit: string
   outOfStock: boolean
   path: string
+  /** The name of the item's folder (its thumbnail's letters); null in the inventory root. */
+  folderName: string | null
   /** The matched variant's photo, else the item's cover. */
   cover: PhotoRef | null
   /** The item's pinned values (as ItemRow.pinned). */
@@ -377,6 +384,7 @@ export function searchRows(s: InventorySnapshot, hits: SearchHit[]): SearchRow[]
       ...amount(s, item, quantity),
       amount: formatAmount(quantity, unitOf(s, item)),
       outOfStock: isEmpty(quantity),
+      folderName: folderNameOf(ix, item),
       path: item.folderId === null ? '' : pathOf(ix, item.folderId).map((f) => f.name).join(' / '),
       cover: (variant && hit.variantId !== null ? ix.variantCovers.get(hit.variantId) : undefined) ?? ix.covers.get(item.id) ?? null,
       pinned: ix.pinned.get(item.id) ?? [],

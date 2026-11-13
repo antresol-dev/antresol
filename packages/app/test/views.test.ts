@@ -318,6 +318,18 @@ describe('index and edge cases', () => {
     tl.folderId = null
     const [root] = searchRows(s, [{ itemId: tl.id, variantId: null }])
     expect(root!.path).toBe('')
+    expect(root!.folderName).toBeNull()
+    expect(row!.folderName).toBe('Resistors')
+  })
+
+  it('gives item rows the name of their folder, null in the root', () => {
+    const s = clone()
+    const tl = s.items.find((i) => i.name === 'TL072')!
+    const folder = s.folders.find((f) => f.id === tl.folderId)!
+    expect(folderView(s, folder.id)!.items.find((r) => r.id === tl.id)!.folderName).toBe(folder.name)
+    const moved = clone()
+    moved.items.find((i) => i.id === tl.id)!.folderId = null
+    expect(folderView(moved, null)!.items.find((r) => r.id === tl.id)!.folderName).toBeNull()
   })
 })
 

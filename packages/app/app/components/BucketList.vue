@@ -124,7 +124,7 @@ watch(() => props.highlight, reveal)
             @count="emit('open', 'set', row.variantId)"
           />
           <RowMenu
-            class="size-8"
+            class="h-11 w-8"
             :label="row.name ?? $t('item.noVariant')"
             :actions="actionsOf(row)"
             @select="(key) => choose(key, row)"

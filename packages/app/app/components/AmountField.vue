@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { UnitDef } from '@antresol/core'
-import { amountPreview, amountTextOnly } from '~/lib/amounts'
+import { amountDraftOk, amountPreview } from '~/lib/amounts'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
@@ -12,21 +12,27 @@ const unitKey = defineModel<string>('unitKey', { required: true })
 
 const unit = computed(() => props.units.find((u) => u.key === unitKey.value) ?? props.units[0])
 const preview = computed(() => (unit.value ? amountPreview(text.value, unit.value) : null))
+const single = computed(() => (props.units.length === 1 ? props.units[0]! : null))
 
-// Typing or pasting keeps only what an amount in this unit can hold (digits, signs, the unit's own letters): "asda" never
-// lands in the field. Whether the rest reads as an amount is still the form's check.
+// Typing or pasting is refused when the field would stop being (the start of) an amount in this unit: only numbers,
+// expression signs and the unit's prefixes right after a number get in (the symbol shows at the edge). A pasted amount
+// that ends in the unit symbol ("100 pcs") goes in without it. Deleting is never refused.
 function onBeforeInput(e: InputEvent): void {
   const data = e.data ?? e.dataTransfer?.getData('text/plain') ?? null
-  if (!data || !unit.value) return
-  const kept = amountTextOnly(data, unit.value)
-  if (kept === data) return
-  e.preventDefault()
-  if (kept === '') return
+  const u = unit.value
+  if (!data || !u) return
   const el = e.target as HTMLInputElement
-  el.setRangeText(kept, el.selectionStart ?? el.value.length, el.selectionEnd ?? el.value.length, 'end')
-  text.value = el.value
+  const from = el.selectionStart ?? el.value.length
+  const to = el.selectionEnd ?? el.value.length
+  const next = (insert: string) => el.value.slice(0, from) + insert + el.value.slice(to)
+  if (amountDraftOk(next(data), u)) return
+  e.preventDefault()
+  const bare = data.trimEnd().endsWith(u.symbol) ? data.trimEnd().slice(0, -u.symbol.length).trimEnd() : null
+  if (bare && amountDraftOk(next(bare), u)) {
+    el.setRangeText(bare, from, to, 'end')
+    text.value = el.value
+  }
 }
-const single = computed(() => (props.units.length === 1 ? props.units[0]! : null))
 </script>
 
 <template>

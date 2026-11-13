@@ -1,6 +1,6 @@
 import { BUILTIN_UNITS, newId, type InventorySnapshot } from '@antresol/core'
 import { describe, expect, it } from 'vitest'
-import { amountExample, amountPreview, amountTextOnly, parseAmountText, parseMoneyText, pricePreview, unitChoices } from '../app/lib/amounts'
+import { amountDraftOk, amountExample, amountPreview, parseAmountText, parseMoneyText, pricePreview, unitChoices } from '../app/lib/amounts'
 import { dictionaryView } from '../app/lib/dictionaries'
 
 const pcs = BUILTIN_UNITS.pcs
@@ -102,28 +102,25 @@ describe('expressions in fields', () => {
   })
 })
 
-describe('amountTextOnly', () => {
-  it('drops letters that mean nothing for the unit', () => {
-    expect(amountTextOnly('qwerty', pcs)).toBe('')
-    expect(amountTextOnly('12q', pcs)).toBe('12')
+describe('amountDraftOk', () => {
+  it('takes numbers and expressions', () => {
+    for (const t of ['', '10', '2,5', '2.', '5x100', '(1/3)×2÷4-1*3X2', '10 + 2.5']) expect(amountDraftOk(t, pcs), t).toBe(true)
   })
-  it('keeps digits, decimal marks, expression signs and the unit\'s own symbol and prefixes', () => {
-    expect(amountTextOnly('5x100 + 2,5k', pcs)).toBe('5x100 + 2,5k')
-    expect(amountTextOnly('(1/3)×2÷4-1*3X2', pcs)).toBe('(1/3)×2÷4-1*3X2')
-    expect(amountTextOnly('10 pcs', pcs)).toBe('10 pcs')
-    expect(amountTextOnly('2.5m + 120cm', m)).toBe('2.5m + 120cm')
-    expect(amountTextOnly('3 km', m)).toBe('3 km')
+  it('takes a prefix of the unit right after a number, closing it', () => {
+    for (const t of ['2k', '2 k', '1.5M', '2k + 3k', '2kx3']) expect(amountDraftOk(t, pcs), t).toBe(true)
+    for (const t of ['120c', '3k', '5mm', '5m']) expect(amountDraftOk(t, m), t).toBe(true)
   })
-  it('drops prefixes the unit does not have', () => {
-    expect(amountTextOnly('2M', m)).toBe('2')
-    expect(amountTextOnly('3µ', pcs)).toBe('3')
+  it('refuses the unit symbol, letters that are not its prefixes, and a prefix not at the end of a number', () => {
+    for (const t of ['asda', 'qwerty', '10 pcs', '10p', 'k4', '4k7', '2kk', '2k 5', '3µ']) expect(amountDraftOk(t, pcs), t).toBe(false)
+    for (const t of ['2M', '120cm', '5mmm']) expect(amountDraftOk(t, m), t).toBe(false)
   })
 })
 
 describe('amountExample', () => {
   it('shows an amount in the field\'s own unit', () => {
-    expect(amountExample(pcs)).toBe('10 pcs or 5x100')
-    expect(amountExample(m)).toBe('10 m or 50 mm')
-    expect(amountExample({ key: 'custom:x', name: 'Rolls', symbol: 'roll', prefixPowers: [] })).toBe('10 roll or 5x100')
+    expect(amountExample(pcs)).toBe('10, 2k or 5x100')
+    expect(amountExample(m)).toBe('10, 50c or 5x100')
+    expect(amountExample(BUILTIN_UNITS.g)).toBe('10, 50m or 5x100')
+    expect(amountExample({ key: 'custom:x', name: 'Rolls', symbol: 'roll', prefixPowers: [] })).toBe('10 or 5x100')
   })
 })

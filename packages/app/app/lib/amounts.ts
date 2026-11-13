@@ -10,24 +10,54 @@ export function unitChoices(s: InventorySnapshot): UnitDef[] {
 }
 
 
-/** The text with only the characters an amount in this unit can hold: digits, decimal marks, spaces, expression signs and
- *  brackets, and the letters of the unit's symbol and of its prefixes ('k' for pieces, 'm', 'c', 'k' for meters; 'u' as
- *  well as 'µ' for micro). "asda" in pieces is ''. Whether the rest reads as an amount is parseAmountText's job. */
-export function amountTextOnly(text: string, unit: UnitDef): string {
-  const letters = new Set(unit.symbol)
-  for (const p of unit.prefixPowers) {
-    for (const ch of SI_PREFIXES[p]?.symbol ?? '') letters.add(ch)
-    if (p === -6) letters.add('u')
-  }
-  return [...text].filter((ch) => /[\d\s.,+\-*/×÷xX()]/.test(ch) || letters.has(ch)).join('')
+/** What may follow a number in an amount field of this unit: its prefixes ('k', 'M' for pieces; 'u' as well as 'µ' for
+ *  micro). The field shows the unit symbol itself, so the symbol is never typed, except after a prefix spelled like it
+ *  ('mm' for millimetres, as a bare 'm' in meters is the meter). */
+export function amountSuffixes(unit: UnitDef): string[] {
+  return unit.prefixPowers.flatMap((p) => {
+    const symbols = p === -6 ? ['µ', 'u'] : [SI_PREFIXES[p]?.symbol ?? '']
+    return symbols.filter((x) => x !== '').map((x) => (x === unit.symbol ? x + unit.symbol : x))
+  })
 }
 
-/** An example amount in this unit for error copy: "10 pcs or 5x100", "10 m or 50 mm" (the smallest prefix below the
- *  unit when it has one). */
+/** Whether the text can be (the start of) an amount in this unit: numbers, expression signs and brackets, and at most
+ *  one prefix of the unit right after a number, which closes it ('2k', '2k + 3k'; not 'k2', '4k7', '10 pcs', 'asda').
+ *  Whether it reads as a full amount is still parseAmountText's job ('2.' or '(3' pass here). */
+export function amountDraftOk(text: string, unit: UnitDef): boolean {
+  const suffixes = amountSuffixes(unit)
+  let afterNumber = false
+  let afterSuffix = false
+  for (let i = 0; i < text.length; ) {
+    const ch = text[i]!
+    if (/\s/.test(ch)) i++
+    else if (/[\d.,]/.test(ch)) {
+      if (afterSuffix) return false
+      afterNumber = true
+      i++
+    } else if (/[+\-*/×÷xX()]/.test(ch)) {
+      afterNumber = false
+      afterSuffix = false
+      i++
+    } else {
+      const run = /^[^\s\d.,+\-*/×÷xX()]+/.exec(text.slice(i))![0]
+      if (!afterNumber || afterSuffix || !suffixes.some((x) => x.startsWith(run))) return false
+      afterSuffix = true
+      i += run.length
+    }
+  }
+  return true
+}
+
+/** An example for the invalid-amount message, as typed in this unit's field (the symbol shows at the field's edge):
+ *  "10, 2k or 5x100" in pieces, "10, 50c or 5x100" in meters (the prefix nearest below the unit, else the nearest above,
+ *  never one spelled like the symbol), "10 or 5x100" without prefixes. */
 export function amountExample(unit: UnitDef): string {
-  const below = unit.prefixPowers.filter((p) => p < 0).sort((a, b) => a - b)[0]
-  const prefix = below === undefined ? undefined : SI_PREFIXES[below]?.symbol
-  return prefix ? `10 ${unit.symbol} or 50 ${prefix}${unit.symbol}` : `10 ${unit.symbol} or 5x100`
+  const usable = unit.prefixPowers.filter((p) => SI_PREFIXES[p] && SI_PREFIXES[p]!.symbol !== unit.symbol)
+  const below = usable.filter((p) => p < 0).sort((a, b) => b - a)[0]
+  const above = usable.filter((p) => p > 0).sort((a, b) => a - b)[0]
+  const p = below ?? above
+  if (p === undefined) return '10 or 5x100'
+  return `10, ${p < 0 ? 50 : 2}${SI_PREFIXES[p]!.symbol} or 5x100`
 }
 
 /** Text with an operator or a bracket is an expression ("2.5m + 120cm", "5x100"); anything else is a plain value. */

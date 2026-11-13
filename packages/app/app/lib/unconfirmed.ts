@@ -29,7 +29,8 @@ export type SendPhase = 'editing' | 'sending' | 'unconfirmed' | 'retrying'
 /** probablySaved: a retry was refused as landedBefore explains; the form closes and says so instead of an error. */
 export type SendOutcome = 'saved' | 'probablySaved' | 'failed'
 
-export interface UnconfirmedSender {
+/** The freeze state of a write whose outcome may be unknown, shared by every sender (see createUnconfirmedCore). */
+interface FreezeState {
   phase: Readonly<Ref<SendPhase>>
   /** A write is on its way (sending or retrying): the sheet stays open. */
   busy: ComputedRef<boolean>
@@ -37,13 +38,102 @@ export interface UnconfirmedSender {
   frozen: ComputedRef<boolean>
   /** The failure of the last attempt; null after a success. */
   error: Readonly<Ref<unknown>>
+  /** Back to editing with nothing pending, for a form that opens again (it renews its ids itself). */
+  reset(): void
+}
+
+/** What a send or retry came to; `result`: the write's own answer, when it was made and saved. */
+export interface Attempt<R> {
+  outcome: SendOutcome
+  result?: R
+}
+
+export interface UnconfirmedCore<P, R> extends FreezeState {
+  /** Sends a payload. While unconfirmed it sends the unconfirmed payload again instead (see retry). */
+  send(payload: P): Promise<Attempt<R>>
+  /** Sends the unconfirmed payload again, unchanged; saved without a write when `shows` says the copy holds it. Any
+   *  failure but `landedBefore` keeps the form unconfirmed: the first attempt may still have landed. */
+  retry(): Promise<Attempt<R>>
+}
+
+/**
+ * The one state machine behind every write that freezes its form on an unknown outcome (spec 4.7): a first attempt
+ * failing as `freezesOn` says leaves the payload pending and the form unconfirmed until a retry of the same payload or
+ * a reset; any other failure returns to editing.
+ */
+export function createUnconfirmedCore<P, R>(
+  attempt: (payload: P) => Promise<R>,
+  policy: {
+    freezesOn: (payload: P, e: unknown) => boolean
+    landedBefore?: (payload: P, e: unknown) => boolean
+    shows?: (payload: P) => boolean
+  },
+): UnconfirmedCore<P, R> {
+  const phase = ref<SendPhase>('editing')
+  const error = shallowRef<unknown>(null)
+  /** The payload whose outcome is unknown. */
+  let pending: { payload: P } | null = null
+
+  function settle(): void {
+    pending = null
+    error.value = null
+    phase.value = 'editing'
+  }
+
+  async function run(payload: P, retrying: boolean): Promise<Attempt<R>> {
+    phase.value = retrying ? 'retrying' : 'sending'
+    let result: R
+    try {
+      result = await attempt(payload)
+    } catch (e) {
+      error.value = e
+      if (retrying && policy.landedBefore?.(payload, e)) {
+        pending = null
+        phase.value = 'editing'
+        return { outcome: 'probablySaved' }
+      }
+      if (retrying || policy.freezesOn(payload, e)) {
+        pending = { payload }
+        phase.value = 'unconfirmed'
+      } else {
+        phase.value = 'editing'
+      }
+      return { outcome: 'failed' }
+    }
+    settle()
+    return { outcome: 'saved', result }
+  }
+
+  async function retry(): Promise<Attempt<R>> {
+    const held = pending
+    if (!held || phase.value !== 'unconfirmed') return { outcome: 'failed' }
+    if (policy.shows?.(held.payload)) {
+      settle()
+      return { outcome: 'saved' }
+    }
+    return run(held.payload, true)
+  }
+
+  return {
+    phase: readonly(phase),
+    busy: computed(() => phase.value === 'sending' || phase.value === 'retrying'),
+    frozen: computed(() => phase.value === 'unconfirmed' || phase.value === 'retrying'),
+    error: readonly(error),
+    send(payload) {
+      if (phase.value === 'unconfirmed') return retry()
+      return phase.value === 'editing' ? run(payload, false) : Promise.resolve({ outcome: 'failed' })
+    },
+    retry,
+    reset: settle,
+  }
+}
+
+export interface UnconfirmedSender extends FreezeState {
   /** Sends a form's command. While unconfirmed it sends the unconfirmed command again instead (see retry). */
   send(command: Command): Promise<SendOutcome>
   /** Sends the unconfirmed command again with the same ids; 'saved' without a write when the shown copy already holds it
    *  (`shows`). Any failure but landedBefore keeps the form unconfirmed: the first attempt may still have landed. */
   retry(): Promise<SendOutcome>
-  /** Back to editing with nothing pending, for a form that opens again (it renews its ids itself). */
-  reset(): void
 }
 
 /**
@@ -55,63 +145,15 @@ export function createUnconfirmedSender(
   apply: (command: Command) => Promise<void>,
   shows: (command: Command) => boolean = () => false,
 ): UnconfirmedSender {
-  const phase = ref<SendPhase>('editing')
-  const error = shallowRef<unknown>(null)
-  /** The command whose outcome is unknown. */
-  let pending: Command | null = null
-
-  async function run(command: Command, retrying: boolean): Promise<SendOutcome> {
-    phase.value = retrying ? 'retrying' : 'sending'
-    try {
-      await apply(command)
-    } catch (e) {
-      error.value = e
-      if (retrying && landedBefore(command, e)) {
-        pending = null
-        phase.value = 'editing'
-        return 'probablySaved'
-      }
-      if (retrying || (isUnknownOutcome(e) && !isAbsolute(command))) {
-        pending = command
-        phase.value = 'unconfirmed'
-      } else {
-        phase.value = 'editing'
-      }
-      return 'failed'
-    }
-    pending = null
-    error.value = null
-    phase.value = 'editing'
-    return 'saved'
-  }
-
-  async function retry(): Promise<SendOutcome> {
-    const command = pending
-    if (!command || phase.value !== 'unconfirmed') return 'failed'
-    if (shows(command)) {
-      pending = null
-      error.value = null
-      phase.value = 'editing'
-      return 'saved'
-    }
-    return run(command, true)
-  }
-
+  const core = createUnconfirmedCore<Command, unknown>(apply, {
+    freezesOn: (command, e) => isUnknownOutcome(e) && !isAbsolute(command),
+    landedBefore,
+    shows,
+  })
   return {
-    phase: readonly(phase),
-    busy: computed(() => phase.value === 'sending' || phase.value === 'retrying'),
-    frozen: computed(() => phase.value === 'unconfirmed' || phase.value === 'retrying'),
-    error: readonly(error),
-    send(command) {
-      if (phase.value === 'unconfirmed') return retry()
-      return phase.value === 'editing' ? run(command, false) : Promise.resolve('failed')
-    },
-    retry,
-    reset() {
-      pending = null
-      error.value = null
-      phase.value = 'editing'
-    },
+    ...core,
+    send: async (command) => (await core.send(command)).outcome,
+    retry: async () => (await core.retry()).outcome,
   }
 }
 

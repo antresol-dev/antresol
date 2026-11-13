@@ -259,14 +259,89 @@ describe('intake draft sync', () => {
     expect(save).toHaveBeenCalledTimes(1)
   })
 
-  it('a draft committed elsewhere is dropped from the device', async () => {
+  it('a draft committed elsewhere keeps the unsaved edits, marked with the committed row; keepMine is refused, takeTheirs drops them', async () => {
+    const id = newId()
+    const committed: Intake = { ...theirs(id, 'Theirs', 'r9'), status: 'committed', draft: null, lines: [] }
+    const save = vi.fn<Save>(async () => ({ saved: false, reason: 'committed' }))
+    const db = createMemoryDeviceDb()
+    const sync = createIntakeDraftSync({ db, save, sourceId: () => SRC, inventoryId: () => INV, findIntake: async () => committed })
+    await sync.load(id, theirs(id, 'Old', 'r1'))
+    await sync.edit(id, shop('Mine'))
+    await sync.flush(id)
+    const copy = (await db.getIntakeDraft(SRC, id))!
+    expect(copy).toMatchObject({ dirty: true, header: { shop: 'Mine' } })
+    expect(copy.changedElsewhere).toEqual(committed)
+    // Never sent again by itself.
+    await sync.edit(id, shop('Mine 2'))
+    await vi.advanceTimersByTimeAsync(10 * DRAFT_SYNC_DELAY_MS)
+    await sync.flush()
+    expect(save).toHaveBeenCalledTimes(1)
+    await expect(sync.resolveConflict(id, 'keepMine')).rejects.toMatchObject({ name: 'StorageError', code: 'conflict' })
+    expect(save).toHaveBeenCalledTimes(1)
+    expect(await db.getIntakeDraft(SRC, id)).toMatchObject({ dirty: true, header: { shop: 'Mine 2' }, changedElsewhere: committed })
+    await sync.resolveConflict(id, 'takeTheirs')
+    expect(await db.getIntakeDraft(SRC, id)).toBeNull()
+  })
+
+  it('without a row to read, the mark is a committed row made from the copy', async () => {
     const save = vi.fn<Save>(async () => ({ saved: false, reason: 'committed' }))
     const { sync, db } = setup(save)
     const id = newId()
     await sync.load(id, theirs(id, 'Old', 'r1'))
     await sync.edit(id, shop('Mine'))
     await sync.flush(id)
-    expect(await db.getIntakeDraft(SRC, id)).toBeNull()
+    expect((await db.getIntakeDraft(SRC, id))?.changedElsewhere).toMatchObject({ id, status: 'committed', header: { shop: 'Mine' } })
+  })
+
+  it('load of a committed row: a dirty copy is kept and marked, a clean one is dropped and the load rejects', async () => {
+    const { sync, db } = setup(vi.fn<Save>())
+    const [dirty, clean] = [newId(), newId()]
+    const committedRow = (id: Id): Intake => ({ ...theirs(id, 'Theirs', 'r9'), status: 'committed', draft: null, lines: [] })
+    await sync.load(dirty, theirs(dirty, 'Old', 'r1'))
+    await sync.edit(dirty, shop('Mine'))
+    const marked = await sync.load(dirty, committedRow(dirty))
+    expect(marked).toMatchObject({ dirty: true, header: { shop: 'Mine' }, changedElsewhere: { status: 'committed' } })
+    expect((await db.getIntakeDraft(SRC, dirty))?.changedElsewhere?.status).toBe('committed')
+    await sync.load(clean, theirs(clean, 'Old', 'r1'))
+    await expect(sync.load(clean, committedRow(clean))).rejects.toMatchObject({ name: 'StorageError', code: 'not_found' })
+    expect(await db.getIntakeDraft(SRC, clean)).toBeNull()
+  })
+
+  it('the device storage failing during a timed write: no unhandled rejection, the copy stays dirty, flush resolves', async () => {
+    const unhandled: unknown[] = []
+    const onUnhandled = (e: unknown): void => {
+      unhandled.push(e)
+    }
+    process.on('unhandledRejection', onUnhandled)
+    try {
+      const { sync, save, db } = setup()
+      const id = newId()
+      await sync.load(id, null)
+      await sync.edit(id, shop('LCSC'))
+      const put = db.putIntakeDraft.bind(db)
+      const get = db.getIntakeDraft.bind(db)
+      db.putIntakeDraft = async () => {
+        throw new DOMException('quota exceeded', 'QuotaExceededError')
+      }
+      await vi.advanceTimersByTimeAsync(DRAFT_SYNC_DELAY_MS)
+      expect(save).toHaveBeenCalledTimes(1)
+      expect((await db.getIntakeDraft(SRC, id))?.dirty).toBe(true)
+      db.getIntakeDraft = async () => {
+        throw new DOMException('gone', 'UnknownError')
+      }
+      await expect(sync.flush(id)).resolves.toBeUndefined()
+      await expect(sync.flush()).resolves.toBeUndefined()
+      await expect(sync.load(id, null)).rejects.toBeInstanceOf(DOMException)
+      db.putIntakeDraft = put
+      db.getIntakeDraft = get
+      // Back: sent again from the base it had (the answer it could not keep makes the database row look changed).
+      await sync.flush(id)
+      expect(save).toHaveBeenCalledTimes(2)
+      await vi.advanceTimersByTimeAsync(0)
+      expect(unhandled).toEqual([])
+    } finally {
+      process.off('unhandledRejection', onUnhandled)
+    }
   })
 })
 

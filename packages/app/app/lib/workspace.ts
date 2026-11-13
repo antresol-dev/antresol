@@ -1347,10 +1347,24 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     save: saveIntakeDraft,
     sourceId: () => state.current?.sourceId ?? null,
     inventoryId: () => state.current?.inventoryId ?? null,
+    findIntake: async (id) => (await listIntakes()).find((i) => i.id === id) ?? null,
     now: () => now().getTime(),
   })
 
   async function deleteIntakeDraft(id: Id): Promise<void> {
+    const copy = await intakeDrafts.peek(id)
+    if (copy && copy.baseDraftRev === null) {
+      // Never saved from here: gone with its device copy, offline too. A row a lost answer may have left is deleted
+      // when the source answers, or found in the list again.
+      await intakeDrafts.forget(id)
+      try {
+        const { sourceId, conn } = draftSource()
+        await guarded(sourceId, conn, () => conn.storage.deleteIntakeDraft(id))
+      } catch {
+        // Nothing the person asked for depends on it.
+      }
+      return
+    }
     const { sourceId, conn } = draftSource()
     // The device copy first, with its pending write: nothing sends the draft back after the delete.
     await intakeDrafts.forget(id)
@@ -1358,12 +1372,19 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   }
 
   async function updateIntakeHeader(id: Id, header: IntakeHeader): Promise<void> {
-    if (await intakeDrafts.peek(id)) {
+    const copy = await intakeDrafts.peek(id)
+    const committedElsewhere = (d: LocalIntakeDraft | null): boolean => d?.changedElsewhere?.status === 'committed'
+    if (copy && !committedElsewhere(copy)) {
       // Written with the draft, from the draftRev the copy knows: a separate header write would make its next save
-      // look changed elsewhere. Should the draft turn out committed, its copy is dropped and the header goes below.
+      // look changed elsewhere.
       await intakeDrafts.edit(id, (d) => ({ ...d, header }))
       await intakeDrafts.flush(id)
-      if (await intakeDrafts.peek(id)) return
+      const after = await intakeDrafts.peek(id)
+      if (!after || !committedElsewhere(after)) return
+      // Committed elsewhere meanwhile. Earlier edits of the copy stay marked for the person; a copy that held only
+      // this header edit is dropped, and the header goes to the committed intake below.
+      if (copy.dirty) return
+      await intakeDrafts.forget(id)
     }
     const { sourceId, conn } = draftSource()
     await guarded(sourceId, conn, () => conn.storage.updateIntakeHeader(id, header, { device: state.deviceName }))

@@ -1,7 +1,6 @@
 import { emptyIntakeDraft, StorageError, type Id, type Intake, type IntakeDraftContent, type IntakeHeader } from '@antresol/core'
-import { computed, readonly, ref, shallowRef, type ComputedRef, type Ref } from 'vue'
 import type { DeviceDb } from './device-db'
-import { isUnknownOutcome, type SendPhase } from './unconfirmed'
+import { createUnconfirmedCore, isUnknownOutcome, type Attempt, type UnconfirmedCore } from './unconfirmed'
 import type { Workspace } from './workspace-types'
 
 /**
@@ -21,7 +20,8 @@ export interface LocalIntakeDraft {
   baseDraftRev: string | null
   /** Edits the database does not have yet. */
   dirty: boolean
-  /** The database row as another device saved it while this copy had unsaved edits; nothing is sent until resolved. */
+  /** The database row as another device saved it while this copy had unsaved edits; nothing is sent until resolved.
+   *  A committed row (committed on another device): only takeTheirs is possible, which drops the copy. */
   changedElsewhere: Intake | null
 }
 
@@ -33,11 +33,12 @@ export interface IntakeDraftSync {
   /** Sends the draft (every draft of the current source without `id`) now if it has unsaved edits. Never rejects: a
    *  write that fails leaves the copy dirty for the next flush. */
   flush(id?: Id): Promise<void>
-  /** keepMine: the copy is written over the database row (force); takeTheirs: the row replaces the copy. */
+  /** keepMine: the copy is written over the database row (force); takeTheirs: the row replaces the copy. Against a row
+   *  committed elsewhere, takeTheirs drops the copy and keepMine rejects with `conflict`, the copy left as it is. */
   resolveConflict(id: Id, choice: 'keepMine' | 'takeTheirs'): Promise<void>
   /** The device copy wins while it is dirty (sent now); otherwise the database row, kept on the device as what was
-   *  last seen. Null and no copy: a new empty draft, kept in memory until its first edit. A committed row drops the copy
-   *  and rejects with `not_found`. */
+   *  last seen. Null and no copy: a new empty draft, kept in memory until its first edit. A committed row: a dirty copy
+   *  is kept and marked with it (changedElsewhere); a clean one is dropped and the call rejects with `not_found`. */
   load(id: Id, fromDatabase: Intake | null): Promise<LocalIntakeDraft>
   /** The device copy as it is now; null: none. */
   peek(id: Id): Promise<LocalIntakeDraft | null>
@@ -70,6 +71,9 @@ export function createIntakeDraftSync(deps: {
   sourceId: () => string | null
   /** The current inventory: only its drafts are sent (the save writes into it). */
   inventoryId: () => Id | null
+  /** The intake's database row, to mark a copy whose draft was committed elsewhere; without it (or when it fails) the
+   *  mark is a committed row made from the copy's header. */
+  findIntake?: (id: Id) => Promise<Intake | null>
   now?: () => number
 }): IntakeDraftSync {
   const { db, save } = deps
@@ -113,42 +117,69 @@ export function createIntakeDraftSync(deps: {
     )
   }
 
+  /** The row a copy is marked with when its draft was committed elsewhere (see deps.findIntake). */
+  async function committedRow(id: Id, copy: LocalIntakeDraft): Promise<Intake> {
+    const found = await deps.findIntake?.(id).catch(() => null)
+    if (found?.status === 'committed') return found
+    return {
+      id,
+      inventoryId: copy.inventoryId,
+      status: 'committed',
+      header: copy.header,
+      draft: null,
+      lines: null,
+      draftRev: '',
+      createdAt: '',
+      createdBy: '',
+      updatedAt: '',
+      updatedBy: '',
+      committedAt: null,
+    }
+  }
+
+  const isCommitted = (copy: LocalIntakeDraft): boolean => copy.changedElsewhere?.status === 'committed'
+
   async function put(sourceId: string, id: Id, draft: LocalIntakeDraft): Promise<void> {
     fresh.delete(freshKey(sourceId, id))
     await db.putIntakeDraft(sourceId, id, plain(draft))
   }
 
-  /** One database write of the copy if it has unsaved edits and nothing blocks it; failures leave it dirty. */
+  /** One database write of the copy if it has unsaved edits and nothing blocks it. Never rejects: a failure, of the
+   *  database or of the device's own storage, leaves the copy as it was (dirty) for a later flush. */
   function send(id: Id, force: boolean): Promise<void> {
-    return serial(sends, id, async () => {
-      const sourceId = deps.sourceId()
-      if (sourceId === null) return
-      const sent = await withCopy(id, () => db.getIntakeDraft(sourceId, id))
-      if (!sent || !sent.dirty || (sent.changedElsewhere && !force)) return
-      if (deps.inventoryId() !== sent.inventoryId) return
-      const editsBefore = edits.get(id) ?? 0
-      let result: Awaited<ReturnType<typeof save>>
-      try {
-        result = await save(id, sent.header, sent.content, sent.baseDraftRev, force)
-      } catch {
-        // Offline or refused: the copy stays dirty and goes out with the next flush (the app calls one when back online).
-        return
+    return serial(sends, id, () => sendNow(id, force)).catch(() => {})
+  }
+
+  async function sendNow(id: Id, force: boolean): Promise<void> {
+    const sourceId = deps.sourceId()
+    if (sourceId === null) return
+    const sent = await withCopy(id, () => db.getIntakeDraft(sourceId, id))
+    if (!sent || !sent.dirty || (sent.changedElsewhere && !force)) return
+    if (deps.inventoryId() !== sent.inventoryId) return
+    const editsBefore = edits.get(id) ?? 0
+    let result: Awaited<ReturnType<typeof save>>
+    try {
+      result = await save(id, sent.header, sent.content, sent.baseDraftRev, force)
+    } catch {
+      // Offline or refused: the copy stays dirty and goes out with the next flush (the app calls one when back online).
+      return
+    }
+    // Committed on another device: nothing can be saved into it any more. Read before the copy is locked (a network
+    // call); the edits stay, marked with it, until the person discards them (takeTheirs).
+    const committed = !result.saved && result.reason === 'committed' ? await committedRow(id, sent) : null
+    await withCopy(id, async () => {
+      const copy = await db.getIntakeDraft(sourceId, id)
+      if (!copy) return
+      if (result.saved) {
+        const editedSince = (edits.get(id) ?? 0) !== editsBefore
+        await put(sourceId, id, { ...copy, baseDraftRev: result.draftRev, changedElsewhere: null, dirty: editedSince })
+        if (editedSince && !timers.has(id)) schedule(id)
+      } else if (result.reason === 'changed') {
+        await put(sourceId, id, { ...copy, changedElsewhere: result.current })
+      } else {
+        cancel(id)
+        await put(sourceId, id, { ...copy, changedElsewhere: committed })
       }
-      await withCopy(id, async () => {
-        const copy = await db.getIntakeDraft(sourceId, id)
-        if (!copy) return
-        if (result.saved) {
-          const editedSince = (edits.get(id) ?? 0) !== editsBefore
-          await put(sourceId, id, { ...copy, baseDraftRev: result.draftRev, changedElsewhere: null, dirty: editedSince })
-          if (editedSince && !timers.has(id)) schedule(id)
-        } else if (result.reason === 'changed') {
-          await put(sourceId, id, { ...copy, changedElsewhere: result.current })
-        } else {
-          // Committed on another device: nothing can be saved into it any more.
-          cancel(id)
-          await db.deleteIntakeDraft(sourceId, id)
-        }
-      })
     })
   }
 
@@ -192,6 +223,11 @@ export function createIntakeDraftSync(deps: {
       const copy = await db.getIntakeDraft(sourceId, id)
       const theirs = copy?.changedElsewhere
       if (!copy || !theirs) return false
+      if (theirs.status === 'committed') {
+        if (choice === 'keepMine') throw new StorageError('conflict', `intake ${id} was committed on another device`)
+        await db.deleteIntakeDraft(sourceId, id)
+        return false
+      }
       // keepMine: from their revision on; should the forced write fail, a later plain one still sees a third version.
       await put(
         sourceId,
@@ -208,12 +244,19 @@ export function createIntakeDraftSync(deps: {
   async function load(id: Id, fromDatabase: Intake | null): Promise<LocalIntakeDraft> {
     const sourceId = deps.sourceId()
     if (sourceId === null) throw new StorageError('not_found')
-    if (fromDatabase?.status === 'committed') {
-      await forget(id)
-      throw new StorageError('not_found', `intake ${id} is committed`)
-    }
     const loaded = await withCopy(id, async () => {
       const copy = await db.getIntakeDraft(sourceId, id)
+      if (fromDatabase?.status === 'committed') {
+        if (!copy?.dirty) {
+          fresh.delete(freshKey(sourceId, id))
+          if (copy) await db.deleteIntakeDraft(sourceId, id)
+          return null
+        }
+        const marked = { ...copy, changedElsewhere: fromDatabase }
+        await put(sourceId, id, marked)
+        return marked
+      }
+      if (copy && isCommitted(copy)) return copy
       if (copy?.dirty) {
         const known = [copy.baseDraftRev, copy.changedElsewhere?.draftRev]
         if (fromDatabase && !known.includes(fromDatabase.draftRev)) {
@@ -245,6 +288,10 @@ export function createIntakeDraftSync(deps: {
       fresh.set(key, created)
       return created
     })
+    if (!loaded) {
+      cancel(id)
+      throw new StorageError('not_found', `intake ${id} is committed`)
+    }
     // Left dirty by a closed tab or a failed write: sent now.
     if (loaded.dirty && !loaded.changedElsewhere) void send(id, false)
     return loaded
@@ -271,66 +318,23 @@ export function createIntakeDraftSync(deps: {
 
 export type CommitIntakeResult = Awaited<ReturnType<Workspace['commitIntake']>>
 
-export interface IntakeCommitSender {
-  phase: Readonly<Ref<SendPhase>>
-  busy: ComputedRef<boolean>
-  /** The outcome of the last commit is unknown: the draft is read-only; the screen offers Retry. */
-  frozen: ComputedRef<boolean>
-  error: Readonly<Ref<unknown>>
+export interface IntakeCommitSender extends Omit<UnconfirmedCore<Id, CommitIntakeResult>, 'send' | 'retry'> {
   /** Commits; null when it failed (see `error`). While unconfirmed it retries instead. */
   send(id: Id): Promise<CommitIntakeResult | null>
   /** Commits the unconfirmed intake again. Safe: a commit that landed is found committed and nothing more is written. */
   retry(): Promise<CommitIntakeResult | null>
-  reset(): void
 }
 
 /**
- * The commit of an intake with the unknown outcome handled as createUnconfirmedSender does for a form: after one the
- * draft freezes until a retry (any failure of a retry keeps it frozen) or a reset.
+ * The commit of an intake on the same state machine as a form's write (createUnconfirmedCore): after an unknown outcome
+ * the draft freezes until a retry (any failure of a retry keeps it frozen) or a reset.
  */
 export function createIntakeCommitSender(commit: (id: Id) => Promise<CommitIntakeResult>): IntakeCommitSender {
-  const phase = ref<SendPhase>('editing')
-  const error = shallowRef<unknown>(null)
-  let pending: Id | null = null
-
-  async function run(id: Id, retrying: boolean): Promise<CommitIntakeResult | null> {
-    phase.value = retrying ? 'retrying' : 'sending'
-    try {
-      const result = await commit(id)
-      pending = null
-      error.value = null
-      phase.value = 'editing'
-      return result
-    } catch (e) {
-      error.value = e
-      if (retrying || isUnknownOutcome(e)) {
-        pending = id
-        phase.value = 'unconfirmed'
-      } else {
-        phase.value = 'editing'
-      }
-      return null
-    }
-  }
-
-  function retry(): Promise<CommitIntakeResult | null> {
-    return pending !== null && phase.value === 'unconfirmed' ? run(pending, true) : Promise.resolve(null)
-  }
-
+  const core = createUnconfirmedCore<Id, CommitIntakeResult>(commit, { freezesOn: (_id, e) => isUnknownOutcome(e) })
+  const resultOf = (a: Attempt<CommitIntakeResult>): CommitIntakeResult | null => (a.outcome === 'saved' ? (a.result ?? null) : null)
   return {
-    phase: readonly(phase),
-    busy: computed(() => phase.value === 'sending' || phase.value === 'retrying'),
-    frozen: computed(() => phase.value === 'unconfirmed' || phase.value === 'retrying'),
-    error: readonly(error),
-    send(id) {
-      if (phase.value === 'unconfirmed') return retry()
-      return phase.value === 'editing' ? run(id, false) : Promise.resolve(null)
-    },
-    retry,
-    reset() {
-      pending = null
-      error.value = null
-      phase.value = 'editing'
-    },
+    ...core,
+    send: async (id) => resultOf(await core.send(id)),
+    retry: async () => resultOf(await core.retry()),
   }
 }

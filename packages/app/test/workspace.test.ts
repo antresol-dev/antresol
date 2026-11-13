@@ -2926,6 +2926,18 @@ describe('workspace intakes', () => {
     expect(await h.db.getIntakeDraft('s1', intakeId)).toMatchObject({ dirty: true })
   })
 
+  it('a draft never saved from this device is deleted offline too: its device copy goes', async () => {
+    const { h, ws, itemId } = await started()
+    const intakeId = newId()
+    await ws.intakeDrafts.load(intakeId, null)
+    await ws.intakeDrafts.edit(intakeId, (d) => ({ ...d, header, content: { newItems: [], lines: [line(itemId, '1')] } }))
+    h.flags.offline = true
+    await ws.listIntakes().catch(() => {})
+    expect(ws.state.readOnly).toBe('offline')
+    await ws.deleteIntakeDraft(intakeId)
+    expect(await h.db.getIntakeDraft('s1', intakeId)).toBeNull()
+  })
+
   it('a draft saved on another device since it was opened here: refused as a conflict with its values reloaded, nothing written', async () => {
     const { h, ws, inv, itemId } = await started()
     const intakeId = newId()

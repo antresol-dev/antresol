@@ -492,8 +492,10 @@ async function remove(): Promise<void> {
 }
 
 const title = computed(() => t(editing.value ? 'intakes.line.editTitle' : 'intakes.line.addTitle'))
+// Like the app's list rows: a rounded highlight whose edges clear the text (the row reaches 12 px past the column on both
+// sides, so labels stay aligned with the fields above), and an inset divider between rows instead of a full-width border.
 const summaryRow =
-  'flex min-h-11 w-full min-w-0 items-center gap-3 border-b border-divider py-2 text-left transition-colors duration-150 hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none'
+  "relative -mx-3 flex min-h-11 min-w-0 items-center gap-3 rounded-field px-3 py-2 text-left transition-colors duration-150 not-first:before:absolute not-first:before:top-0 not-first:before:right-3 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-[''] hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none"
 const matchRow =
   'flex min-h-11 w-full min-w-0 items-center gap-2.5 rounded-field px-3 py-2 text-left transition-colors duration-150 hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none'
 const banner = 'grid gap-1 rounded-field px-3 py-2.5 text-[13px]'
@@ -648,7 +650,7 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-2.5 
             <template v-else>{{ haveText }}</template>
           </p>
           <div>
-            <Button type="button" variant="ghost" size="sm" class="-ml-2 h-9 text-accent-ink" :disabled="disabled" @click="changeItem">{{ $t('intakes.line.change') }}</Button>
+            <Button type="button" variant="ghost" size="sm" class="h-9 text-accent-ink" :disabled="disabled" @click="changeItem">{{ $t('intakes.line.change') }}</Button>
           </div>
         </div>
 

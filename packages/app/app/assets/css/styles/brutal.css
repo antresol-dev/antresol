@@ -13,6 +13,10 @@
  *     text in both themes (its h.fg / p.fg), and so is what is inside it; the open row menu's "⋯" likewise.
  *  4. The tree's rows under the pointer use the row hover (rowHover: the mock-up's pale yellow in light, a dark yellow
  *     in dark, where those rows keep their light text) rather than the flat controls' pale yellow.
+ *  5. The empty photo block is the neutral `photo`, not a Memphis card (plan 12, F8).
+ *
+ * Controls nested in a card or the selected row draw a 1.5 px line (--brutal-ring), so no more than two levels of the
+ * 2 px line meet (F8).
  */
 
 [data-style='brutal']:root {
@@ -27,7 +31,8 @@
   --brutal-ink: var(--st-card-fg);
   --brutal-ink-muted: var(--st-card-muted);
   --brutal-paper: var(--st-pill-sel-bg);
-  --brutal-ring: inset 0 0 0 2px var(--brutal-ink);
+  /* Controls nested in a card or the selected row: 1.5 px (F8), so no more than two levels of the 2 px line meet. */
+  --brutal-ring: inset 0 0 0 1.5px var(--brutal-ink);
   --ghost-hover: var(--st-row-hover);
 }
 
@@ -93,6 +98,39 @@
   --ring: var(--brutal-ink);
 }
 
+/* 5. The empty photo block: a card shaped like the photo (ItemGallery gives it the cover's aspect ratio), drawn as the
+   neutral `photo` (F8: the panel with a faint hatch) instead of a Memphis colour, so what is in it keeps the page's
+   colours, not the ink of a Memphis card. */
+[data-style='brutal'] .raised-card[class*='aspect-'] {
+  --foreground: var(--st-fg);
+  --icon: var(--st-icon);
+  --accent-ink: var(--st-ink);
+  --muted-foreground: var(--st-muted);
+  --subtle-foreground: var(--st-subtle);
+  --dimmed-foreground: var(--st-dimmed);
+  --destructive: var(--st-destructive);
+  --warning: var(--st-warning);
+  --accent-soft: var(--st-accent-soft);
+  --accent-soft-foreground: var(--st-accent-soft-fg);
+  --surface: var(--st-surface);
+  --field: var(--st-field);
+  --chip: var(--st-chip);
+  --hover: var(--st-row-hover);
+  --input: var(--st-field-line);
+  --divider: var(--st-divider-color);
+  --border: var(--st-border);
+  --ring: var(--st-ring);
+  border-radius: var(--st-photo-r);
+  background: var(--st-photo);
+  box-shadow: var(--st-photo-sh);
+  color: var(--st-photo-fg);
+}
+@media (prefers-contrast: more) {
+  [data-style='brutal'] .raised-card[class*='aspect-'] {
+    background: var(--st-photo-solid);
+  }
+}
+
 /* Raised controls on a card or the selected row: white, the ink line, the light theme's offsets. */
 [data-style='brutal'] :is(.raised-card, .row-selected) :is(.raised, .raised-sm, .add-tile) {
   --n-bg: var(--brutal-paper);
@@ -113,6 +151,10 @@
   background-color: var(--st-pill-sel-bg);
   background-image: none;
   box-shadow: var(--st-pill-sel-sh);
+}
+/* Its seam in ink too: the dark theme's cream seam all but vanished on the white pill. */
+[data-style='brutal'] :is(.raised-card, .row-selected) .pill > .pill-step + .pill-step {
+  border-left-color: var(--brutal-ink);
 }
 [data-style='brutal'] .raised-card .pill-step {
   --n-bg: var(--st-step-sel-n-bg);

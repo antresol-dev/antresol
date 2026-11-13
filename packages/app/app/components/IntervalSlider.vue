@@ -33,7 +33,8 @@ const at = (i: number): string => `calc(10px + (100% - 20px) * ${i / last})`
 
 <template>
   <div class="grid gap-1">
-    <p class="ps-(--field-inset) text-base font-semibold" aria-hidden="true">{{ label(shown) }}</p>
+    <!-- Pulled down into the empty top of the 44 px touch area, close to the track. -->
+    <p class="-mb-2.5 text-center text-sm font-semibold" aria-hidden="true">{{ label(shown) }}</p>
     <div class="relative h-11">
       <div class="pointer-events-none absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-muted" aria-hidden="true">
         <div class="h-full rounded-full bg-primary" :style="{ width: at(index) }" />
@@ -63,8 +64,8 @@ const at = (i: number): string => `calc(10px + (100% - 20px) * ${i / last})`
         @change="onChange"
       >
     </div>
-    <!-- Inset like the field text: the ends then sit under the first and last ticks (10 px in). -->
-    <div class="flex justify-between px-(--field-inset) text-xs text-subtle-foreground" aria-hidden="true">
+    <!-- The ends of the track: flush with it, like the track itself. -->
+    <div class="flex justify-between text-xs text-subtle-foreground" aria-hidden="true">
       <span>{{ $t('sync.intervalShortMin') }}</span>
       <span>{{ $t('sync.never') }}</span>
     </div>
@@ -103,8 +104,14 @@ const at = (i: number): string => `calc(10px + (100% - 20px) * ${i / last})`
   border: 3px solid var(--background);
   box-shadow: 0 1px 3px rgb(0 0 0 / 0.3);
 }
+/* Keyboard focus rings the thumb, not the whole 44 px box (which would cross the value text above the track). */
 .interval-slider:focus-visible {
-  outline-offset: 0;
-  border-radius: var(--radius-field);
+  outline: none;
+}
+.interval-slider:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring);
+}
+.interval-slider:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring);
 }
 </style>

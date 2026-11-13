@@ -9,6 +9,7 @@ export interface IntakeRow {
   /** The purchase day as written on the row: "12 Nov 2026". */
   date: string
   lineCount: number
+  /** Who started the intake (spec §3). */
   by: string
 }
 
@@ -56,7 +57,7 @@ export function intakeRows(intakes: Intake[], _s: InventorySnapshot): IntakeRow[
       title: intakeTitle(i.header),
       date: formatDay(i.header.purchasedOn),
       lineCount: lineCountOf(i),
-      by: i.updatedBy || i.createdBy,
+      by: i.createdBy,
     }))
 }
 

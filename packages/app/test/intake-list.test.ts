@@ -80,6 +80,11 @@ describe('intakeRows', () => {
     expect(rows[0]).toMatchObject({ id: d.id, status: 'draft', lineCount: 1, by: 'Phone' })
     expect(rows[1]!.lineCount).toBe(2)
   })
+
+  it('names the author, not the last editor (spec §3)', () => {
+    const d = { ...draft('D', null, '2026-11-05', ['esp32']), createdBy: 'Phone', updatedBy: 'Laptop' }
+    expect(intakeRows([d], s)[0]!.by).toBe('Phone')
+  })
 })
 
 describe('searchIntakes', () => {

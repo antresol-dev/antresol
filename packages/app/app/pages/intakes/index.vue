@@ -5,14 +5,16 @@ import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { errorMessageKey } from '~/lib/errors'
-import { intakeRows, searchIntakes } from '~/lib/intake-list'
+import { canCreateIntake, intakeRows, searchIntakes } from '~/lib/intake-list'
 
 definePageMeta({ layout: 'default' })
 
 const { t } = useI18n()
 const { state } = useWorkspace()
 const intakes = useIntakes()
-const { list, loading, failureKey, reload } = useIntakeList()
+const { list, loading, failureKey, offlineList, reload } = useIntakeList()
+/** The database's list with this device's drafts; offline, the drafts this device holds. */
+const shown = computed(() => list.value ?? offlineList.value)
 
 // The current inventory's snapshot only: never another inventory's paired with the current ref.
 const snapshot = computed(() => {
@@ -23,16 +25,17 @@ const snapshot = computed(() => {
 const query = ref('')
 const rows = computed(() => {
   const s = snapshot.value
-  if (!s || !list.value) return []
-  return intakeRows(searchIntakes(list.value, s, query.value), s)
+  if (!s || !shown.value) return []
+  return intakeRows(searchIntakes(shown.value, s, query.value), s)
 })
-const empty = computed(() => list.value !== null && list.value.length === 0)
-const noMatch = computed(() => list.value !== null && list.value.length > 0 && rows.value.length === 0)
+const empty = computed(() => shown.value !== null && shown.value.length === 0)
+const noMatch = computed(() => shown.value !== null && shown.value.length > 0 && rows.value.length === 0)
 
 const creating = ref(false)
-// A new intake lives on this device until its first edit; the screen opens it by its id.
+const canCreate = computed(() => canCreateIntake(state.readOnly))
+// A new intake lives on this device until its first edit (offline too); the screen opens it by its id.
 async function create(): Promise<void> {
-  if (creating.value || state.readOnly) return
+  if (creating.value || !canCreate.value) return
   creating.value = true
   try {
     const id = newId()
@@ -50,10 +53,10 @@ async function create(): Promise<void> {
   <main class="min-w-0">
     <ScreenHeader :title="$t('intakes.title')">
       <template #actions="{ compact }">
-        <Button v-if="compact" variant="ghost" size="icon" class="size-11 disabled:opacity-35" :aria-label="$t('intakes.new')" :disabled="creating || !!state.readOnly" @click="create">
+        <Button v-if="compact" variant="ghost" size="icon" class="size-11 disabled:opacity-35" :aria-label="$t('intakes.new')" :disabled="creating || !canCreate" @click="create">
           <Plus class="size-5" aria-hidden="true" />
         </Button>
-        <Button v-else class="h-9 rounded-field" :disabled="creating || !!state.readOnly" @click="create">
+        <Button v-else class="h-9 rounded-field" :disabled="creating || !canCreate" @click="create">
           <Plus class="size-4" aria-hidden="true" />
           {{ $t('intakes.new') }}
         </Button>
@@ -64,7 +67,7 @@ async function create(): Promise<void> {
         <Skeleton class="h-11 rounded-field" />
         <Skeleton class="h-40 rounded-card" />
       </div>
-      <EmptyState v-else-if="failureKey" :text="$t(failureKey)">
+      <EmptyState v-else-if="failureKey && (!offlineList || empty)" :text="$t(offlineList ? 'intakes.offlineList' : failureKey)">
         <Button variant="outline" class="h-11" @click="reload">{{ $t('status.retry') }}</Button>
       </EmptyState>
       <EmptyState v-else-if="empty" :text="$t('intakes.empty')" />
@@ -80,6 +83,7 @@ async function create(): Promise<void> {
             class="h-11 pl-9"
           />
         </div>
+        <p v-if="offlineList" class="text-[13px] text-muted-foreground">{{ $t('intakes.offlineList') }}</p>
         <EmptyState v-if="noMatch" :text="$t('intakes.noMatch')" />
         <IntakeList v-else :rows="rows" />
       </template>

@@ -22,6 +22,7 @@
     "empty": "No intakes yet. An intake records a batch of stock you received, such as an order.",
     "noMatch": "No intakes match",
     "needsConnection": "Intakes need a connection to the source",
+    "offlineList": "Connect to see all intakes",
     "notFound": "This intake doesn’t exist or was deleted.",
     "backToList": "All intakes",
     "header": {

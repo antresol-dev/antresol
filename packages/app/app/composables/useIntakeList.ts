@@ -1,10 +1,11 @@
 import { StorageError, type Intake } from '@antresol/core'
 import { errorMessageKey } from '~/lib/errors'
-import { withDeviceDrafts } from '~/lib/intake-list'
+import { deviceIntakes, withDeviceDrafts } from '~/lib/intake-list'
 
 /** The current inventory's intakes for a screen: read on mount and again after every new snapshot (a write or a
  *  refresh) or when the source turns ready; the answer of the latest request only. `list`: with this device's drafts
- *  (withDeviceDrafts); `rows`: the database's alone. `failureKey`: why it could not be read. */
+ *  (withDeviceDrafts); `rows`: the database's alone. `failureKey`: why it could not be read. `offlineList`: while it
+ *  cannot be read for want of a connection, the drafts this device holds (deviceIntakes); null otherwise. */
 export function useIntakeList() {
   const { state } = useWorkspace()
   const intakes = useIntakes()
@@ -12,6 +13,7 @@ export function useIntakeList() {
   const list = shallowRef<Intake[] | null>(null)
   const rows = shallowRef<Intake[] | null>(null)
   const failure = shallowRef<unknown>(null)
+  const onDevice = shallowRef<Intake[] | null>(null)
   let latest = 0
 
   const status = computed(() => {
@@ -30,9 +32,12 @@ export function useIntakeList() {
       rows.value = read
       list.value = withDeviceDrafts(read, copies, cur.inventoryId, state.deviceName)
       failure.value = null
+      onDevice.value = null
     } catch (e) {
+      const copies = await intakes.drafts.peekAll()
       if (n !== latest) return
       failure.value = e
+      onDevice.value = deviceIntakes(copies, cur.inventoryId, state.deviceName)
     }
   }
   onScopeDispose(() => latest++)
@@ -44,6 +49,7 @@ export function useIntakeList() {
       list.value = null
       rows.value = null
       failure.value = null
+      onDevice.value = null
       void reload()
     },
     { immediate: true },
@@ -63,5 +69,9 @@ export function useIntakeList() {
     return unavailable.value ? 'intakes.needsConnection' : errorMessageKey(failure.value)
   })
 
-  return { list, rows, loading, failureKey, reload }
+  const offlineList = computed(() =>
+    list.value === null && unavailable.value && !loading.value ? onDevice.value : null,
+  )
+
+  return { list, rows, loading, failureKey, offlineList, reload }
 }

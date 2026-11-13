@@ -1,5 +1,6 @@
 import type { Id, Intake, IntakeHeader, IntakeStatus, InventorySnapshot } from '@antresol/core'
 import type { LocalIntakeDraft } from './intake-drafts'
+import type { ReadOnlyReason } from './workspace-types'
 
 export interface IntakeRow {
   id: Id
@@ -86,6 +87,22 @@ export function searchIntakes(intakes: Intake[], s: InventorySnapshot, query: st
   })
 }
 
+/** A device copy as a draft row; `by`: who started it, when known. */
+const copyRow = (id: Id, d: LocalIntakeDraft, inventoryId: Id, by: string): Intake => ({
+  id,
+  inventoryId,
+  status: 'draft',
+  header: d.header,
+  draft: d.content,
+  lines: null,
+  draftRev: d.baseDraftRev ?? '',
+  createdAt: '',
+  createdBy: by,
+  updatedAt: '',
+  updatedBy: by,
+  committedAt: null,
+})
+
 /**
  * The database's intakes with this device's drafts of the inventory: a draft only this device has (never saved, or
  * with edits whose row is gone) comes first, by `device`; a draft row this device has unsaved edits of shows them. A
@@ -101,23 +118,25 @@ export function withDeviceDrafts(
   const known = new Set(rows.map((r) => r.id))
   const onlyHere: Intake[] = [...mine]
     .filter(([id, d]) => !known.has(id) && (d.baseDraftRev === null || d.dirty))
-    .map(([id, d]) => ({
-      id,
-      inventoryId,
-      status: 'draft',
-      header: d.header,
-      draft: d.content,
-      lines: null,
-      draftRev: d.baseDraftRev ?? '',
-      createdAt: '',
-      createdBy: device,
-      updatedAt: '',
-      updatedBy: device,
-      committedAt: null,
-    }))
+    .map(([id, d]) => copyRow(id, d, inventoryId, device))
   const merged = rows.map((r) => {
     const d = mine.get(r.id)
     return d?.dirty && r.status === 'draft' ? { ...r, header: d.header, draft: d.content } : r
   })
   return [...onlyHere, ...merged]
+}
+
+/** Offline, while the database's list cannot be read (spec §4: drafts are edited on the device without a network):
+ *  every draft this device holds a copy of, of the inventory, as the device last saw it; not one marked committed on
+ *  another device. Who started a draft is known here only for one not in the database yet (this device). */
+export function deviceIntakes(copies: { id: Id; draft: LocalIntakeDraft }[], inventoryId: Id, device: string): Intake[] {
+  return copies
+    .filter(({ draft: d }) => d.inventoryId === inventoryId && d.changedElsewhere?.status !== 'committed')
+    .map(({ id, draft: d }) => copyRow(id, d, inventoryId, d.baseDraftRev === null ? device : ''))
+}
+
+/** "New intake": a new draft lives on the device until it is sent, so offline too; not while the source needs a newer
+ *  app (nothing may be written) or fails. */
+export function canCreateIntake(readOnly: ReadOnlyReason | null): boolean {
+  return readOnly === null || readOnly === 'offline'
 }

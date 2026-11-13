@@ -2,7 +2,7 @@ import { newId, type Intake, type InventorySnapshot } from '@antresol/core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import type { LocalIntakeDraft } from '../app/lib/intake-drafts'
-import { intakeRows, intakeTitle, searchIntakes, withDeviceDrafts } from '../app/lib/intake-list'
+import { canCreateIntake, deviceIntakes, intakeRows, intakeTitle, searchIntakes, withDeviceDrafts } from '../app/lib/intake-list'
 import type { SourceConfig } from '../app/lib/types'
 
 const cfg: SourceConfig = {
@@ -144,7 +144,37 @@ describe('withDeviceDrafts', () => {
     expect(withDeviceDrafts([done], [{ id: row.id, draft: edited }], 'inv', 'Laptop')).toEqual([done])
   })
 
+  it('offline, without the database\'s list: every draft the device holds of this inventory, not one committed elsewhere', () => {
+    const [fresh, saved, edited, done] = [newId(), newId(), newId(), newId()]
+    const committedRow = committed('LCSC', null, '2026-11-12', '2026-11-12T11:00:00Z', [])
+    const list = deviceIntakes(
+      [
+        { id: fresh, draft: copy() },
+        { id: saved, draft: copy({ baseDraftRev: 'r1', dirty: false, header: header('Mouser', null, '2026-11-10') }) },
+        { id: edited, draft: copy({ baseDraftRev: 'r2', dirty: true }) },
+        { id: done, draft: copy({ baseDraftRev: 'r3', changedElsewhere: committedRow }) },
+        { id: newId(), draft: copy({ inventoryId: 'other' }) },
+      ],
+      'inv',
+      'Laptop',
+    )
+    expect(list.map((i) => i.id)).toEqual([fresh, saved, edited])
+    expect(list.every((i) => i.status === 'draft')).toBe(true)
+    // Who started a draft is known here only for one not in the database yet.
+    expect(list.map((i) => i.createdBy)).toEqual(['Laptop', '', ''])
+    expect(list[1]).toMatchObject({ header: { shop: 'Mouser' }, draftRev: 'r1' })
+  })
+
   it('a clean copy saved before whose row is gone (deleted elsewhere) is not listed', () => {
     expect(withDeviceDrafts([], [{ id: newId(), draft: copy({ baseDraftRev: 'r', dirty: false }) }], 'inv', 'Laptop')).toEqual([])
+  })
+})
+
+describe('canCreateIntake', () => {
+  it('starts a draft online and offline (it lives on the device), never while the source needs a newer app or fails', () => {
+    expect(canCreateIntake(null)).toBe(true)
+    expect(canCreateIntake('offline')).toBe(true)
+    expect(canCreateIntake('schema_newer')).toBe(false)
+    expect(canCreateIntake('source_error')).toBe(false)
   })
 })

@@ -157,7 +157,7 @@ function select(key: string): void {
 <template>
   <div class="grid gap-1">
     <div class="flex min-h-11 items-center justify-between gap-2">
-      <h2 class="min-w-0 section-label text-[15px] wrap-anywhere">
+      <h2 class="min-w-0 section-label text-base wrap-anywhere">
         {{ $t('item.variantsTitle') }}
         <span v-if="summary" class="font-normal">{{ $t('axes.by', { axes: summary }) }}</span>
       </h2>
@@ -166,7 +166,7 @@ function select(key: string): void {
     <p v-if="errorKey && !addOpen" role="alert" class="text-sm text-destructive">{{ $t(errorKey) }}</p>
 
     <AppSheet v-model:open="addSheetOpen" :title="$t('axes.addTitle')" :description="$t('axes.addHint')" :locked="addLocked">
-      <div class="mt-3.5 grid gap-3.5">
+      <div class="mt-4 grid gap-4">
         <div class="grid gap-1.5">
           <Label for="axis-choice">{{ $t('attributeSheet.attribute') }}</Label>
           <Select v-model="choice" :disabled="addLocked">
@@ -202,9 +202,9 @@ function select(key: string): void {
     />
 
     <AppSheet v-model:open="reorderOpen" :title="$t('axes.reorderTitle')" :locked="busy">
-      <ol class="mt-3.5 grid divide-y divide-divider">
+      <ol class="mt-4 grid divide-y divide-divider">
         <li v-for="(a, n) in view.axes" :key="a.attributeId" class="flex min-h-12 items-center justify-between gap-2 pl-1">
-          <span class="min-w-0 text-[15px] font-semibold wrap-anywhere">{{ a.name }}</span>
+          <span class="min-w-0 text-base font-semibold wrap-anywhere">{{ a.name }}</span>
           <span class="flex shrink-0">
             <Button
               variant="ghost"
@@ -239,7 +239,7 @@ function select(key: string): void {
       :title="$t(shown?.mode === 'share' ? 'axes.shareTitle' : 'axes.removeTitle', { name: shown?.name ?? '' })"
       :locked="busy"
     >
-      <div v-if="shown" class="mt-3.5 grid gap-2.5 text-sm">
+      <div v-if="shown" class="mt-4 grid gap-3 text-sm">
         <template v-if="shown.notice.kind === 'blocked'">
           <p role="alert" class="text-destructive">{{ $t(shown.notice.messageKey) }}</p>
           <template v-if="shown.notice.groups.length > 0">

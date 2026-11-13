@@ -16,16 +16,16 @@ const icons: Record<Exclude<Section, 'settings'>, Component> = { items: Boxes, i
 
 // The rail grows and its column scrolls; in the drawer the tree takes the free height and scrolls itself.
 // Rows are flat (pressable: the accent tint under the pointer); the current section is a selected row.
-const link = 'pressable flex min-h-11 items-center gap-2.5 px-3 text-sm font-semibold'
+const link = 'pressable flex min-h-11 items-center gap-3 px-3 text-sm font-semibold'
 const linkState = (key: Section): string => (section.value === key ? 'row-selected' : '')
 </script>
 
 <template>
-  <div :class="['flex flex-col gap-3.5 px-2.5 py-3.5', props.variant === 'drawer' ? 'h-full min-h-0' : 'min-h-full']">
+  <div :class="['flex flex-col gap-4 px-3 py-4', props.variant === 'drawer' ? 'h-full min-h-0' : 'min-h-full']">
     <!-- A row like the nav rows below (width, height, radius, states): the whole row is the link home. -->
     <NuxtLink to="/" class="pressable flex min-h-11 shrink-0 items-center gap-2 px-3">
-      <AppLogo class="size-[26px] shrink-0" />
-      <span class="antresol-wordmark text-[17px]">{{ $t('app.name') }}</span>
+      <AppLogo class="size-6 shrink-0" />
+      <span class="antresol-wordmark text-lg">{{ $t('app.name') }}</span>
     </NuxtLink>
 
     <div class="shrink-0">
@@ -36,7 +36,7 @@ const linkState = (key: Section): string => (section.value === key ? 'row-select
       <ul class="grid gap-0.5">
         <li v-for="s in NAV_SECTIONS" :key="s.key">
           <NuxtLink :to="s.to" :class="[link, linkState(s.key)]" :aria-current="current(s.key, s.to)">
-            <component :is="icons[s.key]" class="size-[18px] shrink-0" aria-hidden="true" />
+            <component :is="icons[s.key]" class="size-5 shrink-0" aria-hidden="true" />
             {{ $t(`nav.${s.key}`) }}
           </NuxtLink>
         </li>
@@ -49,7 +49,7 @@ const linkState = (key: Section): string => (section.value === key ? 'row-select
 
     <div class="mt-auto shrink-0">
       <NuxtLink to="/settings" :class="[link, linkState('settings')]" :aria-current="current('settings', '/settings')">
-        <SlidersHorizontal class="size-[18px] shrink-0" aria-hidden="true" />
+        <SlidersHorizontal class="size-5 shrink-0" aria-hidden="true" />
         {{ $t('nav.settings') }}
       </NuxtLink>
     </div>

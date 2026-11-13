@@ -157,7 +157,7 @@ function select(key: string): void {
 <template>
   <div class="grid gap-1">
     <div class="flex min-h-11 items-center justify-between gap-2 pl-1">
-      <h2 class="min-w-0 section-label text-[13px] wrap-anywhere">
+      <h2 class="min-w-0 section-label text-[15px] wrap-anywhere">
         {{ $t('item.variantsTitle') }}
         <span v-if="summary" class="font-normal">{{ $t('axes.by', { axes: summary }) }}</span>
       </h2>

@@ -175,9 +175,9 @@ export function flushWhenHidden(target: PageEvents, flush: () => void): () => vo
 }
 
 /** A light tick under the finger for a stepper press where the device has vibration (Android Chrome); silent elsewhere.
- *  The web has no amplitude control, so lightness comes from length: 5 ms reads as a tick, longer as a buzz. Taps
+ *  The web has no amplitude control, so lightness comes from length: 3 ms is the lightest tick a phone still plays (owner, 2026-11-14). Taps
  *  closer than 60 ms apart give one tick, so fast tapping never blurs into a rumble. */
-const BUZZ_MS = 5
+const BUZZ_MS = 3
 const BUZZ_GAP_MS = 60
 let lastBuzz = -Infinity
 export function buzz(now: number = Date.now()): void {

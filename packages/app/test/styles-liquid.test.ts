@@ -133,6 +133,31 @@ describe.each(['light', 'dark'] as const)('Liquid glass, %s', (mode) => {
   })
 })
 
+describe('Liquid: softer rims on small controls (plan 12)', () => {
+  /** Alphas of a shadow list's inset white lines: [top highlight, ring]. */
+  const rimAlphas = (sh: string) =>
+    topLevel(sh)
+      .filter((x) => x.startsWith('inset'))
+      .map((x) => parseColor(/rgba\([^)]*\)/.exec(x)![0])!.a)
+
+  it('dark: icon buttons and the stepper pill wear the card\'s rim at half its alpha', () => {
+    const t = build('dark', defaultAccent)
+    const card = rimAlphas(t.cardSh)
+    expect(card).toEqual([0.22, 0.1])
+    for (const sh of [t.kinds.ib.n.sh, t.kinds.ib.h.sh, t.kinds.ib.p.sh, t.pillSh, t.pillSelSh]) {
+      expect(rimAlphas(sh)).toEqual(card.map((a) => a / 2))
+    }
+    // Buttons with a label keep the full rim.
+    expect(rimAlphas(t.kinds.btn.n.sh)).toEqual(card)
+  })
+
+  it('light keeps one control rim for every control', () => {
+    const t = build('light', defaultAccent)
+    expect(t.kinds.ib.n.sh).toBe(t.kinds.btn.n.sh)
+    expect(t.pillSh).toBe(t.kinds.btn.n.sh)
+  })
+})
+
 describe('liquid.css', () => {
   const own = (): string => readFileSync(new URL('../app/assets/css/styles/liquid.css', import.meta.url), 'utf8')
 

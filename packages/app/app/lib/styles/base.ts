@@ -6,16 +6,23 @@ import type { StyleBuild } from './types'
  * S1 Base — flat + material: tonal fills, light elevation, state layers. The default style (the owner, 2026-11-12).
  * The mock-up's `base` branch of build() (styles-mockup.dc.html), verbatim, except:
  *
- * Shades picked for contrast (spec §8; each keeps the mock-up's amount wherever its text reads at 4.5:1, so indigo,
- * the default, is the mock-up's everywhere):
+ * Shades picked for contrast (spec §8; each keeps the mock-up's amount wherever its text reads at 4.5:1; light indigo,
+ * the default, is the mock-up's everywhere; on dark the lighter card of plan 12 leaves less room):
  *  - the primary button's hover lifts the accent 8 % toward white, or less: as far as its text stays at 4.5:1
  *    (green: 5 %; 8 % takes white text to 4.35:1);
- *  - dark: the tonal button's pressed tone is 28 %, or less: as far as the accent ink on it stays at 4.5:1 (rose 25 %,
- *    pink 26 %, slate and copper 27 %);
+ *  - dark: the tonal button's pressed tone is 28 %, or less: as far as the accent ink on it stays at 4.5:1 (green 28 %;
+ *    blue, teal, orange 27 %; indigo, violet, sky 26 %; slate 25 %; copper 24 %; pink 23 %; rose 22 %);
  *  - dark: flat controls on the selected row ("⋯" open: accent ink) press to a 14 % state layer, or less, by the same
- *    rule (rose 11 %, pink 12 %, slate and copper 13 %).
+ *    rule (blue, green 14 %; teal, orange 13 %; indigo, violet, sky 12 %; slate 11 %; copper 10 %; pink 9 %; rose 8 %);
+ *  - dark: icon buttons press to a 20 % state layer, or less, as far as the accent ink stays at 4.5:1 on a sheet (the
+ *    raised layer): rose 19 %.
+ *
+ * Dark layers (plan 12, the design system's surface and raised): the page #111216, cards and lists a step lighter
+ * (#1E2026, about 5 % OKLCH lightness up; the mock-up's #1A1C21 sat too close to the page) with a 6 % white rim, menus
+ * and sheets a step above them (#23262C). Controls transition at the design system's dur-fast (100 ms ease-standard).
  *
  * App surfaces the mock-up does not draw (spec §5; derive.ts derives the rest):
+ *  - sheets and dialogs: the card (light), the raised layer (dark);
  *  - fields and checkboxes keep the list's surface, with a line that reads on a sheet (the list's own frame is an
  *    elevation shadow; the divider colour vanishes on white);
  *  - generic lines (boxes, the tree panel's edge, toasts) are the header line's colour (light) and the seam's (dark):
@@ -24,8 +31,10 @@ import type { StyleBuild } from './types'
 
 export const build: StyleBuild = (mode, accent) => {
   const { dark, A, onA, ink } = accentOf(mode, accent)
-  const surf = dark ? '#1A1C21' : '#FFFFFF'
-  const e1 = dark ? 'inset 0 0 0 1px rgba(255,255,255,0.05)' : '0 1px 2px rgba(16,24,40,0.06), 0 1px 3px rgba(16,24,40,0.10)'
+  const surf = dark ? '#1E2026' : '#FFFFFF'
+  /** Dark: the raised layer of the design system (menus, sheets), a step above the card. */
+  const raised = '#23262C'
+  const e1 = dark ? 'inset 0 0 0 1px rgba(255,255,255,0.06)' : '0 1px 2px rgba(16,24,40,0.06), 0 1px 3px rgba(16,24,40,0.10)'
   const e2 = dark ? 'inset 0 0 0 1px rgba(255,255,255,0.08), 0 2px 6px rgba(0,0,0,0.4)' : '0 2px 4px rgba(16,24,40,0.06), 0 4px 8px rgba(16,24,40,0.10)'
   const fg = dark ? '#ECEEF2' : '#16181D'
   const muted = dark ? '#A2A8B4' : '#5D6370'
@@ -39,6 +48,7 @@ export const build: StyleBuild = (mode, accent) => {
   const ghost = K(S('rgba(0,0,0,0)', 0, 0, muted), S(rgba(A, 0.08), 0, 0, ink), S(rgba(A, 0.14), 0, 0, ink))
   const selHover = upTo(0.08, (x) => [rgba(A, x), cur], ink)
   const selPress = upTo(0.14, (x) => [rgba(A, x), cur], ink)
+  const ibPress = dark ? upTo(0.2, (x) => [rgba(A, x), raised], ink) : 0.14
 
   return finish(
     {
@@ -87,7 +97,7 @@ export const build: StyleBuild = (mode, accent) => {
       ibR: '12px',
       btnR: '12px',
       primR: '12px',
-      pop: dark ? '#23262C' : '#FFFFFF',
+      pop: dark ? raised : '#FFFFFF',
       popSh: dark ? '0 8px 24px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.06)' : '0 8px 24px rgba(16,24,40,0.16), 0 2px 6px rgba(16,24,40,0.08)',
       popR: '12px',
       popFg: fg,
@@ -95,9 +105,10 @@ export const build: StyleBuild = (mode, accent) => {
       popHoverFg: ink,
       popDanger: dark ? '#FCA5A5' : '#B42318',
       popDiv: dark ? '#2E3138' : '#EEF0F3',
-      tr: 'background-color 150ms cubic-bezier(0.2,0,0,1), box-shadow 150ms cubic-bezier(0.2,0,0,1), color 150ms ease',
+      // The design system's dur-fast and ease-standard (main.css --dur-fast, --ease-standard).
+      tr: 'background-color 100ms cubic-bezier(0.2,0,0,1), box-shadow 100ms cubic-bezier(0.2,0,0,1), color 100ms cubic-bezier(0.2,0,0,1)',
       kinds: {
-        ib: K(S('rgba(0,0,0,0)', 0, 0, icon), S(rgba(A, dark ? 0.12 : 0.08), 0, 0, ink), S(rgba(A, dark ? 0.2 : 0.14), 0, 0, ink)),
+        ib: K(S('rgba(0,0,0,0)', 0, 0, icon), S(rgba(A, dark ? 0.12 : 0.08), 0, 0, ink), S(rgba(A, ibPress), 0, 0, ink)),
         add: K(S(surf, 0, e1, icon), S(ton(0.06), 0, e2, ink), S(ton(0.12), 0, 'none', ink)),
         btn: K(S(ton(dark ? 0.16 : 0.1), 0, 'none', ink), S(ton(dark ? 0.22 : 0.16), 0, e1, ink), S(ton(pressTone), 0, 'none', ink)),
         primary: K(S(A, 0, 'none', onA), S(mix(A, '#ffffff', lift), 0, e2, onA), S(mix(A, '#000000', 0.08), 0, 'none', onA)),
@@ -106,6 +117,8 @@ export const build: StyleBuild = (mode, accent) => {
       },
       ghostSel: K({ ...ghost.n, fg: muted }, { ...ghost.h, bg: rgba(A, selHover) }, { ...ghost.p, bg: rgba(A, selPress) }),
 
+      // Dark: sheets and dialogs are the raised layer, like menus (the card is a step below them, the page two).
+      sheet: dark ? raised : surf,
       fieldLine: dark ? '#3A3E47' : '#D0D5DD',
       border: dark ? '#2E3138' : '#E4E7EC',
     },

@@ -8,6 +8,16 @@ import { STYLES } from '../app/lib/styles/registry'
 import type { Mode } from '../app/lib/styles/types'
 import { contrast, mixHex, over, parseColor } from './fixtures/color'
 
+/** OKLCH lightness of an opaque colour. */
+function oklchL({ r, g, b }: { r: number; g: number; b: number }): number {
+  const lin = (v: number) => (v / 255 <= 0.04045 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4)
+  const [R, G, B] = [lin(r), lin(g), lin(b)]
+  const l = Math.cbrt(0.4122214708 * R + 0.5363325363 * G + 0.0514459929 * B)
+  const m = Math.cbrt(0.2119034982 * R + 0.6806995451 * G + 0.1073969566 * B)
+  const s = Math.cbrt(0.0883024619 * R + 0.2817188376 * G + 0.6299787005 * B)
+  return 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s
+}
+
 /*
  * S1 Base (plan 10 Task 3): the mock-up's `base` branch of build() (styles-mockup.dc.html), the default style. Values at
  * the default accent (indigo) are the mock-up's, literally; the shades picked for contrast are listed in the module's
@@ -15,7 +25,8 @@ import { contrast, mixHex, over, parseColor } from './fixtures/color'
  */
 
 const ONEST = stack('Onest')
-const TR = 'background-color 150ms cubic-bezier(0.2,0,0,1), box-shadow 150ms cubic-bezier(0.2,0,0,1), color 150ms ease'
+/** Plan 12: the design system's dur-fast (100 ms) and ease-standard; the mock-up's was 150 ms, colour on plain ease. */
+const TR = 'background-color 100ms cubic-bezier(0.2,0,0,1), box-shadow 100ms cubic-bezier(0.2,0,0,1), color 100ms cubic-bezier(0.2,0,0,1)'
 
 const MOCKUP: Record<Mode, Record<string, string>> = {
   light: {
@@ -29,9 +40,10 @@ const MOCKUP: Record<Mode, Record<string, string>> = {
   },
   dark: {
     page: '#111216',
-    card: '#1A1C21',
+    // Plan 12 (the design system's dark layers): a step lighter than the mock-up's #1A1C21, a 6 % rim (was 5 %).
+    card: '#1E2026',
     cardR: '16px',
-    cardSh: 'inset 0 0 0 1px rgba(255,255,255,0.05)',
+    cardSh: 'inset 0 0 0 1px rgba(255,255,255,0.06)',
     primary: '#B0ACF3',
     pop: '#23262C',
     popR: '12px',
@@ -69,7 +81,7 @@ describe('Base follows the chosen accent', () => {
     expect(parseColor(build('light', accent).kinds.primary.n.bg)).toEqual(parseColor(AL))
     expect(parseColor(build('dark', accent).kinds.primary.n.bg)).toEqual(parseColor(AD))
     expect(parseColor(build('light', accent).cur)).toEqual(parseColor(mixHex('#FFFFFF', AL, 0.1)))
-    expect(parseColor(build('dark', accent).cur)).toEqual(parseColor(mixHex('#1A1C21', AD, 0.16)))
+    expect(parseColor(build('dark', accent).cur)).toEqual(parseColor(mixHex('#1E2026', AD, 0.16)))
   })
 })
 
@@ -82,18 +94,30 @@ describe('Base: shades picked for contrast (the mock-up\'s amount wherever its t
     same(build('dark', 'green').kinds.primary.h.bg, mixHex('#96C6A8', '#FFFFFF', 0.08))
   })
 
-  it('dark: the tonal button presses to a 28 % tone; rose 25 %, pink 26 %, slate and copper 27 % (accent ink on it)', () => {
+  it('dark: the tonal button presses to a 28 % tone or less, as far as accent ink on it reads (rose 22 % … green 28 %)', () => {
     same(build('light', 'rose').kinds.btn.p.bg, mixHex('#FFFFFF', '#BE123C', 0.22))
-    for (const [accent, k] of [['indigo', 0.28], ['rose', 0.25], ['pink', 0.26], ['slate', 0.27], ['copper', 0.27]] as const) {
-      same(build('dark', accent).kinds.btn.p.bg, mixHex('#1A1C21', ACCENTS[accent].dark, k))
+    const amounts = [['green', 0.28], ['blue', 0.27], ['teal', 0.27], ['orange', 0.27], ['indigo', 0.26], ['violet', 0.26], ['sky', 0.26], ['slate', 0.25], ['copper', 0.24], ['pink', 0.23], ['rose', 0.22]] as const
+    for (const [accent, k] of amounts) {
+      same(build('dark', accent).kinds.btn.p.bg, mixHex('#1E2026', ACCENTS[accent].dark, k))
     }
   })
 
-  it('dark: flat controls on the selected row press to a 14 % layer; rose 11 %, pink 12 %, slate and copper 13 %', () => {
+  it('dark: flat controls on the selected row press to a 14 % layer or less, by the same rule (rose 8 % … blue 14 %)', () => {
     expect(build('light', 'rose').ghostSel.p.bg).toBe('rgba(190,18,60,0.14)')
-    for (const [accent, k] of [['indigo', 0.14], ['rose', 0.11], ['pink', 0.12], ['slate', 0.13], ['copper', 0.13]] as const) {
+    const amounts = [['blue', 0.14], ['green', 0.14], ['teal', 0.13], ['orange', 0.13], ['indigo', 0.12], ['violet', 0.12], ['sky', 0.12], ['slate', 0.11], ['copper', 0.1], ['pink', 0.09], ['rose', 0.08]] as const
+    for (const [accent, k] of amounts) {
       expect(build('dark', accent).ghostSel.p.bg).toBe(`rgba(${Object.values(parseColor(ACCENTS[accent].dark)).slice(0, 3).join(',')},${k})`)
     }
+  })
+
+  it('dark: icon buttons press to a 20 % layer; rose 19 % (accent ink on it over a sheet)', () => {
+    expect(build('light', 'rose').kinds.ib.p.bg).toBe('rgba(190,18,60,0.14)')
+    for (const accent of ACCENT_NAMES) {
+      const t = build('dark', accent)
+      expect(contrast(t.ink, over(parseColor(t.kinds.ib.p.bg), parseColor(t.sheet))), accent).toBeGreaterThanOrEqual(4.5)
+    }
+    expect(build('dark', 'indigo').kinds.ib.p.bg).toMatch(/,0\.2\)$/)
+    expect(build('dark', 'rose').kinds.ib.p.bg).toMatch(/,0\.19\)$/)
   })
 
   it.each(ACCENT_NAMES)('%s: the "⋯" on the selected row (accent ink, the markup\'s) reads at 4.5:1 hovered and open', (accent) => {
@@ -112,17 +136,27 @@ describe('Base: app surfaces the mock-up does not draw', () => {
     const l = build('light', 'indigo')
     const d = build('dark', 'indigo')
     expect([l.field, l.fieldLine, l.fieldSh, l.border, l.treeLine]).toEqual(['#FFFFFF', '#D0D5DD', 'none', '#E4E7EC', '#E4E7EC'])
-    expect([d.field, d.fieldLine, d.fieldSh, d.border, d.treeLine]).toEqual(['#1A1C21', '#3A3E47', 'none', '#2E3138', '#2E3138'])
+    expect([d.field, d.fieldLine, d.fieldSh, d.border, d.treeLine]).toEqual(['#1E2026', '#3A3E47', 'none', '#2E3138', '#2E3138'])
     // The row divider stays the mock-up's.
     expect([l.dividerColor, d.dividerColor]).toEqual(['#EEF0F3', '#262930'])
   })
 
-  it('sheets are the card, menus and tooltips the pop panel (spec §5)', () => {
+  it('sheets are the card (light) or the raised layer, the menus\' colour (dark); menus and tooltips the pop panel', () => {
     for (const mode of ['light', 'dark'] as const) {
       const t = build(mode, 'indigo')
-      expect([t.sheet, t.sheetSh]).toEqual([t.card, t.cardSh])
+      expect([t.sheet, t.sheetSh]).toEqual([mode === 'dark' ? '#23262C' : t.card, t.cardSh])
       expect([t.tip, t.tipFg, t.tipSh]).toEqual([t.popSolid, t.popFg, t.popSh])
     }
+    expect(build('dark', 'indigo').pop).toBe('#23262C')
+  })
+
+  it('dark layers (plan 12): page → card about 5 % OKLCH lightness up → raised (menus, sheets) another step', () => {
+    const d = build('dark', 'indigo')
+    const L = (hex: string) => oklchL(parseColor(hex))
+    expect(L(d.card) - L(d.pageColor)).toBeGreaterThan(0.045)
+    expect(L(d.card) - L(d.pageColor)).toBeLessThan(0.07)
+    expect(L(d.pop)).toBeGreaterThan(L(d.card) + 0.015)
+    expect(d.listSh).toBe(d.cardSh)
   })
 })
 

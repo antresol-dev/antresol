@@ -14,6 +14,7 @@ import {
   type AttributeKind,
   type Folder,
   type Id,
+  type Intake,
   type InventorySnapshot,
   type Item,
   type Movement,
@@ -23,6 +24,7 @@ import {
   type StockLine,
   type UnitDef,
 } from '@antresol/core'
+import { intakeTitle } from './intake-list'
 import { byName, compareIds, pathOf, snapshotIndex, type Crumb } from './views'
 
 export interface BucketRow {
@@ -282,10 +284,12 @@ export interface JournalRow {
   balance: { number: string; unit: string } | null
   /** A recount that matched: an adjustment of zero ("Counted: 37 ✓"; spec 4.14). */
   counted: boolean
+  /** The intake whose commit made this movement, when it is known (the cached list of intakes); null otherwise. */
+  intake: { id: Id; title: string } | null
 }
 
 /** Core refuses other schemes on write, but a source can be written by other clients: check again before linking. */
-function httpHref(url: string | null): string | null {
+export function httpHref(url: string | null): string | null {
   if (url === null) return null
   let parsed: URL
   try {
@@ -299,7 +303,8 @@ function httpHref(url: string | null): string | null {
 const MINUS = '−'
 
 /** `movements` newest first (as loadMovements returns them); the two halves of a transfer become one row. */
-export function journalRows(s: InventorySnapshot, itemId: Id, movements: Movement[]): JournalRow[] {
+export function journalRows(s: InventorySnapshot, itemId: Id, movements: Movement[], intakes: readonly Intake[] | null = null): JournalRow[] {
+  const known = new Map((intakes ?? []).map((i) => [i.id, { id: i.id, title: intakeTitle(i.header) }]))
   const ix = snapshotIndex(s)
   const unit = unitOf(s, ix.items.get(itemId))
   // Archived variants keep their labels in the index, so old movements still name them.
@@ -344,7 +349,7 @@ export function journalRows(s: InventorySnapshot, itemId: Id, movements: Movemen
       }
       const transfer = { from: null, to: null, [side]: nameOf(m.variantId) }
       transfers.set(m.transferId, transfer)
-      rows.push({ ...base, id: m.transferId, kind: 'transfer', number: parts.number, variantName: null, transfer, balance: null, counted: false })
+      rows.push({ ...base, id: m.transferId, kind: 'transfer', number: parts.number, variantName: null, transfer, balance: null, counted: false, intake: null })
       continue
     }
 
@@ -358,6 +363,7 @@ export function journalRows(s: InventorySnapshot, itemId: Id, movements: Movemen
       transfer: null,
       balance: balanceOf(m),
       counted: m.kind === 'adjustment' && sign === 0,
+      intake: (m.intakeId !== null && known.get(m.intakeId)) || null,
     })
   }
   return rows

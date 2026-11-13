@@ -2,6 +2,7 @@ import { itemStock, newId, type Command, type InventorySnapshot, type InventoryS
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import { attributeChoices, bucketDescription, itemView, journalDays, journalRows, looseTransferOffer, type JournalRow } from '../app/lib/item-view'
+import { intakeTitle } from '../app/lib/intake-list'
 import type { SourceConfig } from '../app/lib/types'
 
 const cfg: SourceConfig = {
@@ -193,6 +194,26 @@ describe('itemView', () => {
 })
 
 describe('journalRows', () => {
+  it('links a movement made by an intake to the intake when it is known', () => {
+    const intakeId = newId()
+    const intake = {
+      id: intakeId, inventoryId, status: 'committed' as const,
+      header: { shop: 'LCSC', orderNumber: 'WM2511-0042', purchasedOn: '2026-11-12', note: null },
+      draft: null, lines: [], draftRev: 'r', createdAt: '', createdBy: '', updatedAt: '', updatedBy: '', committedAt: '2026-11-12T10:00:00Z',
+    }
+    const m: Movement = {
+      id: newId(), seq: 1, itemId: ne555, variantId: null, kind: 'receipt', quantity: '1', totalPrice: null, sourceUrl: null,
+      note: null, transferId: null, intakeId, createdAt: '2026-11-12T10:00:00Z', createdBy: 'Test',
+    }
+    expect(journalRows(s, ne555, [m], [intake])[0]!.intake).toEqual({ id: intakeId, title: 'LCSC · #WM2511-0042' })
+    expect(intakeTitle(intake.header)).toBe('LCSC · #WM2511-0042')
+    // No cache yet, or an intake it does not hold: no link.
+    expect(journalRows(s, ne555, [m])[0]!.intake).toBeNull()
+    expect(journalRows(s, ne555, [m], [])[0]!.intake).toBeNull()
+    expect(journalRows(s, ne555, [{ ...m, intakeId: null }], [intake])[0]!.intake).toBeNull()
+  })
+
+
   it('signs journal quantities and keeps newest first', async () => {
     const movements = await storage.loadMovements(ne555)
     const rows = journalRows(s, ne555, movements)

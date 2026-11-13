@@ -99,7 +99,7 @@ export type PaletteAction =
   | { kind: 'addItem'; name: string }
   | { kind: 'newFolder'; parentId: Id | null; parentName: string }
   | { kind: 'switchInventory'; ref: InventoryRef; name: string }
-  | { kind: 'go'; section: 'archive' | 'dictionaries' | 'settings' }
+  | { kind: 'go'; section: 'archive' | 'dictionaries' | 'intakes' | 'settings' }
 
 export interface PaletteContext {
   query: string
@@ -107,7 +107,7 @@ export interface PaletteContext {
   folder: { id: Id | null; name: string } | null
   inventories: InventoryEntry[]
   current: InventoryRef | null
-  sections: ('archive' | 'dictionaries' | 'settings')[]
+  sections: ('archive' | 'dictionaries' | 'intakes' | 'settings')[]
   canWrite: boolean
 }
 

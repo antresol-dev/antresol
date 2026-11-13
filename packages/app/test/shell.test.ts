@@ -48,20 +48,21 @@ beforeAll(async () => {
 
 describe('shell', () => {
   it('lists the sections of the app panel', () => {
-    expect(NAV_SECTIONS.map((s) => s.key)).toEqual(['items', 'dictionaries', 'archive'])
+    expect(NAV_SECTIONS.map((s) => s.key)).toEqual(['items', 'intakes', 'dictionaries', 'archive'])
   })
 
   it('maps routes to sections', () => {
     expect(['index', 'folder-id', 'item-id'].map(sectionOf)).toEqual(['items', 'items', 'items'])
     expect(['archive', 'dictionaries', 'settings', 'settings-sources-id', 'settings-sources-new'].map(sectionOf))
       .toEqual(['archive', 'dictionaries', 'settings', 'settings', 'settings'])
+    expect(['intakes', 'intakes-id'].map(sectionOf)).toEqual(['intakes', 'intakes'])
     expect([sectionOf('welcome'), sectionOf(null), sectionOf(undefined)]).toEqual([null, null, null])
     expect(['index', 'item-id', 'archive', 'settings'].map(showsTree)).toEqual([true, true, false, false])
     expect([showsTree('folder-id'), showsTree('welcome'), showsTree(null)]).toEqual([true, false, false])
   })
 
   it('tells inventory screens from the rest', () => {
-    expect(['index', 'folder-id', 'item-id', 'archive', 'dictionaries'].map(inventoryScoped)).toEqual([true, true, true, true, true])
+    expect(['index', 'folder-id', 'item-id', 'archive', 'dictionaries', 'intakes', 'intakes-id'].map(inventoryScoped)).toEqual([true, true, true, true, true, true, true])
     expect(['settings', 'settings-sources-id', 'settings-sources-new', 'welcome'].map(inventoryScoped))
       .toEqual([false, false, false, false])
     expect([inventoryScoped(null), inventoryScoped(undefined)]).toEqual([false, false])

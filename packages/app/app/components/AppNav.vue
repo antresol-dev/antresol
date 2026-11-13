@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Archive, Boxes, SlidersHorizontal, Tags } from '@lucide/vue'
+import { Archive, Boxes, PackageOpen, SlidersHorizontal, Tags } from '@lucide/vue'
 import type { Component } from 'vue'
 import { NAV_SECTIONS, sectionOf, type Section } from '~/lib/shell'
 
@@ -12,7 +12,7 @@ const section = computed(() => sectionOf(typeof route.name === 'string' ? route.
 // "page" only on the section's own page; on a page inside it (a folder, a source) the highlight is "true".
 const current = (key: Section, to: string): 'page' | 'true' | undefined =>
   section.value !== key ? undefined : route.path === to ? 'page' : 'true'
-const icons: Record<Exclude<Section, 'settings'>, Component> = { items: Boxes, dictionaries: Tags, archive: Archive }
+const icons: Record<Exclude<Section, 'settings'>, Component> = { items: Boxes, intakes: PackageOpen, dictionaries: Tags, archive: Archive }
 
 // The rail grows and its column scrolls; in the drawer the tree takes the free height and scrolls itself.
 // Rows are flat (pressable: the accent tint under the pointer); the current section is a selected row.

@@ -4,12 +4,41 @@
   "nav": {
     "sections": "Sections",
     "items": "Items",
+    "intakes": "Intakes",
     "dictionaries": "Tags & fields",
     "archive": "Archive",
     "settings": "Settings",
     "menu": "Menu",
     "back": "Back",
     "forward": "Forward"
+  },
+  "intakes": {
+    "title": "Intakes",
+    "new": "New intake",
+    "edit": "Edit",
+    "draft": "Draft",
+    "lines": "{count} line | {count} lines",
+    "search": "Search intakes",
+    "empty": "No intakes yet. An intake records a batch of stock you received, such as an order.",
+    "noMatch": "No intakes match",
+    "needsConnection": "Intakes need a connection to the source",
+    "draftSoon": "This draft is edited on its own screen.",
+    "header": {
+      "title": "Intake details",
+      "shop": "Shop",
+      "orderNumber": "Order number",
+      "date": "Purchased on",
+      "note": "Note",
+      "save": "Save"
+    },
+    "record": {
+      "purchased": "Purchased {date}",
+      "committed": "received {date}",
+      "lines": "{count} line | {count} lines",
+      "noLines": "No lines",
+      "now": "Now: {name}",
+      "gone": "Item removed or archived"
+    }
   },
   "archive": {
     "title": "Archive",
@@ -149,6 +178,7 @@
     },
     "moved": "Moved from {from} to {to}",
     "whereBought": "Where bought",
+    "intake": "Intake: {title}",
     "newTab": "(opens in a new tab)",
     "today": "Today",
     "yesterday": "Yesterday",

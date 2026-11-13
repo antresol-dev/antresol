@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { StorageError, type Movement } from '@antresol/core'
+import { StorageError, type Intake, type Movement } from '@antresol/core'
 import { Check, ExternalLink } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { errorMessageKey } from '~/lib/errors'
@@ -71,14 +71,26 @@ const failureText = computed(() => {
   return unavailable.value ? t('journal.needsConnection') : t(errorMessageKey(failure.value))
 })
 
+// Titles of the intakes for the links to them: the cached list; none yet (or none readable), no link.
+const intakeList = shallowRef<Intake[] | null>(null)
+const intakes = useIntakes()
+async function loadIntakes(): Promise<void> {
+  try {
+    intakeList.value = await intakes.list()
+  } catch {
+    // The history reads fine without the links.
+  }
+}
+watch(() => [props.itemId, state.snapshot], () => void loadIntakes(), { immediate: true })
+
 const currency = computed(() => state.snapshot?.inventory.currency ?? null)
 
-type Part = { kind: 'text'; text: string } | { kind: 'link'; href: string }
+type Part = { kind: 'text'; text: string } | { kind: 'link'; href: string } | { kind: 'route'; to: string; text: string }
 // Grouped by day (Today, Yesterday, Nov 10); a row shows its time only, and the device when it is another one.
 const days = computed(() => {
   const s = state.snapshot
   if (!s || !movements.value) return []
-  return journalDays(journalRows(s, props.itemId, movements.value), new Date()).map((day) => ({
+  return journalDays(journalRows(s, props.itemId, movements.value, intakeList.value), new Date()).map((day) => ({
     key: day.day,
     label: dayLabel(day),
     entries: day.rows.map((row) => ({ row, title: titleOf(row), parts: partsOf(row), meta: metaOf(row) })),
@@ -113,6 +125,7 @@ function partsOf(row: JournalRow): Part[] {
   if (row.sourceHref) parts.push({ kind: 'link', href: row.sourceHref })
   else if (row.sourceUrl) parts.push({ kind: 'text', text: row.sourceUrl })
   if (row.note) parts.push({ kind: 'text', text: row.note })
+  if (row.intake) parts.push({ kind: 'route', to: `/intakes/${row.intake.id}`, text: t('journal.intake', { title: row.intake.title }) })
   return parts
 }
 </script>
@@ -182,6 +195,11 @@ function partsOf(row: JournalRow): Part[] {
                   <ExternalLink class="size-3" aria-hidden="true" />
                   <span class="sr-only">{{ $t('journal.newTab') }}</span>
                 </a>
+                <NuxtLink
+                  v-else-if="part.kind === 'route'"
+                  :to="part.to"
+                  class="relative rounded-chip font-semibold text-foreground underline decoration-border underline-offset-2 outline-none transition-colors duration-150 after:absolute after:-inset-x-1 after:-inset-y-3.5 after:content-[''] hover:decoration-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                >{{ part.text }}</NuxtLink>
                 <template v-else>{{ part.text }}</template>
               </template>
             </p>

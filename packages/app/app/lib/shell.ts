@@ -7,11 +7,12 @@ import type { Mode, StyleName } from './styles/types'
 import { pathOf, snapshotIndex } from './views'
 import type { InventoryEntry } from './workspace'
 
-export type Section = 'items' | 'archive' | 'dictionaries' | 'settings'
+export type Section = 'items' | 'intakes' | 'archive' | 'dictionaries' | 'settings'
 
 /** Sections in the app panel between the inventory switcher and Settings. */
 export const NAV_SECTIONS: { key: Exclude<Section, 'settings'>; to: string }[] = [
   { key: 'items', to: '/' },
+  { key: 'intakes', to: '/intakes' },
   { key: 'dictionaries', to: '/dictionaries' },
   { key: 'archive', to: '/archive' },
 ]
@@ -20,6 +21,8 @@ const SECTION_BY_ROUTE: Record<string, Section> = {
   'index': 'items',
   'folder-id': 'items',
   'item-id': 'items',
+  'intakes': 'intakes',
+  'intakes-id': 'intakes',
   'archive': 'archive',
   'dictionaries': 'dictionaries',
   'settings': 'settings',
@@ -27,7 +30,7 @@ const SECTION_BY_ROUTE: Record<string, Section> = {
   'settings-sources-new': 'settings',
 }
 
-/** index, folder-id, item-id → items; archive; dictionaries; settings, settings-sources-id, settings-sources-new → settings; anything else → null. */
+/** index, folder-id, item-id → items; intakes, intakes-id → intakes; archive; dictionaries; settings, settings-sources-id, settings-sources-new → settings; anything else → null. */
 export function sectionOf(routeName: string | null | undefined): Section | null {
   if (!routeName || !Object.hasOwn(SECTION_BY_ROUTE, routeName)) return null
   return SECTION_BY_ROUTE[routeName]!

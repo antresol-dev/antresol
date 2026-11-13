@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useMediaQuery } from '@vueuse/core'
-import { Archive, ArrowLeftRight, Folder, FolderPlus, Plus, Search, SlidersHorizontal, Tags, X } from '@lucide/vue'
+import { Archive, ArrowLeftRight, Folder, FolderPlus, PackageOpen, Plus, Search, SlidersHorizontal, Tags, X } from '@lucide/vue'
 import { DialogContent, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui'
 import type { Component } from 'vue'
 import { toast } from 'vue-sonner'
@@ -11,7 +11,7 @@ import { currentInventoryName, NAV_SECTIONS, treeCurrent } from '~/lib/shell'
 import { pathOf, snapshotIndex } from '~/lib/views'
 
 type GoSection = Extract<PaletteAction, { kind: 'go' }>['section']
-const SECTION_ICONS: Record<GoSection, Component> = { archive: Archive, dictionaries: Tags, settings: SlidersHorizontal }
+const SECTION_ICONS: Record<GoSection, Component> = { archive: Archive, dictionaries: Tags, intakes: PackageOpen, settings: SlidersHorizontal }
 // The app panel's sections besides Items, then Settings.
 const SECTIONS: GoSection[] = [...NAV_SECTIONS.flatMap((s) => (s.key === 'items' ? [] : [s.key])), 'settings']
 

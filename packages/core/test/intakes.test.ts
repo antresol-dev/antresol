@@ -157,6 +157,28 @@ describe('resolveIntake', () => {
   })
 })
 
+describe('resolveIntake: what the commit would refuse', () => {
+  it('marks a line whose link is not an http(s) address, and a new item whose name is too long', () => {
+    const plain = (name: string): DraftNewItem => ({ id: 'P', name, folderId: null, unitKey: 'pcs', attributes: [] })
+    const lines = [
+      line('M', {}, { sourceUrl: 'lcsc.com/x' }),
+      line('M', {}, { sourceUrl: 'https://lcsc.com/x' }),
+      line('M', {}, { sourceUrl: 'HTTP://lcsc.com/x' }),
+    ]
+    const r = resolveIntake(draft(lines), electronics())
+    expect(r.ok).toBe(false)
+    expect(r.lines.map((l) => l.resolution.kind === 'problem' ? l.resolution.code : 'ok')).toEqual(['invalid_link', 'ok', 'ok'])
+    const long = resolveIntake(draft([line('P')], [plain('x'.repeat(201))]), electronics())
+    expect(long.lines[0]!.resolution).toEqual({ kind: 'problem', code: 'invalid_value' })
+    expect(resolveIntake(draft([line('P')], [plain(` ${'x'.repeat(200)} `)]), electronics()).ok).toBe(true)
+  })
+
+  it('an item problem is told before a bad link', () => {
+    const r = resolveIntake(draft([line('GONE', {}, { sourceUrl: 'lcsc.com/x' })]), electronics())
+    expect(r.lines[0]!.resolution).toEqual({ kind: 'problem', code: 'unknown_item' })
+  })
+})
+
 describe('buildIntakeCommit', () => {
   const build = (content: IntakeDraftContent, s = electronics()) => {
     const resolved = resolveIntake(content, s)

@@ -10,6 +10,7 @@ import {
   type InventoryStorage,
 } from '@antresol/core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import en from '../i18n/locales/en.json'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import {
   alreadyInDraft,
@@ -288,6 +289,17 @@ describe('buildDraftLine', () => {
     expect(buildDraftLine(form({ price: 'abc' }), snap, emptyIntakeDraft())).toEqual({ errorKey: 'quickAdd.invalidPrice' })
     const n = newItem({ name: '  ' })
     expect(buildDraftLine(form({ itemId: n.id, newItem: n, axisValues: [] }), snap, emptyIntakeDraft())).toEqual({ errorKey: 'errors.domain.name_required' })
+  })
+
+  it('refuses what the commit would refuse: a link that is not http(s), a new item name that is too long', () => {
+    expect(buildDraftLine(form({ url: 'lcsc.com/x' }), snap, emptyIntakeDraft())).toEqual({ errorKey: 'errors.domain.invalid_url' })
+    expect(buildDraftLine(form({ url: ' https://lcsc.com/x ' }), snap, emptyIntakeDraft())).toMatchObject({ line: { sourceUrl: 'https://lcsc.com/x' } })
+    const long = newItem({ name: 'x'.repeat(201), unitKey: 'pcs', attributes: [] })
+    expect(buildDraftLine(form({ itemId: long.id, newItem: long, axisValues: [] }), snap, emptyIntakeDraft())).toEqual({ errorKey: 'errors.domain.name_too_long' })
+    const fits = newItem({ name: 'x'.repeat(200), unitKey: 'pcs', attributes: [] })
+    expect(buildDraftLine(form({ itemId: fits.id, newItem: fits, axisValues: [] }), snap, emptyIntakeDraft())).toHaveProperty('line')
+    // A line written elsewhere (MCP) with such a link is marked with its own copy.
+    expect(en.intakes.problem.invalid_link).toMatch(/https:\/\//)
   })
 
   it('a new item keeps its shared values, its axes go on the line; the link prefix alone is no link', () => {

@@ -3,6 +3,8 @@ import {
   cmpQ,
   duplicateOf,
   getCurrency,
+  isSourceUrl,
+  MAX_NAME_LENGTH,
   pruneNewItems,
   resolveUnit,
   itemAxes,
@@ -300,13 +302,15 @@ export interface LineForm {
 export type BuiltLine = { line: DraftLine; newItem: DraftNewItem | null } | { errorKey: string; params?: Record<string, string> }
 
 /** The sheet's fields as a draft line (and its new item), values as the axes store them; or what to fix. A line needs an
- *  amount and a value on every axis; a new item needs a name. */
+ *  amount and a value on every axis, and its link must be an http(s) address; a new item needs a name that is not too
+ *  long. What the commit would refuse is refused here, so no line fails the whole commit (spec §7). */
 export function buildDraftLine(form: LineForm, s: InventorySnapshot, draft: IntakeDraftContent): BuiltLine {
   const n = form.newItem
   const item = n ? null : s.items.find((i) => i.id === form.itemId)
   if (!n && !item) return { errorKey: 'intakes.problem.unknown_item' }
   const name = n ? n.name.trim() : item!.name
   if (name === '') return { errorKey: 'errors.domain.name_required' }
+  if (n && name.length > MAX_NAME_LENGTH) return { errorKey: 'errors.domain.name_too_long' }
 
   const axes = n
     ? n.attributes.flatMap((x) => {
@@ -342,6 +346,7 @@ export function buildDraftLine(form: LineForm, s: InventorySnapshot, draft: Inta
   const typedUrl = form.url.trim()
   const prefix = form.urlPrefix
   const sourceUrl = typedUrl === '' || (prefix !== null && (typedUrl === prefix || typedUrl === `${prefix}/`)) ? null : typedUrl
+  if (sourceUrl !== null && !isSourceUrl(sourceUrl)) return { errorKey: 'errors.domain.invalid_url' }
 
   const newItem: DraftNewItem | null = n
     ? {

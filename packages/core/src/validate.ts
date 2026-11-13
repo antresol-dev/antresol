@@ -1,6 +1,7 @@
 import type { Command } from './commands'
 import type { Id } from './ids'
 import { snapshotAfterIntake } from './intakes'
+import { isSourceUrl, MAX_NAME_LENGTH } from './limits'
 import { CURRENCIES } from './money'
 import type { Archivable, Attribute, AttributeKind, Folder, InventorySnapshot, Item, ItemAttribute, Variant } from './model'
 import { isCanonicalNumber } from './numbers'
@@ -48,7 +49,6 @@ export class DomainError extends Error {
 /** Attributes of one inventory shown in lists ("Show in lists"). */
 export const MAX_PINNED_ATTRIBUTES = 2
 
-const MAX_NAME = 200
 const MAX_UNIT = 16
 const ATTRIBUTE_KINDS: readonly AttributeKind[] = ['text', 'enum', 'number']
 
@@ -131,7 +131,7 @@ function checkName(name: string | undefined) {
   if (name === undefined) return
   const t = name.trim()
   if (!t) fail('name_required')
-  if (t.length > MAX_NAME) fail('name_too_long')
+  if (t.length > MAX_NAME_LENGTH) fail('name_too_long')
 }
 
 /** numeric(20,6) holds absolute values below 10^14. */
@@ -152,7 +152,7 @@ function checkPrice(p: number | null) {
   if (p !== null && (!Number.isSafeInteger(p) || p < 0)) fail('invalid_price')
 }
 function checkUrl(u: string | null) {
-  if (u !== null && !/^https?:\/\//i.test(u)) fail('invalid_url')
+  if (u !== null && !isSourceUrl(u)) fail('invalid_url')
 }
 function checkPrefixes(p: number[] | undefined) {
   if (p?.some((x) => !Number.isInteger(x) || !Object.hasOwn(SI_PREFIXES, x))) fail('invalid_option')

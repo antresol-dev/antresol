@@ -452,6 +452,8 @@ async function save(next: boolean): Promise<void> {
   )
   if ('errorKey' in built) {
     error.value = { key: built.errorKey, params: built.params }
+    // The link sits in the folded "Price & link": open it so the field to fix is in sight.
+    if (built.errorKey === 'errors.domain.invalid_url' || built.errorKey === 'quickAdd.invalidPrice') priceOpen.value = true
     return
   }
   saving.value = true

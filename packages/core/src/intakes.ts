@@ -1,5 +1,6 @@
 import type { Command } from './commands'
 import type { Id } from './ids'
+import { isSourceUrl, MAX_NAME_LENGTH } from './limits'
 import type { Attribute, InventorySnapshot, Item, ItemAttribute, Variant, VariantAttributeValue } from './model'
 import { parseNumberValue } from './numbers'
 import type { Quantity } from './quantity'
@@ -92,7 +93,7 @@ export type LineResolution =
   | { kind: 'newValue'; itemId: Id; variantId: Id; sharedWith: Id | null }
   /** An item of draft.newItems; its variant (when it has axes) as for newValue. */
   | { kind: 'newItem'; itemId: Id; variantId: Id | null }
-  | { kind: 'problem'; code: 'item_archived' | 'missing_axis_value' | 'invalid_value' | 'unknown_item' }
+  | { kind: 'problem'; code: 'item_archived' | 'missing_axis_value' | 'invalid_value' | 'unknown_item' | 'invalid_link' }
 export interface ResolvedIntake {
   lines: { lineId: Id; resolution: LineResolution }[]
   ok: boolean
@@ -139,12 +140,14 @@ function lineValues(line: DraftLine, axes: readonly Attribute[]): Map<Id, string
 }
 
 /** The axes of a new item of the draft, in order; or what keeps it from being created: its folder archived (or gone,
- *  which needs an archive first), an empty name, a unit gone, an attribute gone, a shared value that does not fit. */
+ *  which needs an archive first), an empty or too long name, a unit gone, an attribute gone, a shared value that does
+ *  not fit. */
 function newItemAxes(n: DraftNewItem, s: InventorySnapshot): Attribute[] | Problem {
   if (n.folderId !== null && (!s.folders.some((f) => f.id === n.folderId) || folderArchived(s, n.folderId))) {
     return 'item_archived'
   }
-  if (n.name.trim() === '' || !resolveUnit(n.unitKey, s.units)) return 'invalid_value'
+  const name = n.name.trim()
+  if (name === '' || name.length > MAX_NAME_LENGTH || !resolveUnit(n.unitKey, s.units)) return 'invalid_value'
   const axes: Attribute[] = []
   for (const x of n.attributes) {
     const a = s.attributes.find((y) => y.id === x.attributeId)
@@ -202,7 +205,13 @@ export function resolveIntake(draft: IntakeDraftContent, s: InventorySnapshot): 
       : { kind: 'newValue', itemId: line.itemId, variantId, sharedWith: creator?.lineId ?? null }
   }
 
-  const lines = draft.lines.map((line) => ({ lineId: line.id, resolution: resolve(line) }))
+  // A link the commit would refuse marks the line, once its item and values resolve (an item problem is told first).
+  const withLink = (line: DraftLine): LineResolution => {
+    const resolution = resolve(line)
+    if (resolution.kind === 'problem' || line.sourceUrl === null || isSourceUrl(line.sourceUrl)) return resolution
+    return { kind: 'problem', code: 'invalid_link' }
+  }
+  const lines = draft.lines.map((line) => ({ lineId: line.id, resolution: withLink(line) }))
   return { lines, ok: lines.every((l) => l.resolution.kind !== 'problem') }
 }
 

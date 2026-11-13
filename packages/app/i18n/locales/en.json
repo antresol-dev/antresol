@@ -81,6 +81,7 @@
       "missing_axis_value": "A value is missing",
       "invalid_value": "Something here doesn’t fit: check the name, unit and values",
       "unknown_item": "The item was deleted",
+      "invalid_link": "The link isn’t a web address: it should start with https://",
       "unknown": "This line can’t be committed as it is: open it to check"
     },
     "line": {

@@ -96,7 +96,7 @@ watch(() => props.highlight, reveal)
         :data-variant="row.variantId ?? undefined"
         :aria-current="row.variantId !== null && row.variantId === highlight ? 'true' : undefined"
         :class="[
-          'relative grid min-w-0 py-2 pr-2.5 pl-5',
+          'relative grid min-w-0 py-2 pr-3.5 pl-5',
           isHighlight(row.variantId)
             ? 'row-selected row-inset my-0.5'
             : !isHighlight(rows[i - 1]?.variantId) &&

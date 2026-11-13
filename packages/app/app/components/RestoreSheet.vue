@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { StorageError, type RestoreMode } from '@antresol/core'
 import { toast } from 'vue-sonner'
+import { FileUp } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import {
@@ -162,13 +163,15 @@ const percent = computed(() =>
         {{ $t(`backup.problem.${problem.key}`) }}
         <span v-if="problem.reason" class="block text-subtle-foreground break-words">{{ problem.reason }}</span>
       </p>
+      <!-- Flat with a border and full width, like the photo buttons (PhotoPicker): a raised one looked odd here. -->
       <Button
         type="button"
-        variant="outline"
-        class="h-11 justify-self-start"
+        variant="ghost"
+        class="h-11 w-full border border-input px-4 btn-label"
         :disabled="busy || reading"
         @click="input?.click()"
       >
+        <FileUp class="size-5" aria-hidden="true" />
         {{ picked ? $t('backup.chooseOther') : $t('backup.chooseFile') }}
       </Button>
 

@@ -65,7 +65,7 @@ async function remove(): Promise<void> {
 
 <template>
   <section class="grid min-w-0 gap-2" aria-labelledby="dictionaries-attributes">
-    <div class="flex min-h-11 items-center justify-between gap-2 px-1">
+    <div class="flex min-h-11 items-center justify-between gap-2">
       <h2 id="dictionaries-attributes" class="text-[17px] font-bold tracking-[-0.01em] text-foreground">
         {{ $t('dictionaries.attributes') }}
       </h2>
@@ -94,7 +94,7 @@ async function remove(): Promise<void> {
         />
       </li>
     </ul>
-    <p v-else class="px-1 text-sm text-muted-foreground">{{ $t('dictionaries.noAttributes') }}</p>
+    <p v-else class="text-sm text-muted-foreground">{{ $t('dictionaries.noAttributes') }}</p>
 
     <AppSheet
       v-model:open="formOpen"

@@ -304,8 +304,12 @@ export interface AppSurfaces {
   thumb: string
   /** An opaque surface: the desktop tree panel, badges, shadcn's --card (--surface). Default: `card` made opaque. */
   surface: string
-  /** The desktop sidebar and the navigation drawer (--rail). Default: pageColor. */
+  /** The desktop sidebar and the navigation drawer (--rail). A translucent tint is laid over pageColor (the rail is
+   *  always opaque: the drawer covers the page). Default: pageColor. */
   rail: string
+  /** The desktop sidebar's right edge (--st-rail-line), a border shorthand ("1px solid …", or "none" where the rail's own
+   *  colour sets it apart). Default: 1 px of `border`. */
+  railLine: string
   /** Generic line colour: outlines, the palette's border, `border` utilities (--border). Default: divider's colour. */
   border: string
   /** Row divider colour (--divider). Default: divider's colour. */
@@ -330,6 +334,13 @@ export interface AppSurfaces {
   sheetLine: string
   /** Their blur. Default: surfBlur. */
   sheetBlur: string
+  /** The desktop search palette's window, a sheet: a layer drawn over the sheet's colour (--st-palette-img). Default:
+   *  'none'. */
+  paletteImg: string
+  /** Its shadow. Default: Tailwind's shadow-2xl (what the window had). */
+  paletteSh: string
+  /** Its 1 px border's colour. Default: sheetLine. */
+  paletteLine: string
   /** The scrim behind sheets and dialogs. Default: rgba(0,0,0,0.8). */
   overlay: string
   /** An opaque menu colour: menus without blur support or under high contrast, toasts (--popover). Default: `pop`

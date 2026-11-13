@@ -236,6 +236,7 @@ const linkClass =
         :currency="view.currency"
         :stepper="view.hasVariants ? null : steppers.of(null)"
         :counted-at="countedAt"
+        :variant-count="view.buckets.filter((b) => b.variantId !== null).length"
         @open="(mode) => openStock(mode, null)"
         @count="openStock('set', null)"
       />

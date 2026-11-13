@@ -201,6 +201,7 @@ async function send(command: ItemCreate): Promise<void> {
           class="flex h-11 w-full min-w-0 items-center gap-2 rounded-field border border-input bg-field px-3 text-left text-sm transition-colors duration-150 hover:bg-hover"
           @click="picking = !picking"
         >
+          <RootMark />
           <span class="min-w-0 flex-1 truncate">{{ folderPath }}</span>
           <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-150 motion-reduce:transition-none" :class="picking ? 'rotate-180' : ''" aria-hidden="true" />
         </button>
@@ -250,7 +251,7 @@ async function send(command: ItemCreate): Promise<void> {
       </div>
 
       <div v-if="canPhoto" class="grid gap-1.5">
-        <p class="text-sm font-medium leading-none">
+        <p class="field-text text-sm font-medium leading-none">
           {{ $t('quickAdd.photo') }}
           <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
         </p>
@@ -265,7 +266,7 @@ async function send(command: ItemCreate): Promise<void> {
       </div>
     </fieldset>
 
-    <p id="quick-add-error" role="alert" class="text-sm text-destructive">
+    <p id="quick-add-error" role="alert" class="field-text text-sm text-destructive">
       <template v-if="unconfirmed">
         {{ $t('unconfirmed.hint') }}<template v-if="retryErrorKey"> {{ $t(retryErrorKey) }}</template>
       </template>

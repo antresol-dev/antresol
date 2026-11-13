@@ -107,7 +107,7 @@ async function submit(): Promise<void> {
       <Label>{{ $t('itemForm.tags') }}</Label>
       <TagPicker v-model="tagIds" :snapshot="snapshot" :locked="locked" @create="createTag" />
     </div>
-    <p id="item-form-error" role="alert" class="text-sm text-destructive">
+    <p id="item-form-error" role="alert" class="field-text text-sm text-destructive">
       <template v-if="errorKey">{{ $t(errorKey) }}</template>
     </p>
     <Button type="submit" class="h-11 rounded-field" :disabled="!canSubmit">

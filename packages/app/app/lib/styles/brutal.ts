@@ -66,6 +66,8 @@ export const build: StyleBuild = (mode) => {
       numWeight: '700',
       stroke: '2.5',
       page: 'radial-gradient(' + (dark ? 'rgba(255,255,255,0.09)' : 'rgba(17,17,17,0.14)') + ' 1.2px, transparent 1.6px) 0 0 / 22px 22px, ' + page,
+      // The sidebar: the page's paper without dots, cut off by the style's 2 px ink line.
+      railLine: '2px solid ' + lineC,
       fg,
       muted,
       subtle: muted,

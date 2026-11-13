@@ -21,7 +21,7 @@ const forwardedProps = useForwardProps(delegatedProps)
     :data-size="size"
     v-bind="forwardedProps"
     :class="cn(
-      `border-input bg-field data-[placeholder]:text-muted-foreground [&_svg:not([class*='text-'])]:text-muted-foreground focus-visible:border-ring aria-invalid:border-destructive aria-invalid:outline-destructive flex w-fit items-center justify-between gap-2 rounded-field border px-3 py-2 text-sm whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-50 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4`,
+      `border-input bg-field data-[placeholder]:text-muted-foreground [&_svg:not([class*='text-'])]:text-muted-foreground focus-visible:border-ring aria-invalid:border-destructive flex w-fit items-center justify-between gap-2 rounded-field border px-3 py-2 text-sm whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-50 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4`,
       // A plain height, not data-[size=…]:h-*: a height passed in (h-11 next to a 44 px field) must win, and only a
       // utility of the same kind is merged away.
       size === 'sm' ? 'h-8' : 'h-9',

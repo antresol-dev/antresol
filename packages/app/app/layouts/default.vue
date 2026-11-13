@@ -105,7 +105,7 @@ useEventListener(
       ]"
       :style="withTree ? { gridTemplateColumns: `212px ${treeWidth}px minmax(0, 1fr)` } : undefined"
     >
-      <div v-if="desktop" class="min-h-0 overflow-y-auto bg-rail">
+      <div v-if="desktop" class="surface-rail min-h-0 overflow-y-auto">
         <AppNav variant="rail" />
       </div>
       <TreePanel v-if="desktop && withTree" />

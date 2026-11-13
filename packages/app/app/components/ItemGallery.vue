@@ -183,13 +183,13 @@ const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thu
         </div>
       </div>
     </template>
-    <p v-if="!hasStore && photos.length > 0 && !readOnly" class="px-1 pt-1.5 text-[13px] text-muted-foreground">
+    <p v-if="!hasStore && photos.length > 0 && !readOnly" class="pt-1.5 text-[13px] text-muted-foreground">
       {{ $t('photos.noStore') }}
     </p>
     <NuxtLink
       v-if="!hasStore && sourceId && !readOnly"
       :to="`/settings/sources/${sourceId}`"
-      class="min-h-11 content-center rounded-chip px-1 text-sm font-semibold text-accent-ink underline-offset-4 hover:underline"
+      class="min-h-11 content-center rounded-chip text-sm font-semibold text-accent-ink underline-offset-4 hover:underline"
     >
       {{ $t('photos.noStoreLink') }}
     </NuxtLink>

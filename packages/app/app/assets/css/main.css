@@ -312,6 +312,14 @@
   }
   /* Fields: a soft halo hugging the border, which itself turns accent (the markup's focus-visible:border-ring). The
      2 px offset ring above reached the label text over the field. */
+  /* The halo's colour is set at rest too: the fields' transition-colors also animates outline-color, which otherwise
+     starts from currentColor (white in the dark theme) and flashed on every focus. */
+  :where([data-slot='input'], [data-slot='textarea'], [data-slot='select-trigger']) {
+    outline-color: color-mix(in oklab, var(--ring) 35%, transparent);
+  }
+  :where([data-slot='input'], [data-slot='textarea'], [data-slot='select-trigger'])[aria-invalid='true'] {
+    outline-color: color-mix(in oklab, var(--destructive) 35%, transparent);
+  }
   :where([data-slot='input'], [data-slot='textarea'], [data-slot='select-trigger']):focus-visible {
     outline: 3px solid color-mix(in oklab, var(--ring) 35%, transparent);
     outline-offset: 0;

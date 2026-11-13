@@ -57,6 +57,25 @@ export function openPath(s: InventorySnapshot, open: TreeOpen, folderId: Id | nu
   return next
 }
 
+/** Every folder closed. */
+export function collapseAll(): TreeOpen {
+  return {}
+}
+
+/** Every active folder that has children open. */
+export function expandAll(s: InventorySnapshot): TreeOpen {
+  const open: TreeOpen = {}
+  const walk = (nodes: TreeNode[]): void => {
+    for (const n of nodes) {
+      if (n.children.length === 0) continue
+      open[n.id] = true
+      walk(n.children)
+    }
+  }
+  walk(folderTree(s))
+  return open
+}
+
 export function toggleOpen(open: TreeOpen, id: Id): TreeOpen {
   if (open[id] !== true) return { ...open, [id]: true }
   const { [id]: _closed, ...rest } = open

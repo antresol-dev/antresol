@@ -167,7 +167,7 @@
     "title": "Update to keep editing",
     "text": "A newer Antresol updated this source. Changes are off until this app updates."
   },
-  "tree": { "expand": "Expand {name}", "collapse": "Collapse {name}", "resize": "Resize the folder tree" },
+  "tree": { "expand": "Expand {name}", "collapse": "Collapse {name}", "resize": "Resize the folder tree", "collapseAll": "Collapse all", "expandAll": "Expand all" },
   "search": {
     "label": "Search",
     "field": "Search {name}",

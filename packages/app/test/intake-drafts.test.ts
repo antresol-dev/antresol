@@ -345,6 +345,32 @@ describe('intake draft sync', () => {
   })
 })
 
+describe('intake draft sync: finding drafts', () => {
+  it('load without create: an id it knows nothing of is not_found; a new draft or a device copy loads', async () => {
+    const { sync } = setup()
+    await expect(sync.load(newId(), null, { create: false })).rejects.toMatchObject({ code: 'not_found' })
+    const fresh = newId()
+    await sync.load(fresh, null)
+    expect((await sync.load(fresh, null, { create: false })).baseDraftRev).toBeNull()
+    const saved = newId()
+    await sync.load(saved, null)
+    await sync.edit(saved, shop('LCSC'))
+    expect((await sync.load(saved, null, { create: false })).header.shop).toBe('LCSC')
+  })
+
+  it('peekAll lists the device copies of the current source', async () => {
+    const { sync } = setup()
+    const a = newId()
+    const b = newId()
+    await sync.load(a, null)
+    await sync.load(b, null)
+    await sync.edit(a, shop('LCSC'))
+    const all = await sync.peekAll()
+    expect(all.map((x) => x.id)).toEqual([a])
+    expect(all[0]!.draft.header.shop).toBe('LCSC')
+  })
+})
+
 describe('intake commit sender', () => {
   it('an unknown outcome freezes until a retry; a refusal does not', async () => {
     const commit = vi.fn<(id: Id) => Promise<{ ok: true }>>()

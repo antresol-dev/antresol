@@ -6,8 +6,9 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { errorMessageKey } from '~/lib/errors'
 
-// Shop, order number, purchase day and note of an intake (a draft or a committed one).
-const props = defineProps<{ intakeId: Id; header: IntakeHeader; shops: string[] }>()
+// Shop, order number, purchase day and note of an intake (a draft or a committed one). A draft's screen passes `saveDraft`:
+// its header is an edit of the draft, which works offline too.
+const props = defineProps<{ intakeId: Id; header: IntakeHeader; shops: string[]; saveDraft?: (header: IntakeHeader) => Promise<void> }>()
 const emit = defineEmits<{ saved: [] }>()
 const open = defineModel<boolean>('open', { required: true })
 
@@ -35,19 +36,21 @@ watch(
   { immediate: true },
 )
 
-const canSave = computed(() => !busy.value && !state.readOnly && /^\d{4}-\d{2}-\d{2}$/.test(purchasedOn.value))
+const blocked = computed(() => !!state.readOnly && !(props.saveDraft && state.readOnly === 'offline'))
+const canSave = computed(() => !busy.value && !blocked.value && /^\d{4}-\d{2}-\d{2}$/.test(purchasedOn.value))
 
 async function save(): Promise<void> {
   if (!canSave.value) return
   busy.value = true
   errorKey.value = null
   try {
-    await intakes.updateHeader(props.intakeId, {
+    const header = {
       shop: shop.value.trim() || null,
       orderNumber: orderNumber.value.trim() || null,
       purchasedOn: purchasedOn.value,
       note: note.value.trim() || null,
-    })
+    }
+    await (props.saveDraft ? props.saveDraft(header) : intakes.updateHeader(props.intakeId, header))
     emit('saved')
     open.value = false
   } catch (e) {

@@ -1,4 +1,5 @@
 import type { Id, Intake, IntakeHeader, IntakeStatus, InventorySnapshot } from '@antresol/core'
+import type { LocalIntakeDraft } from './intake-drafts'
 
 export interface IntakeRow {
   id: Id
@@ -82,4 +83,40 @@ export function searchIntakes(intakes: Intake[], s: InventorySnapshot, query: st
     const text = haystack(i, s)
     return words.every((w) => text.includes(w))
   })
+}
+
+/**
+ * The database's intakes with this device's drafts of the inventory: a draft only this device has (never saved, or
+ * with edits whose row is gone) comes first, by `device`; a draft row this device has unsaved edits of shows them. A
+ * committed row stays as it is, and so does a clean copy (what the database said last).
+ */
+export function withDeviceDrafts(
+  rows: Intake[],
+  copies: { id: Id; draft: LocalIntakeDraft }[],
+  inventoryId: Id,
+  device: string,
+): Intake[] {
+  const mine = new Map(copies.filter((c) => c.draft.inventoryId === inventoryId).map((c) => [c.id, c.draft] as const))
+  const known = new Set(rows.map((r) => r.id))
+  const onlyHere: Intake[] = [...mine]
+    .filter(([id, d]) => !known.has(id) && (d.baseDraftRev === null || d.dirty))
+    .map(([id, d]) => ({
+      id,
+      inventoryId,
+      status: 'draft',
+      header: d.header,
+      draft: d.content,
+      lines: null,
+      draftRev: d.baseDraftRev ?? '',
+      createdAt: '',
+      createdBy: device,
+      updatedAt: '',
+      updatedBy: device,
+      committedAt: null,
+    }))
+  const merged = rows.map((r) => {
+    const d = mine.get(r.id)
+    return d?.dirty && r.status === 'draft' ? { ...r, header: d.header, draft: d.content } : r
+  })
+  return [...onlyHere, ...merged]
 }

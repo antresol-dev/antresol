@@ -1,13 +1,16 @@
 import { StorageError, type Intake } from '@antresol/core'
 import { errorMessageKey } from '~/lib/errors'
+import { withDeviceDrafts } from '~/lib/intake-list'
 
 /** The current inventory's intakes for a screen: read on mount and again after every new snapshot (a write or a
- *  refresh) or when the source turns ready; the answer of the latest request only. `failureKey`: why it could not be read. */
+ *  refresh) or when the source turns ready; the answer of the latest request only. `list`: with this device's drafts
+ *  (withDeviceDrafts); `rows`: the database's alone. `failureKey`: why it could not be read. */
 export function useIntakeList() {
   const { state } = useWorkspace()
   const intakes = useIntakes()
 
   const list = shallowRef<Intake[] | null>(null)
+  const rows = shallowRef<Intake[] | null>(null)
   const failure = shallowRef<unknown>(null)
   let latest = 0
 
@@ -17,12 +20,15 @@ export function useIntakeList() {
   })
 
   async function reload(): Promise<void> {
-    if (!state.current) return
+    const cur = state.current
+    if (!cur) return
     const n = ++latest
     try {
-      const rows = await intakes.list()
+      const read = await intakes.list()
+      const copies = await intakes.drafts.peekAll()
       if (n !== latest) return
-      list.value = rows
+      rows.value = read
+      list.value = withDeviceDrafts(read, copies, cur.inventoryId, state.deviceName)
       failure.value = null
     } catch (e) {
       if (n !== latest) return
@@ -36,6 +42,7 @@ export function useIntakeList() {
     () => state.current?.inventoryId,
     () => {
       list.value = null
+      rows.value = null
       failure.value = null
       void reload()
     },
@@ -56,5 +63,5 @@ export function useIntakeList() {
     return unavailable.value ? 'intakes.needsConnection' : errorMessageKey(failure.value)
   })
 
-  return { list, loading, failureKey, reload }
+  return { list, rows, loading, failureKey, reload }
 }

@@ -38,10 +38,13 @@ export interface IntakeDraftSync {
   resolveConflict(id: Id, choice: 'keepMine' | 'takeTheirs'): Promise<void>
   /** The device copy wins while it is dirty (sent now); otherwise the database row, kept on the device as what was
    *  last seen. Null and no copy: a new empty draft, kept in memory until its first edit. A committed row: a dirty copy
-   *  is kept and marked with it (changedElsewhere); a clean one is dropped and the call rejects with `not_found`. */
-  load(id: Id, fromDatabase: Intake | null): Promise<LocalIntakeDraft>
+   *  is kept and marked with it (changedElsewhere); a clean one is dropped and the call rejects with `not_found`.
+   *  `create: false`: an id with no row, no copy and no new draft rejects with `not_found` instead of starting one. */
+  load(id: Id, fromDatabase: Intake | null, options?: { create?: boolean }): Promise<LocalIntakeDraft>
   /** The device copy as it is now; null: none. */
   peek(id: Id): Promise<LocalIntakeDraft | null>
+  /** Every device copy of the current source (drafts not yet in the database among them); never rejects. */
+  peekAll(): Promise<{ id: Id; draft: LocalIntakeDraft }[]>
   /** Drops the copy and any pending write (a draft deleted or committed). */
   forget(id: Id): Promise<void>
 }
@@ -241,7 +244,7 @@ export function createIntakeDraftSync(deps: {
     if (choice === 'keepMine') await send(id, true)
   }
 
-  async function load(id: Id, fromDatabase: Intake | null): Promise<LocalIntakeDraft> {
+  async function load(id: Id, fromDatabase: Intake | null, options: { create?: boolean } = {}): Promise<LocalIntakeDraft> {
     const sourceId = deps.sourceId()
     if (sourceId === null) throw new StorageError('not_found')
     const loaded = await withCopy(id, async () => {
@@ -276,7 +279,7 @@ export function createIntakeDraftSync(deps: {
       const known = fresh.get(key)
       if (known) return known
       const inventoryId = deps.inventoryId()
-      if (inventoryId === null) throw new StorageError('not_found')
+      if (inventoryId === null || options.create === false) throw new StorageError('not_found', `intake ${id} is unknown`)
       const created: LocalIntakeDraft = {
         inventoryId,
         header: { shop: null, orderNumber: null, purchasedOn: localDay(now()), note: null },
@@ -303,6 +306,12 @@ export function createIntakeDraftSync(deps: {
     return withCopy(id, () => db.getIntakeDraft(sourceId, id))
   }
 
+  async function peekAll(): Promise<{ id: Id; draft: LocalIntakeDraft }[]> {
+    const sourceId = deps.sourceId()
+    if (sourceId === null) return []
+    return db.listIntakeDrafts(sourceId).catch(() => [])
+  }
+
   async function forget(id: Id): Promise<void> {
     cancel(id)
     const sourceId = deps.sourceId()
@@ -313,7 +322,7 @@ export function createIntakeDraftSync(deps: {
     await withCopy(id, () => db.deleteIntakeDraft(sourceId, id))
   }
 
-  return { edit, flush, resolveConflict, load, peek, forget }
+  return { edit, flush, resolveConflict, load, peek, peekAll, forget }
 }
 
 export type CommitIntakeResult = Awaited<ReturnType<Workspace['commitIntake']>>

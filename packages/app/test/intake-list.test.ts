@@ -1,7 +1,8 @@
 import { newId, type Intake, type InventorySnapshot } from '@antresol/core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
-import { intakeRows, intakeTitle, searchIntakes } from '../app/lib/intake-list'
+import type { LocalIntakeDraft } from '../app/lib/intake-drafts'
+import { intakeRows, intakeTitle, searchIntakes, withDeviceDrafts } from '../app/lib/intake-list'
 import type { SourceConfig } from '../app/lib/types'
 
 const cfg: SourceConfig = {
@@ -105,5 +106,40 @@ describe('searchIntakes', () => {
     expect(searchIntakes(all, s, '  ')).toEqual(all)
     expect(searchIntakes(all, s, 'lcsc header').map((i) => i.id)).toEqual([lcsc.id])
     expect(searchIntakes(all, s, 'lcsc capacitor')).toEqual([])
+  })
+})
+
+describe('withDeviceDrafts', () => {
+  const copy = (over: Partial<LocalIntakeDraft> = {}): LocalIntakeDraft => ({
+    inventoryId: 'inv',
+    header: header('LCSC', null, '2026-11-13'),
+    content: { newItems: [], lines: [] },
+    baseDraftRev: null,
+    dirty: true,
+    changedElsewhere: null,
+    ...over,
+  })
+
+  it('adds the drafts only this device has, of this inventory, as drafts by this device', () => {
+    const saved = committed('Mouser', '1', '2026-11-01', '2026-11-02T10:00:00Z', ['TL072'])
+    const mine = newId()
+    const merged = withDeviceDrafts([saved], [{ id: mine, draft: copy() }, { id: newId(), draft: copy({ inventoryId: 'other' }) }], 'inv', 'Laptop')
+    expect(merged.map((i) => i.id)).toEqual([mine, saved.id])
+    expect(merged[0]).toMatchObject({ status: 'draft', header: { shop: 'LCSC' }, createdBy: 'Laptop', updatedBy: 'Laptop', draft: { lines: [] } })
+  })
+
+  it('a dirty copy shows its own header and lines over the row; a clean one or a committed row leaves the row', () => {
+    const row = draft('LCSC', null, '2026-11-12', ['Fuse'])
+    const edited = copy({ baseDraftRev: 'r', header: header('LCSC', '42', '2026-11-12') })
+    expect(withDeviceDrafts([row], [{ id: row.id, draft: edited }], 'inv', 'Laptop')).toEqual([
+      { ...row, header: edited.header, draft: edited.content },
+    ])
+    expect(withDeviceDrafts([row], [{ id: row.id, draft: { ...edited, dirty: false } }], 'inv', 'Laptop')).toEqual([row])
+    const done = { ...committed('LCSC', null, '2026-11-12', '2026-11-12T11:00:00Z', []), id: row.id }
+    expect(withDeviceDrafts([done], [{ id: row.id, draft: edited }], 'inv', 'Laptop')).toEqual([done])
+  })
+
+  it('a clean copy saved before whose row is gone (deleted elsewhere) is not listed', () => {
+    expect(withDeviceDrafts([], [{ id: newId(), draft: copy({ baseDraftRev: 'r', dirty: false }) }], 'inv', 'Laptop')).toEqual([])
   })
 })

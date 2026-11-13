@@ -182,9 +182,7 @@ describe.each(MODES)('Neumorphism equals main.css before styles: %s', (mode) => 
         ['ghost-pressed', t.kinds.ghost.p.bg], ['selected-pill', t.pillSelBg], ['selected-step-hover', t.stepSel.h.bg],
         ['selected-step-hover-ink', t.stepSel.h.fg], ['selected-step-pressed', t.stepSel.p.bg], ['chip', t.chip], ['chip', t.chips[0]!],
         ['thumb', t.thumb], ['thumb', t.thumbs[0]!], ['thumb', t.photo], ['field', t.field], ['rail', t.rail],
-        ['accent-button', t.kinds.primary.n.bg], ['accent-button-hover', t.kinds.primary.h.bg], ['accent-button-pressed', t.kinds.primary.p.bg],
-        ['accent-button-foreground', t.kinds.primary.n.fg], ['accent-button-foreground', t.kinds.primary.h.fg],
-        ['accent-button-foreground', t.kinds.primary.p.fg], ['glass-hover', t.popHover], ['glass-hover-foreground', t.popHoverFg],
+        ['glass-hover', t.popHover], ['glass-hover-foreground', t.popHoverFg],
         ['glass-divider', t.popDiv], ['glass-muted', t.popMuted], ['glass-danger', t.popDanger], ['glass-border', t.popBorder],
         ['glass-bg', topLevel(t.pop).at(-1)!], ['primary', t.primary], ['primary-foreground', t.primaryFg], ['ring', t.ring],
         ['popover-foreground', t.popFg], ['pill-seam', t.seam.replace(/^1px solid /, '')], ['divider', t.divider.replace(/^1px solid /, '')],
@@ -215,8 +213,7 @@ describe.each(MODES)('Neumorphism equals main.css before styles: %s', (mode) => 
         ['card-shadow', t.cardSh], ['pill-shadow', t.pillSh], ['pill-shadow-selected', t.pillSelSh],
         ['flat-shadow', t.kinds.step.n.sh], ['flat-shadow', t.kinds.step.h.sh], ['step-shadow-pressed', t.kinds.step.p.sh],
         ['flat-shadow', t.stepSel.n.sh], ['flat-shadow', t.stepSel.h.sh], ['selected-step-shadow-pressed', t.stepSel.p.sh],
-        ['accent-button-shadow', t.kinds.primary.n.sh], ['accent-button-shadow-hover', t.kinds.primary.h.sh],
-        ['accent-button-shadow-pressed', t.kinds.primary.p.sh], ['glass-shadow', t.popSh],
+        ['glass-shadow', t.popSh],
         ['hover-shadow', t.painted.n.sh, pv.accent], ['hover-shadow', t.painted.h.sh, pv.accent], ['active-shadow', t.painted.p.sh, pv.accent],
         ['hover-shadow', t.paintedDanger.n.sh, pv.destructive], ['hover-shadow', t.paintedDanger.h.sh, pv.destructive],
         ['active-shadow', t.paintedDanger.p.sh, pv.destructive],
@@ -226,10 +223,15 @@ describe.each(MODES)('Neumorphism equals main.css before styles: %s', (mode) => 
         return p ? [`--${name}: ${p}`] : []
       })
       // Flat things had no shadow; sheets had Tailwind's shadow-lg (DialogContent), the ghost none.
-      for (const [name, value] of [['hdrSh', t.hdrSh], ['listSh', t.listSh], ['photoSh', t.photoSh], ['thumbSh', t.thumbSh], ['chipSh', t.chipSh], ['curSh', t.curSh], ['fieldSh', t.fieldSh], ['tipSh', t.tipSh]]) {
+      for (const [name, value] of [['hdrSh', t.hdrSh], ['photoSh', t.photoSh], ['thumbSh', t.thumbSh], ['chipSh', t.chipSh], ['curSh', t.curSh], ['fieldSh', t.fieldSh], ['tipSh', t.tipSh]]) {
         if (value !== 'none') problems.push(`${name} ${value}`)
       }
       for (const s of ['n', 'h', 'p'] as const) if (t.kinds.ghost[s].sh !== 'none') problems.push(`ghost.${s}.sh`)
+      // Plan 12 (F5): lists lie in a concave panel — the raised button's pair (R(4, 10)) turned inward.
+      const raised = shadows('var(--raised-shadow)', v).slice(0, 2)
+      const sunk = shadows(t.listSh).filter((x) => x.color.a > 0)
+      const lp = shadowProblem(sunk, raised.map((x) => ({ ...x, inset: true })))
+      if (lp) problems.push(`listSh: ${lp}`)
       const lg = /--shadow-lg:\s*([^;]+);/.exec(readFileSync(createRequire(import.meta.url).resolve('tailwindcss/theme.css'), 'utf8'))![1]!
       const p = shadowProblem(shadows(t.sheetSh), shadows(lg.replace(/rgb\((\d+) (\d+) (\d+) \/ ([\d.]+)\)/g, 'rgba($1, $2, $3, $4)')))
       if (p) problems.push(`sheetSh: ${p}`)
@@ -255,7 +257,9 @@ describe.each(MODES)('Neumorphism equals main.css before styles: %s', (mode) => 
       expect(t.kinds.btn.p.tf).toBe(pressTf(scale('.raised')))
       expect(t.kinds.ib.p.tf).toBe(pressTf(scale('.raised-sm')))
       expect(t.kinds.add.p.tf).toBe(pressTf(scale('.raised-sm')))
-      expect(t.kinds.primary.p.tf).toBe(pressTf(scale('.accent-button')))
+      // Plan 12 (F5): the accent button (the FAB) is painted in the accent in both themes, like .painted (its colours and
+      // shadows are checked against the old .painted above); before, light was a soft tint with accent ink.
+      expect(t.kinds.primary).toEqual(t.painted)
       expect(t.painted.p.tf).toBe(pressTf(scale('.painted')))
       expect(t.paintedDanger.p.tf).toBe(pressTf(scale('.painted')))
       expect([t.kinds.step.p.tf, t.kinds.ghost.p.tf, t.stepSel.p.tf]).toEqual(['none', 'none', 'none'])
@@ -277,7 +281,8 @@ describe.each(MODES)('Neumorphism equals main.css before styles: %s', (mode) => 
       expect([t.numWeight, t.btnWeight, t.plainBtnWeight]).toEqual(['700', '700', '500'])
       expect(t.barSh).toBe('none')
       expect([t.winBg, t.winBlur, t.hdrBlur, t.surfBlur, t.ctrlBlur, t.sheetBlur, t.led]).toEqual(['transparent', 'none', 'none', 'none', 'none', 'none', false])
-      expect([t.list, t.listR, t.curM, t.pillImg, t.hdr]).toEqual(['transparent', '0', '0', 'none', t.pageColor])
+      // Plan 12 (F5): the list's concave panel is rounded like a card (before: rows on the page, radius 0).
+      expect([t.list, t.listR, t.curM, t.pillImg, t.hdr]).toEqual(['transparent', '20px', '0', 'none', t.pageColor])
       expect(t.overlay).toBe('rgba(0, 0, 0, 0.8)')
     })
   })

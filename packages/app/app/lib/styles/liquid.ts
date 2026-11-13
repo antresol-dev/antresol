@@ -39,6 +39,10 @@ export const build: StyleBuild = (mode, accent) => {
   const ctrlRim = dark
     ? highlight + ', inset 0 0 0 1px rgba(255,255,255,0.10), 0 2px 8px rgba(0,0,0,0.3)'
     : highlight + ', inset 0 0 0 1px rgba(255,255,255,0.4), 0 2px 8px rgba(20,24,40,0.10)'
+  /** The small controls' rim — icon buttons and the stepper pill (plan 12): on dark, the card's specular rim at half its
+   *  alpha (top 11 %, ring 5 %), so a row of small glass buttons does not glitter brighter than the panel they sit on.
+   *  Light keeps ctrlRim. */
+  const smallRim = dark ? 'inset 0 1px 0 rgba(255,255,255,0.11), inset 0 0 0 1px rgba(255,255,255,0.05), 0 2px 8px rgba(0,0,0,0.3)' : ctrlRim
   const c0 = dark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.40)'
   const c1 = dark ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.60)'
   const c2 = dark ? 'rgba(255,255,255,0.24)' : 'rgba(255,255,255,0.78)'
@@ -105,7 +109,7 @@ export const build: StyleBuild = (mode, accent) => {
       curMuted: muted,
       pillBg: c0,
       pillImg: 'none',
-      pillSh: ctrlRim,
+      pillSh: smallRim,
       pillR: '999px',
       seam: '1px solid ' + (dark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.55)'),
       ibR: '999px',
@@ -117,7 +121,7 @@ export const build: StyleBuild = (mode, accent) => {
       popR: '22px',
       popHoverFg: ink,
       kinds: {
-        ib: K(S(c0, 0, ctrlRim, fg), S(c1, 0, ctrlRim, fg), S(c2, 0, ctrlRim, fg, 'scale(0.92)')),
+        ib: K(S(c0, 0, smallRim, fg), S(c1, 0, smallRim, fg), S(c2, 0, smallRim, fg, 'scale(0.92)')),
         add: K(S(c0, 0, ctrlRim, fg), S(c1, 0, ctrlRim, fg), S(c2, 0, ctrlRim, fg, 'scale(0.94)')),
         btn: K(S(c0, 0, ctrlRim, fg), S(c1, 0, ctrlRim, fg), S(c2, 0, ctrlRim, fg, 'scale(0.96)')),
         // contrast: the label is white on the tinted glass, at 4.5:1 on every accent —

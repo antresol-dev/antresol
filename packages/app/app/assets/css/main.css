@@ -918,8 +918,8 @@
 
 /* Experiment (the owner, 2026-11-13): in Neumorphism the desktop search palette is pressed up out of the dimmed
    backdrop, like the style's raised buttons out of the page: two outer shadows in the backdrop's own light and shade
-   (lighter top-left, darker bottom-right), and a convex surface that melts into the backdrop's colour at its edges
-   (no border), lit top-left. Unlayered: it must beat border and shadow-2xl. */
+   (lighter top-left, darker bottom-right) on a flat surface without a border. Unlayered: it must beat border and
+   shadow-2xl. */
 [data-style='neumorphism'] .palette-window {
   --pw-base: var(--background);
   /* The backdrop: the page under the overlay. */
@@ -927,21 +927,13 @@
   /* The backdrop's light and shade, as the raised buttons' LT and DK are the page's. */
   --pw-lift: color-mix(in srgb, var(--pw-dim) 72%, #fff);
   --pw-shade: rgba(0, 0, 0, 0.62);
-  --pw-rim: rgba(255, 255, 255, 0.9);
   border-color: transparent;
-  background: radial-gradient(
-    140% 135% at 30% 20%,
-    var(--pw-base) 48%,
-    color-mix(in srgb, var(--pw-base) 62%, var(--pw-dim)) 100%
-  );
+  background: var(--pw-base);
   box-shadow:
-    inset 6px 6px 12px -5px var(--pw-rim),
-    inset -14px -14px 26px -10px color-mix(in srgb, var(--pw-dim) 70%, transparent),
     -14px -14px 34px color-mix(in srgb, var(--pw-lift) 55%, transparent),
     18px 20px 42px var(--pw-shade);
 }
 .dark[data-style='neumorphism'] .palette-window {
   --pw-lift: color-mix(in srgb, var(--pw-dim) 78%, #fff);
   --pw-shade: rgba(0, 0, 0, 0.75);
-  --pw-rim: rgba(255, 255, 255, 0.08);
 }

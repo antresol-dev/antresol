@@ -4,6 +4,7 @@ import type { Attribute, InventorySnapshot, Item, ItemAttribute, Variant, Varian
 import { parseNumberValue } from './numbers'
 import type { Quantity } from './quantity'
 import { folderArchived, itemArchived } from './tree'
+import { resolveUnit } from './units'
 import { duplicateOf, itemAxes, variantLabel } from './variants'
 
 /** An intake: one batch of stock receipts (an order, a stocktake), a draft until it is committed. Spec 2026-11-13
@@ -138,11 +139,12 @@ function lineValues(line: DraftLine, axes: readonly Attribute[]): Map<Id, string
 }
 
 /** The axes of a new item of the draft, in order; or what keeps it from being created: its folder archived (or gone,
- *  which needs an archive first), an attribute gone, a shared value that does not fit. */
+ *  which needs an archive first), an empty name, a unit gone, an attribute gone, a shared value that does not fit. */
 function newItemAxes(n: DraftNewItem, s: InventorySnapshot): Attribute[] | Problem {
   if (n.folderId !== null && (!s.folders.some((f) => f.id === n.folderId) || folderArchived(s, n.folderId))) {
     return 'item_archived'
   }
+  if (n.name.trim() === '' || !resolveUnit(n.unitKey, s.units)) return 'invalid_value'
   const axes: Attribute[] = []
   for (const x of n.attributes) {
     const a = s.attributes.find((y) => y.id === x.attributeId)

@@ -370,6 +370,18 @@ function checkIntakePhotos(s: Snap, after: Snap, photos: IntakeCommit['photos'])
   }
 }
 
+/** The intake's record of its lines matches the receipts it writes: one line per receipt, by movement id, with the same
+ *  bucket and quantity (both canonical after normalizeCommand). */
+function checkIntakeLines(c: IntakeCommit) {
+  const receipts = new Map(c.receipts.map((r) => [r.movementId, r] as const))
+  if (c.lines.length !== receipts.size) fail('invalid_option')
+  onceEach(c.lines.map((l) => l.movementId))
+  for (const l of c.lines) {
+    const r = receipts.get(l.movementId)
+    if (!r || r.itemId !== l.itemId || r.variantId !== l.variantId || r.quantity !== l.quantity) fail('invalid_option')
+  }
+}
+
 /** intake.commit: every id it names is in the copy or made by the command itself; values, quantities, prices, links and
  *  photos by the rules of the commands that make them one at a time (item.create, variant.createMany, stock.receive,
  *  photo.add and photo.replace). Rows already made by this very command pass (a retry after an unknown outcome). */
@@ -397,6 +409,7 @@ function checkIntakeCommit(s: Snap, c: IntakeCommit) {
     checkUrl(r.sourceUrl)
   }
   checkIntakePhotos(s, after, c.photos)
+  checkIntakeLines(c)
 }
 
 function check(c: Command, s: Snap | null): void {

@@ -681,8 +681,18 @@ describe('intake.commit', () => {
   const receipt = (itemId: string, variantId: string | null, n: string, over: Partial<IntakeCommit['receipts'][number]> = {}) => ({
     movementId: `m${n}`, itemId, variantId, quantity: '5', totalPrice: null, sourceUrl: null, ...over,
   })
-  /** A new item NEW (axis Resistance, shared Package) with variant n1, plus a receipt to r1k of the electronics copy. */
-  const commit = (over: Partial<IntakeCommit> = {}): Command => ({
+  /** The intake's record of a receipt. */
+  const lineOf = (r: IntakeCommit['receipts'][number]): IntakeCommit['lines'][number] => ({
+    lineId: `l-${r.movementId}`, kind: 'add', itemId: r.itemId, variantId: r.variantId, movementId: r.movementId,
+    itemName: 'Part', variantLabel: null, quantity: r.quantity, unitKey: 'pcs', totalPrice: r.totalPrice, sourceUrl: r.sourceUrl,
+  })
+  /** A new item NEW (axis Resistance, shared Package) with variant n1, plus a receipt to r1k of the electronics copy;
+   *  one line per receipt unless `over` names the lines. */
+  const commit = (over: Partial<IntakeCommit> = {}): Command => {
+    const c = commitWithoutLines(over)
+    return { ...c, lines: over.lines ?? c.receipts.map(lineOf) }
+  }
+  const commitWithoutLines = (over: Partial<IntakeCommit>): IntakeCommit => ({
     type: 'intake.commit',
     intakeId: 'in1',
     inventoryId: 'inv',
@@ -719,6 +729,20 @@ describe('intake.commit', () => {
     expect(ec(commit({ receipts: [receipt('R', 'zz', '1')] }))).toBe('not_found')
     expect(ec(commit({ newVariants: [{ id: 'n1', itemId: 'ZZ', values: [{ attributeId: 'res', value: '1000' }] }] }))).toBe('not_found')
     expect(ec(commit({ unarchiveVariants: ['zz'] }))).toBe('not_found')
+  })
+
+  it('the lines match the receipts one to one', () => {
+    const r1 = receipt('NEW', 'n1', '1')
+    const r2 = receipt('R', 'r1k', '2')
+    // A line whose movement has no receipt, and a receipt without a line.
+    expect(ec(commit({ receipts: [r1, r2], lines: [lineOf(r1), lineOf(receipt('R', 'r1k', '3'))] }))).toBe('invalid_option')
+    expect(ec(commit({ receipts: [r1, r2], lines: [lineOf(r1)] }))).toBe('invalid_option')
+    expect(ec(commit({ receipts: [r1], lines: [lineOf(r1), lineOf(r1)] }))).toBe('invalid_option')
+    // The same movement with another bucket or quantity.
+    expect(ec(commit({ receipts: [r1, r2], lines: [lineOf(r1), { ...lineOf(r2), variantId: 'r10k' }] }))).toBe('invalid_option')
+    expect(ec(commit({ receipts: [r1, r2], lines: [lineOf(r1), { ...lineOf(r2), quantity: '6' }] }))).toBe('invalid_option')
+    // Equal once canonical.
+    expect(ec(commit({ receipts: [r1, r2], lines: [lineOf(r1), { ...lineOf(r2), quantity: '5.0' }] }))).toBeNull()
   })
 
   it('the purchase date is a calendar date', () => {

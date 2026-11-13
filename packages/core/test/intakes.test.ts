@@ -119,6 +119,26 @@ describe('resolveIntake', () => {
     for (const l of r.lines) expect(l.resolution).toEqual({ kind: 'newItem', itemId: 'P', variantId: null })
   })
 
+  it('marks lines on a new item that cannot be created', () => {
+    const s = makeSnapshot({
+      ...electronics(),
+      folders: [folder('AF', 'Old parts', null, ARCHIVED)],
+      units: [{ id: 'u1', inventoryId: 'inv', name: 'Reel', symbol: 'reel', prefixPowers: [], createdAt: '', updatedAt: '', createdBy: '', updatedBy: '' }],
+    })
+    const cases: [Partial<DraftNewItem>, string][] = [
+      [{ folderId: 'AF' }, 'item_archived'],
+      [{ attributes: [{ attributeId: 'gone', value: null, axis: true }] }, 'invalid_value'],
+      [{ unitKey: 'custom:deleted' }, 'invalid_value'],
+      [{ name: '   ' }, 'invalid_value'],
+      [{ unitKey: 'custom:u1' }, 'ok'],
+    ]
+    for (const [over, code] of cases) {
+      const r = resolveIntake(draft([line('NEW', { res: '1k' })], [{ ...resistorItem(), ...over }]), s)
+      expect(r.lines[0]!.resolution.kind === 'problem' ? r.lines[0]!.resolution.code : 'ok', JSON.stringify(over)).toBe(code)
+      expect(r.ok).toBe(code === 'ok')
+    }
+  })
+
   it('marks lines whose item is gone or archived, or whose axis has no value', () => {
     const s = makeSnapshot({
       ...electronics(),

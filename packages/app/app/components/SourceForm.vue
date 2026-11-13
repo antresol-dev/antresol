@@ -6,18 +6,24 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { errorMessageKey } from '~/lib/errors'
 import { canSaveSource, checkConnectionString, createNeonDriver, photoStoreChoices, photoStoreProblem, type SourceProbe } from '~/lib/sources'
+import type { SharedConnection } from '~/lib/connection-share'
 import type { PhotoStore, SourceConfig } from '~/lib/types'
 
-const props = defineProps<{ source?: SourceConfig }>()
+const props = defineProps<{
+  source?: SourceConfig
+  /** A new source's settings received from another device (a scanned QR code): filled in, still to be checked. */
+  prefill?: SharedConnection
+}>()
+const initial = props.source ?? props.prefill
 
 const { t } = useI18n()
 const workspace = useWorkspace()
 const router = useRouter()
 const driver = createNeonDriver()
 
-const name = ref(props.source?.name ?? t('sourceForm.defaultName'))
-const connectionString = ref(props.source?.connectionString ?? '')
-const PHOTO_STORES: readonly PhotoStore[] = photoStoreChoices(props.source?.photoStore)
+const name = ref(initial?.name ?? t('sourceForm.defaultName'))
+const connectionString = ref(initial?.connectionString ?? '')
+const PHOTO_STORES: readonly PhotoStore[] = photoStoreChoices(initial?.photoStore)
 const KEY_LINKS: Record<PhotoStore, string> = {
   uploadcare: 'https://app.uploadcare.com/',
   cloudinary: 'https://console.cloudinary.com/settings/upload/presets',
@@ -27,13 +33,13 @@ const KEY_LINKS: Record<PhotoStore, string> = {
 function keyLink(p: PhotoStore): string {
   return KEY_LINKS[p]
 }
-const photoStore = ref<PhotoStore>(props.source?.photoStore ?? 'uploadcare')
-const cloudinaryCloud = ref(props.source?.cloudinaryCloudName ?? '')
-const cloudinaryPreset = ref(props.source?.cloudinaryUploadPreset ?? '')
-const imgbbApiKey = ref(props.source?.imgbbApiKey ?? '')
-const imgurClientId = ref(props.source?.imgurClientId ?? '')
-const uploadcareKey = ref(props.source?.uploadcarePublicKey ?? '')
-const uploadcareCdn = ref(props.source?.uploadcareCdnBase ?? '')
+const photoStore = ref<PhotoStore>(initial?.photoStore ?? 'uploadcare')
+const cloudinaryCloud = ref(initial?.cloudinaryCloudName ?? '')
+const cloudinaryPreset = ref(initial?.cloudinaryUploadPreset ?? '')
+const imgbbApiKey = ref(initial?.imgbbApiKey ?? '')
+const imgurClientId = ref(initial?.imgurClientId ?? '')
+const uploadcareKey = ref(initial?.uploadcarePublicKey ?? '')
+const uploadcareCdn = ref(initial?.uploadcareCdnBase ?? '')
 const cdnProblem = ref(false)
 const storeProblem = ref<ReturnType<typeof photoStoreProblem>>(null)
 const reveal = ref(false)

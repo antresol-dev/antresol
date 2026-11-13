@@ -2174,7 +2174,7 @@ describe('workspace sync and the check interval', () => {
   it('5. syncIfDue within the interval does nothing; after it, it checks once', async () => {
     const { h, ws } = await started('Inv')
     expect(ws.state.checkInterval).toBe('15m')
-    const minutes = { '5m': 5, '15m': 15, '1h': 60, '6h': 360, '1d': 1440 } as const
+    const minutes = { '5m': 5, '10m': 10, '15m': 15, '30m': 30, '1h': 60, '2h': 120, '3h': 180, '6h': 360, '12h': 720, '1d': 1440, '2d': 2880, '3d': 4320, '1w': 10080 } as const
     for (const [interval, n] of Object.entries(minutes)) {
       await ws.setCheckInterval(interval as keyof typeof minutes)
       // Any successful check starts the interval again.

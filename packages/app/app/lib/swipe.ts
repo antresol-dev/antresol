@@ -15,3 +15,14 @@ export function swipeAction(
   if (dx > 0) return !drawerOpen && start.x >= SWIPE.edgeGuard ? 'open' : null
   return drawerOpen ? 'close' : null
 }
+
+/** Swipe down to close the phone search palette: at least 80 px down and 1.5 times more down than across. */
+export const SWIPE_DOWN = { minDistance: 80, dominance: 1.5 } as const
+
+/** A finished touch move → close the palette? Only when the gesture could not have scrolled the results instead:
+ *  `canScrollUp` is whether the results list, at touch start, still had content above to reveal. */
+export function swipeDownCloses(start: { x: number; y: number }, end: { x: number; y: number }, canScrollUp: boolean): boolean {
+  const dx = end.x - start.x
+  const dy = end.y - start.y
+  return !canScrollUp && dy >= SWIPE_DOWN.minDistance && dy >= SWIPE_DOWN.dominance * Math.abs(dx)
+}

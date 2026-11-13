@@ -310,6 +310,19 @@
     outline: 2px solid var(--ring);
     outline-offset: 2px;
   }
+  /* Fields: a soft halo hugging the border, which itself turns accent (the markup's focus-visible:border-ring). The
+     2 px offset ring above reached the label text over the field. */
+  :where([data-slot='input'], [data-slot='textarea'], [data-slot='select-trigger']):focus-visible {
+    outline: 3px solid color-mix(in oklab, var(--ring) 35%, transparent);
+    outline-offset: 0;
+  }
+  :where([data-slot='input'], [data-slot='textarea'], [data-slot='select-trigger'])[aria-invalid='true']:focus-visible {
+    outline-color: color-mix(in oklab, var(--destructive) 35%, transparent);
+  }
+  /* A field's label starts where its rounded corner straightens out, not at the box's sharp edge. */
+  [data-slot='label']:not(:has([role='radio'], [role='checkbox'], [role='switch'], button)) {
+    padding-inline-start: calc(var(--radius-field) * 0.4);
+  }
 
   /* Everything that can be clicked shows the pointer (spec 4.2); disabled things do not. Zero specificity, so a
      cursor-* utility wins and the disabled rule wins over the pointer one. */

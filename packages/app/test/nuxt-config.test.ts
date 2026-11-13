@@ -8,7 +8,13 @@ describe('nuxt config', () => {
   // Android Chrome's default (resizes-visual) leaves the layout viewport full height under the
   // on-screen keyboard, so bottom-anchored sheets end up hidden behind it.
   it('lets the on-screen keyboard shrink the layout so bottom sheets stay above it', () => {
-    expect(config.app?.head?.viewport).toBe('width=device-width, initial-scale=1, interactive-widget=resizes-content')
+    expect(config.app?.head?.viewport).toContain('interactive-widget=resizes-content')
+  })
+
+  // Edge to edge: the page draws under Android's navigation bar, so the bar shows the page (the dock) in every theme
+  // instead of a fixed light strip; bottom bars pad themselves with env(safe-area-inset-bottom).
+  it('draws under the system navigation bar', () => {
+    expect(config.app?.head?.viewport).toContain('viewport-fit=cover')
   })
 
   it('asks before updating the service worker', () => {

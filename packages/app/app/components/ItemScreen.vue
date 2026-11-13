@@ -211,20 +211,20 @@ const linkClass =
     <template v-if="view && snapshot">
       <StockSheet :view="view" :target="stockTarget" @close="stockTarget = null" />
       <ul v-if="pinned.length > 0" class="-mt-1 flex min-w-0 flex-wrap gap-1.5" :aria-label="$t('list.pinned')">
-        <li v-for="(value, i) in pinned" :key="i" class="max-w-full truncate rounded-chip bg-chip px-2 py-0.5 text-[13px] font-semibold text-subtle-foreground">
+        <li v-for="(value, i) in pinned" :key="i" class="max-w-full truncate rounded-chip bg-chip px-2 py-0.5 text-xs font-semibold text-subtle-foreground">
           {{ value }}
         </li>
       </ul>
       <ItemGallery :item-id="itemId" :photos="view.photos" />
-      <div v-if="view.item.description || view.tags.length > 0" class="grid min-w-0 gap-2.5">
-        <p v-if="view.item.description" class="text-[15px] whitespace-pre-line text-muted-foreground wrap-anywhere">
+      <div v-if="view.item.description || view.tags.length > 0" class="grid min-w-0 gap-2">
+        <p v-if="view.item.description" class="text-base whitespace-pre-line text-muted-foreground wrap-anywhere">
           {{ view.item.description }}
         </p>
         <ul v-if="view.tags.length > 0" class="flex min-w-0 flex-wrap gap-1.5" :aria-label="$t('item.tags')">
           <li
             v-for="tag in view.tags"
             :key="tag.id"
-            class="tag-chip max-w-full truncate px-2.5 py-1 text-[13px] font-semibold"
+            class="tag-chip max-w-full truncate px-3 py-1 text-xs font-semibold"
           >
             {{ tag.name }}
           </li>
@@ -255,7 +255,7 @@ const linkClass =
         @archive="askArchive"
       />
       </div>
-      <Button variant="outline" class="h-11 justify-self-start px-4.5 btn-label" :disabled="locked" @click="addOpen = true">
+      <Button variant="outline" class="h-11 justify-self-start px-4 btn-label" :disabled="locked" @click="addOpen = true">
         <Plus class="size-5" aria-hidden="true" />
         {{ $t('variantsForm.open') }}
       </Button>
@@ -345,8 +345,8 @@ const linkClass =
     >
       <NuxtLink :to="fixTo" :class="linkClass">{{ $t('status.fix') }}</NuxtLink>
     </EmptyState>
-    <div v-else class="grid grid-cols-1 gap-3.5" aria-hidden="true">
-      <Skeleton class="h-[104px] rounded-card" />
+    <div v-else class="grid grid-cols-1 gap-4" aria-hidden="true">
+      <Skeleton class="h-26 rounded-card" />
       <Skeleton class="h-40 rounded-card" />
     </div>
   </ScreenBody>

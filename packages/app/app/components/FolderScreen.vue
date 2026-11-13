@@ -98,7 +98,7 @@ function retry(): void {
         {{ $t('status.fix') }}
       </NuxtLink>
     </EmptyState>
-    <div v-else-if="!snapshot" class="grid grid-cols-1 gap-3.5" aria-hidden="true">
+    <div v-else-if="!snapshot" class="grid grid-cols-1 gap-4" aria-hidden="true">
       <Skeleton class="h-40 rounded-card" />
     </div>
     <template v-else>

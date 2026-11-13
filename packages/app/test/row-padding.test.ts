@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 /*
  * Content keeps clear space from the edge of any highlighted row (owner, 2026-11-12). The highlight fills the row
  * (only the variant list's current row insets it by curM), and rows pad their content by the largest radius any style
- * gives them: 12 px horizontally (10 on the 32 px panel tree rows). Measured in the browser for all nine styles.
+ * gives them: 12 px horizontally (the 32 px panel tree rows too). Measured in the browser for all nine styles.
  */
 
 const read = (path: string) => readFileSync(fileURLToPath(new URL(`../app/${path}`, import.meta.url)), 'utf8')
@@ -29,11 +29,11 @@ describe('highlight fills the row', () => {
 describe('rows pad their content', () => {
   const has = (file: string, re: RegExp) => expect(read(file)).toMatch(re)
   it('nav links and the logo row: 12 px', () => {
-    has('components/AppNav.vue', /min-h-11 items-center gap-2\.5 px-3 text-sm/)
+    has('components/AppNav.vue', /min-h-11 items-center gap-3 px-3 text-sm/)
     has('components/AppNav.vue', /gap-2 px-3">/)
   })
-  it('tree rows: 10 px on the panel, 12 px in the drawer', () => {
-    has('components/FolderTreeNode.vue', /'h-8 pr-2\.5 pl-2\.5' : 'min-h-11 pr-3'/)
+  it('tree rows: 12 px on the panel and in the drawer', () => {
+    has('components/FolderTreeNode.vue', /'h-8 px-3' : 'min-h-11 pr-3'/)
   })
   it('palette rows: 12 px, clear of a pill-shaped highlight\'s corners', () => {
     has('components/SearchPalette.vue', /rounded-field px-3 select-none/)
@@ -54,7 +54,7 @@ describe('rows pad their content', () => {
     has('components/ui/select/SelectItem.vue', /pr-9 pl-3/)
   })
   it('the inventory switcher: trigger 16 px (capsule corners), menu rows 12 px', () => {
-    has('components/InventorySwitcher.vue', /gap-2\.5 px-4 py-2 text-left/)
+    has('components/InventorySwitcher.vue', /gap-3 px-4 py-2 text-left/)
     has('components/InventorySwitcher.vue', /gap-2 px-3 py-1\.5 text-left/)
   })
 })

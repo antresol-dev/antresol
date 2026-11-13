@@ -148,11 +148,11 @@ const itemClass = computed(() => [
   <DefineTrigger>
     <button
       type="button"
-      class="raised pressable flex min-h-11 w-full min-w-0 items-center gap-2.5 px-4 py-2 text-left"
+      class="raised pressable flex min-h-11 w-full min-w-0 items-center gap-3 px-4 py-2 text-left"
     >
       <span class="flex min-w-0 flex-1 flex-col">
-        <span class="text-[11px] font-semibold text-subtle-foreground">{{ $t('inventory.label') }}</span>
-        <span class="min-h-5 truncate text-sm font-bold">{{ name || (state.current ? '' : $t('inventory.none')) }}</span>
+        <span class="text-xs font-semibold text-subtle-foreground">{{ $t('inventory.label') }}</span>
+        <span class="min-h-5 truncate text-sm font-semibold">{{ name || (state.current ? '' : $t('inventory.none')) }}</span>
       </span>
       <ChevronsUpDown class="size-4 shrink-0 text-subtle-foreground" aria-hidden="true" />
     </button>

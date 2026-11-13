@@ -172,7 +172,7 @@ const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thu
       </div>
       <div
         v-else
-        class="raised-card grid aspect-[4/3] max-h-96 w-full place-items-center gap-2 p-4.5 text-center"
+        class="raised-card grid aspect-[4/3] max-h-96 w-full place-items-center gap-2 p-4 text-center"
       >
         <p v-if="!hasStore" class="text-sm text-muted-foreground">{{ $t('photos.noStore') }}</p>
         <PhotoPicker v-else multiple :disabled="!canAdd" @pick="upload" />
@@ -183,7 +183,7 @@ const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thu
         </div>
       </div>
     </template>
-    <p v-if="!hasStore && photos.length > 0 && !readOnly" class="pt-1.5 text-[13px] text-muted-foreground">
+    <p v-if="!hasStore && photos.length > 0 && !readOnly" class="pt-2 text-sm text-muted-foreground">
       {{ $t('photos.noStore') }}
     </p>
     <NuxtLink

@@ -19,16 +19,16 @@ const actions = computed(() => [
 
 <template>
   <section class="grid min-w-0 grid-cols-1 gap-2">
-    <h2 class="section-label text-[15px]">{{ $t('item.attributes') }}</h2>
+    <h2 class="section-label text-base">{{ $t('item.attributes') }}</h2>
     <!-- A flat list on the page, rows divided by lines. -->
     <dl v-if="attributes.length > 0" class="surface-list">
       <div
         v-for="a in attributes"
         :key="a.attributeId"
-        class="relative flex min-h-12 items-center justify-between gap-2 py-0.5 pl-3.5 not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-3.5 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
+        class="relative flex min-h-12 items-center justify-between gap-2 py-0.5 pl-3 not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
       >
-        <dt class="min-w-0 text-[15px] text-muted-foreground wrap-anywhere">{{ a.name }}</dt>
-        <dd class="ml-auto min-w-0 text-right text-[15px] wrap-anywhere">
+        <dt class="min-w-0 text-base text-muted-foreground wrap-anywhere">{{ a.name }}</dt>
+        <dd class="ml-auto min-w-0 text-right text-base wrap-anywhere">
           <template v-if="a.display === null">
             <span class="text-muted-foreground" aria-hidden="true">{{ $t('item.noValue') }}</span>
             <span class="sr-only">{{ $t('item.noValueLabel') }}</span>
@@ -43,7 +43,7 @@ const actions = computed(() => [
         />
       </div>
     </dl>
-    <Button variant="outline" class="mt-1 h-11 justify-self-start px-4.5 btn-label" :disabled="locked" @click="emit('add')">
+    <Button variant="outline" class="mt-1 h-11 justify-self-start px-4 btn-label" :disabled="locked" @click="emit('add')">
       <Plus class="size-5" aria-hidden="true" />
       {{ $t('item.addAttribute') }}
     </Button>

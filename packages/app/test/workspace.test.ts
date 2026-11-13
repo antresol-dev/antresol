@@ -1,5 +1,18 @@
 import { PGlite } from '@electric-sql/pglite'
-import { DomainError, FileError, newId, StorageError, variantLabel, type Command, type FileStore, type Id } from '@antresol/core'
+import {
+  DomainError,
+  FileError,
+  newId,
+  StorageError,
+  variantLabel,
+  type Command,
+  type DraftLine,
+  type DraftNewItem,
+  type FileStore,
+  type Id,
+  type IntakeDraftContent,
+  type IntakeHeader,
+} from '@antresol/core'
 import { APP_SCHEMA_VERSION, createPgliteExecutor, type PgExecutor } from '@antresol/storage-postgres'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computed, isReactive } from 'vue'
@@ -2789,5 +2802,178 @@ describe('workspace photos', () => {
       await ws.refresh()
       expect(ws.state.snapshot?.folders.map((f) => f.name).sort()).toEqual(['First', 'Second'])
     })
+  })
+})
+
+describe('workspace intakes', () => {
+  const started = async () => {
+    const h = setup()
+    const inv = await h.seed(CS('one'), 'Inv')
+    await h.db.putSource(config('s1', CS('one')))
+    const ws = h.workspace()
+    await ws.start()
+    const itemId = newId()
+    await ws.apply({
+      type: 'item.create', id: itemId, inventoryId: inv, folderId: null, name: 'Bolt', description: null, unitKey: 'pcs', tagIds: [], initialReceipt: null,
+    })
+    return { h, ws, inv, itemId }
+  }
+  const header: IntakeHeader = { shop: 'LCSC', orderNumber: 'WM2511-0042', purchasedOn: '2026-11-12', note: null }
+  const line = (itemId: Id, quantity: string): DraftLine => ({
+    id: newId(),
+    itemId,
+    axisValues: [],
+    quantity,
+    totalPrice: null,
+    sourceUrl: null,
+    photo: null,
+    ids: { movementId: newId(), variantId: newId(), photoId: newId() },
+  })
+  type Ws = ReturnType<ReturnType<typeof harness>['workspace']>
+  const stockOf = (ws: Ws, itemId: Id): number =>
+    Number(ws.state.snapshot!.stock.find((l) => l.itemId === itemId && l.variantId === null)?.quantity ?? 0)
+
+  it('commits a draft edited on the device a moment ago: the copy gets the rows by patch, no full load; listIntakes shows it committed', async () => {
+    const { h, ws, inv, itemId } = await started()
+    const folderId = newId()
+    await ws.apply(folderCreate(inv, 'Op-amps', folderId))
+    const fresh: DraftNewItem = { id: newId(), name: 'TL072', folderId, unitKey: 'pcs', attributes: [] }
+    const intakeId = newId()
+    await ws.intakeDrafts.load(intakeId, null)
+    // Not sent yet (the pause has not passed): commit flushes it first.
+    await ws.intakeDrafts.edit(intakeId, (d) => ({
+      ...d,
+      header,
+      content: { newItems: [fresh], lines: [line(itemId, '5'), line(fresh.id, '3')] },
+    }))
+    const loads = h.flags.loadCalls
+    expect(await ws.commitIntake(intakeId)).toEqual({ ok: true })
+    expect(h.flags.loadCalls).toBe(loads)
+    expect(stockOf(ws, itemId)).toBe(5)
+    expect(stockOf(ws, fresh.id)).toBe(3)
+    expect(ws.state.snapshot!.items.find((i) => i.id === fresh.id)?.folderId).toBe(folderId)
+    const stored = await (await h.direct(CS('one'))).loadInventory(inv)
+    expect(stored.stock.find((l) => l.itemId === fresh.id)?.quantity).toBe(ws.state.snapshot!.stock.find((l) => l.itemId === fresh.id)?.quantity)
+    const intake = (await ws.listIntakes()).find((i) => i.id === intakeId)!
+    expect(intake.status).toBe('committed')
+    expect(intake.header).toEqual(header)
+    expect(intake.lines?.map((l) => [l.itemName, l.kind])).toEqual([['Bolt', 'add'], ['TL072', 'newItem']])
+    // The device copy is gone; the folder chosen for the new item is a recent one now.
+    expect(await h.db.getIntakeDraft('s1', intakeId)).toBeNull()
+    expect(await h.db.getRecentFolders(inv)).toEqual([folderId])
+    // Committing again (a retry) writes nothing more.
+    const applied = h.flags.applied.length
+    expect(await ws.commitIntake(intakeId)).toEqual({ ok: true })
+    expect(h.flags.applied.length).toBe(applied)
+    expect(stockOf(ws, itemId)).toBe(5)
+  })
+
+  it('an item of a line deleted on another device: problems, nothing written', async () => {
+    const { h, ws, inv, itemId } = await started()
+    const intakeId = newId()
+    const content: IntakeDraftContent = { newItems: [], lines: [line(itemId, '5')] }
+    expect(await ws.saveIntakeDraft(intakeId, header, content, null)).toMatchObject({ saved: true })
+    const other = await h.direct(CS('one'))
+    await other.apply({ type: 'archive', target: 'item', id: itemId, archiveId: newId() }, { device: 'other' })
+    await other.apply({ type: 'deletePermanently', target: 'item', id: itemId }, { device: 'other' })
+    const before = await other.loadAllMovements(inv)
+    const applied = h.flags.applied.length
+    expect(await ws.commitIntake(intakeId)).toEqual({ ok: false, problems: [{ lineId: content.lines[0]!.id, code: 'unknown_item' }] })
+    expect(h.flags.applied.length).toBe(applied)
+    expect(await other.loadAllMovements(inv)).toEqual(before)
+    expect((await ws.listIntakes()).find((i) => i.id === intakeId)?.status).toBe('draft')
+  })
+
+  it('the revision moved between the sync and the write: one automatic retry goes through', async () => {
+    const { h, ws, itemId } = await started()
+    const intakeId = newId()
+    await ws.saveIntakeDraft(intakeId, header, { newItems: [], lines: [line(itemId, '5')] }, null)
+    const gate = h.gate()
+    h.flags.applyGate = gate.promise
+    const committing = ws.commitIntake(intakeId)
+    await vi.waitFor(() => expect(h.flags.applyBlocked).toBe(true))
+    await h.bumpRev(CS('one'))
+    gate.open()
+    expect(await committing).toEqual({ ok: true })
+    expect(h.flags.applied.filter((t) => t === 'intake.commit')).toHaveLength(2)
+    expect(stockOf(ws, itemId)).toBe(5)
+    expect((await ws.listIntakes()).find((i) => i.id === intakeId)?.status).toBe('committed')
+  })
+
+  it('an unknown outcome: committing again finds the intake committed and writes nothing more', async () => {
+    const { h, ws, itemId } = await started()
+    const intakeId = newId()
+    await ws.saveIntakeDraft(intakeId, header, { newItems: [], lines: [line(itemId, '5')] }, null)
+    h.flags.afterApply = async () => {
+      throw new StorageError('unavailable')
+    }
+    await expect(ws.commitIntake(intakeId)).rejects.toMatchObject({ name: 'StorageError', code: 'unavailable' })
+    expect(ws.state.readOnly).toBe('offline')
+    expect(await ws.commitIntake(intakeId)).toEqual({ ok: true })
+    expect(h.flags.applied.filter((t) => t === 'intake.commit')).toHaveLength(1)
+    expect(stockOf(ws, itemId)).toBe(5)
+  })
+
+  it('offline: refused as read-only before anything is sent; the draft stays on the device', async () => {
+    const { h, ws, itemId } = await started()
+    const intakeId = newId()
+    await ws.intakeDrafts.load(intakeId, null)
+    await ws.intakeDrafts.edit(intakeId, (d) => ({ ...d, header, content: { newItems: [], lines: [line(itemId, '1')] } }))
+    h.flags.offline = true
+    const applied = h.flags.applied.length
+    await expect(ws.commitIntake(intakeId)).rejects.toMatchObject({ name: 'StorageError', code: 'read_only' })
+    expect(h.flags.applied.length).toBe(applied)
+    expect(await h.db.getIntakeDraft('s1', intakeId)).toMatchObject({ dirty: true })
+  })
+
+  it('a draft saved on another device since it was opened here: refused as a conflict with its values reloaded, nothing written', async () => {
+    const { h, ws, inv, itemId } = await started()
+    const intakeId = newId()
+    await ws.saveIntakeDraft(intakeId, header, { newItems: [], lines: [line(itemId, '5')] }, null)
+    const row = (await ws.listIntakes()).find((i) => i.id === intakeId)!
+    await ws.intakeDrafts.load(intakeId, row)
+    const theirs = { ...header, shop: 'Mouser' }
+    const other = await h.direct(CS('one'))
+    const saved = await other.saveIntakeDraft({ id: intakeId, inventoryId: inv, header: theirs, content: row.draft! }, row.draftRev, { device: 'other' })
+    expect(saved).toMatchObject({ saved: true })
+    const applied = h.flags.applied.length
+    await expect(ws.commitIntake(intakeId)).rejects.toMatchObject({ name: 'StorageError', code: 'conflict' })
+    expect(h.flags.applied.length).toBe(applied)
+    expect(await h.db.getIntakeDraft('s1', intakeId)).toMatchObject({ dirty: false, header: theirs })
+  })
+
+  it('lists intakes again only when the intakes revision moved; headers, deletes and photo uploads', async () => {
+    const { h, ws, inv, itemId } = await started()
+    const [a, b] = [newId(), newId()]
+    await ws.saveIntakeDraft(a, header, { newItems: [], lines: [line(itemId, '1')] }, null)
+    expect((await ws.listIntakes()).map((i) => i.id)).toEqual([a])
+    const other = await h.direct(CS('one'))
+    await other.saveIntakeDraft({ id: b, inventoryId: inv, header, content: { newItems: [], lines: [] } }, null, { device: 'other' })
+    expect((await ws.listIntakes()).map((i) => i.id).sort()).toEqual([a, b].sort())
+    await ws.deleteIntakeDraft(b)
+    expect((await ws.listIntakes()).map((i) => i.id)).toEqual([a])
+    await ws.commitIntake(a)
+    const { rev } = await other.listInventories()
+    await ws.updateIntakeHeader(a, { ...header, note: 'Box 3' })
+    expect((await ws.listIntakes())[0]?.header.note).toBe('Box 3')
+    expect((await other.listInventories()).rev).toBe(rev)
+    expect(await ws.uploadPhoto(new File(['x'], 'shot.jpg', { type: 'image/jpeg' }))).toEqual({
+      provider: 'fake',
+      fileId: 'shot.jpg',
+      url: 'https://cdn.test/shot.jpg',
+    })
+  })
+
+  it('a header edit of a draft kept on the device goes with the draft: no false conflict after it', async () => {
+    const { ws, itemId } = await started()
+    const intakeId = newId()
+    await ws.intakeDrafts.load(intakeId, null)
+    await ws.intakeDrafts.edit(intakeId, (d) => ({ ...d, header, content: { newItems: [], lines: [line(itemId, '2')] } }))
+    await ws.intakeDrafts.flush(intakeId)
+    await ws.updateIntakeHeader(intakeId, { ...header, shop: 'Digikey' })
+    await ws.intakeDrafts.edit(intakeId, (d) => ({ ...d, header: { ...d.header, note: 'later' } }))
+    await ws.intakeDrafts.flush(intakeId)
+    const copy = await ws.intakeDrafts.load(intakeId, (await ws.listIntakes()).find((i) => i.id === intakeId)!)
+    expect(copy).toMatchObject({ dirty: false, changedElsewhere: null, header: { shop: 'Digikey', note: 'later' } })
   })
 })

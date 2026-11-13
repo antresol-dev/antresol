@@ -33,13 +33,18 @@ export default defineNuxtPlugin(async () => {
   let onlineTimer: ReturnType<typeof setTimeout> | undefined
   window.addEventListener('online', () => {
     clearTimeout(onlineTimer)
-    onlineTimer = setTimeout(() => quietly(workspace.refresh()), ONLINE_DEBOUNCE_MS)
+    // Intake drafts edited offline go to the database once the source answers again.
+    onlineTimer = setTimeout(() => quietly(workspace.refresh().then(() => workspace.intakeDrafts.flush())), ONLINE_DEBOUNCE_MS)
   })
   document.addEventListener('visibilitychange', () => {
     // Back in the app: a check if the device's interval has passed (or a source is failing).
     if (document.visibilityState === 'visible') quietly(workspace.syncIfDue())
-    // The app may be closed while hidden: written rows not saved on the device yet are saved now.
-    if (document.visibilityState === 'hidden') quietly(workspace.flushCache())
+    // The app may be closed while hidden: written rows not saved on the device yet are saved now, and intake drafts
+    // waiting for their pause go to the database (their device copies are saved already).
+    if (document.visibilityState === 'hidden') {
+      quietly(workspace.flushCache())
+      quietly(workspace.intakeDrafts.flush())
+    }
   })
 
   return { provide: { workspace, workspaceReady: ready } }

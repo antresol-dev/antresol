@@ -2,8 +2,12 @@ import type {
   Command,
   FileStore,
   Id,
+  Intake,
+  IntakeDraftContent,
+  IntakeHeader,
   Inventory,
   InventorySnapshot,
+  InventoryStorage,
   Movement,
   RestoreMode,
   RestoreResult,
@@ -11,6 +15,7 @@ import type {
 } from '@antresol/core'
 import type { BackupFile } from './backup'
 import type { BackupInfo, DeviceDb, RestoreRun } from './device-db'
+import type { IntakeDraftSync } from './intake-drafts'
 import type { FailureReason, SourceDriver } from './sources'
 import type { InventoryRef, SourceConfig, SourceKind } from './types'
 
@@ -188,4 +193,41 @@ export interface Workspace {
    *  can be run again. A write on its way keeps the connection until it is done. */
   removeSource(id: string): Promise<void>
   setDeviceName(name: string): Promise<void>
+
+  /** Intakes of the current inventory, drafts and committed, the most recently changed first. Kept per intakes
+   *  revision: listed again only when it moved (one light read otherwise). While the source is unreachable, the list
+   *  last read this session, if any; otherwise rejects with `unavailable`. */
+  listIntakes(): Promise<Intake[]>
+  /** One database write of a whole draft into the current inventory (InventoryStorage.saveIntakeDraft); `rev` does not
+   *  change. Not in the write queue. Rejects with `unavailable` without a network call while the source is
+   *  unreachable. Drafts go through `intakeDrafts`, which calls this. */
+  saveIntakeDraft(
+    id: Id,
+    header: IntakeHeader,
+    content: IntakeDraftContent,
+    baseDraftRev: string | null,
+    force?: boolean,
+  ): ReturnType<InventoryStorage['saveIntakeDraft']>
+  /** Deletes the draft from the database, then its copy on this device. */
+  deleteIntakeDraft(id: Id): Promise<void>
+  /** The header of a committed intake, or of a draft. A draft kept on this device takes it as an edit and is sent with
+   *  it (its next write would otherwise find the row changed by this one); any other goes straight to the database. */
+  updateIntakeHeader(id: Id, header: IntakeHeader): Promise<void>
+  /**
+   * Commits a draft of the current inventory (spec 2026-11-13 intakes §7): its device copy is sent first; then a sync,
+   * and the lines are resolved again against that fresh copy. Lines with problems: `{ ok: false, problems }`, nothing
+   * sent. Otherwise one intake.commit at the source's revision, in the write queue, its rows put into the shown copy;
+   * refused as made on a copy that is behind (`conflict`), it is resolved and sent once more. An intake committed already
+   * (a retry whose first attempt landed) is `{ ok: true }` with nothing written. Afterwards the device copy is dropped
+   * and the folders of its new items become recent ones. Rejects with `conflict` when the draft has edits from another
+   * device this one has not seen (the device copy then shows them), `read_only` when the source cannot be reached
+   * before anything is sent, and as apply otherwise (`unavailable`: the outcome is unknown; committing again is safe).
+   */
+  commitIntake(id: Id): Promise<{ ok: true } | { ok: false; problems: { lineId: Id; code: string }[] }>
+  /** Prepares and uploads a photo to the current source's photo store, recording nothing (a draft line keeps it). */
+  uploadPhoto(file: File): Promise<{ provider: string; fileId: string; url: string }>
+  /** Folders this device last put new items of an intake into, in the current inventory; newest first. */
+  recentFolders(): Promise<Id[]>
+  /** The drafts kept on this device and their trips to the database. */
+  readonly intakeDrafts: IntakeDraftSync
 }

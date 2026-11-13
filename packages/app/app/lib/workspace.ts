@@ -1,15 +1,21 @@
 import {
+  buildIntakeCommit,
   DomainError,
   FileError,
   newId,
   normalizeCommand,
   patchSnapshot,
+  pruneNewItems,
+  resolveIntake,
   StorageError,
   validateCommand,
   type ApplyResult,
   type Command,
   type FileStore,
   type Id,
+  type Intake,
+  type IntakeDraftContent,
+  type IntakeHeader,
   type Inventory,
   type InventorySnapshot,
   type Movement,
@@ -26,6 +32,7 @@ import { markRaw, reactive } from 'vue'
 import { buildBackup, type BackupFile } from './backup'
 import { logError, secretsOf, setSecretSource } from './diagnostics'
 import { createDeviceFileStore, releaseDeviceUrls } from './device-files'
+import { createIntakeDraftSync, type LocalIntakeDraft } from './intake-drafts'
 import { prepareImage as defaultPrepareImage } from './images'
 import { countUpload } from './uploads'
 import type { CachedSnapshot } from './device-db'
@@ -1287,6 +1294,171 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     return guarded(sourceId, conn, () => conn.storage.findReceiptsBySource(inventoryId, key))
   }
 
+  /** The current inventory's source and connection for a write outside the queue (drafts, headers); as journalSource,
+   *  and `read_only` while its schema needs a newer app. */
+  function draftSource(): { sourceId: string; conn: SourceConnection } {
+    const found = journalSource()
+    if (statusOf(found.sourceId) === 'read_only') throw new StorageError('read_only')
+    return found
+  }
+
+  /** Intakes lists by `sourceId:inventoryId`, with the intakes revision they were read at. */
+  const intakeLists = new Map<string, { intakes: Intake[]; intakesRev: string }>()
+  const intakesKey = (ref: InventoryRef): string => `${ref.sourceId}:${ref.inventoryId}`
+
+  /** The inventory's intakes from the source, kept for listIntakes. */
+  async function readIntakes(ref: InventoryRef, conn: SourceConnection): Promise<Intake[]> {
+    const listed = await guarded(ref.sourceId, conn, () => conn.storage.listIntakes(ref.inventoryId))
+    intakeLists.set(intakesKey(ref), listed)
+    return listed.intakes
+  }
+
+  async function listIntakes(): Promise<Intake[]> {
+    const cur = state.current
+    if (!cur) throw new StorageError('not_found')
+    const ref = { sourceId: cur.sourceId, inventoryId: cur.inventoryId }
+    const kept = intakeLists.get(intakesKey(ref))
+    try {
+      const { conn } = journalSource()
+      if (kept && (await guarded(ref.sourceId, conn, () => conn.storage.intakesRev())) === kept.intakesRev) return kept.intakes
+      return await readIntakes(ref, conn)
+    } catch (error) {
+      if (kept) return kept.intakes
+      throw error
+    }
+  }
+
+  async function saveIntakeDraft(
+    id: Id,
+    header: IntakeHeader,
+    content: IntakeDraftContent,
+    baseDraftRev: string | null,
+    force = false,
+  ): ReturnType<Workspace['saveIntakeDraft']> {
+    const cur = state.current
+    if (!cur) throw new StorageError('not_found')
+    const { sourceId, conn } = draftSource()
+    const draft = { id, inventoryId: cur.inventoryId, header, content }
+    return guarded(sourceId, conn, () => conn.storage.saveIntakeDraft(draft, baseDraftRev, { device: state.deviceName }, { force }))
+  }
+
+  const intakeDrafts = createIntakeDraftSync({
+    db,
+    save: saveIntakeDraft,
+    sourceId: () => state.current?.sourceId ?? null,
+    inventoryId: () => state.current?.inventoryId ?? null,
+    now: () => now().getTime(),
+  })
+
+  async function deleteIntakeDraft(id: Id): Promise<void> {
+    const { sourceId, conn } = draftSource()
+    // The device copy first, with its pending write: nothing sends the draft back after the delete.
+    await intakeDrafts.forget(id)
+    await guarded(sourceId, conn, () => conn.storage.deleteIntakeDraft(id))
+  }
+
+  async function updateIntakeHeader(id: Id, header: IntakeHeader): Promise<void> {
+    if (await intakeDrafts.peek(id)) {
+      // Written with the draft, from the draftRev the copy knows: a separate header write would make its next save
+      // look changed elsewhere. Should the draft turn out committed, its copy is dropped and the header goes below.
+      await intakeDrafts.edit(id, (d) => ({ ...d, header }))
+      await intakeDrafts.flush(id)
+      if (await intakeDrafts.peek(id)) return
+    }
+    const { sourceId, conn } = draftSource()
+    await guarded(sourceId, conn, () => conn.storage.updateIntakeHeader(id, header, { device: state.deviceName }))
+  }
+
+  /** The sync before a commit. Failing, nothing was sent: `read_only` when the source cannot be reached (writes are
+   *  refused so while it is offline), `failed` for a copy still behind; never `unavailable`, which means an unknown
+   *  outcome. */
+  async function syncForCommit(ref: InventoryRef): Promise<void> {
+    try {
+      await sync()
+    } catch (error) {
+      if (!isConnected(statusOf(ref.sourceId))) throw new StorageError('read_only')
+      if (error instanceof StorageError && error.code === 'unavailable') throw new StorageError('failed')
+      throw error
+    }
+    if (!sameRef(state.current, ref)) throw new StorageError('not_found')
+  }
+
+  /** A draft kept only on this device (its row deleted on another device) as the commit is built from it. */
+  const intakeOf = (id: Id, local: LocalIntakeDraft): Intake => ({
+    id,
+    inventoryId: local.inventoryId,
+    status: 'draft',
+    header: local.header,
+    draft: local.content,
+    lines: null,
+    draftRev: local.baseDraftRev ?? '',
+    createdAt: '',
+    createdBy: '',
+    updatedAt: '',
+    updatedBy: '',
+    committedAt: null,
+  })
+
+  /** The device copy goes; the folders the commit put new items into become recent ones. */
+  async function afterCommit(ref: InventoryRef, id: Id, content: IntakeDraftContent | null): Promise<void> {
+    await intakeDrafts.forget(id).catch(() => {})
+    const folders = new Set((content ? pruneNewItems(content).newItems : []).flatMap((n) => (n.folderId ? [n.folderId] : [])))
+    for (const folderId of folders) await db.noteRecentFolder(ref.inventoryId, folderId).catch(() => {})
+  }
+
+  async function commitIntake(id: Id): ReturnType<Workspace['commitIntake']> {
+    const cur = state.current
+    if (!cur) throw new StorageError('not_found')
+    const ref = { sourceId: cur.sourceId, inventoryId: cur.inventoryId }
+    await intakeDrafts.flush(id)
+    for (let attempt = 0; ; attempt++) {
+      await syncForCommit(ref)
+      let local = await intakeDrafts.peek(id)
+      // Offline at the flush above: sent now that the source answers.
+      if (local?.dirty && !local.changedElsewhere) {
+        await intakeDrafts.flush(id)
+        local = await intakeDrafts.peek(id)
+      }
+      if (local && local.inventoryId !== ref.inventoryId) throw new StorageError('not_found')
+      if (local?.changedElsewhere) throw new StorageError('conflict')
+      if (local?.dirty) throw new StorageError(statusOf(ref.sourceId) === 'read_only' ? 'read_only' : 'failed')
+      const row = (await readIntakes(ref, journalSource().conn)).find((i) => i.id === id) ?? null
+      if (row?.status === 'committed') {
+        await afterCommit(ref, id, local?.content ?? null)
+        return { ok: true }
+      }
+      if (local && row && row.draftRev !== local.baseDraftRev) {
+        // Saved on another device since this one last saw it: shown first, never committed unseen.
+        await intakeDrafts.load(id, row)
+        throw new StorageError('conflict')
+      }
+      const intake = row ?? (local ? intakeOf(id, local) : null)
+      if (!intake?.draft) throw new StorageError('not_found')
+      const snapshot = state.snapshot
+      const rev = shownRev
+      if (!snapshot || snapshot.inventory.id !== ref.inventoryId || rev === null) throw new StorageError('failed')
+      const resolved = resolveIntake(intake.draft, snapshot)
+      if (!resolved.ok) {
+        const problems = resolved.lines.flatMap(({ lineId, resolution: r }) => (r.kind === 'problem' ? [{ lineId, code: r.code }] : []))
+        return { ok: false, problems }
+      }
+      try {
+        await applyTo(ref, buildIntakeCommit(intake, resolved, snapshot, rev))
+      } catch (error) {
+        // Made on a copy that fell behind meanwhile (another write landed): once more from a fresh one.
+        if (attempt === 0 && error instanceof StorageError && error.code === 'conflict') continue
+        throw error
+      }
+      await afterCommit(ref, id, intake.draft)
+      return { ok: true }
+    }
+  }
+
+  async function uploadPhoto(file: File): Promise<{ provider: string; fileId: string; url: string }> {
+    const { cur, store } = photoTarget()
+    return uploadOne(cur.sourceId, store, file)
+  }
+
   async function exportSource(sourceId: string): Promise<BackupFile> {
     const entry = state.sources.find((s) => s.config.id === sourceId)
     const conn = conns.get(sourceId)
@@ -1426,6 +1598,14 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     },
     loadMovements,
     findReceiptsBySource,
+    listIntakes,
+    saveIntakeDraft,
+    deleteIntakeDraft,
+    updateIntakeHeader,
+    commitIntake,
+    uploadPhoto,
+    recentFolders: async () => (state.current ? db.getRecentFolders(state.current.inventoryId) : []),
+    intakeDrafts,
     exportSource,
     restoreSource,
     restoreRun: (fileSha256) => db.getRestoreRun(fileSha256),

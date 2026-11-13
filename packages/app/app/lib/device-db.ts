@@ -1,6 +1,7 @@
-import { newId, type Inventory, type InventorySnapshot, type RestoreMode } from '@antresol/core'
+import { newId, type Id, type Inventory, type InventorySnapshot, type RestoreMode } from '@antresol/core'
 import { createStore, del, get, getMany, keys, set, setMany, update, type UseStore } from 'idb-keyval'
 import type { AccentName } from './accent'
+import type { LocalIntakeDraft } from './intake-drafts'
 import type { StyleName } from './styles/types'
 import type { InventoryRef, SourceConfig } from './types'
 import type { CheckInterval } from './workspace-types'
@@ -90,7 +91,19 @@ export interface DeviceDb {
   finishRestoreRun(fileSha256: string, runId: string): Promise<void>
   /** Run `runId` wrote nothing (refused before its first batch): forgotten, so nothing goes on with it. */
   dropRestoreRun(fileSha256: string, runId: string): Promise<void>
+  /** This device's copy of an intake draft (intake-drafts.ts); null: none. */
+  getIntakeDraft(sourceId: string, intakeId: Id): Promise<LocalIntakeDraft | null>
+  putIntakeDraft(sourceId: string, intakeId: Id, value: LocalIntakeDraft): Promise<void>
+  deleteIntakeDraft(sourceId: string, intakeId: Id): Promise<void>
+  /** Every draft copy of the source on this device, in no particular order. */
+  listIntakeDrafts(sourceId: string): Promise<{ id: Id; draft: LocalIntakeDraft }[]>
+  /** Folders this device last put new items of an intake into, newest first, at most RECENT_FOLDERS_KEPT. */
+  getRecentFolders(inventoryId: Id): Promise<Id[]>
+  /** The folder goes first; it is never listed twice. */
+  noteRecentFolder(inventoryId: Id, folderId: Id): Promise<void>
 }
+
+export const RECENT_FOLDERS_KEPT = 3
 
 const SOURCES = 'sources'
 const SETTINGS = 'settings'
@@ -101,6 +114,9 @@ const revKey = (ref: InventoryRef): string => `snapshotRev:${ref.sourceId}:${ref
 const revPrefix = (sourceId: string): string => `snapshotRev:${sourceId}:`
 const backupKey = (sourceId: string): string => `backup:${sourceId}`
 const runKey = (fileSha256: string): string => `restoreRun:${fileSha256}`
+const intakeDraftKey = (sourceId: string, intakeId: Id): string => `intakeDraft:${sourceId}:${intakeId}`
+const intakeDraftPrefix = (sourceId: string): string => `intakeDraft:${sourceId}:`
+const recentFoldersKey = (inventoryId: Id): string => `recentFolders:${inventoryId}`
 const noBackup = (): BackupInfo => ({ lastBackupAt: null, writesSince: 0 })
 const RESTORE_MODES: readonly unknown[] = ['same-ids', 'new-ids'] satisfies RestoreMode[]
 /** A stored run as written by this app; anything else (an older build kept a bare run id there) counts as none. */
@@ -142,7 +158,7 @@ function buildDeviceDb(kv: Kv, persistent: boolean): DeviceDb {
     },
     async deleteSource(id) {
       await kv.update<SourceConfig[]>(SOURCES, (list) => (list ?? []).filter((x) => x.id !== id))
-      const prefixes = [snapshotPrefix(id), revPrefix(id)]
+      const prefixes = [snapshotPrefix(id), revPrefix(id), intakeDraftPrefix(id)]
       for (const key of await kv.keys()) {
         if (prefixes.some((p) => key.startsWith(p))) await kv.del(key)
       }
@@ -242,6 +258,32 @@ function buildDeviceDb(kv: Kv, persistent: boolean): DeviceDb {
     async dropRestoreRun(fileSha256, runId) {
       // Atomic, unlike a read then a delete: an empty value is no run.
       await kv.update<unknown>(runKey(fileSha256), (stored) => (asRun(stored)?.runId === runId ? undefined : stored))
+    },
+    async getIntakeDraft(sourceId, intakeId) {
+      return (await kv.get<LocalIntakeDraft>(intakeDraftKey(sourceId, intakeId))) ?? null
+    },
+    async putIntakeDraft(sourceId, intakeId, value) {
+      await kv.set(intakeDraftKey(sourceId, intakeId), value)
+    },
+    async deleteIntakeDraft(sourceId, intakeId) {
+      await kv.del(intakeDraftKey(sourceId, intakeId))
+    },
+    async listIntakeDrafts(sourceId) {
+      const prefix = intakeDraftPrefix(sourceId)
+      const found = (await kv.keys()).filter((key) => key.startsWith(prefix))
+      const values = (await kv.getMany(found)) as (LocalIntakeDraft | undefined)[]
+      return found.flatMap((key, i) => {
+        const draft = values[i]
+        return draft ? [{ id: key.slice(prefix.length), draft }] : []
+      })
+    },
+    async getRecentFolders(inventoryId) {
+      return (await kv.get<Id[]>(recentFoldersKey(inventoryId))) ?? []
+    },
+    async noteRecentFolder(inventoryId, folderId) {
+      await kv.update<Id[]>(recentFoldersKey(inventoryId), (list) =>
+        [folderId, ...(list ?? []).filter((id) => id !== folderId)].slice(0, RECENT_FOLDERS_KEPT),
+      )
     },
   }
 }

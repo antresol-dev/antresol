@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createStore, get, keys, set } from 'idb-keyval'
 import { newId, type Inventory, type InventorySnapshot } from '@antresol/core'
 import { createMemoryDeviceDb, openDeviceDb, type DeviceDb } from '../app/lib/device-db'
+import type { LocalIntakeDraft } from '../app/lib/intake-drafts'
 import type { InventoryRef, SourceConfig } from '../app/lib/types'
 
 const source = (id: string): SourceConfig => ({
@@ -201,4 +202,47 @@ describe('device db when the probe write fails', () => {
     await db.putSource(source('m'))
     expect((await db.getSources()).map((s) => s.id)).toEqual(['m'])
   })
+})
+
+describe('device db intake drafts and recent folders', () => {
+  const local = (inventoryId: string, shop: string): LocalIntakeDraft => ({
+    inventoryId,
+    header: { shop, orderNumber: null, purchasedOn: '2026-11-13', note: null },
+    content: { newItems: [], lines: [] },
+    baseDraftRev: null,
+    dirty: true,
+    changedElsewhere: null,
+  })
+
+  for (const [name, open] of [
+    ['memory', async () => createMemoryDeviceDb()],
+    ['IndexedDB', () => openDeviceDb()],
+  ] as const) {
+    it(`${name}: keeps drafts per source, lists and deletes them; deleteSource drops them`, async () => {
+      const db: DeviceDb = await open()
+      const [a, b, x, y] = [newId(), newId(), newId(), newId()]
+      expect(await db.getIntakeDraft(a, x)).toBeNull()
+      await db.putIntakeDraft(a, x, local('inv', 'LCSC'))
+      await db.putIntakeDraft(a, y, local('inv', 'Ali'))
+      await db.putIntakeDraft(b, x, local('inv', 'Other'))
+      expect((await db.getIntakeDraft(a, x))?.header.shop).toBe('LCSC')
+      const listed = await db.listIntakeDrafts(a)
+      expect(listed.map((d) => [d.id, d.draft.header.shop]).sort()).toEqual([[x, 'LCSC'], [y, 'Ali']].sort())
+      await db.deleteIntakeDraft(a, y)
+      expect((await db.listIntakeDrafts(a)).map((d) => d.id)).toEqual([x])
+      await db.deleteSource(a)
+      expect(await db.listIntakeDrafts(a)).toEqual([])
+      expect((await db.getIntakeDraft(b, x))?.header.shop).toBe('Other')
+    })
+
+    it(`${name}: remembers the three most recent folders per inventory, newest first`, async () => {
+      const db: DeviceDb = await open()
+      const [inv, other] = [newId(), newId()]
+      const [f1, f2, f3, f4] = [newId(), newId(), newId(), newId()]
+      expect(await db.getRecentFolders(inv)).toEqual([])
+      for (const f of [f1, f2, f3, f2, f4]) await db.noteRecentFolder(inv, f)
+      expect(await db.getRecentFolders(inv)).toEqual([f4, f2, f3])
+      expect(await db.getRecentFolders(other)).toEqual([])
+    })
+  }
 })

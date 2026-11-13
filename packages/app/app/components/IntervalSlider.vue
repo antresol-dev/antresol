@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { CHECK_INTERVALS, type CheckInterval } from '~/lib/workspace-types'
 
-// "Check for changes": a slider over the interval steps (5 min … 1 week, then Never), a dot per step. The steps grow
+// "Check for changes": a slider over the interval steps (5 min … 1 week, then Never), a tick per step. The steps grow
 // roughly geometrically, so even spacing reads as a logarithmic scale. Saved when the thumb is let go.
 const props = defineProps<{ id?: string; modelValue: CheckInterval }>()
 const emit = defineEmits<{ 'update:modelValue': [value: CheckInterval] }>()
@@ -25,7 +25,9 @@ function onChange(): void {
   const v = CHECK_INTERVALS[index.value]
   if (v && v !== props.modelValue) emit('update:modelValue', v)
 }
-// The dot's centre: the thumb (20 px) travels between 10 px from each end.
+/** Steps marked by a taller tick: the hour, the day and the week. */
+const MAJOR = new Set<CheckInterval>(['1h', '1d', '1w'])
+// A step's centre: the thumb (20 px) travels between 10 px from each end.
 const at = (i: number): string => `calc(10px + (100% - 20px) * ${i / last})`
 </script>
 
@@ -36,13 +38,15 @@ const at = (i: number): string => `calc(10px + (100% - 20px) * ${i / last})`
       <div class="pointer-events-none absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-muted" aria-hidden="true">
         <div class="h-full rounded-full bg-primary" :style="{ width: at(index) }" />
       </div>
+      <!-- A ruler under the track instead of dots on it: a short tick per step, taller ones at 1 h, 1 day and 1 week. -->
       <span
-        v-for="(_, i) in CHECK_INTERVALS"
-        :key="i"
+        v-for="(v, i) in CHECK_INTERVALS"
+        :key="v"
         aria-hidden="true"
         :class="[
-          'pointer-events-none absolute top-1/2 size-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full',
-          i <= index ? 'bg-primary-foreground/80' : 'bg-subtle-foreground/60',
+          'pointer-events-none absolute top-[calc(50%+7px)] w-px -translate-x-1/2 rounded-full',
+          MAJOR.has(v) ? 'h-2' : 'h-1',
+          i <= index ? 'bg-primary/70' : 'bg-subtle-foreground/45',
         ]"
         :style="{ left: at(i) }"
       />
@@ -59,7 +63,7 @@ const at = (i: number): string => `calc(10px + (100% - 20px) * ${i / last})`
         @change="onChange"
       >
     </div>
-    <!-- Inset like the field text: the ends then sit under the first and last dots (10 px in). -->
+    <!-- Inset like the field text: the ends then sit under the first and last ticks (10 px in). -->
     <div class="flex justify-between px-(--field-inset) text-xs text-subtle-foreground" aria-hidden="true">
       <span>{{ $t('sync.intervalShortMin') }}</span>
       <span>{{ $t('sync.never') }}</span>

@@ -24,3 +24,12 @@
     background: var(--st-thumbs-2);
   }
 }
+
+/* The wallpaper's grid and stars (`page`, lib/styles/y2k.ts) 30 % fainter from 1024 px (lg): on a wide screen the
+   pattern fills far more of the view and competed with the panels. Only the alpha scale is set here; the colour is
+   the token's. Set on the root, where --st-page is declared and resolved. */
+@media (width >= 64rem) {
+  [data-style='y2k']:root {
+    --y2k-grid: 0.7;
+  }
+}

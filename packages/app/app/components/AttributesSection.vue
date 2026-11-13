@@ -66,7 +66,7 @@ async function remove(): Promise<void> {
 <template>
   <section class="grid min-w-0 gap-2" aria-labelledby="dictionaries-attributes">
     <div class="flex min-h-11 items-center justify-between gap-2">
-      <h2 id="dictionaries-attributes" class="text-[17px] font-bold tracking-[-0.01em] text-foreground">
+      <h2 id="dictionaries-attributes" class="text-base font-semibold tracking-[-0.01em] text-foreground">
         {{ $t('dictionaries.attributes') }}
       </h2>
       <!-- Thinner than the default raised button (R(3,7), 40 px): it must not outweigh the section's heading. -->
@@ -79,13 +79,13 @@ async function remove(): Promise<void> {
       <li
         v-for="row in rows"
         :key="row.attribute.id"
-        class="relative flex min-h-[62px] items-center gap-3 px-3.5 py-1.5 not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-3.5 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
+        class="relative flex min-h-14 items-center gap-3 px-3 py-1.5 not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
       >
         <span class="flex min-w-0 grow flex-col gap-0.5">
-          <span class="truncate text-[15px] font-bold">{{ row.attribute.name }}</span>
-          <span class="truncate text-[13px] text-muted-foreground">{{ typeLabel(row.attribute) }}</span>
+          <span class="truncate text-base font-semibold">{{ row.attribute.name }}</span>
+          <span class="truncate text-sm text-muted-foreground">{{ typeLabel(row.attribute) }}</span>
         </span>
-        <span class="shrink-0 text-[13px] text-muted-foreground">{{ $t('dictionaries.itemCount', row.itemCount) }}</span>
+        <span class="shrink-0 text-sm text-muted-foreground">{{ $t('dictionaries.itemCount', row.itemCount) }}</span>
         <RowMenu
           class="size-11"
           :label="row.attribute.name"

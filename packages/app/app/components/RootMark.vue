@@ -7,7 +7,7 @@ import { House } from '@lucide/vue'
 
 <template>
   <span class="inline-flex shrink-0 items-center text-subtle-foreground" :title="$t('folder.root')">
-    <House class="size-3.5" aria-hidden="true" />
+    <House class="size-4" aria-hidden="true" />
     <span class="sr-only">{{ $t('folder.root') }}</span>
   </span>
 </template>

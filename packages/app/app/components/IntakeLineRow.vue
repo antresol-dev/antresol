@@ -97,7 +97,7 @@ const tag = computed(() => {
 <template>
   <button
     type="button"
-    class="flex min-h-[62px] w-full min-w-0 items-center gap-3 rounded-field px-3.5 py-2 text-left transition-colors duration-150 hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+    class="flex min-h-14 w-full min-w-0 items-center gap-3 rounded-field px-3 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     @click="$emit('open')"
   >
     <span class="amount w-14 shrink-0 text-right text-base tabular-nums">
@@ -105,13 +105,13 @@ const tag = computed(() => {
       <span class="block text-xs font-semibold text-muted-foreground">{{ amount.unit }}</span>
     </span>
     <span class="flex min-w-0 grow flex-col gap-0.5">
-      <span class="min-w-0 text-[15px] font-bold wrap-anywhere">
+      <span class="min-w-0 text-base font-semibold wrap-anywhere">
         {{ name }}<span v-if="values" class="font-semibold text-muted-foreground"> · {{ values }}</span>
       </span>
-      <span v-if="problemCode" class="text-[13px] font-semibold text-destructive wrap-anywhere">{{ problemText }}</span>
-      <span v-else class="truncate text-[13px] text-muted-foreground">{{ caption }}</span>
+      <span v-if="problemCode" class="text-sm font-semibold text-destructive wrap-anywhere">{{ problemText }}</span>
+      <span v-else class="truncate text-sm text-muted-foreground">{{ caption }}</span>
     </span>
-    <span class="shrink-0 rounded-chip px-1.5 py-px text-[11px] font-bold tracking-[0.04em] uppercase" :class="tag.class">
+    <span class="shrink-0 rounded-chip px-1.5 py-px text-xs font-semibold tracking-[0.04em] uppercase" :class="tag.class">
       {{ $t(tag.label) }}
     </span>
   </button>

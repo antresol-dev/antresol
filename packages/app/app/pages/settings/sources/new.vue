@@ -79,11 +79,11 @@ const host = computed(() => {
     <ScreenHeader :title="$t('sourceForm.newTitle')" />
     <ScreenBody>
       <p v-if="opening" role="status" class="text-sm">{{ $t('pairing.opening') }}</p>
-      <div v-else-if="linkProblem" role="alert" class="grid gap-2 rounded-field bg-chip px-3 py-2.5 text-sm">
+      <div v-else-if="linkProblem" role="alert" class="grid gap-2 rounded-field bg-chip px-3 py-3 text-sm">
         <p>{{ $t(`pairing.link.${linkProblem}`) }}</p>
         <Button type="button" variant="outline" class="h-11" @click="receiveOpen = true">{{ $t('pairing.receive') }}</Button>
       </div>
-      <div v-if="received" role="status" class="grid gap-1 rounded-field bg-chip px-3 py-2.5 text-sm">
+      <div v-if="received" role="status" class="grid gap-1 rounded-field bg-chip px-3 py-3 text-sm">
         <p>{{ $t('pairing.received') }}</p>
         <p class="font-semibold break-all">{{ $t('pairing.database', { host }) }}</p>
         <p class="font-semibold">{{ $t('pairing.photoStore', { store: $t(`sourceForm.store.${received.photoStore ?? 'uploadcare'}`) }) }}</p>

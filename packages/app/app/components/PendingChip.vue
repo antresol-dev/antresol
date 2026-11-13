@@ -16,7 +16,7 @@ const total = computed(() => formatAmountParts(props.stepper.projected.value, pr
 const deltaUnit = computed(() => (delta.value.unit === total.value.unit ? '' : ` ${delta.value.unit}`))
 
 const RING = 2 * Math.PI * 8
-const action = 'h-11 px-3 font-bold'
+const action = 'h-11 px-3 font-semibold'
 </script>
 
 <template>

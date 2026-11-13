@@ -63,7 +63,7 @@ async function save(): Promise<void> {
 
 <template>
   <AppSheet v-model:open="open" :title="$t('intakes.header.title')" :locked="busy" initial-focus="#intake-shop">
-    <form id="intake-header-form" class="mt-3.5 grid gap-3.5" novalidate @submit.prevent="save">
+    <form id="intake-header-form" class="mt-4 grid gap-4" novalidate @submit.prevent="save">
       <div class="grid gap-1.5">
         <Label for="intake-shop">{{ $t('intakes.header.shop') }}</Label>
         <Input id="intake-shop" v-model="shop" list="intake-shops" autocomplete="off" class="h-11" />

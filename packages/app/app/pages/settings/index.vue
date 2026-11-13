@@ -90,9 +90,9 @@ async function confirmRemove(): Promise<void> {
     <ScreenHeader :title="$t('settings.title')" />
     <ScreenBody>
       <section class="grid gap-2" aria-labelledby="settings-sources">
-        <h2 id="settings-sources" class="section-label text-sm">{{ $t('settings.sources.title') }}</h2>
+        <h2 id="settings-sources" class="section-label text-base">{{ $t('settings.sources.title') }}</h2>
         <ul v-if="state.sources.length" class="raised-card divide-y divide-divider">
-          <li v-for="s in state.sources" :key="s.config.id" class="grid gap-1 px-4.5 py-3">
+          <li v-for="s in state.sources" :key="s.config.id" class="grid gap-1 px-4 py-3">
             <div class="flex flex-wrap items-center gap-2">
               <span class="min-w-0 break-words font-semibold">{{ s.config.name }}</span>
               <span v-if="kindLabel(s.config) !== s.config.name" class="text-sm text-subtle-foreground">{{ kindLabel(s.config) }}</span>
@@ -137,8 +137,8 @@ async function confirmRemove(): Promise<void> {
       </section>
 
       <section class="grid gap-2" aria-labelledby="settings-device">
-        <h2 id="settings-device" class="section-label text-sm">{{ $t('settings.device.title') }}</h2>
-        <div class="raised-card grid gap-1.5 p-4.5">
+        <h2 id="settings-device" class="section-label text-base">{{ $t('settings.device.title') }}</h2>
+        <div class="raised-card grid gap-1.5 p-4">
           <Label for="device-name">{{ $t('settings.device.name') }}</Label>
           <Input
             id="device-name"
@@ -156,8 +156,8 @@ async function confirmRemove(): Promise<void> {
       </section>
 
       <section class="grid gap-2" aria-labelledby="settings-appearance">
-        <h2 id="settings-appearance" class="section-label text-sm">{{ $t('settings.appearance.title') }}</h2>
-        <div class="raised-card grid gap-2 px-4.5 pt-2 pb-4.5">
+        <h2 id="settings-appearance" class="section-label text-base">{{ $t('settings.appearance.title') }}</h2>
+        <div class="raised-card grid gap-2 px-4 pt-2 pb-4">
           <ThemeSwitch />
           <div class="h-px bg-divider" aria-hidden="true" />
           <StylePicker class="pt-2" />

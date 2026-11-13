@@ -41,12 +41,12 @@ const time = (iso: string): string => new Date(iso).toLocaleString()
 
 <template>
   <section class="grid gap-2" aria-labelledby="settings-diagnostics">
-    <h2 id="settings-diagnostics" class="section-label text-sm">{{ $t('diagnostics.title') }}</h2>
-    <div class="raised-card grid gap-2 p-4.5">
+    <h2 id="settings-diagnostics" class="section-label text-base">{{ $t('diagnostics.title') }}</h2>
+    <div class="raised-card grid gap-2 p-4">
       <p class="text-sm text-subtle-foreground">{{ $t('diagnostics.hint') }}</p>
       <p v-if="!entries.length" class="text-sm">{{ $t('diagnostics.empty') }}</p>
       <ul v-else class="max-h-64 divide-y divide-divider overflow-y-auto rounded-field border border-input bg-field" :aria-label="$t('diagnostics.title')">
-        <li v-for="(e, i) in entries" :key="i" class="grid gap-0.5 px-3 py-2 text-[13px]">
+        <li v-for="(e, i) in entries" :key="i" class="grid gap-0.5 px-3 py-2 text-sm">
           <span class="text-subtle-foreground">{{ time(e.at) }} · {{ e.where }} · {{ e.code }}</span>
           <span class="break-words">{{ e.message }}</span>
         </li>

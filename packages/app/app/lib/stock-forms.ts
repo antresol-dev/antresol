@@ -1,5 +1,5 @@
 import { cmpQ, type Command, type Id, type UnitDef } from '@antresol/core'
-import { parseAmountText, parseMoneyText } from './amounts'
+import { amountExample, parseAmountText, parseMoneyText } from './amounts'
 
 export type StockMode = 'receive' | 'use' | 'set' | 'transfer'
 export interface StockFormInput {
@@ -29,9 +29,9 @@ const orNull = (text: string): string | null => {
 }
 
 /** Form text → a stock command, or the i18n key of what is wrong. */
-export function buildStockCommand(mode: StockMode, input: StockFormInput, ctx: StockFormContext, ids: StockIds): { command: Command } | { errorKey: string } {
+export function buildStockCommand(mode: StockMode, input: StockFormInput, ctx: StockFormContext, ids: StockIds): { command: Command } | { errorKey: string; params?: Record<string, string> } {
   const quantity = parseAmountText(input.amount, ctx.unit)
-  if (quantity === null || (mode !== 'set' && cmpQ(quantity, '0') <= 0)) return { errorKey: 'stockForm.invalidAmount' }
+  if (quantity === null || (mode !== 'set' && cmpQ(quantity, '0') <= 0)) return { errorKey: 'stockForm.invalidAmount', params: { example: amountExample(ctx.unit) } }
   const { itemId, variantId } = ctx
   const note = orNull(input.note)
 

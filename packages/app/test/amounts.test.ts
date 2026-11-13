@@ -1,6 +1,6 @@
 import { BUILTIN_UNITS, newId, type InventorySnapshot } from '@antresol/core'
 import { describe, expect, it } from 'vitest'
-import { amountPreview, parseAmountText, parseMoneyText, pricePreview, unitChoices } from '../app/lib/amounts'
+import { amountExample, amountPreview, amountTextOnly, parseAmountText, parseMoneyText, pricePreview, unitChoices } from '../app/lib/amounts'
 import { dictionaryView } from '../app/lib/dictionaries'
 
 const pcs = BUILTIN_UNITS.pcs
@@ -99,5 +99,31 @@ describe('expressions in fields', () => {
     expect(amountPreview('1-3', pcs)).toEqual({ errorKey: 'expression.negative' })
     expect(pricePreview('10/3', 'USD')).toEqual({ text: '3.33' })
     expect(pricePreview('19.99', 'USD')).toBeNull()
+  })
+})
+
+describe('amountTextOnly', () => {
+  it('drops letters that mean nothing for the unit', () => {
+    expect(amountTextOnly('qwerty', pcs)).toBe('')
+    expect(amountTextOnly('12q', pcs)).toBe('12')
+  })
+  it('keeps digits, decimal marks, expression signs and the unit\'s own symbol and prefixes', () => {
+    expect(amountTextOnly('5x100 + 2,5k', pcs)).toBe('5x100 + 2,5k')
+    expect(amountTextOnly('(1/3)×2÷4-1*3X2', pcs)).toBe('(1/3)×2÷4-1*3X2')
+    expect(amountTextOnly('10 pcs', pcs)).toBe('10 pcs')
+    expect(amountTextOnly('2.5m + 120cm', m)).toBe('2.5m + 120cm')
+    expect(amountTextOnly('3 km', m)).toBe('3 km')
+  })
+  it('drops prefixes the unit does not have', () => {
+    expect(amountTextOnly('2M', m)).toBe('2')
+    expect(amountTextOnly('3µ', pcs)).toBe('3')
+  })
+})
+
+describe('amountExample', () => {
+  it('shows an amount in the field\'s own unit', () => {
+    expect(amountExample(pcs)).toBe('10 pcs or 5x100')
+    expect(amountExample(m)).toBe('10 m or 50 mm')
+    expect(amountExample({ key: 'custom:x', name: 'Rolls', symbol: 'roll', prefixPowers: [] })).toBe('10 roll or 5x100')
   })
 })

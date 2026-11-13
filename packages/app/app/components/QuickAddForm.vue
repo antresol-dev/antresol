@@ -56,6 +56,7 @@ const canPhoto = computed(() => !!state.current && workspace.fileStoreFor(state.
 // The sheet around the form locks while this is set.
 const busy = defineModel<boolean>('busy', { default: false })
 const errorKey = ref<string | null>(null)
+const errorParams = ref<Record<string, string>>({})
 
 const snapshot = computed(() => state.snapshot)
 const units = computed(() => (snapshot.value ? unitChoices(snapshot.value) : []))
@@ -134,6 +135,7 @@ async function submit(): Promise<void> {
   )
   if ('errorKey' in built) {
     errorKey.value = built.errorKey
+    errorParams.value = built.params ?? {}
     return
   }
   sent = built.command
@@ -269,7 +271,7 @@ async function send(command: ItemCreate): Promise<void> {
       <template v-if="unconfirmed">
         {{ $t('unconfirmed.hint') }}<template v-if="retryErrorKey"> {{ $t(retryErrorKey) }}</template>
       </template>
-      <template v-else-if="errorKey">{{ $t(errorKey) }}</template>
+      <template v-else-if="errorKey">{{ $t(errorKey, errorParams) }}</template>
     </p>
     <div v-if="unconfirmed" class="grid grid-cols-2 gap-2">
       <Button type="button" variant="outline" class="h-11" :disabled="busy" @click="emit('close')">

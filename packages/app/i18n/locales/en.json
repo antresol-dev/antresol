@@ -296,7 +296,7 @@
     "price": "Price for the batch",
     "url": "Where bought",
     "note": "Note",
-    "invalidAmount": "Enter a valid amount, like 10 or 50 cm.",
+    "invalidAmount": "Enter a valid amount, like {example}.",
     "invalidPrice": "Enter a valid price.",
     "sameBucket": "Choose a different place to move it to."
   },
@@ -710,7 +710,7 @@
     "photo": "Photo",
     "removePhoto": "Remove photo",
     "photoFailed": "Item added. The photo didn’t upload — add it from the item card.",
-    "invalidAmount": "Enter a valid amount, like 10 or 50 cm.",
+    "invalidAmount": "Enter a valid amount, like {example}.",
     "invalidPrice": "Enter a valid price.",
     "needsAmount": "Enter the amount to add a price or a link.",
     "linkNeedsAmount": "Add the amount to keep the link",

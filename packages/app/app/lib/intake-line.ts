@@ -19,7 +19,7 @@ import {
   type InventorySnapshot,
   type Quantity,
 } from '@antresol/core'
-import { parseAmountText, parseMoneyText } from './amounts'
+import { amountExample, parseAmountText, parseMoneyText } from './amounts'
 import { parseAttributeInput } from './attribute-values'
 import { existingMatches, kiloK } from './quick-add'
 import { searchRows, type SearchRow } from './views'
@@ -335,7 +335,7 @@ export function buildDraftLine(form: LineForm, s: InventorySnapshot, draft: Inta
   if (!unit) return { errorKey: 'intakes.problem.invalid_value' }
   if (form.amount.trim() === '') return { errorKey: 'intakes.line.needsAmount' }
   const quantity = parseAmountText(form.amount, unit)
-  if (quantity === null) return { errorKey: 'quickAdd.invalidAmount' }
+  if (quantity === null) return { errorKey: 'quickAdd.invalidAmount', params: { example: amountExample(unit) } }
   if (cmpQ(quantity, '0') <= 0) return { errorKey: 'intakes.line.needsAmount' }
 
   let totalPrice: number | null = null

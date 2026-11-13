@@ -60,7 +60,7 @@ describe('buildQuickAdd', () => {
   it('reads expressions in the amount and the price', () => {
     const r = buildQuickAdd(input({ amount: '5x100', price: '10/4' }), snap, ids)
     expect('command' in r && r.command.initialReceipt).toMatchObject({ quantity: '500', totalPrice: 250 })
-    expect(buildQuickAdd(input({ amount: '5x' }), snap, ids)).toEqual({ errorKey: 'quickAdd.invalidAmount' })
+    expect(buildQuickAdd(input({ amount: '5x' }), snap, ids)).toMatchObject({ errorKey: 'quickAdd.invalidAmount' })
   })
 
   it('adds a first receipt with the batch price and link', () => {
@@ -100,7 +100,7 @@ describe('buildQuickAdd', () => {
   })
 
   it('refuses an invalid amount or price', () => {
-    expect(buildQuickAdd(input({ amount: 'abc' }), snap, ids)).toEqual({ errorKey: 'quickAdd.invalidAmount' })
+    expect(buildQuickAdd(input({ amount: 'abc' }), snap, ids)).toMatchObject({ errorKey: 'quickAdd.invalidAmount' })
     expect(buildQuickAdd(input({ amount: '1', price: '1.234' }), snap, ids)).toEqual({ errorKey: 'quickAdd.invalidPrice' })
   })
 

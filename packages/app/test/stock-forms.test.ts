@@ -24,19 +24,19 @@ describe('buildStockCommand', () => {
     const ok = buildStockCommand('receive', input({ amount: '2', note: ' hi ' }), ctx, ids)
     expect('command' in ok && ok.command).toMatchObject({ quantity: '2', totalPrice: null, note: 'hi' })
     expect(buildStockCommand('receive', input({ amount: '2', price: 'abc' }), ctx, ids)).toEqual({ errorKey: 'stockForm.invalidPrice' })
-    expect(buildStockCommand('receive', input({ amount: '0' }), ctx, ids)).toEqual({ errorKey: 'stockForm.invalidAmount' })
-    expect(buildStockCommand('receive', input({ amount: '' }), ctx, ids)).toEqual({ errorKey: 'stockForm.invalidAmount' })
+    expect(buildStockCommand('receive', input({ amount: '0' }), ctx, ids)).toMatchObject({ errorKey: 'stockForm.invalidAmount' })
+    expect(buildStockCommand('receive', input({ amount: '' }), ctx, ids)).toMatchObject({ errorKey: 'stockForm.invalidAmount' })
   })
 
   it('receive: expressions in the amount and the price', () => {
     const r = buildStockCommand('receive', input({ amount: '2.5m + 120cm', price: '12.5 * 2' }), ctx, ids)
     expect('command' in r && r.command).toMatchObject({ quantity: '3.7', totalPrice: 2500 })
-    expect(buildStockCommand('use', input({ amount: '1/0' }), ctx, ids)).toEqual({ errorKey: 'stockForm.invalidAmount' })
+    expect(buildStockCommand('use', input({ amount: '1/0' }), ctx, ids)).toMatchObject({ errorKey: 'stockForm.invalidAmount' })
     expect(buildStockCommand('receive', input({ amount: '2', price: '1+' }), ctx, ids)).toEqual({ errorKey: 'stockForm.invalidPrice' })
   })
 
   it('use: needs a positive amount', () => {
-    expect(buildStockCommand('use', input({ amount: '0' }), ctx, ids)).toEqual({ errorKey: 'stockForm.invalidAmount' })
+    expect(buildStockCommand('use', input({ amount: '0' }), ctx, ids)).toMatchObject({ errorKey: 'stockForm.invalidAmount' })
     const r = buildStockCommand('use', input({ amount: '3', note: 'project' }), ctx, ids)
     expect('command' in r && r.command).toMatchObject({ type: 'stock.use', quantity: '3', note: 'project' })
   })
@@ -44,7 +44,7 @@ describe('buildStockCommand', () => {
   it('set: accepts zero', () => {
     const r = buildStockCommand('set', input({ amount: '0' }), ctx, ids)
     expect('command' in r && r.command).toMatchObject({ type: 'stock.set', target: '0', note: null })
-    expect(buildStockCommand('set', input({ amount: '-1' }), ctx, ids)).toEqual({ errorKey: 'stockForm.invalidAmount' })
+    expect(buildStockCommand('set', input({ amount: '-1' }), ctx, ids)).toMatchObject({ errorKey: 'stockForm.invalidAmount' })
   })
 
   it('transfer: refuses the same bucket, moves to another', () => {

@@ -1,5 +1,5 @@
-import { cmpQ, resolveUnit, type Command, type Id, type InventorySnapshot, type SearchHit } from '@antresol/core'
-import { parseAmountText, parseMoneyText } from './amounts'
+import { BUILTIN_UNITS, cmpQ, resolveUnit, type Command, type Id, type InventorySnapshot, type SearchHit } from '@antresol/core'
+import { amountExample, parseAmountText, parseMoneyText } from './amounts'
 import { searchRows, snapshotSearch, type SearchRow } from './views'
 
 export interface QuickAddInput {
@@ -18,7 +18,7 @@ export interface QuickAddIds {
   itemId: Id
   movementId: Id
 }
-export type QuickAddResult = { command: Extract<Command, { type: 'item.create' }> } | { errorKey: string }
+export type QuickAddResult = { command: Extract<Command, { type: 'item.create' }> } | { errorKey: string; params?: Record<string, string> }
 
 /** The quick add form as an `item.create` command, or the i18n key of what to fix. Everything about the name, the
  *  link's scheme and the limits is checked again by core when the command is applied. */
@@ -34,7 +34,7 @@ export function buildQuickAdd(input: QuickAddInput, s: InventorySnapshot, ids: Q
   if (amountText !== '') {
     const unit = resolveUnit(input.unitKey, s.units)
     const parsed = unit ? parseAmountText(amountText, unit) : null
-    if (parsed === null) return { errorKey: 'quickAdd.invalidAmount' }
+    if (parsed === null) return { errorKey: 'quickAdd.invalidAmount', params: { example: amountExample(unit ?? BUILTIN_UNITS.pcs) } }
     if (cmpQ(parsed, '0') > 0) quantity = parsed
   }
   if (quantity === null) {

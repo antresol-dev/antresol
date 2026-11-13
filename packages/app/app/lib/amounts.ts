@@ -1,4 +1,4 @@
-import { BUILTIN_UNITS, evaluateAmount, evaluatePrice, formatAmount, getCurrency, parseAmount, parseMoney, customUnitKey, type InventorySnapshot, type Quantity, type UnitDef } from '@antresol/core'
+import { BUILTIN_UNITS, evaluateAmount, evaluatePrice, formatAmount, getCurrency, parseAmount, SI_PREFIXES, parseMoney, customUnitKey, type InventorySnapshot, type Quantity, type UnitDef } from '@antresol/core'
 import { byName } from './views'
 
 /** Built-ins in BUILTIN_UNITS order, then custom units by name in the lists' order (as on Tags & fields). */
@@ -9,6 +9,26 @@ export function unitChoices(s: InventorySnapshot): UnitDef[] {
   return [...Object.values(BUILTIN_UNITS), ...custom]
 }
 
+
+/** The text with only the characters an amount in this unit can hold: digits, decimal marks, spaces, expression signs and
+ *  brackets, and the letters of the unit's symbol and of its prefixes ('k' for pieces, 'm', 'c', 'k' for meters; 'u' as
+ *  well as 'µ' for micro). "asda" in pieces is ''. Whether the rest reads as an amount is parseAmountText's job. */
+export function amountTextOnly(text: string, unit: UnitDef): string {
+  const letters = new Set(unit.symbol)
+  for (const p of unit.prefixPowers) {
+    for (const ch of SI_PREFIXES[p]?.symbol ?? '') letters.add(ch)
+    if (p === -6) letters.add('u')
+  }
+  return [...text].filter((ch) => /[\d\s.,+\-*/×÷xX()]/.test(ch) || letters.has(ch)).join('')
+}
+
+/** An example amount in this unit for error copy: "10 pcs or 5x100", "10 m or 50 mm" (the smallest prefix below the
+ *  unit when it has one). */
+export function amountExample(unit: UnitDef): string {
+  const below = unit.prefixPowers.filter((p) => p < 0).sort((a, b) => a - b)[0]
+  const prefix = below === undefined ? undefined : SI_PREFIXES[below]?.symbol
+  return prefix ? `10 ${unit.symbol} or 50 ${prefix}${unit.symbol}` : `10 ${unit.symbol} or 5x100`
+}
 
 /** Text with an operator or a bracket is an expression ("2.5m + 120cm", "5x100"); anything else is a plain value. */
 export const isExpression = (text: string): boolean => /[+\-*×÷/()xX]/.test(text.trim())

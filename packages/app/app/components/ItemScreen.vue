@@ -207,15 +207,18 @@ const linkClass =
     <template v-if="view" #actions="{ compact }">
       <ItemActions :item-id="itemId" :compact="compact" />
     </template>
+    <!-- One clipped line: the header is sticky and must not grow; what does not fit is hidden. -->
+    <template v-if="pinned.length > 0" #below-title>
+      <ul class="mt-1 flex min-w-0 flex-nowrap gap-1.5 overflow-hidden" :aria-label="$t('list.pinned')">
+        <li v-for="(value, i) in pinned" :key="i" class="min-w-0 shrink-0 truncate rounded-chip bg-chip px-2 py-0.5 text-xs font-semibold text-subtle-foreground last:shrink">
+          {{ value }}
+        </li>
+      </ul>
+    </template>
   </ScreenHeader>
   <ScreenBody>
     <template v-if="view && snapshot">
       <StockSheet :view="view" :target="stockTarget" @close="stockTarget = null" />
-      <ul v-if="pinned.length > 0" class="-mt-1 flex min-w-0 flex-wrap gap-1.5" :aria-label="$t('list.pinned')">
-        <li v-for="(value, i) in pinned" :key="i" class="max-w-full truncate rounded-chip bg-chip px-2 py-0.5 text-xs font-semibold text-subtle-foreground">
-          {{ value }}
-        </li>
-      </ul>
       <!-- Without photos the description and tags sit beside the 64 px photo tile (design system F1). -->
       <ItemGallery :item-id="itemId" :photos="view.photos">
         <template v-if="hasAbout && view.photos.length === 0" #beside>

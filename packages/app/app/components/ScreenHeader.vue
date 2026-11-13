@@ -17,6 +17,8 @@ const props = defineProps<{
 defineSlots<{
   /** compact = below 1024 px: icon-only buttons in the top bar. */
   actions?: (props: { compact: boolean }) => unknown
+  /** One line of chips right under the title (an item's list values); the caller keeps it to one clipped row. */
+  'below-title'?: () => unknown
 }>()
 
 const { state } = useWorkspace()
@@ -72,6 +74,7 @@ const crumbLink = 'pressable min-w-0 truncate rounded-chip'
         <div class="flex min-w-0 items-end justify-between gap-3">
           <div class="min-w-0 flex-1">
             <h1 tabindex="-1" :class="[heading, wrapTitle ? 'wrap-anywhere' : 'truncate']">{{ title }}</h1>
+            <slot name="below-title" />
             <p v-if="subtitle" class="mt-0.5 truncate text-sm font-semibold text-muted-foreground">{{ subtitle }}</p>
           </div>
           <div v-if="$slots.actions" class="flex shrink-0 items-center gap-3">
@@ -128,6 +131,7 @@ const crumbLink = 'pressable min-w-0 truncate rounded-chip'
           </template>
         </nav>
         <h1 tabindex="-1" :class="[heading, wrapTitle ? 'wrap-anywhere' : 'truncate']">{{ title }}</h1>
+        <slot name="below-title" />
       </template>
 
       <AppStatus />

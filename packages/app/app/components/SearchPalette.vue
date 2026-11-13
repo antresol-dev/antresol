@@ -435,7 +435,7 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-xs font-semibold text-subtle-
                 <template v-else-if="row.kind === 'folder'">
                   <span
                     :class="[
-                      'grid size-8 shrink-0 place-items-center rounded-icon text-accent-soft-foreground',
+                      'grid size-9 shrink-0 place-items-center rounded-thumb text-accent-soft-foreground',
                       row.key === selected?.key ? 'bg-(--selected-pill)' : 'bg-accent-soft',
                     ]"
                   >
@@ -451,7 +451,7 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-xs font-semibold text-subtle-
                 <template v-else>
                   <span
                     :class="[
-                      'grid size-8 shrink-0 place-items-center rounded-icon text-icon',
+                      'grid size-9 shrink-0 place-items-center rounded-thumb text-icon',
                       row.key === selected?.key ? 'bg-(--selected-pill)' : 'bg-chip',
                     ]"
                   >

@@ -32,8 +32,8 @@ const icons: Record<ArchiveRow['kind'], Component> = { folder: Folder, item: Pac
           :class="[
             'flex shrink-0 items-center justify-center',
             row.kind === 'folder'
-              ? 'size-8 rounded-icon bg-accent-soft text-accent-soft-foreground'
-              : 'size-8 rounded-thumb bg-thumb text-thumb-foreground',
+              ? 'size-9 rounded-icon bg-accent-soft text-accent-soft-foreground'
+              : 'size-9 rounded-thumb bg-thumb text-thumb-foreground',
           ]"
         >
           <component :is="icons[row.kind]" class="size-5" aria-hidden="true" />

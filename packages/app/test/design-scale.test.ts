@@ -9,11 +9,31 @@ import { describe, expect, it } from 'vitest'
 
 const appDir = new URL('../app', import.meta.url).pathname
 
-function vueFiles(dir: string): string[] {
+function sourceFiles(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
     const path = join(dir, name)
-    return statSync(path).isDirectory() ? vueFiles(path) : path.endsWith('.vue') ? [path] : []
+    return statSync(path).isDirectory() ? sourceFiles(path) : /\.(?:vue|ts)$/.test(path) ? [path] : []
   })
+}
+
+// Class strings split at quotes, whitespace, braces and the like. Inside square brackets only `=` and `>` are kept
+// (`data-[state=open]:x`, `has-[>svg]:x`, `[&>svg]:x` stay one token); quotes and whitespace still end a token, so a
+// JS array in a script cannot swallow what follows it.
+export function tokenize(src: string): string[] {
+  const tokens: string[] = []
+  let depth = 0
+  let cur = ''
+  for (const c of src) {
+    if (c === '[') depth++
+    else if (c === ']') depth = Math.max(0, depth - 1)
+    if (depth === 0 ? /[\s"'`<>={},;]/.test(c) : /[\s"'`<{},;]/.test(c)) {
+      if (/[\s"'`<{},;]/.test(c)) depth = 0
+      if (cur) tokens.push(cur)
+      cur = ''
+    } else cur += c
+  }
+  if (cur) tokens.push(cur)
+  return tokens
 }
 
 // Comments may mention the banned classes ("was text-[13px]"); only live markup and script count.
@@ -58,10 +78,10 @@ type Hit = { file: string; class: string; why: string }
 
 function scan(): Hit[] {
   const hits: Hit[] = []
-  for (const path of vueFiles(appDir)) {
+  for (const path of sourceFiles(appDir)) {
     const file = relative(appDir, path)
     const seen = new Set<string>()
-    for (const raw of stripComments(readFileSync(path, 'utf8')).split(/[\s"'`<>={},;]+/)) {
+    for (const raw of tokenize(stripComments(readFileSync(path, 'utf8')))) {
       if (!raw || seen.has(raw)) continue
       seen.add(raw)
       const why = violation(raw)
@@ -92,6 +112,18 @@ const EXCEPTIONS: Hit[] = [
 ]
 
 const key = (h: { file: string; class: string }) => `${h.file} :: ${h.class}`
+
+describe('the guard itself', () => {
+  it('keeps bracketed variants in one token and flags their off-scale classes', () => {
+    const src = `<div class="data-[state=open]:text-[13px] has-[>svg]:px-2.5 [&>svg]:p-2.5 aria-[x=y]:duration-150 md:px-4" />`
+    const bad = tokenize(src).filter((t) => violation(t))
+    expect(bad).toEqual(['data-[state=open]:text-[13px]', 'has-[>svg]:px-2.5', '[&>svg]:p-2.5', 'aria-[x=y]:duration-150'])
+  })
+
+  it('accepts on-scale bracketed variants', () => {
+    expect(tokenize(`"data-[state=open]:text-sm has-[>svg]:px-2 [&>svg]:size-4"`).filter((t) => violation(t))).toEqual([])
+  })
+})
 
 describe('design scales in markup', () => {
   const hits = scan()

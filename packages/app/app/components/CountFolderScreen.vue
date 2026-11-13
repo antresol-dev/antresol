@@ -128,7 +128,7 @@ const divider =
               :class="[divider, 'flex min-h-14 items-center gap-3 py-1.5 pr-3', g.hasVariants ? 'pl-8' : 'pl-3', changeOf.has(row.key) && 'rounded-field bg-accent-soft']"
             >
               <label :for="`count-${row.key}`" class="flex min-w-0 grow flex-col gap-0.5">
-                <span class="line-clamp-2 text-base wrap-anywhere" :class="g.hasVariants ? 'font-semibold' : 'font-semibold'">
+                <span class="line-clamp-2 text-base wrap-anywhere" :class="g.hasVariants ? 'font-medium' : 'font-semibold'">
                   {{ row.variantName ?? row.itemName }}
                 </span>
                 <span v-if="changeOf.get(row.key)?.target === null" class="text-sm text-destructive">{{ $t('countFolder.invalid') }}</span>

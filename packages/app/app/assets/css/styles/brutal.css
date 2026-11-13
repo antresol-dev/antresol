@@ -101,7 +101,7 @@
 /* 5. The empty photo block: a card shaped like the photo (ItemGallery gives it the cover's aspect ratio), drawn as the
    neutral `photo` (F8: the panel with a faint hatch) instead of a Memphis colour, so what is in it keeps the page's
    colours, not the ink of a Memphis card. */
-[data-style='brutal'] .raised-card[class*='aspect-'] {
+[data-style='brutal'] .raised-card.photo-empty {
   --foreground: var(--st-fg);
   --icon: var(--st-icon);
   --accent-ink: var(--st-ink);
@@ -126,7 +126,7 @@
   color: var(--st-photo-fg);
 }
 @media (prefers-contrast: more) {
-  [data-style='brutal'] .raised-card[class*='aspect-'] {
+  [data-style='brutal'] .raised-card.photo-empty {
     background: var(--st-photo-solid);
   }
 }

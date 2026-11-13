@@ -13,7 +13,7 @@
  *     text in both themes (its h.fg / p.fg), and so is what is inside it; the open row menu's "⋯" likewise.
  *  4. The tree's rows under the pointer use the row hover (rowHover: the mock-up's pale yellow in light, a dark yellow
  *     in dark, where those rows keep their light text) rather than the flat controls' pale yellow.
- *  5. The empty photo block is the neutral `photo`, not a Memphis card (plan 12, F8).
+ *  5. The photo thumbnails (`.photo-thumb`) take the Memphis colours in turn (nth-child), the cover stays neutral.
  *
  * Controls nested in a card or the selected row draw a 1.5 px line (--brutal-ring), so no more than two levels of the
  * 2 px line meet (F8).

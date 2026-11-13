@@ -12,6 +12,7 @@ import {
 } from '@antresol/core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
+import { dictionaryView } from '../app/lib/dictionaries'
 import type { SourceConfig } from '../app/lib/types'
 import {
   collapseCrumbs,
@@ -24,6 +25,7 @@ import {
   moveTargets,
   searchRows,
   usedBy,
+  usedByArchivedCount,
   type Crumb,
 } from '../app/lib/views'
 
@@ -499,20 +501,50 @@ describe('usedBy', () => {
     expect(usedBy(s, { kind: 'unit', id: 'm' }).map((r) => r.name)).toEqual(['Wire'])
   })
 
-  it('finds an attribute on the item, on a variant, or as an axis, once per item', () => {
+  it('finds an attribute on an item that has a row for it, even an empty one, once per item', () => {
     const s = make({
       items: [item('a', 'A'), item('b', 'B'), item('c', 'C'), item('d', 'D'), item('e', 'E')],
-      variants: [{ id: 'v1', itemId: 'b', archivedAt: null }],
       itemAttributes: [
         { itemId: 'a', attributeId: 'x', value: '1', axisPosition: null },
-        { itemId: 'a', attributeId: 'x', value: '2', axisPosition: 0 },
-        { itemId: 'c', attributeId: 'x', value: null, axisPosition: 0 },
-        { itemId: 'd', attributeId: 'x', value: ' ', axisPosition: null },
+        { itemId: 'b', attributeId: 'x', value: null, axisPosition: 0 },
+        { itemId: 'c', attributeId: 'x', value: ' ', axisPosition: null },
+        { itemId: 'd', attributeId: 'x', value: '', axisPosition: null },
         { itemId: 'e', attributeId: 'y', value: '1', axisPosition: null },
       ],
-      variantAttributeValues: [{ variantId: 'v1', attributeId: 'x', value: '5' }],
     })
-    expect(usedBy(s, { kind: 'attribute', id: 'x' }).map((r) => r.name)).toEqual(['A', 'B', 'C'])
+    expect(usedBy(s, { kind: 'attribute', id: 'x' }).map((r) => r.name)).toEqual(['A', 'B', 'C', 'D'])
+  })
+
+  it('counts archived users apart, so active plus archived is the dictionary count', () => {
+    const s = make({
+      folders: [{ id: 'f', name: 'Old', parentId: null, archivedAt: 'x' }],
+      tags: [{ id: 't', name: 'T' }],
+      attributes: [{ id: 'x', name: 'X' }],
+      units: [],
+      items: [
+        item('a', 'A', { tagIds: ['t'] }),
+        item('b', 'B', { tagIds: ['t'], archivedAt: 'x' }),
+        item('c', 'C', { tagIds: ['t'], folderId: 'f' }),
+        item('d', 'D'),
+      ],
+      itemAttributes: [
+        { itemId: 'a', attributeId: 'x', value: '', axisPosition: null },
+        { itemId: 'b', attributeId: 'x', value: '1', axisPosition: null },
+        { itemId: 'c', attributeId: 'x', value: null, axisPosition: 0 },
+      ],
+    })
+    const dv = dictionaryView(s)
+    const counts = {
+      tag: dv.tags.find((t) => t.tag.id === 't'),
+      attribute: dv.attributes.find((x) => x.attribute.id === 'x'),
+      unit: dv.units.find((u) => u.unit.key === 'pcs'),
+    }
+    for (const kind of ['tag', 'attribute', 'unit'] as const) {
+      const id = kind === 'tag' ? 't' : kind === 'attribute' ? 'x' : 'pcs'
+      const target = { kind, id }
+      expect(usedBy(s, target).length + usedByArchivedCount(s, target)).toBe(counts[kind]?.itemCount)
+      expect(usedByArchivedCount(s, target)).toBe(2)
+    }
   })
 
   it('gives the folder path, the folder name and drops items under an archived folder', () => {

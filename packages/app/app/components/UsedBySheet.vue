@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { type UsageTarget, usedBy } from '~/lib/views'
+import { type UsageTarget, usedBy, usedByArchivedCount } from '~/lib/views'
 
 // The items that use a tag, an attribute or a unit: a tap on a row opens the item. `target` is kept by the parent while
 // the sheet animates out; `name` is what the sheet is about (the summary line).
@@ -9,6 +9,7 @@ const open = defineModel<boolean>('open', { required: true })
 const router = useRouter()
 const { state } = useWorkspace()
 const rows = computed(() => (props.target && state.snapshot ? usedBy(state.snapshot, props.target) : []))
+const archived = computed(() => (props.target && state.snapshot ? usedByArchivedCount(state.snapshot, props.target) : 0))
 
 function go(id: string): void {
   open.value = false
@@ -34,5 +35,6 @@ function go(id: string): void {
         </button>
       </li>
     </ul>
+    <p v-if="archived > 0" class="pt-2 text-sm text-muted-foreground">{{ $t('dictionaries.usedByArchived', archived) }}</p>
   </AppSheet>
 </template>

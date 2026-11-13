@@ -126,7 +126,7 @@ const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thu
 <template>
   <section
     v-if="photos.length > 0 || progress || !readOnly || $slots.beside"
-    :aria-label="$t('photos.viewer')"
+    :aria-label="photos.length > 0 || progress || !readOnly ? $t('photos.viewer') : undefined"
     :class="['grid min-w-0 gap-1.5 rounded-card', dragging && 'ring-2 ring-ring']"
     @dragover="onDragOver"
     @dragleave="onDragLeave"

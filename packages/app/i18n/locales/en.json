@@ -809,6 +809,7 @@
     "units": "Units",
     "itemCount": "{count} item | {count} items",
     "usedByTitle": "Used by {count} item | Used by {count} items",
+    "usedByArchived": "+{count} in the archive | +{count} in the archive",
     "usedByEmpty": "Not used by any item yet",
     "noTags": "No tags yet.",
     "noAttributes": "No attributes yet.",

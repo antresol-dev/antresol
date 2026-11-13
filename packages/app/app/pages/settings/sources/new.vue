@@ -76,7 +76,7 @@ const host = computed(() => {
 
 <template>
   <main class="min-w-0">
-    <ScreenHeader :title="$t('sourceForm.newTitle')" />
+    <ScreenHeader :title="$t('sourceForm.newTitle')" :crumbs="[{ name: $t('settings.title'), to: '/settings' }]" />
     <ScreenBody>
       <p v-if="opening" role="status" class="text-sm">{{ $t('pairing.opening') }}</p>
       <div v-else-if="linkProblem" role="alert" class="grid gap-2 rounded-field bg-chip px-3 py-3 text-sm">

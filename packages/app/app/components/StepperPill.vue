@@ -34,7 +34,7 @@ function press(step: 1 | -1): void {
 // The tick comes when the finger lands, not when it lifts (click), so it is felt with the touch itself. Touch only: a
 // mouse or keyboard press has no vibration to give.
 function tick(event: PointerEvent): void {
-  if (event.pointerType === 'touch') buzz()
+  if (event.pointerType === 'touch' && !(event.currentTarget as HTMLButtonElement).disabled) buzz()
 }
 // The pill (R(3,8), radius 14) and its halves: each sinks as its own rectangle, rounded on the pill's outer side only.
 const zone = 'pill-step size-11 shrink-0'

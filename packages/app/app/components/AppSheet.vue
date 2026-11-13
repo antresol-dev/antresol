@@ -176,6 +176,7 @@ function scrolledDown(target: Element | null, root: HTMLElement): boolean {
 function onTouchStart(event: TouchEvent): void {
   swipeStart = null
   swipeAborted = false
+  dragY.value = 0
   const root = event.currentTarget
   if (!(root instanceof HTMLElement) || event.touches.length !== 1) return
   const touch = event.touches[0]!
@@ -196,8 +197,8 @@ function onTouchMove(event: TouchEvent): void {
   const touch = event.touches[0]!
   const dx = touch.clientX - swipeStart.x
   const dy = touch.clientY - swipeStart.y
-  // Up or across: the finger is scrolling or doing something else.
-  if (dy < 0 || (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10)) {
+  // Up (past a 6 px dead zone) or across: the finger is scrolling or doing something else.
+  if (dy < -6 || (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10)) {
     swipeAborted = true
     dragY.value = 0
     return

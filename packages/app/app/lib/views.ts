@@ -496,28 +496,30 @@ export interface UsedByRow {
   cover: PhotoRef | null
 }
 
-/** Active items that use a tag, an attribute (a value on the item or on one of its variants, or an axis) or a unit (a
- *  unit key: a built-in's or a custom unit's `custom:<id>`), by name. Archived items and those under an archived folder are left out. */
+/** Whether the item uses the target: a tag on it, its unit key, or an attribute row on it (an axis or a value, even an
+ *  empty one: the same rule as the dictionary's counts). */
+function usesTarget(item: InventorySnapshot['items'][number], target: UsageTarget, attributeItems: Set<Id>): boolean {
+  return target.kind === 'tag' ? item.tagIds.includes(target.id) : target.kind === 'unit' ? item.unitKey === target.id : attributeItems.has(item.id)
+}
+
+function attributeItemIds(s: InventorySnapshot, target: UsageTarget): Set<Id> {
+  const ids = new Set<Id>()
+  if (target.kind === 'attribute') for (const a of s.itemAttributes) if (a.attributeId === target.id) ids.add(a.itemId)
+  return ids
+}
+
+/** Active items that use a tag, an attribute (an attribute row on the item: a value, even an empty one, or an axis) or a
+ *  unit (a unit key: a built-in's or a custom unit's `custom:<id>`), by name. Archived items and those under an archived
+ *  folder are left out (see usedByArchivedCount). */
 export function usedBy(s: InventorySnapshot, target: UsageTarget): UsedByRow[] {
   const ix = snapshotIndex(s)
-  const used = new Set<Id>()
-  if (target.kind === 'attribute') {
-    const filled = (v: string | null): boolean => v !== null && v.trim() !== ''
-    for (const a of s.itemAttributes) if (a.attributeId === target.id && (a.axisPosition !== null || filled(a.value))) used.add(a.itemId)
-    const variantItem = new Map(s.variants.map((v) => [v.id, v.itemId] as const))
-    for (const v of s.variantAttributeValues) {
-      const itemId = variantItem.get(v.variantId)
-      if (v.attributeId === target.id && filled(v.value) && itemId !== undefined) used.add(itemId)
-    }
-  }
+  const used = attributeItemIds(s, target)
   const rows: UsedByRow[] = []
   for (const item of s.items) {
     if (item.archivedAt !== null) continue
     const path = item.folderId === null ? [] : pathOf(ix, item.folderId)
     if (item.folderId !== null && path.length === 0) continue
-    const uses =
-      target.kind === 'tag' ? item.tagIds.includes(target.id) : target.kind === 'unit' ? item.unitKey === target.id : used.has(item.id)
-    if (!uses) continue
+    if (!usesTarget(item, target, used)) continue
     rows.push({
       id: item.id,
       name: item.name,
@@ -527,4 +529,13 @@ export function usedBy(s: InventorySnapshot, target: UsageTarget): UsedByRow[] {
     })
   }
   return rows.sort(byName)
+}
+
+/** How many items use the target but are not in usedBy's list (archived, or under an archived folder): the rest of the
+ *  dictionary row's count. */
+export function usedByArchivedCount(s: InventorySnapshot, target: UsageTarget): number {
+  const used = attributeItemIds(s, target)
+  let all = 0
+  for (const item of s.items) if (usesTarget(item, target, used)) all++
+  return all - usedBy(s, target).length
 }

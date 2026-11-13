@@ -84,7 +84,7 @@ export const REV_BUMP: Statement = {
 }
 
 /** The `antresol_meta` key of the intakes revision: opaque like `rev`, given a new value by every write of an intake
- *  (and only by those), set by migration 0002. */
+ *  (and only by those), set by migration 0003. */
 export const INTAKES_REV_KEY = 'intakes_rev'
 
 /** Lock (migrations, then the revision row as writes do), then fail unless schema_version is still `expected`. Plain

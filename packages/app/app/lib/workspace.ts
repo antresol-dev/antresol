@@ -19,12 +19,14 @@ import {
   type Inventory,
   type InventorySnapshot,
   type Movement,
+  type PhotoFile,
   type RestoreMode,
   type RestoreResult,
   type SnapshotPatch,
   type SourceReceipt,
 } from '@antresol/core'
 import { createCloudinaryStore } from '@antresol/files-cloudinary'
+import { createImgbbStore } from '@antresol/files-imgbb'
 import { createImgurStore } from '@antresol/files-imgur'
 import { createUploadcareStore } from '@antresol/files-uploadcare'
 import { APP_SCHEMA_VERSION } from '@antresol/storage-postgres'
@@ -33,7 +35,7 @@ import { buildBackup, type BackupFile } from './backup'
 import { logError, secretsOf, setSecretSource } from './diagnostics'
 import { createDeviceFileStore, releaseDeviceUrls } from './device-files'
 import { createIntakeDraftSync, type LocalIntakeDraft } from './intake-drafts'
-import { prepareImage as defaultPrepareImage } from './images'
+import { prepareImage as defaultPrepareImage, uploadName } from './images'
 import { countUpload } from './uploads'
 import type { CachedSnapshot } from './device-db'
 import { defaultDeviceName } from './device-name'
@@ -195,6 +197,10 @@ export function defaultFileStore(config: SourceConfig, fetchImpl?: typeof fetch)
     const cloudName = config.cloudinaryCloudName?.trim()
     const uploadPreset = config.cloudinaryUploadPreset?.trim()
     return cloudName && uploadPreset ? createCloudinaryStore({ cloudName, uploadPreset, ...opts }) : null
+  }
+  if (config.photoStore === 'imgbb') {
+    const apiKey = config.imgbbApiKey?.trim()
+    return apiKey ? createImgbbStore({ apiKey, ...opts }) : null
   }
   if (config.photoStore === 'imgur') {
     const clientId = config.imgurClientId?.trim()
@@ -1208,6 +1214,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       config.cloudinaryCloudName ?? '',
       config.cloudinaryUploadPreset ?? '',
       config.imgurClientId ?? '',
+      config.imgbbApiKey ?? '',
     ].join('|')
     const known = stores.get(sourceId)
     if (known?.key === key) return known.store
@@ -1232,11 +1239,20 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   }
 
   /** Upload errors are FileErrors and never touch the source's status. */
-  async function uploadOne(sourceId: string, store: FileStore, file: File): Promise<{ provider: string; fileId: string; url: string }> {
-    const blob = await prepare(file)
-    const stored = await store.upload(blob, file.name)
+  async function uploadOne(sourceId: string, store: FileStore, file: File): Promise<PhotoFile> {
+    const prepared = await prepare(file)
+    // A neutral name: the original one can say when and where the photo was taken.
+    const stored = await store.upload(prepared.blob, uploadName(prepared.blob.type))
     countUpload(sourceId)
-    return stored
+    return {
+      provider: stored.provider,
+      fileId: stored.fileId,
+      url: stored.url,
+      urls: stored.urls ?? null,
+      deleteHandle: stored.deleteHandle ?? null,
+      width: prepared.width,
+      height: prepared.height,
+    }
   }
 
   async function addPhotos(itemId: Id, files: File[], onProgress?: (done: number) => void): Promise<void> {
@@ -1527,7 +1543,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     }
   }
 
-  async function uploadPhoto(file: File): Promise<{ provider: string; fileId: string; url: string }> {
+  async function uploadPhoto(file: File): Promise<PhotoFile> {
     const { cur, store } = photoTarget()
     return uploadOne(cur.sourceId, store, file)
   }

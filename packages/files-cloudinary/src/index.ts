@@ -73,12 +73,15 @@ export function createCloudinaryStore(options: CloudinaryOptions): FileStore {
         if (!response.ok) {
           throw new FileError(codeForStatus(response.status), `upload failed: HTTP ${response.status}`)
         }
-        let body: { public_id?: unknown; secure_url?: unknown }
+        let body: { public_id?: unknown; secure_url?: unknown; existing?: unknown }
         try {
           body = (await response.json()) as typeof body
         } catch {
           throw new FileError('failed', 'upload failed: unreadable response')
         }
+        // Every upload is named photo.<ext>: a preset that keeps file names without making them unique answers with the
+        // asset it already has under that name, another picture.
+        if (body.existing === true) throw new FileError('rejected', 'upload refused: the preset returned an existing image')
         const { public_id: publicId, secure_url: url } = body
         if (typeof publicId !== 'string' || !publicId || typeof url !== 'string' || !isCloudinaryUrl(url)) {
           throw new FileError('failed', 'upload failed: unexpected response')

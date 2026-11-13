@@ -1,6 +1,6 @@
 import { PGlite } from '@electric-sql/pglite'
 import { buildIntakeCommit, newId, resolveIntake, StorageError, type InventoryStorage, type Movement, type Quantity } from '@antresol/core'
-import { APP_SCHEMA_VERSION, createPgliteExecutor, openPostgresStorage, type PgExecutor } from '@antresol/storage-postgres'
+import { APP_SCHEMA_VERSION, createPgliteExecutor, openPostgresStorage, sql, type PgExecutor } from '@antresol/storage-postgres'
 import { createStore, set } from 'idb-keyval'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -111,6 +111,13 @@ async function demoBackup(): Promise<{ storage: InventoryStorage; file: unknown 
 
 const ACTOR = { device: 'Test · Vitest' }
 
+/** A photo as an upload gives it now: renditions, size and delete handle. */
+const DRAFT_PHOTO_FILE = {
+  provider: 'imgbb', fileId: 'f', url: 'https://i.ibb.co/f/full.jpg',
+  urls: [{ url: 'https://i.ibb.co/f/thumb.jpg', role: 'thumb', width: 180, height: 180, fit: 'cover' as const, type: 'image/jpeg' }],
+  width: 1600, height: 1200, deleteHandle: 'https://ibb.co/f/del',
+}
+
 /** A file whose inventory holds a committed intake (a new item, one line) and a draft (a new item, one line);
  *  `deleteCommitted`: the committed intake's item is then archived and deleted permanently. */
 async function intakesBackup({ deleteCommitted = false } = {}): Promise<BackupFile> {
@@ -124,7 +131,7 @@ async function intakesBackup({ deleteCommitted = false } = {}): Promise<BackupFi
       newItems: [{ id: item, name, folderId: null, unitKey: 'pcs', attributes: [] }],
       lines: [{
         id: newId(), itemId: item, axisValues: [], quantity: '5' as Quantity, totalPrice: 120, sourceUrl: 'https://s.example/x',
-        photo: { provider: 'uploadcare', fileId: 'f', url: 'https://u.example/f', replace: false },
+        photo: { ...DRAFT_PHOTO_FILE, replace: false },
         ids: { movementId: newId(), variantId: newId(), photoId: newId() },
       }],
     }
@@ -220,24 +227,55 @@ describe('parseBackup', () => {
 })
 
 describe('parseBackup: intakes', () => {
-  it('reads a file of schema 4 without intakes: intakes [], movements without an intake', async () => {
-    const { file } = await demoBackup()
-    const old = JSON.parse(JSON.stringify(file)) as {
+  /** The intakes file as an older schema wrote it: no intakes, movements without an intake, and (schema 4) photos
+   *  without renditions, size and delete handle. */
+  async function olderFile(schemaVersion: 4 | 5) {
+    const old = JSON.parse(JSON.stringify(await intakesBackup())) as {
       app: { schemaVersion: number }
-      inventories: { intakes?: unknown; movements: Rec[] }[]
+      inventories: { intakes?: unknown; movements: Rec[]; snapshot: { photos: Rec[] } }[]
     }
-    old.app.schemaVersion = 4
+    old.app.schemaVersion = schemaVersion
     for (const e of old.inventories) {
       delete e.intakes
       for (const m of e.movements) delete m.intakeId
+      if (schemaVersion === 4) e.snapshot.photos = e.snapshot.photos.map(({ urls: _u, width: _w, height: _h, deleteHandle: _d, ...p }) => p)
     }
-    const parsed = parseBackup(old) as BackupFile
+    return old
+  }
+
+  it('reads a file of schema 4: intakes [], movements without an intake, photos without renditions', async () => {
+    const parsed = parseBackup(await olderFile(4)) as BackupFile
     expect(parsed.app.schemaVersion).toBe(4)
-    expect(parsed.inventories.every((e) => Array.isArray(e.intakes) && e.intakes.length === 0)).toBe(true)
-    expect(parsed.inventories.flatMap((e) => e.movements).every((m) => m.intakeId === null)).toBe(true)
+    const entry = parsed.inventories[0]!
+    expect(entry.intakes).toEqual([])
+    expect(entry.movements.length).toBeGreaterThan(0)
+    expect(entry.movements.every((m) => m.intakeId === null)).toBe(true)
+    expect(entry.snapshot.photos).toEqual([expect.objectContaining({ urls: null, width: null, height: null, deleteHandle: null })])
   })
 
-  it('reads a file of schema 5 with a committed intake and a draft without losing a field', async () => {
+  it('reads a file of schema 5: photo renditions kept, intakes [], movements without an intake', async () => {
+    const parsed = parseBackup(await olderFile(5)) as BackupFile
+    expect(parsed.app.schemaVersion).toBe(5)
+    const entry = parsed.inventories[0]!
+    expect(entry.intakes).toEqual([])
+    expect(entry.movements.every((m) => m.intakeId === null)).toBe(true)
+    const { provider: _p, fileId: _f, url: _u, ...fields } = DRAFT_PHOTO_FILE
+    expect(entry.snapshot.photos).toEqual([expect.objectContaining(fields)])
+  })
+
+  it('reads a draft photo saved before photo renditions: its renditions, size and delete handle are null', async () => {
+    const file = JSON.parse(JSON.stringify(await intakesBackup())) as { inventories: { intakes: Rec[] }[] }
+    const draft = file.inventories[0]!.intakes.find((i) => i.draft)!.draft as { lines: { photo: Rec }[] }
+    draft.lines[0]!.photo = { provider: 'uploadcare', fileId: 'f', url: 'https://u.example/f', replace: true }
+    const parsed = parseBackup(file) as BackupFile
+    expect(parsed.inventories[0]!.intakes.find((i) => i.draft)!.draft!.lines[0]!.photo).toEqual({
+      provider: 'uploadcare', fileId: 'f', url: 'https://u.example/f', urls: null, width: null, height: null, deleteHandle: null, replace: true,
+    })
+    draft.lines[0]!.photo = { ...DRAFT_PHOTO_FILE, width: 0, replace: false }
+    expect(parseBackup(file)).toEqual({ error: 'format' })
+  })
+
+  it('reads a file of schema 6 with a committed intake and a draft without losing a field', async () => {
     const backup = await intakesBackup()
     const file = JSON.parse(JSON.stringify(backup))
     const entry = backup.inventories[0]!
@@ -271,6 +309,118 @@ describe('parseBackup: intakes', () => {
     expect(damaged((e) => { e.movements = e.movements.filter((m) => m.intakeId === null) })).not.toHaveProperty('error')
     const extra = damaged((e) => { (e.intakes[0]!.header as Rec).secret = 'postgres://x' })
     expect(JSON.stringify(extra)).not.toContain('postgres://')
+  })
+})
+
+describe('parseBackup: photo renditions', () => {
+  type PhotoRaw = { app: { schemaVersion: number }; inventories: { snapshot: { inventory: Rec; items: Rec[]; photos: Rec[] } }[] }
+  const rendition = (role: string, side: number) => ({
+    url: `https://i.ibb.co/${role}/p.jpg`, role, width: side, height: side, fit: 'inside', type: 'image/jpeg',
+  })
+  async function withPhoto(extra: Rec) {
+    const { file } = await demoBackup()
+    const all = JSON.parse(JSON.stringify(file)) as PhotoRaw
+    const snap = all.inventories.find((e) => e.snapshot.inventory.name === 'Electronics')!.snapshot
+    const photo: Rec = {
+      id: newId(), itemId: snap.items[0]!.id, variantId: null, provider: 'imgbb', fileId: 'f1',
+      url: 'https://i.ibb.co/full/p.jpg', position: 0, createdAt: '2026-11-11T10:00:00Z', createdBy: 'me', ...extra,
+    }
+    snap.photos.push(photo)
+    return { all, snap, photo }
+  }
+
+  it('reads back a photo with renditions, size and delete handle without loss', async () => {
+    const fields = {
+      urls: [rendition('full', 2048), rendition('medium', 640), { ...rendition('thumb', 180), fit: 'cover', type: null }],
+      width: 2048, height: 1536, deleteHandle: 'https://ibb.co/del/abc',
+    }
+    const { all, photo } = await withPhoto(fields)
+    const parsed = parseBackup(all) as BackupFile
+    expect('error' in parsed).toBe(false)
+    const got = parsed.inventories.flatMap((e) => e.snapshot.photos).find((p) => p.id === photo.id)
+    expect(got).toMatchObject(fields)
+  })
+
+  it('reads a file of schema 4: photos without the new fields get null in all four', async () => {
+    const { all, photo } = await withPhoto({})
+    all.app.schemaVersion = 4
+    const parsed = parseBackup(all) as BackupFile
+    const got = parsed.inventories.flatMap((e) => e.snapshot.photos).find((p) => p.id === photo.id)
+    expect(got).toMatchObject({ urls: null, width: null, height: null, deleteHandle: null })
+  })
+
+  it('refuses urls that is a string, a rendition without width, or a fit that is not allowed', async () => {
+    const { width: _w, ...noWidth } = rendition('medium', 640)
+    for (const urls of ['[]', [noWidth], [{ ...rendition('medium', 640), fit: 'contain' }]]) {
+      const { all } = await withPhoto({ urls })
+      expect(parseBackup(all)).toEqual({ error: 'format' })
+    }
+  })
+
+  it('refuses renditions beyond the limits of a command', async () => {
+    const bad: unknown[] = [
+      [],
+      Array.from({ length: 9 }, (_, i) => rendition(`r${i}`, 100)),
+      [{ ...rendition('a', 100), url: 'http://i.ibb.co/a.jpg' }],
+      [{ ...rendition('a', 100), role: '' }],
+      [{ ...rendition('a', 100), width: 20001 }],
+      [{ ...rendition('a', 100), type: 'x'.repeat(101) }],
+      [rendition('a', 100), null],
+    ]
+    for (const urls of bad) {
+      const { all } = await withPhoto({ urls })
+      expect(parseBackup(all), JSON.stringify(urls)).toEqual({ error: 'format' })
+    }
+    for (const fields of [{ deleteHandle: '' }, { width: 0, height: 100 }]) {
+      const { all } = await withPhoto(fields)
+      expect(parseBackup(all), JSON.stringify(fields)).toEqual({ error: 'format' })
+    }
+  })
+
+  it('reads a rendition as a command does: a key it does not know is left behind, `type` absent is null', async () => {
+    const { type: _type, ...untyped } = rendition('medium', 640)
+    const { all, photo } = await withPhoto({ urls: [{ ...rendition('full', 2048), extra: 1 }, untyped] })
+    const parsed = parseBackup(all) as BackupFile
+    expect('error' in parsed).toBe(false)
+    const got = parsed.inventories.flatMap((e) => e.snapshot.photos).find((p) => p.id === photo.id)
+    expect(got!.urls).toEqual([rendition('full', 2048), { ...rendition('medium', 640), type: null }])
+  })
+
+  it('restores what the app exported from a hand-edited photo row: reads hand it over clean', async () => {
+    const { exec, storage } = await emptyStorage()
+    const actor = { device: 'test' }
+    const [inv, item, id] = [newId(), newId(), newId()]
+    await storage.apply({ type: 'inventory.create', id: inv, name: 'A', description: null, currency: 'USD' }, actor)
+    await storage.apply(
+      { type: 'item.create', id: item, inventoryId: inv, folderId: null, name: 'R', description: null, unitKey: 'pcs', tagIds: [], initialReceipt: null },
+      actor,
+    )
+    await storage.apply(
+      { type: 'photo.add', id, itemId: item, variantId: null, provider: 'imgbb', fileId: 'f', url: 'https://i.ibb.co/full/p.jpg' },
+      actor,
+    )
+    await exec.batch([
+      sql`update photos
+          set urls = '[null, {"url":"http://x/a.webp","role":"t","width":1,"height":1,"fit":"inside","type":null},
+                       {"url":"https://i.ibb.co/a/p.webp","role":"thumb","width":180,"height":180,"fit":"cover"}]'::jsonb,
+              width = 0, height = 100, delete_handle = ''
+          where id = ${id}`,
+    ])
+    const backup = buildBackup({
+      exportedAt: '2026-11-12T10:00:00.000Z', app: { schemaVersion: APP_SCHEMA_VERSION }, source: { name: 'A', kind: 'dev-pglite' },
+      inventories: [await storage.exportInventory(inv)],
+    })
+    const parsed = parseBackup(JSON.parse(JSON.stringify(backup)))
+    expect('error' in parsed).toBe(false)
+    expect((parsed as BackupFile).inventories[0]!.snapshot.photos).toEqual([
+      expect.objectContaining({
+        id,
+        urls: [{ url: 'https://i.ibb.co/a/p.webp', role: 'thumb', width: 180, height: 180, fit: 'cover', type: null }],
+        width: null,
+        height: null,
+        deleteHandle: null,
+      }),
+    ])
   })
 })
 

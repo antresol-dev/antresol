@@ -9,11 +9,13 @@ import type {
   InventorySnapshot,
   InventoryStorage,
   Movement,
+  PhotoFile,
   RestoreMode,
   RestoreResult,
   SourceReceipt,
 } from '@antresol/core'
 import type { BackupFile } from './backup'
+import type { PreparedImage } from './images'
 import type { BackupInfo, DeviceDb, RestoreRun } from './device-db'
 import type { IntakeDraftSync } from './intake-drafts'
 import type { FailureReason, SourceDriver } from './sources'
@@ -73,7 +75,7 @@ export interface WorkspaceDeps {
   userAgent: string
   now?: () => Date
   /** Shrinks a photo before upload; defaults to the canvas-based prepareImage. */
-  prepareImage?: (f: File) => Promise<Blob>
+  prepareImage?: (f: File) => Promise<PreparedImage>
   /** The photo store of a source; defaults to Uploadcare (Neon with a key) or the device store (demo). */
   fileStores?: (config: SourceConfig) => FileStore | null
   /** Looks for a new version of the app now (the service worker's `registration.update()`); never throws. Called when
@@ -187,6 +189,7 @@ export interface Workspace {
         | 'cloudinaryCloudName'
         | 'cloudinaryUploadPreset'
         | 'imgurClientId'
+        | 'imgbbApiKey'
       >>,
   ): Promise<void>
   /** Its saved list goes before the source itself: a removal that fails midway leaves no list without its source, and
@@ -225,7 +228,7 @@ export interface Workspace {
    */
   commitIntake(id: Id): Promise<{ ok: true } | { ok: false; problems: { lineId: Id; code: string }[] }>
   /** Prepares and uploads a photo to the current source's photo store, recording nothing (a draft line keeps it). */
-  uploadPhoto(file: File): Promise<{ provider: string; fileId: string; url: string }>
+  uploadPhoto(file: File): Promise<PhotoFile>
   /** Folders this device last put new items of an intake into, in the current inventory; newest first. */
   recentFolders(): Promise<Id[]>
   /** The drafts kept on this device and their trips to the database. */

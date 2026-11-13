@@ -135,11 +135,11 @@ const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thu
         :aria-label="alt(0)"
         @click="show(0)"
       >
-        <PhotoImg :url="cover.url" size="full" :alt="alt(0)" class="size-full object-cover" />
+        <PhotoImg :photo="cover" size="full" :alt="alt(0)" class="size-full object-cover" />
       </button>
       <div v-if="photos.length > 1 || progress || canAdd" class="flex flex-wrap gap-1.5">
         <button v-for="(p, i) in photos" :key="p.id" type="button" :class="[tile, 'photo-thumb']" :aria-label="alt(i)" @click="show(i)">
-          <PhotoImg :url="p.url" size="thumb" :alt="alt(i)" class="size-full object-cover" />
+          <PhotoImg :photo="p" size="thumb" :alt="alt(i)" class="size-full object-cover" />
         </button>
         <div
           v-for="n in skeletons"

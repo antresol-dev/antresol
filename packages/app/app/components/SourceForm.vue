@@ -21,6 +21,7 @@ const PHOTO_STORES: readonly PhotoStore[] = photoStoreChoices(props.source?.phot
 const KEY_LINKS: Record<PhotoStore, string> = {
   uploadcare: 'https://app.uploadcare.com/',
   cloudinary: 'https://console.cloudinary.com/settings/upload/presets',
+  imgbb: 'https://api.imgbb.com/',
   imgur: 'https://api.imgur.com/oauth2/addclient',
 }
 function keyLink(p: PhotoStore): string {
@@ -29,6 +30,7 @@ function keyLink(p: PhotoStore): string {
 const photoStore = ref<PhotoStore>(props.source?.photoStore ?? 'uploadcare')
 const cloudinaryCloud = ref(props.source?.cloudinaryCloudName ?? '')
 const cloudinaryPreset = ref(props.source?.cloudinaryUploadPreset ?? '')
+const imgbbApiKey = ref(props.source?.imgbbApiKey ?? '')
 const imgurClientId = ref(props.source?.imgurClientId ?? '')
 const uploadcareKey = ref(props.source?.uploadcarePublicKey ?? '')
 const uploadcareCdn = ref(props.source?.uploadcareCdnBase ?? '')
@@ -63,6 +65,7 @@ const draft = (): Omit<SourceConfig, 'id' | 'createdAt'> => ({
   cloudinaryCloudName: cloudinaryCloud.value.trim() || null,
   cloudinaryUploadPreset: cloudinaryPreset.value.trim() || null,
   imgurClientId: imgurClientId.value.trim() || null,
+  imgbbApiKey: imgbbApiKey.value.trim() || null,
 })
 
 watch(uploadcareCdn, () => {
@@ -276,7 +279,31 @@ async function save(): Promise<void> {
       </div>
     </template>
 
-    <div v-else class="grid gap-1.5">
+    <div v-else-if="photoStore === 'imgbb'" class="grid gap-1.5">
+      <Label for="source-imgbb">
+        {{ $t('sourceForm.imgbbApiKey') }}
+        <span class="font-normal text-subtle-foreground">· {{ $t('sourceForm.optional') }}</span>
+      </Label>
+      <Input
+        id="source-imgbb"
+        v-model="imgbbApiKey"
+        autocomplete="off"
+        autocapitalize="off"
+        spellcheck="false"
+        class="h-11"
+      />
+      <p class="text-sm text-subtle-foreground">
+        {{ $t('sourceForm.imgbbHint') }}
+        <a
+          :href="keyLink('imgbb')"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="underline underline-offset-2"
+        >{{ $t('sourceForm.imgbbLink') }}</a>
+      </p>
+    </div>
+
+    <div v-else-if="photoStore === 'imgur'" class="grid gap-1.5">
       <Label for="source-imgur">
         {{ $t('sourceForm.imgurClientId') }}
         <span class="font-normal text-subtle-foreground">· {{ $t('sourceForm.optional') }}</span>

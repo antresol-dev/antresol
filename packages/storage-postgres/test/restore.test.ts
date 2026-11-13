@@ -13,7 +13,7 @@ import { backupProblems, RESTORE_BATCH_ROWS, RESTORE_TABLES, renameIntakeIds, re
 import { LOCK_REV, REV_BUMP } from '../src/migrator'
 import { sql, type Statement } from '../src/sql'
 import { openPostgresStorage } from '../src/storage'
-import { makeExecutor, normSnapshot, TEST_ACTOR } from './helpers'
+import { makeExecutor, normSnapshot, RENDITION_FIELDS, TEST_ACTOR } from './helpers'
 import { renamed, seedRich } from './restore-fixtures'
 
 const q = (s: string) => s as Quantity
@@ -168,6 +168,10 @@ describe('restore', () => {
       expect(normSnapshot(await target.loadInventory(id))).toEqual(normSnapshot(await source.loadInventory(id)))
       expect(withoutSeq(await target.loadAllMovements(id))).toEqual(withoutSeq(await source.loadAllMovements(id)))
     }
+    // The photo with renditions comes back with the same list (jsonb travels as JSON text), the others with none.
+    const photos = (await target.loadInventory(inv)).photos
+    expect(photos.find((p) => p.urls !== null)).toMatchObject(RENDITION_FIELDS)
+    expect(photos.filter((p) => p.urls === null).map((p) => [p.width, p.height, p.deleteHandle])).toEqual([[null, null, null]])
     const total = progress[0]![1]
     expect(progress[0]).toEqual([0, total])
     expect(progress.at(-1)).toEqual([total, total])

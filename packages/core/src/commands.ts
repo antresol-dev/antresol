@@ -1,7 +1,18 @@
 import type { Id } from './ids'
 import type { CommittedLine, IntakeHeader } from './intakes'
-import type { AttributeKind } from './model'
+import type { AttributeKind, Rendition } from './model'
 import type { Quantity } from './quantity'
+
+/** The stored file a photo command carries. The optional fields are absent or null from older clients and stores. */
+export interface PhotoFile {
+  provider: string
+  fileId: string
+  url: string
+  urls?: Rendition[] | null
+  width?: number | null
+  height?: number | null
+  deleteHandle?: string | null
+}
 
 export type Command =
   | { type: 'inventory.create'; id: Id; name: string; description: string | null; currency: string }
@@ -96,11 +107,11 @@ export type Command =
       toVariantId: Id | null
       quantity: Quantity
     }
-  | { type: 'photo.add'; id: Id; itemId: Id; variantId: Id | null; provider: string; fileId: string; url: string }
+  | ({ type: 'photo.add'; id: Id; itemId: Id; variantId: Id | null } & PhotoFile)
   /** The variant's photo is removed and this one added in its place (its position), in one transaction; a variant with
    *  no photo just gets this one. `replaces`: the photo the client saw on the variant (null: none). Only while the
    *  variant still has that one (or still none) is it replaced: a late replay never takes away a newer photo. */
-  | { type: 'photo.replace'; variantId: Id; id: Id; itemId: Id; replaces: Id | null; provider: string; fileId: string; url: string }
+  | ({ type: 'photo.replace'; variantId: Id; id: Id; itemId: Id; replaces: Id | null } & PhotoFile)
   | { type: 'photo.remove'; id: Id }
   | { type: 'photo.reorder'; itemId: Id; orderedIds: Id[] }
   /** Commits an intake draft in one write (spec 2026-11-13 intakes §7): new items before their variants, archived
@@ -126,7 +137,7 @@ export type Command =
       newVariants: { id: Id; itemId: Id; values: { attributeId: Id; value: string }[] }[]
       unarchiveVariants: Id[]
       receipts: { movementId: Id; itemId: Id; variantId: Id | null; quantity: Quantity; totalPrice: number | null; sourceUrl: string | null }[]
-      photos: { id: Id; itemId: Id; variantId: Id | null; replaces: Id | null | undefined; provider: string; fileId: string; url: string }[]
+      photos: ({ id: Id; itemId: Id; variantId: Id | null; replaces: Id | null | undefined } & PhotoFile)[]
       lines: CommittedLine[]
     }
   | { type: 'archive'; target: 'inventory' | 'folder' | 'item' | 'variant'; id: Id; archiveId: Id }

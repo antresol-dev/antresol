@@ -52,7 +52,8 @@ function intakeOf(content: IntakeDraftContent): Intake {
 }
 
 const photoRow = (id: string, itemId: string, variantId: string | null): Photo => ({
-  id, itemId, variantId, provider: 'uploadcare', fileId: id, url: `https://x/${id}`, position: 0, createdAt: '', createdBy: 'test',
+  id, itemId, variantId, provider: 'uploadcare', fileId: id, url: `https://x/${id}`, urls: null, width: null, height: null,
+  deleteHandle: null, position: 0, createdAt: '', createdBy: 'test',
 })
 
 /** Resistor R (axis Resistance, Ω with SI prefixes): an active 4.7 kΩ variant and an archived 47 kΩ one. */
@@ -248,9 +249,23 @@ describe('buildIntakeCommit', () => {
     const photo = { provider: 'uploadcare', fileId: 'f1', url: 'https://x/f1' }
     expect(build(draft([line('R', { res: '4k7' }, { photo: { ...photo, replace: false } })]), s).photos).toEqual([])
     const l = line('R', { res: '4k7' }, { photo: { ...photo, replace: true } })
+    // A draft saved before photo renditions: the photo goes without them (null).
     expect(build(draft([l]), s).photos).toEqual([
-      { id: l.ids.photoId, itemId: 'R', variantId: 'r4k7', replaces: 'old', provider: 'uploadcare', fileId: 'f1', url: 'https://x/f1' },
+      {
+        id: l.ids.photoId, itemId: 'R', variantId: 'r4k7', replaces: 'old', provider: 'uploadcare', fileId: 'f1', url: 'https://x/f1',
+        urls: null, width: null, height: null, deleteHandle: null,
+      },
     ])
+  })
+
+  it('a photo carries the renditions, size and delete handle the upload gave it', () => {
+    const file = {
+      provider: 'imgbb', fileId: 'f1', url: 'https://i.ibb.co/f1/full.jpg',
+      urls: [{ url: 'https://i.ibb.co/f1/thumb.jpg', role: 'thumb', width: 180, height: 180, fit: 'cover' as const, type: null }],
+      width: 1600, height: 1200, deleteHandle: 'https://ibb.co/f1/del',
+    }
+    const l = line('M', {}, { photo: { ...file, replace: false } })
+    expect(build(draft([l])).photos).toEqual([{ id: l.ids.photoId, itemId: 'M', variantId: null, replaces: undefined, ...file }])
   })
 
   it('a photo goes to a new variant or a variant without one; the item gallery takes any number', () => {

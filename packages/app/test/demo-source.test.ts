@@ -49,7 +49,7 @@ afterEach(async () => {
 
 describe('demo source', () => {
   it('keeps its browser storage under a name carrying the schema version', () => {
-    expect(demoStorageName('demo')).toBe('idb://antresol-dev-s5-demo')
+    expect(demoStorageName('demo')).toBe('idb://antresol-dev-s6-demo')
   })
 
   it('seeds two inventories with stock', async () => {

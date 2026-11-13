@@ -116,8 +116,20 @@ export async function encodeCanvas(canvas: HTMLCanvasElement): Promise<Blob | nu
   return toBlob('image/jpeg')
 }
 
+/** An encoded photo with the size it was drawn at. */
+export interface PreparedImage {
+  blob: Blob
+  width: number
+  height: number
+}
+
+/** The name sent to the photo store: neutral, so the original file name (often a date or a place) never leaves the device. */
+export function uploadName(type: string): string {
+  return type === 'image/webp' ? 'photo.webp' : 'photo.jpg'
+}
+
 /** Decodes (EXIF-aware), scales to MAX_SIDE and encodes WebP (JPEG where WebP is not supported) at 0.85. */
-export async function prepareImage(file: File): Promise<Blob> {
+export async function prepareImage(file: File): Promise<PreparedImage> {
   const type = file.type.toLowerCase()
   if (!isImageType(type) && !HEIC_TYPES.has(type)) throw new FileError('unsupported')
   if (file.size > MAX_INPUT_BYTES) throw new FileError('too_large')
@@ -137,7 +149,7 @@ export async function prepareImage(file: File): Promise<Blob> {
     ctx.drawImage(bitmap, 0, 0, width, height)
     const blob = await encodeCanvas(canvas)
     if (!blob) throw new FileError('failed')
-    return blob
+    return { blob, width, height }
   } finally {
     bitmap.close()
   }

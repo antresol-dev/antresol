@@ -100,18 +100,7 @@ export function uuidV5(name: string, namespace: string): string {
  */
 export interface RestoreColumn {
   name: string
-  type:
-    | 'uuid'
-    | 'text'
-    | 'timestamptz'
-    | 'boolean'
-    | 'int'
-    | 'smallint'
-    | 'numeric'
-    | 'bigint'
-    | 'json-text'
-    | 'json-smallint'
-    | 'jsonb'
+  type: 'uuid' | 'text' | 'timestamptz' | 'boolean' | 'int' | 'smallint' | 'numeric' | 'bigint' | 'json-text' | 'json-smallint' | 'jsonb'
   ref?: 'id' | 'unitKey'
 }
 export interface RestoreTable {
@@ -121,8 +110,17 @@ export interface RestoreTable {
   columns: RestoreColumn[]
 }
 
-/** A jsonb cell is a function of the id renaming: the restore's `rename` is known only when the row is finished. */
-type Raw = string | number | boolean | null | readonly (string | number)[] | ((rename: (old: Id) => Id) => unknown)
+/** A value as the backup has it. Lists and objects are written as JSON text. A function is a jsonb cell that depends on
+ *  the id renaming: the restore's `rename` is known only when the row is finished. */
+type Raw =
+  | string
+  | number
+  | boolean
+  | null
+  | readonly (string | number)[]
+  | object
+  | readonly object[]
+  | ((rename: (old: Id) => Id) => unknown)
 
 const id = (name: string): RestoreColumn => ({ name, type: 'uuid', ref: 'id' })
 const text = (name: string): RestoreColumn => ({ name, type: 'text' })
@@ -176,7 +174,8 @@ export const RESTORE_TABLES: readonly RestoreTable[] = [
     name: 'photos',
     key: ['id'],
     columns: [
-      id('id'), id('item_id'), id('variant_id'), text('provider'), text('file_id'), text('url'), { name: 'position', type: 'int' },
+      id('id'), id('item_id'), id('variant_id'), text('provider'), text('file_id'), text('url'), { name: 'urls', type: 'jsonb' },
+      { name: 'width', type: 'int' }, { name: 'height', type: 'int' }, text('delete_handle'), { name: 'position', type: 'int' },
       time('created_at'), text('created_by'),
     ],
   },
@@ -354,7 +353,13 @@ function segmentsOf(entry: InventoryExport): Segment[] {
     ['variants', s.variants.map((v) => [v.id, v.itemId, v.description, v.position, ...audit(v), ...archive(v)])],
     ['item_attributes', s.itemAttributes.map((r) => [r.itemId, r.attributeId, r.value, r.axisPosition])],
     ['variant_attribute_values', s.variantAttributeValues.map((r) => [r.variantId, r.attributeId, r.value])],
-    ['photos', s.photos.map((p) => [p.id, p.itemId, p.variantId, p.provider, p.fileId, p.url, p.position, p.createdAt, p.createdBy])],
+    [
+      'photos',
+      s.photos.map((p) => [
+        p.id, p.itemId, p.variantId, p.provider, p.fileId, p.url, p.urls, p.width, p.height, p.deleteHandle, p.position,
+        p.createdAt, p.createdBy,
+      ]),
+    ],
     [
       'intakes',
       intakes.map((k) => [
@@ -379,7 +384,7 @@ function segmentsOf(entry: InventoryExport): Segment[] {
 }
 
 
-/** A row's values as they are written: ids renamed by `rename`, arrays as JSON, everything else as text. */
+/** A row's values as they are written: ids renamed by `rename`, lists and objects as JSON, everything else as text. */
 function finalRow(columns: RestoreColumn[], raw: Raw[], rename: (old: Id) => Id): (string | null)[] {
   return columns.map((column, i) => {
     const value = raw[i] ?? null
@@ -389,7 +394,7 @@ function finalRow(columns: RestoreColumn[], raw: Raw[], rename: (old: Id) => Id)
       return renameUnitKey(value, rename)
     }
     if (typeof value === 'function') return JSON.stringify(value(rename))
-    if (Array.isArray(value)) return JSON.stringify(value)
+    if (typeof value === 'object') return JSON.stringify(value)
     return String(value)
   })
 }

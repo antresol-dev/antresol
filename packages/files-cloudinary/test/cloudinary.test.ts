@@ -60,6 +60,25 @@ describe('createCloudinaryStore', () => {
     }
   })
 
+  it('refuses an asset Cloudinary already had (a preset that keeps file names) instead of taking its picture', async () => {
+    const url = 'https://res.cloudinary.com/cloud7q/image/upload/v1/photo_k3.jpg'
+    const existing = (async () =>
+      new Response(JSON.stringify({ public_id: 'photo_k3', secure_url: url, existing: true }), { status: 200 })) as unknown as typeof fetch
+    try {
+      await createCloudinaryStore({ cloudName: 'cloud7q', uploadPreset: 'preset9z', fetch: existing }).upload(blob(), 'photo.jpg')
+      throw new Error('did not throw')
+    } catch (e) {
+      expect(e).toBeInstanceOf(FileError)
+      expect((e as FileError).code).toBe('rejected')
+      for (const detail of ['preset9z', 'cloud7q', 'photo_k3', 'res.cloudinary.com']) {
+        expect((e as FileError).message).not.toContain(detail)
+      }
+    }
+    // Only `true` counts: a fresh upload says false or nothing.
+    const fresh = async () => new Response(JSON.stringify({ public_id: 'abc', secure_url: URL_, existing: false }), { status: 200 })
+    expect(await make(fresh).upload(blob(), 'photo.jpg')).toEqual({ provider: 'cloudinary', fileId: 'abc', url: URL_ })
+  })
+
   it('maps a bad 200 body to failed', async () => {
     expect(await codeOf(make(async () => new Response('{}', { status: 200 })).upload(blob(), 'a'))).toBe('failed')
     expect(await codeOf(make(async () => new Response('<html>', { status: 200 })).upload(blob(), 'a'))).toBe('failed')

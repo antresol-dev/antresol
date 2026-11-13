@@ -731,14 +731,14 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-2.5 
             <button type="button" :class="summaryRow" :aria-expanded="photoOpen" :disabled="disabled" @click="photoOpen = !photoOpen">
               <span class="shrink-0 text-[13px] font-semibold">{{ $t('intakes.line.photo') }}</span>
               <span class="flex min-w-0 grow justify-end">
-                <PhotoImg v-if="photo || variantPhoto" :url="(photo ?? variantPhoto)!.url" size="thumb" alt="" class="size-8 rounded-thumb object-cover" />
+                <PhotoImg v-if="photo || variantPhoto" :photo="(photo ?? variantPhoto)!" size="thumb" alt="" class="size-8 rounded-thumb object-cover" />
                 <span v-else class="text-[13px] text-muted-foreground">{{ $t('intakes.line.add') }}</span>
               </span>
               <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-150 motion-reduce:transition-none" :class="photoOpen ? 'rotate-180' : ''" aria-hidden="true" />
             </button>
             <div v-if="photoOpen" class="grid gap-2 py-3">
               <div v-if="photo" class="flex items-center gap-3">
-                <PhotoImg :url="photo.url" size="thumb" alt="" class="size-[42px] shrink-0 rounded-thumb object-cover" />
+                <PhotoImg :photo="photo" size="thumb" alt="" class="size-[42px] shrink-0 rounded-thumb object-cover" />
                 <span class="min-w-0 flex-1 text-sm text-muted-foreground">
                   {{ variantPhoto ? $t(photo.replace ? 'intakes.line.replaces' : 'intakes.line.keepsPhoto') : $t('intakes.line.photoSet') }}
                 </span>
@@ -751,7 +751,7 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-2.5 
               </div>
               <template v-else-if="variantPhoto && !replacing">
                 <div class="flex items-center gap-3">
-                  <PhotoImg :url="variantPhoto.url" size="thumb" alt="" class="size-[42px] shrink-0 rounded-thumb object-cover" />
+                  <PhotoImg :photo="variantPhoto" size="thumb" alt="" class="size-[42px] shrink-0 rounded-thumb object-cover" />
                   <span class="min-w-0 flex-1 text-sm text-muted-foreground">{{ $t('intakes.line.currentPhoto') }}</span>
                   <Button type="button" variant="outline" class="h-9" :disabled="disabled" @click="replacing = true">{{ $t('intakes.line.replacePhoto') }}</Button>
                 </div>

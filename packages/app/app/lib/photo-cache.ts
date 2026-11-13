@@ -1,12 +1,13 @@
-import { isCloudinaryUrl, isImgurUrl, isUploadcareUrl } from './photo-url'
+import { isPhotoHostUrl, withoutThumbMark } from './photo-url'
 
 /** Cache names of the service worker's photo caches (nuxt.config.ts pwa.workbox.runtimeCaching uses the same names). */
 export const PHOTO_CACHE = { thumbs: 'antresol-photos-thumb', full: 'antresol-photos-full' } as const
 
-/** The three stores send `Access-Control-Allow-Origin: *`, so their photos are fetched with CORS: the service worker then
- *  caches real (non-opaque) responses. Device and foreign urls are never loaded this way. */
+/** The four stores send `Access-Control-Allow-Origin: *`, so their photos are fetched with CORS: the service worker then
+ *  caches real (non-opaque) responses. Device and foreign urls are never loaded this way. `url` is what
+ *  displayablePhotoUrl gave, so it may carry the thumbnail cache mark, which a store's own url never has. */
 export function photoCrossorigin(url: string): 'anonymous' | undefined {
-  return isUploadcareUrl(url) || isCloudinaryUrl(url) || isImgurUrl(url) ? 'anonymous' : undefined
+  return isPhotoHostUrl(withoutThumbMark(url)) ? 'anonymous' : undefined
 }
 
 async function openCaches(): Promise<Cache[]> {

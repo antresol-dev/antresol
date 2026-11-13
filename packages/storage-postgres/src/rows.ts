@@ -1,4 +1,7 @@
 import {
+  isDeleteHandle,
+  isPhotoSide,
+  normalizeRenditions,
   parseQuantity,
   type Attribute,
   type AttributeKind,
@@ -142,17 +145,30 @@ export const toVariantAttributeValue = (r: Row): VariantAttributeValue => ({
   value: (r.value as string | null) ?? null,
 })
 
-export const toPhoto = (r: Row): Photo => ({
-  id: r.id as string,
-  itemId: r.item_id as string,
-  variantId: (r.variant_id as string | null) ?? null,
-  provider: r.provider as string,
-  fileId: r.file_id as string,
-  url: r.url as string,
-  position: toNumber(r.position),
-  createdAt: toIso(r.created_at),
-  createdBy: r.created_by as string,
-})
+/** The schema-5 fields are read as a photo command would have to carry them, so a hand-edited row never reaches the
+ *  screen or a backup (which refuses them) as it is: renditions that do not parse are dropped, a size out of range on
+ *  either side is none, an empty or too long delete handle is none. */
+export const toPhoto = (r: Row): Photo => {
+  const width = toNumberOrNull(r.width)
+  const height = toNumberOrNull(r.height)
+  const sized = isPhotoSide(width) && isPhotoSide(height)
+  return {
+    id: r.id as string,
+    itemId: r.item_id as string,
+    variantId: (r.variant_id as string | null) ?? null,
+    provider: r.provider as string,
+    fileId: r.file_id as string,
+    url: r.url as string,
+    // jsonb: every driver hands it back parsed.
+    urls: normalizeRenditions(r.urls),
+    width: sized ? width : null,
+    height: sized ? height : null,
+    deleteHandle: isDeleteHandle(r.delete_handle) ? r.delete_handle : null,
+    position: toNumber(r.position),
+    createdAt: toIso(r.created_at),
+    createdBy: r.created_by as string,
+  }
+}
 
 export const toMovement = (r: Row): Movement => ({
   id: r.id as string,

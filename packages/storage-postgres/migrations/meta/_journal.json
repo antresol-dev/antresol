@@ -15,6 +15,20 @@
       "when": 1794417773204,
       "tag": "0001_pinned_journal_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794513776645,
+      "tag": "0002_photo_renditions",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794579916909,
+      "tag": "0003_intakes",
+      "breakpoints": true
     }
   ]
 }

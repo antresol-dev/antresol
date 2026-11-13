@@ -1,4 +1,4 @@
-import type { Command } from './commands'
+import type { Command, PhotoFile } from './commands'
 import type { Id } from './ids'
 import { isSourceUrl, MAX_NAME_LENGTH } from './limits'
 import type { Attribute, InventorySnapshot, Item, ItemAttribute, Variant, VariantAttributeValue } from './model'
@@ -28,10 +28,9 @@ export interface DraftNewItem {
   /** Axes in axis order; an axis has value null. */
   attributes: { attributeId: Id; value: string | null; axis: boolean }[]
 }
-export interface DraftLinePhoto {
-  provider: string
-  fileId: string
-  url: string
+/** The stored file (renditions, size and delete handle as the upload gave them; absent in drafts saved before they
+ *  existed) and whether it replaces the variant's photo. */
+export interface DraftLinePhoto extends PhotoFile {
   /** Replace the photo the variant already has; without it such a variant keeps its photo. */
   replace: boolean
 }
@@ -276,8 +275,9 @@ export function buildIntakeCommit(intake: Intake, resolved: ResolvedIntake, s: I
       sourceUrl: line.sourceUrl,
     })
     if (line.photo) {
-      const { provider, fileId, url } = line.photo
-      const add = (replaces: Id | undefined) => photos.push({ id: line.ids.photoId, itemId, variantId, replaces, provider, fileId, url })
+      const { provider, fileId, url, urls = null, width = null, height = null, deleteHandle = null } = line.photo
+      const file = { provider, fileId, url, urls, width, height, deleteHandle }
+      const add = (replaces: Id | undefined) => photos.push({ id: line.ids.photoId, itemId, variantId, replaces, ...file })
       if (variantId === null) add(undefined)
       else if (!photographed.has(variantId)) {
         const current = s.photos.find((p) => p.variantId === variantId)

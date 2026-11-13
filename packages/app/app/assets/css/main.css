@@ -25,11 +25,13 @@
  *   glass                pop (pop, popSh, popR, popBlur, popFg, popBorder, popMuted, popDanger; items popHover,
  *                        popHoverFg, popItemR; separators popDiv)       menus, select lists, combobox lists
  *   raised-card          card (card, cardSh, cardR, cardFg, cardMuted, surfBlur)  cards: stock, settings, photo block
+ *   surface-rail         rail, railLine                                 the desktop sidebar
  *   surface-list         list (list, listSh, listR, surfBlur)           lists of rows: variants, attributes, history,
  *                                                                       folders, items, Tags & fields, archive
  *   surface-header       hdr (hdr, hdrSh, hdrLine, hdrBlur)             the screen header
  *   surface-bar          hdr, hdrLine, hdrBlur; barSh                   a bottom bar (the count screen's)
  *   surface-sheet        sheet (sheet, sheetSh, sheetLine, sheetBlur)   sheets, dialogs, the search palette
+ *   palette-window       paletteImg, paletteSh, paletteLine             the desktop search palette (with surface-sheet)
  *   surface-tip          tip (tip, tipFg, tipSh)                        tooltips
  *   photo-cover          photo (photo, photoSh, photoR, photoFg, surfBlur)  the item's cover photo
  *   photo-thumb          thumbs (thumbs-0, thumbSh, thumbR, thumbFg, surfBlur)  the gallery's thumbnails
@@ -375,6 +377,12 @@
     backdrop-filter: var(--st-surf-blur);
   }
 
+  /* The desktop sidebar: its own background and a right edge, so it stays apart from a page of the same colour. */
+  .surface-rail {
+    background: var(--rail);
+    border-right: var(--st-rail-line);
+  }
+
   .surface-list {
     border-radius: var(--st-list-r);
     background: var(--st-list);
@@ -390,6 +398,12 @@
     box-shadow: var(--st-sheet-sh);
     -webkit-backdrop-filter: var(--st-sheet-blur);
     backdrop-filter: var(--st-sheet-blur);
+  }
+  /* The desktop search palette: a sheet with its own layer, shadow and border colour. */
+  .surface-sheet.palette-window {
+    border-color: var(--st-palette-line);
+    background-image: var(--st-palette-img);
+    box-shadow: var(--st-palette-sh);
   }
 
   /* A bottom bar (the count screen's sticky bar): the header's surface, its line on the top edge. */
@@ -916,24 +930,3 @@
   box-shadow: inset -1px 0 0 var(--st-sheet-line);
 }
 
-/* Experiment (the owner, 2026-11-13): in Neumorphism the desktop search palette is gently convex: its surface softly
-   darkens toward the bottom-right edge into the dimmed backdrop's colour, with a faint light rim top-left. No border and
-   no outer shadows. Unlayered: it must beat border and shadow-2xl. */
-[data-style='neumorphism'] .palette-window {
-  --pw-base: var(--background);
-  /* The backdrop: the page under the overlay. */
-  --pw-dim: color-mix(in srgb, var(--background) 22%, #000);
-  --pw-rim: rgba(255, 255, 255, 0.6);
-  border-color: transparent;
-  background: radial-gradient(
-    140% 130% at 30% 20%,
-    var(--pw-base) 62%,
-    color-mix(in srgb, var(--pw-base) 90%, var(--pw-dim)) 100%
-  );
-  box-shadow:
-    inset 4px 4px 9px -5px var(--pw-rim),
-    inset -8px -8px 16px -8px color-mix(in srgb, var(--pw-dim) 35%, transparent);
-}
-.dark[data-style='neumorphism'] .palette-window {
-  --pw-rim: rgba(255, 255, 255, 0.06);
-}

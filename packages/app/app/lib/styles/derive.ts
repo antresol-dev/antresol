@@ -152,6 +152,9 @@ export function deriveSurfaces(k: MockupTokens & Partial<AppSurfaces>, mode: Mod
   const surface = k.surface ?? opaque(k.card)
   const dividerColor = k.dividerColor ?? borderColor(k.divider)
   const border = k.border ?? dividerColor
+  // Dark: a sheet or the drawer is the page's colour or near it, over a scrim of 80 % black: without a rim its edge
+  // vanishes (1.1–1.5:1). A light rim, 16 % white. Light themes need none.
+  const sheetLine = k.sheetLine ?? (dark ? 'rgba(255,255,255,0.16)' : 'transparent')
   const destructive = k.destructive ?? k.popDanger
   const destructiveFg = k.destructiveFg ?? (dark ? '#16181D' : '#FFFFFF')
   const paint = opaque(destructive)
@@ -179,7 +182,8 @@ export function deriveSurfaces(k: MockupTokens & Partial<AppSurfaces>, mode: Mod
     chip: k.chip ?? k.chips[0]!,
     thumb: k.thumb ?? k.thumbs[0]!,
     surface,
-    rail: k.rail ?? pageColor,
+    rail: k.rail ? opaque(k.rail) : pageColor,
+    railLine: k.railLine ?? '1px solid ' + border,
     border,
     dividerColor,
     treeLine: k.treeLine ?? border,
@@ -189,10 +193,11 @@ export function deriveSurfaces(k: MockupTokens & Partial<AppSurfaces>, mode: Mod
     fieldSh: k.fieldSh ?? 'none',
     sheet: k.sheet ?? k.card,
     sheetSh: k.sheetSh ?? k.cardSh,
-    // Dark: a sheet or the drawer is the page's colour or near it, over a scrim of 80 % black: without a rim its edge
-    // vanishes (1.1–1.5:1). A light rim, 16 % white. Light themes need none.
-    sheetLine: k.sheetLine ?? (dark ? 'rgba(255,255,255,0.16)' : 'transparent'),
+    sheetLine,
     sheetBlur: k.sheetBlur ?? k.surfBlur,
+    paletteImg: k.paletteImg ?? 'none',
+    paletteSh: k.paletteSh ?? '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+    paletteLine: k.paletteLine ?? sheetLine,
     overlay: k.overlay ?? 'rgba(0,0,0,0.8)',
     popSolid,
     popBorder: k.popBorder ?? 'transparent',

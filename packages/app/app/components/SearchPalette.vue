@@ -273,7 +273,7 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
         :aria-describedby="undefined"
         :class="
           desktop
-            ? 'fixed top-[72px] left-1/2 z-50 flex max-h-[calc(100dvh-144px)] w-[580px] max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col overflow-hidden palette-window surface-sheet rounded-card border shadow-2xl outline-none motion-safe:data-[state=open]:animate-pop-in motion-safe:data-[state=closed]:animate-pop-out motion-reduce:data-[state=open]:animate-fade-in motion-reduce:data-[state=closed]:animate-fade-out'
+            ? 'fixed top-[72px] left-1/2 z-50 flex max-h-[calc(100dvh-144px)] w-[580px] max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col overflow-hidden palette-window surface-sheet rounded-card border outline-none motion-safe:data-[state=open]:animate-pop-in motion-safe:data-[state=closed]:animate-pop-out motion-reduce:data-[state=open]:animate-fade-in motion-reduce:data-[state=closed]:animate-fade-out'
             : 'surface-sheet fixed inset-0 z-50 flex flex-col-reverse outline-none data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out'
         "
         :style="dragY > 0 ? { transform: `translateY(${dragY}px)`, opacity: Math.max(0.4, 1 - dragY / 400) } : undefined"

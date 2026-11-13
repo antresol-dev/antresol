@@ -47,6 +47,8 @@ export const build: StyleBuild = (mode, accent) => {
       btnWeight: '500',
       stroke: '1.5',
       page: dark ? '#08090A' : '#F7F7F8',
+      // Linear's sidebar: a shade off the content, with a hairline.
+      rail: dark ? 'rgba(255,255,255,0.022)' : 'rgba(0,0,0,0.022)',
       fg,
       muted,
       subtle: muted,

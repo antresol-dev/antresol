@@ -492,10 +492,10 @@ async function remove(): Promise<void> {
 }
 
 const title = computed(() => t(editing.value ? 'intakes.line.editTitle' : 'intakes.line.addTitle'))
-// Like the app's list rows: a rounded highlight whose edges clear the text (the row reaches 12 px past the column on both
-// sides, so labels stay aligned with the fields above), and an inset divider between rows instead of a full-width border.
+// Like the app's list rows: a rounded highlight inside the column (its edges line up with the fields above, the text sits
+// 12 px in, like a field's text), and an inset divider between rows instead of a full-width border.
 const summaryRow =
-  "relative -mx-3 flex min-h-11 min-w-0 items-center gap-3 rounded-field px-3 py-2 text-left transition-colors duration-150 not-first:before:absolute not-first:before:top-0 not-first:before:right-3 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-[''] hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none"
+  "relative flex min-h-11 min-w-0 items-center gap-3 rounded-field px-3 py-2 text-left transition-colors duration-150 not-first:before:absolute not-first:before:top-0 not-first:before:right-3 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-[''] hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none"
 const matchRow =
   'flex min-h-11 w-full min-w-0 items-center gap-2.5 rounded-field px-3 py-2 text-left transition-colors duration-150 hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none'
 const banner = 'grid gap-1 rounded-field px-3 py-2.5 text-[13px]'

@@ -1,0 +1,190 @@
+<title>Intake Screen Options</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap">
+<style>
+/* Layout: one column of numbered states (a real sequence); each state is one wireframe phone with a note beside it, stacked on a phone. */
+:root {
+  --bg: #f4f5f7; --surface: #ffffff; --fg: #1b1e24; --muted: #6b7280; --line: #dfe2e8;
+  --accent: #2f6fe4; --accent-soft: #2f6fe41f; --add: #15803d; --add-soft: #15803d1f; --warn: #b45309; --warn-soft: #f59e0b24;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-head: "Space Grotesk", "Inter", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121418; --surface: #1c1f25; --fg: #e8eaee; --muted: #9aa1ad; --line: #2e333c;
+  --accent: #6b9cff; --accent-soft: #6b9cff26; --add: #4ade80; --add-soft: #4ade8026; --warn: #fbbf24; --warn-soft: #fbbf2420; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #121418; --surface: #1c1f25; --fg: #e8eaee; --muted: #9aa1ad; --line: #2e333c;
+  --accent: #6b9cff; --accent-soft: #6b9cff26; --add: #4ade80; --add-soft: #4ade8026; --warn: #fbbf24; --warn-soft: #fbbf2420; color-scheme: dark }
+
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 40px; }
+.wrap { max-width: 820px; margin: 0 auto; display: grid; gap: 30px; }
+h1 { font-family: var(--font-head); font-size: 24px; line-height: 1.2; margin: 0; text-wrap: balance; }
+.lead { color: var(--muted); margin: 6px 0 0; max-width: 65ch; }
+.principles { margin: 10px 0 0; padding-left: 18px; max-width: 65ch; display: grid; gap: 4px; }
+section.state { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.explain { flex: 1 1 260px; min-width: 0; display: grid; gap: 8px; }
+.num { font-family: var(--font-head); font-weight: 700; font-size: 14px; color: var(--accent); letter-spacing: .04em; }
+.explain h2 { font-family: var(--font-head); font-size: 18px; margin: 0; line-height: 1.25; text-wrap: balance; }
+.explain p, .explain ul { margin: 0; max-width: 60ch; }
+.explain ul { padding-left: 18px; display: grid; gap: 4px; }
+.phone { flex: 0 1 320px; min-width: 0; width: 100%; max-width: 340px; background: var(--surface); border: 1px solid var(--line); border-radius: 22px; padding: 14px 12px 16px; font-size: 13px; display: grid; gap: 7px; align-content: start; }
+.ph-head { display: flex; justify-content: space-between; align-items: center; }
+.ph-title { font-weight: 700; font-size: 15px; }
+.chip { display: inline-block; padding: 1px 8px; border-radius: 10px; border: 1px solid var(--line); font-size: 11px; color: var(--muted); white-space: nowrap; }
+.chip.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.chip.val { color: var(--fg); font-weight: 600; }
+.chip.edit { border-style: dashed; }
+.field { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; color: var(--muted); }
+.field.filled { color: var(--fg); }
+.field.focus { border: 1.5px solid var(--accent); color: var(--fg); }
+.group { font-size: 10px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin-top: 2px; }
+.res { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.res > div { padding: 7px 10px; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 8px; }
+.res > div:last-child { border-bottom: 0; }
+.res .r-main { min-width: 0; }
+.res .sub { color: var(--muted); font-size: 11px; }
+.res .newrow { color: var(--accent); font-weight: 600; }
+.res .best { background: var(--add-soft); }
+.card { border: 1px solid var(--line); border-radius: 12px; padding: 9px 10px; display: grid; gap: 4px; }
+.card .t { font-weight: 700; }
+.card .sub { color: var(--muted); font-size: 11px; }
+.row { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 2px; border-bottom: 1px solid var(--line); }
+.row .k { font-weight: 600; font-size: 12px; }
+.row .v { color: var(--muted); font-size: 12px; text-align: right; min-width: 0; }
+.row .v.set { color: var(--fg); }
+.amount { display: flex; align-items: center; gap: 8px; }
+.amount .big { flex: 1; border: 1.5px solid var(--accent); border-radius: 10px; padding: 8px 10px; font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.amount .unit { color: var(--muted); }
+.banner { border-radius: 10px; padding: 8px 10px; font-size: 12px; display: grid; gap: 4px; }
+.banner.warn { background: var(--warn-soft); color: var(--fg); border: 1px solid var(--warn); }
+.banner.info { background: var(--accent-soft); }
+.banner.ok { background: var(--add-soft); }
+.banner b { font-weight: 700; }
+.banner .act { color: var(--accent); font-weight: 600; }
+.tag { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 6px; }
+.tag.new { background: var(--accent-soft); color: var(--accent); }
+.tag.add { background: var(--add-soft); color: var(--add); }
+.btn { text-align: center; padding: 10px; border-radius: 12px; font-weight: 600; }
+.btn.primary { background: var(--accent); color: var(--surface); }
+.photo { display: flex; gap: 6px; }
+.thumb { width: 38px; height: 38px; border-radius: 8px; border: 1px dashed var(--line); display: grid; place-items: center; color: var(--muted); font-size: 16px; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.note { border-top: 1px solid var(--line); padding-top: 14px; color: var(--muted); max-width: 65ch; margin: 0; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Шторка строки: существующий или новый</h1>
+    <p class="lead">Вариант A, шторка «Add line». Четыре состояния одной формы, сверху вниз. Ответь в чате, что не так и чего не хватает.</p>
+    <ul class="principles">
+      <li>Всегда открыто только то, что меняется в каждой строке: что это и сколько.</li>
+      <li>Остальное свёрнуто в строки-сводки, которые читаются как фраза: «Price · 120 ₽ · lcsc.com». Тап раскрывает.</li>
+      <li>Совпадения с инвентарём показываются сразу и всегда, даже когда выбран «новый».</li>
+    </ul>
+  </header>
+
+  <section class="state">
+    <div class="phone">
+      <div class="ph-head"><span class="ph-title">Add line</span><span class="chip">✕</span></div>
+      <div class="field focus">resistor 0.25w 4k7</div>
+      <div class="group">Already have</div>
+      <div class="res">
+        <div class="best"><span class="r-main"><b>Resistor 0.25 W · 4.7 kΩ</b><div class="sub">exact variant · have 40 · Resistors</div></span><span class="tag add">ADD</span></div>
+        <div><span class="r-main"><b>Resistor 0.25 W</b> · other value<div class="sub">24 values · Resistors</div></span><span class="chip">›</span></div>
+        <div><span class="r-main">Resistor 0.6 W · 4.7 kΩ<div class="sub">have 10 · Resistors</div></span><span class="chip">›</span></div>
+      </div>
+      <div class="res"><div><span class="newrow">+ New item “resistor 0.25w 4k7”</span></div></div>
+    </div>
+    <div class="explain">
+      <span class="num">1 · ВВОД</span>
+      <h2>Одно поле «что это», совпадения сразу</h2>
+      <ul>
+        <li>«4k7» находит вариант «4.7 kΩ»: поиск уже понимает номиналы.</li>
+        <li>Точный вариант стоит первым и подсвечен.</li>
+        <li>«Other value» у того же предмета нужен для твоего случая, когда в заказе 47k.</li>
+        <li>«New item» всегда последним, чтобы новое не плодилось случайно.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="state">
+    <div class="phone">
+      <div class="ph-head"><span class="ph-title">Add line</span><span class="chip">✕</span></div>
+      <div class="card">
+        <span class="t">Resistor 0.25 W <span class="tag add">ADD</span></span>
+        <div class="chips"><span class="chip val">0.25 W</span><span class="chip val edit">4.7 kΩ ✎</span></div>
+        <span class="sub">have 40 · Resistors</span>
+      </div>
+      <div class="amount"><span class="big">100</span><span class="unit">pcs</span></div>
+      <div class="row"><span class="k">Price &amp; link</span><span class="v">add ›</span></div>
+      <div class="row"><span class="k">Photo</span><span class="v">add ›</span></div>
+      <div class="btn primary">Add &amp; next</div>
+    </div>
+    <div class="explain">
+      <span class="num">2 · ВЫБРАН СУЩЕСТВУЮЩИЙ</span>
+      <h2>Короткая форма: карточка, количество, свёрнутое остальное</h2>
+      <ul>
+        <li>Вверху карточка предмета, номинал на ней — чип, который можно поменять (✎).</li>
+        <li>Открыто только количество, фокус сразу в нём.</li>
+        <li>Цена со ссылкой и фото свёрнуты, а когда заполнены, показывают значение в строке.</li>
+        <li>Папку и атрибуты не спрашиваем: они уже есть у предмета.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="state">
+    <div class="phone">
+      <div class="ph-head"><span class="ph-title">Add line</span><span class="chip">✕</span></div>
+      <div class="card">
+        <span class="t">Resistor 0.25 W <span class="tag new">NEW VALUE</span></span>
+        <div class="chips"><span class="chip val">0.25 W</span><span class="chip on">47 kΩ ✎</span></div>
+        <span class="sub">Resistors</span>
+      </div>
+      <div class="banner info">No 47 kΩ yet — a new value of this resistor.<span>Nearest: 43 kΩ (5) · 51 kΩ (20)</span></div>
+      <div class="amount"><span class="big">50</span><span class="unit">pcs</span></div>
+      <div class="row"><span class="k">Price &amp; link</span><span class="v set">35 ₽ · lcsc.com/C25819</span></div>
+      <div class="row"><span class="k">Photo</span><span class="v">add ›</span></div>
+      <div class="btn primary">Add &amp; next</div>
+    </div>
+    <div class="explain">
+      <span class="num">3 · ПОМЕНЯЛ НОМИНАЛ</span>
+      <h2>4.7k → 47k в одном чипе</h2>
+      <ul>
+        <li>Тап по чипу, вводишь «47k». Имя, папка, мощность и единица остаются от предмета.</li>
+        <li>Если 47 kΩ у этого резистора уже есть, плашка зелёная: «47 kΩ already here · have 10 · adding to it», и строка пополняет его.</li>
+        <li>Если нет, строка создаёт новый вариант, рядом ближайшие номиналы.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="state">
+    <div class="phone">
+      <div class="ph-head"><span class="ph-title">Add line</span><span class="chip">✕</span></div>
+      <div class="banner warn"><b>Looks like you already have this</b><span>Resistor 0.25 W · 4.7 kΩ · have 40</span><span class="act">Use it instead ›</span></div>
+      <div class="card">
+        <span class="t">resistor 0.25w 4k7 <span class="tag new">NEW</span></span>
+        <span class="sub">new item</span>
+      </div>
+      <div class="amount"><span class="big">100</span><span class="unit">pcs ▾</span></div>
+      <div class="group">Folder</div>
+      <div class="chips"><span class="chip on">Resistors · next to Resistor 0.25 W</span><span class="chip">Passives</span><span class="chip">Other…</span></div>
+      <div class="row"><span class="k">Attributes &amp; values</span><span class="v set">Power 0.25 W · Resistance 4.7 kΩ</span></div>
+      <div class="row"><span class="k">Price &amp; link</span><span class="v">add ›</span></div>
+      <div class="row"><span class="k">Photo</span><span class="v"><span class="photo"><span class="thumb">＋</span></span></span></div>
+      <div class="btn primary">Add &amp; next</div>
+    </div>
+    <div class="explain">
+      <span class="num">4 · ВЫБРАН НОВЫЙ</span>
+      <h2>Новый предмет, но с честным предупреждением</h2>
+      <ul>
+        <li>Жёлтая плашка, если система считает предмет тем же самым: то же имя и те же номиналы (4k7 = 4.7k). «Use it instead» переключает строку на пополнение.</li>
+        <li>Плашка не блокирует: можно сознательно завести отдельный предмет.</li>
+        <li>Папка — чипами: предложенная «рядом с похожим», недавние, «Other…».</li>
+        <li>Атрибуты с номиналами свёрнуты в одну строку-сводку и раскрываются тапом в поля.</li>
+      </ul>
+    </div>
+  </section>
+
+  <p class="note">Это каркас для обсуждения, не финальный вид: оформление будет из стилей приложения.</p>
+</div>

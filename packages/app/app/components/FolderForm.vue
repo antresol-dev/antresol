@@ -106,6 +106,7 @@ async function submit(): Promise<void> {
         class="flex h-11 w-full min-w-0 items-center gap-2 rounded-field border border-input bg-field px-3 text-left text-sm transition-colors duration-150 hover:bg-hover"
         @click="picking = !picking"
       >
+        <RootMark />
         <span class="min-w-0 flex-1 truncate">{{ parentPath }}</span>
         <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-150 motion-reduce:transition-none" :class="picking ? 'rotate-180' : ''" aria-hidden="true" />
       </button>

@@ -58,6 +58,7 @@
     "ellipsis": "…",
     "items": "Items · {count}",
     "summary": "{folders} · {items}",
+    "root": "Root folder",
     "folderCount": "{count} folder | {count} folders",
     "itemCount": "{count} item | {count} items"
   },

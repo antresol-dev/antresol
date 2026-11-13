@@ -19,6 +19,8 @@ const props = defineProps<{
   stepper: BucketStepper | null
   /** The last recount (all buckets shown counted), or null. */
   countedAt: string | null
+  /** How many active variants the total adds up (0 without variants): a small note after the unit. */
+  variantCount?: number
 }>()
 
 const emit = defineEmits<{ open: [mode: StockMode]; count: [] }>()
@@ -74,6 +76,7 @@ const action = 'h-11 min-w-0 px-2 font-bold'
           <span :class="[numberClass, total.outOfStock && 'text-muted-foreground']">{{ total.number }}</span>
           <span class="text-sm leading-none font-semibold text-muted-foreground">{{ total.unit }}</span>
           <span v-if="total.outOfStock" class="ml-1.5 text-sm leading-none font-semibold text-muted-foreground">{{ $t('item.outOfStock') }}</span>
+          <span v-if="variantCount" class="text-sm leading-none text-subtle-foreground">· {{ $t('item.variants', variantCount) }}</span>
         </p>
         <p v-if="prices" class="text-[13px] text-muted-foreground tabular-nums">{{ prices }}</p>
         <p v-if="counted" class="text-[13px] text-muted-foreground">{{ counted }}</p>

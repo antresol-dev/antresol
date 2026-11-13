@@ -105,6 +105,11 @@ export const build: StyleBuild = (mode, accent) => {
       popItemR: '6px',
       pop: dark ? 'rgba(30,30,34,0.94)' : 'rgba(255,255,255,0.92)',
       popBlur: 'blur(12px)',
+      // contrast: dark, the selected radio (and checkbox, switch, progress) is --primary: the accent was 2.4-3.0:1 on the dark
+      // surfaces for indigo, rose, pink and slate. Dark takes the accent lightened 30 % toward white with the dark ink for its
+      // check mark (the primary button keeps the saturated fill); light keeps the accent.
+      primary: dark ? mix(AL, '#ffffff', 0.3) : AL,
+      primaryFg: dark ? '#0B0B0D' : '#FFFFFF',
       popSh: dark ? '0 0 0 1px rgba(255,255,255,0.08), 0 8px 24px rgba(0,0,0,0.5)' : '0 0 0 1px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.10)',
       popR: '8px',
       popFg: fg,

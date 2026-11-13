@@ -81,6 +81,8 @@
   --foreground: var(--brutal-ink);
   --icon: var(--brutal-ink);
   --accent-ink: var(--brutal-ink);
+  --primary: var(--brutal-ink);
+  --primary-foreground: var(--brutal-paper);
   --muted-foreground: var(--brutal-ink-muted);
   --subtle-foreground: var(--brutal-ink-muted);
   --dimmed-foreground: var(--brutal-ink-muted);

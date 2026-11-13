@@ -133,6 +133,11 @@ export const build: StyleBuild = (mode) => {
       popHoverFg: dark ? fg : onP,
       popDanger: danger,
       popDiv: lineC,
+      // contrast: the selected radio (and checkbox, switch, progress) is --primary, which was the Memphis yellow: 1.3-1.7:1 on
+      // the cream page and the pink card. It is the ink line instead (dark: the cream line; on a card main CSS re-points it to
+      // the card's ink), with the yellow / dark ink for the check mark.
+      primary: lineC,
+      primaryFg: dark ? '#111111' : P[0],
       tr: 'background-color 80ms ease-out, transform 80ms ease-out, box-shadow 80ms ease-out',
       kinds: {
         ib: K(lift(surf, 3), S(pale(P[0]), 0, ring + ', ' + off(3), onP), sink(P[0], 3)),

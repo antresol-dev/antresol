@@ -616,7 +616,7 @@ describe.each(FIELD_RING_3_1)('field outline at 3:1: %s', (name) => {
  * field's fill over the surface the group sits on. Both read at 3:1 (WCAG 1.4.11) on page, card, list and sheet.
  * Liquid dark's primary was the accent at 86 % over the dark wallpaper: too dark to see on the grey glass.
  */
-function radioProblems(t: StyleTokens): string[] {
+function radioProblems(t: StyleTokens, cardPrimary = false): string[] {
   const primary = parseColor0(t.primary)
   const fieldFill = parseColor0(t.field)
   if (!primary) return [`primary ${t.primary} is not a colour`]
@@ -628,24 +628,27 @@ function radioProblems(t: StyleTokens): string[] {
     ['list', backdrops(t.list, page)],
     ['sheet', backdrops(t.sheet, page)],
   ] as const) {
+    // Neo-brutal's CSS re-points --primary (ink) and --field (paper) on a card; the other surfaces use the tokens.
+    const onCard = name === 'card' && cardPrimary
+    const ringC = onCard ? parseColor0(t.cardFg)! : primary
+    const fill = onCard ? WHITE : fieldFill
     for (const b of bgs) {
-      const ring = contrast(over(primary, b), b)
+      const ring = contrast(over(ringC, b), b)
       if (ring < 3) problems.push(`radio ring ${t.primary} on ${name} = ${ring.toFixed(2)}`)
-      if (fieldFill) {
-        const inside = over(fieldFill, b)
-        const dot = contrast(over(primary, inside), inside)
+      if (fill) {
+        const inside = over(fill, b)
+        const dot = contrast(over(ringC, inside), inside)
         if (dot < 3) problems.push(`radio dot ${t.primary} on field over ${name} = ${dot.toFixed(2)}`)
       }
     }
   }
   return problems
 }
-// Held to Liquid (the reported case); Linear, Y2K and Neo-brutal have their own owner-approved looks, listed in the plan 13 carry-over.
-const RADIO_3_1: StyleName[] = ['liquid']
-describe.each(RADIO_3_1)('selected radio at 3:1: %s', (name) => {
+// Every style: a selected radio reads as selected everywhere.
+describe.each(STYLE_NAMES)('selected radio at 3:1: %s', (name) => {
   const accents: AccentName[] = STYLES[name].fixedPalette ? [STYLES[name].defaultAccent] : ACCENT_NAMES
   it.each(MODES.flatMap((mode) => accents.map((accent) => [mode, accent] as const)))('%s, %s', (mode, accent) => {
-    expect(radioProblems(STYLES[name].build(mode, accent))).toEqual([])
+    expect(radioProblems(STYLES[name].build(mode, accent), cardInkOf(name).has('--primary'))).toEqual([])
   })
 })
 it('the radio check bites: a dark accent on dark glass fails it', () => {

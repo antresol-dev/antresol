@@ -138,6 +138,11 @@ export const build: StyleBuild = (mode, accent) => {
       popItemR: '14px',
       pop: dark ? 'rgba(20,22,60,0.72)' : 'rgba(255,255,255,0.72)',
       popBlur: 'blur(14px) saturate(160%)',
+      // contrast: dark, the selected radio (and checkbox, switch, progress) is --primary: the accent was 2.2-2.9:1 on the dark
+      // glass. Dark takes the accent lightened 45 % toward white with the dark ink for its check mark (the gel button keeps
+      // its paint); light keeps the accent.
+      primary: dark ? mix(AL, '#ffffff', 0.45) : AL,
+      primaryFg: dark ? '#0B0D26' : '#FFFFFF',
       popSh: dark
         ? 'inset 0 0 0 1px rgba(255,255,255,0.18), 0 12px 30px -8px rgba(0,0,0,0.6), 0 0 24px -6px ' + rgba(A, 0.6)
         : 'inset 0 0 0 1px rgba(255,255,255,0.95), 0 12px 30px -8px rgba(90,80,180,0.45)',

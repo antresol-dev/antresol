@@ -2,7 +2,7 @@
 import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
 import { ScanQrCode } from '@lucide/vue'
-import { canScanConnection } from '~/lib/connection-share'
+import { canPair } from '~/lib/connection-share'
 import { errorMessageKey } from '~/lib/errors'
 
 definePageMeta({ layout: 'bare' })
@@ -13,8 +13,8 @@ const router = useRouter()
 const busy = ref(false)
 const isDev = import.meta.dev
 // A source set up on another device comes over by its QR code (Settings → Share there).
-const canScan = canScanConnection()
-const scanOpen = ref(false)
+const canReceive = canPair()
+const receiveOpen = ref(false)
 
 async function useDemo(): Promise<void> {
   busy.value = true
@@ -39,14 +39,14 @@ async function useDemo(): Promise<void> {
       <Button as-child class="h-11 rounded-field">
         <NuxtLink to="/settings/sources/new">{{ $t('welcome.addSource') }}</NuxtLink>
       </Button>
-      <Button v-if="canScan" variant="outline" class="h-11" @click="scanOpen = true">
+      <Button v-if="canReceive" variant="outline" class="h-11" @click="receiveOpen = true">
         <ScanQrCode class="size-5" aria-hidden="true" />
-        {{ $t('connectionScan.open') }}
+        {{ $t('pairing.receive') }}
       </Button>
       <Button v-if="isDev" variant="outline" class="h-11" :disabled="busy" @click="useDemo">
         {{ $t('welcome.useDemo') }}
       </Button>
     </div>
-    <ConnectionScanSheet v-if="canScan" v-model:open="scanOpen" />
+    <ReceiveSourceSheet v-if="canReceive" v-model:open="receiveOpen" />
   </main>
 </template>

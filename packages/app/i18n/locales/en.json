@@ -470,25 +470,38 @@
     "cleared": "Photo cache cleared",
     "failed": "Could not clear the photo cache"
   },
-  "connectionShare": {
-    "title": "Share to another device",
-    "hint": "Scan this code on your phone: in Antresol (Settings → Scan QR code) or with the camera app. The source opens there filled in; check it and save.",
-    "show": "Show QR code",
-    "qrLabel": "QR code with this source’s settings",
-    "warning": "The code holds the connection string with its password and the photo store keys. Show it only to your own devices."
-  },
-  "connectionScan": {
-    "open": "Scan QR code",
-    "title": "Scan a source",
-    "hint": "On the other device open Settings → Share next to the source, and point the camera at the code.",
-    "received": "This form was filled in from a QR code or a link.",
+  "pairing": {
+    "receive": "Receive from another device",
+    "receiveTitle": "Receive a source",
+    "receiveStep1": "On the other device open Settings → Share next to the source and type this code:",
+    "codeLabel": "Code: {code}",
+    "newCode": "New code",
+    "expires": "Works once, for {minutes} min",
+    "receiveStep2Scan": "Then point the camera at the QR code it shows.",
+    "receiveStep2Camera": "Then scan the QR code it shows with this phone's camera app.",
+    "opening": "Opening…",
+    "received": "Received from your other device. Check the connection and save.",
     "database": "Database: {host}",
     "photoStore": "Photos: {store}",
-    "trust": "Save it only if this is your own database and photo account; anything you add here goes there.",
+    "shareTitle": "Share to another device",
+    "shareStep1": "On the other device open Settings → Receive from another device. Type the code it shows.",
+    "codeField": "Code from the other device",
+    "badCode": "The code has 8 letters and digits, like K7M2-Q9XP.",
+    "makeQr": "Make QR code",
+    "sealing": "Encrypting…",
+    "shareStep2": "Scan this QR code on the other device. It is encrypted with that device’s code and opens only there.",
+    "qrLabel": "Encrypted QR code with this source’s settings",
+    "otherCode": "Use another code",
+    "insecure": "Sharing needs a secure page (https or localhost).",
+    "link": {
+      "noCode": "This link needs a code from this device. Open Receive from another device, type its code on the other device and scan the new QR code.",
+      "mismatch": "This QR code was made with another code, or it has expired. Make a new one with the code shown here."
+    },
     "problem": {
       "denied": "Camera access is blocked. Allow it in the browser’s site settings.",
       "camera": "The camera could not be started.",
-      "foreign": "This QR code is not an Antresol source."
+      "foreign": "This QR code is not an Antresol source.",
+      "mismatch": "This QR code was made with another code. Make a new one with the code shown here."
     }
   },
   "sourceForm": {

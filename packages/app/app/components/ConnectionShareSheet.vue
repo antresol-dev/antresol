@@ -1,19 +1,32 @@
 <script setup lang="ts">
-import { QrCode } from '@lucide/vue'
 import { renderSVG } from 'uqr'
 import { Button } from '@/components/ui/button'
-import { connectionLink } from '~/lib/connection-share'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { canPair, connectionLink, normalizePairingCode } from '~/lib/connection-share'
 import type { SourceConfig } from '~/lib/types'
 
-// Settings → a source → "Share": a QR code with the source's settings for another device. The phone scans it in the
-// app (Settings → Scan QR code) or with its camera app, which opens the new-source page filled in. The code holds the
-// password, so it shows only after a tap.
+// Settings → a source → "Share": the code shown by the receiving device (Receive a source) seals the source's
+// settings into a QR code (lib/connection-share.ts). Without that code the QR code is useless, and the receiving
+// device accepts only what was sealed with the code it made.
 const props = defineProps<{ source: SourceConfig | null }>()
 const open = defineModel<boolean>('open', { required: true })
 
-const revealed = ref(false)
+const code = ref('')
+const svg = ref('')
+const sealing = ref(false)
+const badCode = ref(false)
+const supported = canPair()
+
 watch(open, (o) => {
-  if (o) revealed.value = false
+  if (o) {
+    code.value = ''
+    svg.value = ''
+    badCode.value = false
+  }
+})
+watch(code, () => {
+  badCode.value = false
 })
 // The last source stays while the sheet animates out.
 const shown = shallowRef<SourceConfig | null>(props.source)
@@ -24,25 +37,59 @@ watch(
   },
 )
 
-const svg = computed(() => {
-  if (!shown.value || !revealed.value) return ''
-  const base = `${location.origin}${useRuntimeConfig().app.baseURL}`
-  // Dark on white whatever the theme: phone cameras read that best.
-  return renderSVG(connectionLink(base, shown.value), { ecc: 'L', border: 2, pixelSize: 8 })
-})
+async function makeQr(): Promise<void> {
+  const normalized = normalizePairingCode(code.value)
+  if (!normalized) {
+    badCode.value = true
+    return
+  }
+  if (!shown.value) return
+  sealing.value = true
+  try {
+    const base = `${location.origin}${useRuntimeConfig().app.baseURL}`
+    // Dark on white whatever the theme: phone cameras read that best.
+    svg.value = renderSVG(await connectionLink(base, shown.value, normalized), { ecc: 'L', border: 2, pixelSize: 8 })
+  } finally {
+    sealing.value = false
+  }
+}
 </script>
 
 <template>
-  <AppSheet v-model:open="open" :title="$t('connectionShare.title')" :summary="shown?.name">
+  <AppSheet v-model:open="open" :title="$t('pairing.shareTitle')" :summary="shown?.name" initial-focus="#pairing-code">
     <div class="grid gap-3.5 pt-2">
-      <p class="text-sm text-subtle-foreground">{{ $t('connectionShare.hint') }}</p>
-      <!-- eslint-disable-next-line vue/no-v-html -- an SVG made here from our own data, no script -->
-      <div v-if="svg" class="qr mx-auto w-full max-w-72 overflow-hidden rounded-field bg-white p-2" role="img" :aria-label="$t('connectionShare.qrLabel')" v-html="svg" />
-      <Button v-else type="button" variant="ghost" class="h-11 w-full border border-input px-4 btn-label" @click="revealed = true">
-        <QrCode class="size-5" aria-hidden="true" />
-        {{ $t('connectionShare.show') }}
-      </Button>
-      <p class="text-sm text-subtle-foreground">{{ $t('connectionShare.warning') }}</p>
+      <p v-if="!supported" role="alert" class="text-sm text-destructive">{{ $t('pairing.insecure') }}</p>
+      <template v-else-if="!svg">
+        <p class="text-sm text-subtle-foreground">{{ $t('pairing.shareStep1') }}</p>
+        <form class="grid gap-3.5" novalidate @submit.prevent="makeQr">
+          <div class="grid gap-1.5">
+            <Label for="pairing-code">{{ $t('pairing.codeField') }}</Label>
+            <Input
+              id="pairing-code"
+              v-model="code"
+              autocomplete="off"
+              autocapitalize="characters"
+              spellcheck="false"
+              placeholder="XXXX-XXXX"
+              :aria-invalid="badCode ? true : undefined"
+              aria-describedby="pairing-code-problem"
+              class="h-11 font-mono text-lg tracking-[0.12em] uppercase"
+            />
+            <p id="pairing-code-problem" role="alert" class="text-sm text-destructive">
+              <template v-if="badCode">{{ $t('pairing.badCode') }}</template>
+            </p>
+          </div>
+          <Button type="submit" class="h-11 rounded-field" data-primary :disabled="sealing">
+            {{ $t(sealing ? 'pairing.sealing' : 'pairing.makeQr') }}
+          </Button>
+        </form>
+      </template>
+      <template v-else>
+        <p class="text-sm text-subtle-foreground">{{ $t('pairing.shareStep2') }}</p>
+        <!-- eslint-disable-next-line vue/no-v-html -- an SVG made here from our own data, no script -->
+        <div class="qr mx-auto w-full max-w-72 overflow-hidden rounded-field bg-white p-2" role="img" :aria-label="$t('pairing.qrLabel')" v-html="svg" />
+        <Button type="button" variant="outline" class="h-11" @click="svg = ''">{{ $t('pairing.otherCode') }}</Button>
+      </template>
     </div>
   </AppSheet>
 </template>

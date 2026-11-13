@@ -4,7 +4,7 @@ import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { canScanConnection } from '~/lib/connection-share'
+import { canPair } from '~/lib/connection-share'
 import { defaultDeviceName } from '~/lib/device-name'
 import { errorMessageKey } from '~/lib/errors'
 import type { SourceConfig } from '~/lib/types'
@@ -49,8 +49,8 @@ const shareOpen = computed({
     if (!open) sharing.value = null
   },
 })
-const scanOpen = ref(false)
-const canScan = canScanConnection()
+const receiveOpen = ref(false)
+const canReceive = canPair()
 
 async function reload(config: SourceConfig): Promise<void> {
   if (reloading.value) return
@@ -128,12 +128,12 @@ async function confirmRemove(): Promise<void> {
         <Button as-child variant="outline" class="h-11">
           <NuxtLink to="/settings/sources/new">{{ $t('settings.sources.add') }}</NuxtLink>
         </Button>
-        <Button v-if="canScan" variant="outline" class="h-11" @click="scanOpen = true">
+        <Button v-if="canReceive" variant="outline" class="h-11" @click="receiveOpen = true">
           <ScanQrCode class="size-5" aria-hidden="true" />
-          {{ $t('connectionScan.open') }}
+          {{ $t('pairing.receive') }}
         </Button>
         <ConnectionShareSheet v-model:open="shareOpen" :source="sharing" />
-        <ConnectionScanSheet v-if="canScan" v-model:open="scanOpen" />
+        <ReceiveSourceSheet v-if="canReceive" v-model:open="receiveOpen" />
       </section>
 
       <section class="grid gap-2" aria-labelledby="settings-device">

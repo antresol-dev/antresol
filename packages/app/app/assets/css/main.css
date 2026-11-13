@@ -916,25 +916,32 @@
   box-shadow: inset -1px 0 0 var(--st-sheet-line);
 }
 
-/* Experiment (the owner, 2026-11-13): in Neumorphism the desktop search palette rises out of the dimmed backdrop. Its
-   surface melts into the backdrop's colour at the edges (no border), with a light rim top-left and a shade bottom-right,
-   so the window reads as a convex pillow pressed up from the dark. Unlayered: it must beat border and shadow-2xl. */
+/* Experiment (the owner, 2026-11-13): in Neumorphism the desktop search palette is pressed up out of the dimmed
+   backdrop, like the style's raised buttons out of the page: two outer shadows in the backdrop's own light and shade
+   (lighter top-left, darker bottom-right), and a convex surface that melts into the backdrop's colour at its edges
+   (no border), lit top-left. Unlayered: it must beat border and shadow-2xl. */
 [data-style='neumorphism'] .palette-window {
   --pw-base: var(--background);
-  /* The backdrop: the page under the 80 % black overlay. */
-  --pw-dim: color-mix(in srgb, var(--background) 20%, #000);
-  --pw-lt: rgba(255, 255, 255, 0.9);
-  --pw-glow: rgba(255, 255, 255, 0.1);
+  /* The backdrop: the page under the overlay. */
+  --pw-dim: color-mix(in srgb, var(--background) 22%, #000);
+  /* The backdrop's light and shade, as the raised buttons' LT and DK are the page's. */
+  --pw-lift: color-mix(in srgb, var(--pw-dim) 72%, #fff);
+  --pw-shade: rgba(0, 0, 0, 0.62);
+  --pw-rim: rgba(255, 255, 255, 0.9);
   border-color: transparent;
-  background:
-    radial-gradient(130% 120% at 28% 18%, var(--pw-base) 55%, color-mix(in srgb, var(--pw-base) 82%, var(--pw-dim)) 100%);
+  background: radial-gradient(
+    140% 135% at 30% 20%,
+    var(--pw-base) 48%,
+    color-mix(in srgb, var(--pw-base) 62%, var(--pw-dim)) 100%
+  );
   box-shadow:
-    inset 7px 7px 14px -6px var(--pw-lt),
-    inset -12px -12px 22px -8px color-mix(in srgb, var(--pw-dim) 55%, transparent),
-    -8px -8px 22px var(--pw-glow),
-    14px 16px 34px rgba(0, 0, 0, 0.55);
+    inset 6px 6px 12px -5px var(--pw-rim),
+    inset -14px -14px 26px -10px color-mix(in srgb, var(--pw-dim) 70%, transparent),
+    -14px -14px 34px color-mix(in srgb, var(--pw-lift) 55%, transparent),
+    18px 20px 42px var(--pw-shade);
 }
 .dark[data-style='neumorphism'] .palette-window {
-  --pw-lt: rgba(255, 255, 255, 0.07);
-  --pw-glow: rgba(255, 255, 255, 0.035);
+  --pw-lift: color-mix(in srgb, var(--pw-dim) 78%, #fff);
+  --pw-shade: rgba(0, 0, 0, 0.75);
+  --pw-rim: rgba(255, 255, 255, 0.08);
 }

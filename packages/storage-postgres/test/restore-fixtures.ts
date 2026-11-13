@@ -1,12 +1,13 @@
 import { customUnitKey, newId, type Command, type Id, type InventorySnapshot, type InventoryStorage, type Quantity } from '@antresol/core'
-import { attributeCreate, TEST_ACTOR, variantsCreate } from './helpers'
+import { attributeCreate, RENDITION_FIELDS, TEST_ACTOR, variantsCreate } from './helpers'
 
 const q = (s: string) => s as Quantity
 
 /** Every kind of row and reference the schema has, and text an array literal must quote (commas, quotes, braces,
  *  backslashes, 'NULL', an empty option): nested and archived folders, tags, list/number/pinned attributes, a
- *  custom unit used by an item, axes and variants (one archived), shared values, photos of an item and of a variant,
- *  every movement kind including a transfer, an archived item and a folder archived with its item. */
+ *  custom unit used by an item, axes and variants (one archived), shared values, photos of an item and of a variant (that
+ *  one with renditions, size and delete handle), every movement kind including a transfer, an archived item and a folder
+ *  archived with its item. */
 export async function seedRich(storage: InventoryStorage, name = 'Workshop'): Promise<Id> {
   const run = (c: Command) => storage.apply(c, TEST_ACTOR)
   const inv = newId()
@@ -54,7 +55,7 @@ export async function seedRich(storage: InventoryStorage, name = 'Workshop'): Pr
   await run({ type: 'stock.use', movementId: newId(), itemId: wire, variantId: null, quantity: q('0.75'), note: null })
   await run({ type: 'stock.receive', movementId: newId(), itemId: old, variantId: null, quantity: q('3'), totalPrice: null, sourceUrl: null, note: null })
   await run({ type: 'photo.add', id: newId(), itemId: resistor, variantId: null, provider: 'uploadcare', fileId: 'f1', url: 'https://u.example/f1' })
-  await run({ type: 'photo.add', id: newId(), itemId: resistor, variantId: v2, provider: 'imgur', fileId: 'f2', url: 'https://i.example/f2' })
+  await run({ type: 'photo.add', id: newId(), itemId: resistor, variantId: v2, provider: 'imgbb', fileId: 'f2', url: 'https://i.ibb.co/abc/full.jpg', ...RENDITION_FIELDS })
   await run({ type: 'archive', target: 'variant', id: v3, archiveId: newId() })
   await run({ type: 'archive', target: 'item', id: old, archiveId: newId() })
   await run({ type: 'archive', target: 'folder', id: d, archiveId: newId() })

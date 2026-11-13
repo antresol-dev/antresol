@@ -1,5 +1,14 @@
 import { PGlite } from '@electric-sql/pglite'
-import { newId, type Actor, type AttributeKind, type Command, type Id, type InventorySnapshot, type InventoryStorage } from '@antresol/core'
+import {
+  newId,
+  type Actor,
+  type AttributeKind,
+  type Command,
+  type Id,
+  type InventorySnapshot,
+  type InventoryStorage,
+  type PhotoFile,
+} from '@antresol/core'
 import { afterEach } from 'vitest'
 import type { PgExecutor } from '../src/executor'
 import { createPgliteExecutor } from '../src/executors/pglite'
@@ -73,6 +82,19 @@ export const variantsCreate = (itemId: Id, variants: [Id, Record<Id, string>][])
     values: Object.entries(values).map(([attributeId, value]) => ({ attributeId, value })),
   })),
 })
+
+/** The schema-5 fields of a photo stored where the store makes renditions (as ImgBB does). A role holds text JSON must
+ *  escape (quotes, braces, a backslash, a non-ASCII letter). */
+export const RENDITION_FIELDS = {
+  urls: [
+    { url: 'https://i.ibb.co/abc/full.jpg', role: 'original', width: 1600, height: 1200, fit: 'inside', type: 'image/jpeg' },
+    { url: 'https://i.ibb.co/abc/medium.jpg', role: 'medium', width: 640, height: 480, fit: 'inside', type: 'image/jpeg' },
+    { url: 'https://i.ibb.co/abc/thumb.jpg', role: 'thumb, "sq" {x} \\ ü', width: 180, height: 180, fit: 'cover', type: null },
+  ],
+  width: 1600,
+  height: 1200,
+  deleteHandle: 'https://ibb.co/abc/0123456789abcdef',
+} satisfies Required<Pick<PhotoFile, 'urls' | 'width' | 'height' | 'deleteHandle'>>
 
 // ---- comparison without row order ----
 

@@ -1,4 +1,16 @@
-import { parseQuantity, type InventoryExport, type InventorySnapshot, type Movement, type RestoreMode } from '@antresol/core'
+import {
+  isDeleteHandle,
+  isPhotoSide,
+  MAX_RENDITIONS,
+  normalizeRenditions,
+  parseQuantity,
+  parseRendition,
+  type InventoryExport,
+  type InventorySnapshot,
+  type Movement,
+  type Photo,
+  type RestoreMode,
+} from '@antresol/core'
 import { APP_SCHEMA_VERSION, backupProblems, SCHEMA_BASE } from '@antresol/storage-postgres'
 import { computed, watch, type WatchStopHandle } from 'vue'
 import type { BackupInfo, RestoreRun } from './device-db'
@@ -144,6 +156,11 @@ const listOf =
 
 type Shape = Record<string, Check>
 
+/** 1 to MAX_RENDITIONS renditions, each one core's parseRendition reads (the check of a photo command): a rendition it
+ *  does not read fails the file. The photo keeps them as parsed (see `photos`). */
+const renditions: Check = (v) =>
+  Array.isArray(v) && v.length >= 1 && v.length <= MAX_RENDITIONS && v.every((r) => parseRendition(r) !== null)
+
 const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
 
 /**
@@ -193,7 +210,8 @@ const SHAPES = {
   variantAttributeValue: { variantId: uuid, attributeId: uuid, value: nullable(str) },
   photo: {
     id: uuid, itemId: uuid, variantId: nullable(uuid), provider: str, fileId: str, url: str, position: int,
-    createdAt: time, createdBy: str,
+    createdAt: time, createdBy: str, urls: nullable(renditions), width: nullable(isPhotoSide), height: nullable(isPhotoSide),
+    deleteHandle: nullable(isDeleteHandle),
   },
   stock: {
     itemId: uuid, variantId: nullable(uuid), quantity, pricedQuantity: quantity, pricedTotal: int,
@@ -210,6 +228,15 @@ const SHAPES = {
 /** Fields newer than schema 3 (`pinned`: schema 4; `lastCountedAt`: Plan 8), absent from older files. */
 const ATTRIBUTE_DEFAULTS = { pinned: false }
 const STOCK_DEFAULTS = { lastCountedAt: null }
+/** Schema 5 added renditions, size and delete handle to photos: a file of schema 4 or older has none. */
+const PHOTO_DEFAULTS = { urls: null, width: null, height: null, deleteHandle: null }
+
+/** The photos of a file, each rendition rebuilt as parseRendition reads it: a key it does not know is left behind, as
+ *  for every record, and `type` absent is null. */
+function photos(value: unknown): Photo[] | null {
+  const list = records<Photo>(value, SHAPES.photo, PHOTO_DEFAULTS)
+  return list && list.map((p) => ({ ...p, urls: normalizeRenditions(p.urls) }))
+}
 
 function inventoryExport(value: unknown): InventoryExport | null {
   if (!isRecord(value) || !isRecord(value.snapshot)) return null
@@ -224,7 +251,7 @@ function inventoryExport(value: unknown): InventoryExport | null {
     units: records(s.units, SHAPES.unit),
     itemAttributes: records(s.itemAttributes, SHAPES.itemAttribute),
     variantAttributeValues: records(s.variantAttributeValues, SHAPES.variantAttributeValue),
-    photos: records(s.photos, SHAPES.photo),
+    photos: photos(s.photos),
     stock: records(s.stock, SHAPES.stock, STOCK_DEFAULTS),
   }
   const movements = records<Movement>(value.movements, SHAPES.movement)

@@ -7,7 +7,7 @@ export interface InventoryRef {
 
 export type SourceKind = 'neon' | 'dev-pglite'
 
-export type PhotoStore = 'uploadcare' | 'cloudinary' | 'imgur'
+export type PhotoStore = 'uploadcare' | 'cloudinary' | 'imgbb' | 'imgur'
 
 export interface SourceConfig {
   id: string
@@ -22,5 +22,6 @@ export interface SourceConfig {
   cloudinaryCloudName?: string | null
   cloudinaryUploadPreset?: string | null
   imgurClientId?: string | null
+  imgbbApiKey?: string | null
   createdAt: string
 }

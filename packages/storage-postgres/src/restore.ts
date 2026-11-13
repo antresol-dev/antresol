@@ -92,11 +92,12 @@ export function uuidV5(name: string, namespace: string): string {
  * One column the restore writes. `ref`: what the value names, renamed in new-ids mode: `id` for a uuid (the row's own id
  * or a reference to another row, archive and transfer groups included), `unitKey` for `custom:<unit id>`. A test checks
  * against the database that every uuid column of the schema is declared `id`, so a new one cannot be forgotten.
- * `type`: the Postgres array type its values travel in (`json` for an array column: one JSON text per row).
+ * `type`: the Postgres array type its values travel in (`json` for an array column, and `jsonb` for a jsonb one: one
+ * JSON text per row).
  */
 export interface RestoreColumn {
   name: string
-  type: 'uuid' | 'text' | 'timestamptz' | 'boolean' | 'int' | 'smallint' | 'numeric' | 'bigint' | 'json-text' | 'json-smallint'
+  type: 'uuid' | 'text' | 'timestamptz' | 'boolean' | 'int' | 'smallint' | 'numeric' | 'bigint' | 'json-text' | 'json-smallint' | 'jsonb'
   ref?: 'id' | 'unitKey'
 }
 export interface RestoreTable {
@@ -106,7 +107,8 @@ export interface RestoreTable {
   columns: RestoreColumn[]
 }
 
-type Raw = string | number | boolean | null | readonly (string | number)[]
+/** A value as the backup has it. Lists and objects are written as JSON text. */
+type Raw = string | number | boolean | null | readonly (string | number)[] | object | readonly object[]
 
 const id = (name: string): RestoreColumn => ({ name, type: 'uuid', ref: 'id' })
 const text = (name: string): RestoreColumn => ({ name, type: 'text' })
@@ -160,7 +162,8 @@ export const RESTORE_TABLES: readonly RestoreTable[] = [
     name: 'photos',
     key: ['id'],
     columns: [
-      id('id'), id('item_id'), id('variant_id'), text('provider'), text('file_id'), text('url'), { name: 'position', type: 'int' },
+      id('id'), id('item_id'), id('variant_id'), text('provider'), text('file_id'), text('url'), { name: 'urls', type: 'jsonb' },
+      { name: 'width', type: 'int' }, { name: 'height', type: 'int' }, text('delete_handle'), { name: 'position', type: 'int' },
       time('created_at'), text('created_by'),
     ],
   },
@@ -285,7 +288,13 @@ function segmentsOf(entry: InventoryExport): Segment[] {
     ['variants', s.variants.map((v) => [v.id, v.itemId, v.description, v.position, ...audit(v), ...archive(v)])],
     ['item_attributes', s.itemAttributes.map((r) => [r.itemId, r.attributeId, r.value, r.axisPosition])],
     ['variant_attribute_values', s.variantAttributeValues.map((r) => [r.variantId, r.attributeId, r.value])],
-    ['photos', s.photos.map((p) => [p.id, p.itemId, p.variantId, p.provider, p.fileId, p.url, p.position, p.createdAt, p.createdBy])],
+    [
+      'photos',
+      s.photos.map((p) => [
+        p.id, p.itemId, p.variantId, p.provider, p.fileId, p.url, p.urls, p.width, p.height, p.deleteHandle, p.position,
+        p.createdAt, p.createdBy,
+      ]),
+    ],
     [
       'movements',
       // Oldest first: the new `seq` keeps the journal's order (last price, last recount).
@@ -302,7 +311,7 @@ function segmentsOf(entry: InventoryExport): Segment[] {
 
 const CUSTOM = 'custom:'
 
-/** A row's values as they are written: ids renamed by `rename`, arrays as JSON, everything else as text. */
+/** A row's values as they are written: ids renamed by `rename`, lists and objects as JSON, everything else as text. */
 function finalRow(columns: RestoreColumn[], raw: Raw[], rename: (old: Id) => Id): (string | null)[] {
   return columns.map((column, i) => {
     const value = raw[i] ?? null
@@ -311,7 +320,7 @@ function finalRow(columns: RestoreColumn[], raw: Raw[], rename: (old: Id) => Id)
     if (column.ref === 'unitKey' && typeof value === 'string' && value.startsWith(CUSTOM)) {
       return CUSTOM + rename(value.slice(CUSTOM.length))
     }
-    if (Array.isArray(value)) return JSON.stringify(value)
+    if (typeof value === 'object') return JSON.stringify(value)
     return String(value)
   })
 }
@@ -327,6 +336,7 @@ const ARRAY_TYPE: Record<RestoreColumn['type'], string> = {
   bigint: 'bigint[]',
   'json-text': 'text[]',
   'json-smallint': 'text[]',
+  jsonb: 'text[]',
 }
 
 function selectExpression(column: RestoreColumn): string {
@@ -337,6 +347,7 @@ function selectExpression(column: RestoreColumn): string {
   if (column.type === 'json-smallint') {
     return `array(select x.e::smallint from jsonb_array_elements_text(${value}::jsonb) with ordinality as x(e, n) order by x.n)`
   }
+  if (column.type === 'jsonb') return `${value}::jsonb`
   return value
 }
 

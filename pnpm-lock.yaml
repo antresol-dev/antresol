@@ -29,6 +29,9 @@ importers:
       '@antresol/files-cloudinary':
         specifier: workspace:*
         version: link:../files-cloudinary
+      '@antresol/files-imgbb':
+        specifier: workspace:*
+        version: link:../files-imgbb
       '@antresol/files-imgur':
         specifier: workspace:*
         version: link:../files-imgur
@@ -137,6 +140,12 @@ importers:
         version: 1.2.1
 
   packages/files-cloudinary:
+    dependencies:
+      '@antresol/core':
+        specifier: workspace:*
+        version: link:../core
+
+  packages/files-imgbb:
     dependencies:
       '@antresol/core':
         specifier: workspace:*

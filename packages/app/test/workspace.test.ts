@@ -211,7 +211,7 @@ function harness() {
     upload: async (_blob, name) => ({ provider: 'fake', fileId: name, url: `https://cdn.test/${name}` }),
   }
   const workspace = (extra: Partial<WorkspaceDeps> = {}) =>
-    createWorkspace({ db, drivers: { neon: driver }, userAgent: UA, now, fileStores: () => fileStore, prepareImage: async (f) => f, ...extra })
+    createWorkspace({ db, drivers: { neon: driver }, userAgent: UA, now, fileStores: () => fileStore, prepareImage: async (f) => ({ blob: f, width: 640, height: 480 }), ...extra })
 
   /** Creates a database for the connection string with one inventory, directly through storage. */
   const seed = async (connectionString: string, inventoryName: string): Promise<Id> => {
@@ -1523,7 +1523,7 @@ describe('workspace writes patch the local copy', () => {
     await ws.addPhotos(itemId, [new File(['x'], 'shot.jpg', { type: 'image/jpeg' })])
     expect(h.flags.loadCalls).toBe(loads)
     expect(itemIds(ws)).toEqual([itemId])
-    expect(ws.state.snapshot!.photos.map((p) => [p.itemId, p.fileId])).toEqual([[itemId, 'shot.jpg']])
+    expect(ws.state.snapshot!.photos.map((p) => [p.itemId, p.fileId])).toEqual([[itemId, 'photo.jpg']])
   })
 
   it('3. a foreign write between two own writes keeps both own rows and marks the copy stale; the next refresh loads once', async () => {
@@ -2478,7 +2478,7 @@ describe('workspace photos', () => {
     await db.putSource(demoConfig)
     const uploads: string[] = []
     const prepared: string[] = []
-    const control = { failOn: null as number | null, count: 0, hold: null as Promise<void> | null }
+    const control = { failOn: null as number | null, count: 0, hold: null as Promise<void> | null, plain: false }
     const store: FileStore = {
       provider: 'fake',
       async upload(_blob, name) {
@@ -2488,7 +2488,13 @@ describe('workspace photos', () => {
         control.hold = null
         if (hold) await hold
         if (control.failOn === control.count) throw new FileError('unavailable')
-        return { provider: 'fake', fileId: `f-${control.count}`, url: `https://cdn.test/${control.count}` }
+        const stored = { provider: 'fake', fileId: `f-${control.count}`, url: `https://cdn.test/${control.count}` }
+        if (control.plain) return stored
+        return {
+          ...stored,
+          urls: [{ role: 'thumb', url: `https://cdn.test/${control.count}-t`, width: 180, height: 180, fit: 'cover', type: 'image/jpeg' }],
+          deleteHandle: `h-${control.count}`,
+        }
       },
     }
     const inner = freshDriver()
@@ -2513,7 +2519,7 @@ describe('workspace photos', () => {
       userAgent: UA,
       prepareImage: async (f) => {
         prepared.push(f.name)
-        return f
+        return { blob: f, width: 1024, height: 768 }
       },
       fileStores: () => store,
     })
@@ -2536,6 +2542,30 @@ describe('workspace photos', () => {
     expect(photos.map((p) => p.fileId)).toEqual(['f-1', 'f-2'])
     expect(photos.map((p) => p.provider)).toEqual(['fake', 'fake'])
     expect(photos.map((p) => p.position)).toEqual([0, 1])
+  })
+
+  it('addPhotos sends a neutral file name and keeps the renditions, delete handle and size in photo.add', async () => {
+    const { ws, item, uploads, commands } = await photoHarness()
+    await ws.addPhotos(item.id, [file('IMG_1234')])
+    expect(uploads).toEqual(['photo.jpg'])
+    const add = commands.find((c) => c.type === 'photo.add')
+    expect(add).toMatchObject({
+      fileId: 'f-1',
+      urls: [{ role: 'thumb', url: 'https://cdn.test/1-t', width: 180, height: 180, fit: 'cover', type: 'image/jpeg' }],
+      deleteHandle: 'h-1',
+      width: 1024,
+      height: 768,
+    })
+    expect(photosOf(ws, item.id)[0]).toMatchObject({ deleteHandle: 'h-1', width: 1024, height: 768 })
+    expect(photosOf(ws, item.id)[0]!.urls).toEqual([{ role: 'thumb', url: 'https://cdn.test/1-t', width: 180, height: 180, fit: 'cover', type: 'image/jpeg' }])
+  })
+
+  it('a store without renditions gives urls null and a null delete handle, with the size', async () => {
+    const { ws, item, control, commands } = await photoHarness()
+    control.plain = true
+    await ws.addPhotos(item.id, [file('a')])
+    expect(commands.find((c) => c.type === 'photo.add')).toMatchObject({ urls: null, deleteHandle: null, width: 1024, height: 768 })
+    expect(photosOf(ws, item.id)[0]).toMatchObject({ urls: null, deleteHandle: null, width: 1024, height: 768 })
   })
 
   it('stops at the first failed upload and keeps earlier photos', async () => {
@@ -2587,12 +2617,13 @@ describe('workspace photos', () => {
     expect(now).toHaveLength(1)
     expect(now[0]!.id).not.toBe(first.id)
     expect(now[0]!.fileId).toBe('f-2')
-    expect(uploads).toEqual(['one.jpg', 'two.jpg'])
+    expect(uploads).toEqual(['photo.jpg', 'photo.jpg'])
     const photoCommands = commands.filter((c) => c.type.startsWith('photo.')).map((c) => c.type)
     expect(photoCommands).toEqual(['photo.replace', 'photo.replace'])
     // Each names the photo the variant had when it was chosen: none, then the first one.
     const [one, two] = commands.filter((c) => c.type === 'photo.replace')
-    expect(one).toMatchObject({ itemId: variant.itemId, variantId: variant.id, fileId: 'f-1', replaces: null })
+    expect(one).toMatchObject({ itemId: variant.itemId, variantId: variant.id, fileId: 'f-1', replaces: null, deleteHandle: 'h-1', width: 1024, height: 768 })
+    expect((one as { urls: unknown[] }).urls).toHaveLength(1)
     expect(two).toMatchObject({ itemId: variant.itemId, variantId: variant.id, fileId: 'f-2', replaces: first.id })
   })
 
@@ -2665,6 +2696,9 @@ describe('workspace photos', () => {
     expect(defaultFileStore({ ...base, photoStore: 'cloudinary', cloudinaryCloudName: 'c' })).toBeNull()
     expect(defaultFileStore({ ...base, photoStore: 'imgur', imgurClientId: 'id' })?.provider).toBe('imgur')
     expect(defaultFileStore({ ...base, photoStore: 'imgur', uploadcarePublicKey: 'pub' })).toBeNull()
+    expect(defaultFileStore({ ...base, photoStore: 'imgbb', imgbbApiKey: 'k' })?.provider).toBe('imgbb')
+    expect(defaultFileStore({ ...base, photoStore: 'imgbb', imgbbApiKey: ' ' })).toBeNull()
+    expect(defaultFileStore({ ...base, photoStore: 'imgbb', uploadcarePublicKey: 'pub' })).toBeNull()
     expect(defaultFileStore({ ...base, uploadcarePublicKey: 'pub' })?.provider).toBe('uploadcare')
   })
 

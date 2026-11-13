@@ -1,6 +1,6 @@
 import { FileError } from '@antresol/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fitWithin, isImageType, isOutOfMemory, MAX_SIDE, prepareImage } from '../app/lib/images'
+import { fitWithin, isImageType, isOutOfMemory, MAX_SIDE, prepareImage, uploadName } from '../app/lib/images'
 
 describe('fitWithin', () => {
   it('scales down by the longer side', () => {
@@ -16,6 +16,14 @@ describe('fitWithin', () => {
   it('honours a custom max', () => {
     expect(fitWithin(400, 200, 100)).toEqual({ width: 100, height: 50 })
     expect(MAX_SIDE).toBe(2048)
+  })
+})
+
+describe('uploadName', () => {
+  it('is neutral: photo.webp for WebP, photo.jpg otherwise', () => {
+    expect(uploadName('image/webp')).toBe('photo.webp')
+    expect(uploadName('image/jpeg')).toBe('photo.jpg')
+    expect(uploadName('image/png')).toBe('photo.jpg')
   })
 })
 
@@ -97,7 +105,7 @@ describe('prepareImage errors', () => {
     const stub = vi.fn().mockRejectedValueOnce(new RangeError('out of memory')).mockResolvedValueOnce(bitmap())
     vi.stubGlobal('createImageBitmap', stub)
     vi.stubGlobal('document', { createElement: () => fakeCanvas(false).canvas })
-    expect((await prepareImage(jpeg())).type).toBe('image/jpeg')
+    expect((await prepareImage(jpeg())).blob.type).toBe('image/jpeg')
   })
   it('decodes a big file straight at the reduced size', async () => {
     stubImage(4000, 3000)
@@ -141,7 +149,7 @@ describe('prepareImage errors', () => {
     const stub = vi.fn().mockRejectedValueOnce(invalidState()).mockResolvedValueOnce(bitmap())
     vi.stubGlobal('createImageBitmap', stub)
     vi.stubGlobal('document', { createElement: () => fakeCanvas(false).canvas })
-    expect((await prepareImage(jpeg())).type).toBe('image/jpeg')
+    expect((await prepareImage(jpeg())).blob.type).toBe('image/jpeg')
     expect(stub).toHaveBeenCalledTimes(2)
     expect(stub.mock.calls[1]![1]).toMatchObject({ resizeWidth: MAX_SIDE })
   })
@@ -159,11 +167,20 @@ describe('prepareImage errors', () => {
     expect(await codeOf(prepareImage(new File(['x'], 'a.heic', { type: 'image/heic' })))).toBe('unsupported')
     expect(stub).toHaveBeenCalledTimes(1)
   })
+  it('returns the size of the encoded image: reduced to MAX_SIDE, or as it is when it fits', async () => {
+    vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue(bitmap()))
+    vi.stubGlobal('document', { createElement: () => fakeCanvas(false).canvas })
+    const big = await prepareImage(jpeg())
+    expect([big.width, big.height]).toEqual([2048, 1536])
+    vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue({ width: 800, height: 600, close: vi.fn() }))
+    const small = await prepareImage(jpeg())
+    expect([small.width, small.height]).toEqual([800, 600])
+  })
   it('accepts an upper-case IMAGE/JPEG type', async () => {
     vi.stubGlobal('createImageBitmap', vi.fn().mockResolvedValue(bitmap()))
     vi.stubGlobal('document', { createElement: () => fakeCanvas(false).canvas })
     const file = new File([new Uint8Array(10)], 'a.jpg', { type: 'IMAGE/JPEG' })
-    expect((await prepareImage(file)).type).toBe('image/jpeg')
+    expect((await prepareImage(file)).blob.type).toBe('image/jpeg')
   })
   it('keeps too_large for a file over the input limit and unsupported for other types', async () => {
     expect(await codeOf(prepareImage(new File(['x'], 'a.pdf', { type: 'application/pdf' })))).toBe('unsupported')

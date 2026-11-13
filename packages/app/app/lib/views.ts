@@ -20,6 +20,7 @@ import {
   type UnitDef,
   type Variant,
 } from '@antresol/core'
+import type { PhotoRef } from './photo-url'
 
 export interface Crumb {
   /** null is the inventory root; its name is the inventory name. */
@@ -50,7 +51,7 @@ export interface ItemRow {
   /** The unit after the number, smaller (spec 4.3): '' for plain pieces, the prefix for many ("k"), else the symbol ("m"). */
   unit: string
   outOfStock: boolean
-  coverUrl: string | null
+  cover: PhotoRef | null
   /** At most LIST_BUCKETS buckets, in variant order; the no-variant one first and only when it is not zero. [] without variants. */
   buckets: ListBucket[]
   /** Buckets left out after the first LIST_BUCKETS: "+2". */
@@ -86,10 +87,10 @@ export interface Index {
   buckets: Map<string, StockLine>
   variants: Map<Id, { name: string; archived: boolean }>
   activeVariantCount: Map<Id, number>
-  /** url of the photo with the lowest position and no variant. */
-  covers: Map<Id, string>
+  /** The photo with the lowest position and no variant, as display needs it (PhotoRef: url and renditions). */
+  covers: Map<Id, PhotoRef>
   /** Lowest-position photo of each variant. */
-  variantCovers: Map<Id, string>
+  variantCovers: Map<Id, PhotoRef>
   paths: Map<Id, Folder[]>
   /** Active variants of each item in variant order (core compareVariants). */
   itemVariants: Map<Id, Variant[]>
@@ -160,15 +161,15 @@ function buildIndex(s: InventorySnapshot): Index {
   for (const [itemId, list] of pinnedValues) pinned.set(itemId, list.sort(byName).map((p) => p.value))
 
   const coverPos = new Map<Id, number>()
-  const covers = new Map<Id, string>()
+  const covers = new Map<Id, PhotoRef>()
   const variantPos = new Map<Id, number>()
-  const variantCovers = new Map<Id, string>()
+  const variantCovers = new Map<Id, PhotoRef>()
   for (const p of s.photos) {
-    const [pos, urls, key] = p.variantId === null ? [coverPos, covers, p.itemId] : [variantPos, variantCovers, p.variantId]
+    const [pos, refs, key] = p.variantId === null ? [coverPos, covers, p.itemId] : [variantPos, variantCovers, p.variantId]
     const best = pos.get(key)
     if (best === undefined || p.position < best) {
       pos.set(key, p.position)
-      urls.set(key, p.url)
+      refs.set(key, { url: p.url, urls: p.urls })
     }
   }
 
@@ -301,7 +302,7 @@ function itemRow(s: InventorySnapshot, ix: Index, item: Item): ItemRow {
     variantCount: ix.activeVariantCount.get(item.id) ?? 0,
     ...suffixAmount(quantity, unitOf(s, item)),
     outOfStock: isEmpty(quantity),
-    coverUrl: ix.covers.get(item.id) ?? null,
+    cover: ix.covers.get(item.id) ?? null,
     ...listBuckets(s, ix, item),
     pinned: ix.pinned.get(item.id) ?? [],
   }
@@ -348,7 +349,7 @@ export interface SearchRow {
   outOfStock: boolean
   path: string
   /** The matched variant's photo, else the item's cover. */
-  coverUrl: string | null
+  cover: PhotoRef | null
   /** The item's pinned values (as ItemRow.pinned). */
   pinned: string[]
   /** number and unit in one: "4 pcs", "1.5k", "3 m". */
@@ -377,7 +378,7 @@ export function searchRows(s: InventorySnapshot, hits: SearchHit[]): SearchRow[]
       amount: formatAmount(quantity, unitOf(s, item)),
       outOfStock: isEmpty(quantity),
       path: item.folderId === null ? '' : pathOf(ix, item.folderId).map((f) => f.name).join(' / '),
-      coverUrl: (variant && hit.variantId !== null ? ix.variantCovers.get(hit.variantId) : undefined) ?? ix.covers.get(item.id) ?? null,
+      cover: (variant && hit.variantId !== null ? ix.variantCovers.get(hit.variantId) : undefined) ?? ix.covers.get(item.id) ?? null,
       pinned: ix.pinned.get(item.id) ?? [],
       hasVariants: (ix.itemVariants.get(item.id) ?? []).length > 0,
     })

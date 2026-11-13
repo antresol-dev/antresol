@@ -38,6 +38,11 @@ describe('cspFor', () => {
     expect(img).toContain('https://i.imgur.com')
   })
 
+  it('lets the app upload to and show photos from ImgBB', () => {
+    expect(directive(csp, 'connect-src')).toContain('https://api.imgbb.com')
+    expect(directive(csp, 'img-src')).toContain('https://i.ibb.co')
+  })
+
   it('allows only the given inline script hashes', () => {
     expect(directive(csp, 'script-src')).toBe("script-src 'self' 'sha256-abc=' 'sha256-def='")
     expect(directive(cspFor([]), 'script-src')).toBe("script-src 'self'")

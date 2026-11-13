@@ -73,7 +73,7 @@ describe('folderView', () => {
     expect(tl.number).toBe('37')
     expect(tl.unit).toBe('')
     expect(tl.outOfStock).toBe(false)
-    expect(tl.coverUrl).toBeNull()
+    expect(tl.cover).toBeNull()
   })
 
   it('flags out-of-stock items', () => {
@@ -270,10 +270,10 @@ describe('index and edge cases', () => {
       photo(item.id, null, 2, 'second.jpg'),
       photo(item.id, null, 1, 'first.jpg'),
     ]
-    expect(folderView(s, idOf(s, 'Resistors'))!.items[0]!.coverUrl).toBe('first.jpg')
+    expect(folderView(s, idOf(s, 'Resistors'))!.items[0]!.cover?.url).toBe('first.jpg')
     const onlyVariant = clone()
     onlyVariant.photos = [photo(item.id, variant.id, 0, 'variant.jpg')]
-    expect(folderView(onlyVariant, idOf(onlyVariant, 'Resistors'))!.items[0]!.coverUrl).toBeNull()
+    expect(folderView(onlyVariant, idOf(onlyVariant, 'Resistors'))!.items[0]!.cover).toBeNull()
   })
 
   it('gives search rows the cover, and the variant photo when a variant matched', () => {
@@ -289,14 +289,14 @@ describe('index and edge cases', () => {
       { itemId: item.id, variantId: variant.id },
       { itemId: item.id, variantId: null },
     ])
-    expect(rows.map((r) => r.coverUrl)).toEqual(['v-early.jpg', 'cover.jpg'])
+    expect(rows.map((r) => r.cover?.url)).toEqual(['v-early.jpg', 'cover.jpg'])
     // Snapshots are indexed once, so each case gets its own.
     const coverOnly = clone()
     coverOnly.photos = [photo(item.id, null, 0, 'cover.jpg')]
-    expect(searchRows(coverOnly, [{ itemId: item.id, variantId: variant.id }])[0]!.coverUrl).toBe('cover.jpg')
+    expect(searchRows(coverOnly, [{ itemId: item.id, variantId: variant.id }])[0]!.cover?.url).toBe('cover.jpg')
     const none = clone()
     none.photos = []
-    expect(searchRows(none, [{ itemId: item.id, variantId: null }])[0]!.coverUrl).toBeNull()
+    expect(searchRows(none, [{ itemId: item.id, variantId: null }])[0]!.cover).toBeNull()
   })
 
   it('falls back to pcs for an unknown unit', () => {

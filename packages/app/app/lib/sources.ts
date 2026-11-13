@@ -32,7 +32,7 @@ export function checkConnectionString(input: string): ConnectionStringProblem | 
 /** Photo stores the source form offers. Imgur is hidden: it stopped registering new API applications (late 2025), so a
  *  Client-ID can no longer be had. A source already set to Imgur keeps it, so its choice stays visible and editable. */
 export function photoStoreChoices(current?: PhotoStore | null): PhotoStore[] {
-  const choices: PhotoStore[] = ['uploadcare', 'cloudinary']
+  const choices: PhotoStore[] = ['uploadcare', 'cloudinary', 'imgbb']
   if (current === 'imgur') choices.push('imgur')
   return choices
 }

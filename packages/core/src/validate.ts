@@ -1,7 +1,21 @@
-import type { Command } from './commands'
+import type { Command, PhotoFile } from './commands'
 import type { Id } from './ids'
 import { CURRENCIES } from './money'
-import type { Archivable, Attribute, AttributeKind, Folder, InventorySnapshot, Item, ItemAttribute, Variant } from './model'
+import {
+  isDeleteHandle,
+  isPhotoSide,
+  isRenditionUrl,
+  MAX_RENDITIONS,
+  parseRendition,
+  type Archivable,
+  type Attribute,
+  type AttributeKind,
+  type Folder,
+  type InventorySnapshot,
+  type Item,
+  type ItemAttribute,
+  type Variant,
+} from './model'
 import { isCanonicalNumber } from './numbers'
 import { bucketStock } from './stock'
 import { cmpQ, parseQuantity, type Quantity } from './quantity'
@@ -136,6 +150,24 @@ function checkPrice(p: number | null) {
 }
 function checkUrl(u: string | null) {
   if (u !== null && !/^https?:\/\//i.test(u)) fail('invalid_url')
+}
+/** The renditions, size and delete handle of a photo command; undefined counts as null. Every rendition must pass
+ *  parseRendition, the check reads use: one without `type` or with a key it does not know passes (it is read with
+ *  `type` null and the key left behind). */
+function checkPhotoFile(c: PhotoFile) {
+  const { urls, width, height, deleteHandle } = c
+  if (urls != null) {
+    if (!Array.isArray(urls) || urls.length < 1 || urls.length > MAX_RENDITIONS) fail('invalid_option')
+    for (const r of urls as unknown[]) {
+      if (parseRendition(r) !== null) continue
+      const isObject = typeof r === 'object' && r !== null && !Array.isArray(r)
+      fail(isObject && !isRenditionUrl((r as { url?: unknown }).url) ? 'invalid_url' : 'invalid_option')
+    }
+  }
+  // The size is both or neither.
+  if ((width == null) !== (height == null)) fail('invalid_option')
+  if (width != null && (!isPhotoSide(width) || !isPhotoSide(height))) fail('invalid_option')
+  if (deleteHandle != null && !isDeleteHandle(deleteHandle)) fail('invalid_option')
 }
 function checkPrefixes(p: number[] | undefined) {
   if (p?.some((x) => !Number.isInteger(x) || !Object.hasOwn(SI_PREFIXES, x))) fail('invalid_option')
@@ -491,10 +523,12 @@ function check(c: Command, s: Snap | null): void {
       }
       return
     case 'photo.add':
+      checkPhotoFile(c)
       activeBucket(s, c.itemId, c.variantId)
       if (c.variantId !== null && s.photos.some((p) => p.variantId === c.variantId)) fail('invalid_option')
       return
     case 'photo.replace': {
+      checkPhotoFile(c)
       activeBucket(s, c.itemId, c.variantId)
       // The new photo already stored as this variant's: a retry. Any other photo with this id is not this command's.
       const existing = s.photos.find((p) => p.id === c.id)

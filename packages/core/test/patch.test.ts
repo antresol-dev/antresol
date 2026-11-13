@@ -4,7 +4,7 @@ import { patchSnapshot, type SnapshotPatch } from '../src/patch'
 import { item, makeSnapshot, stockLine, variant } from './fixtures'
 
 function photo(id: string, itemId: string): Photo {
-  return { id, itemId, variantId: null, provider: 'p', fileId: id, url: 'u', position: 0, createdAt: 't', createdBy: 'test' }
+  return { id, itemId, variantId: null, provider: 'p', fileId: id, url: 'u', urls: null, width: null, height: null, deleteHandle: null, position: 0, createdAt: 't', createdBy: 'test' }
 }
 function emptyPatch(over: Partial<SnapshotPatch> = {}): SnapshotPatch {
   return {

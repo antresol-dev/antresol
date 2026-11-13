@@ -10,6 +10,7 @@ import type {
   SourceReceipt,
 } from '@antresol/core'
 import type { BackupFile } from './backup'
+import type { PreparedImage } from './images'
 import type { BackupInfo, DeviceDb, RestoreRun } from './device-db'
 import type { FailureReason, SourceDriver } from './sources'
 import type { InventoryRef, SourceConfig, SourceKind } from './types'
@@ -68,7 +69,7 @@ export interface WorkspaceDeps {
   userAgent: string
   now?: () => Date
   /** Shrinks a photo before upload; defaults to the canvas-based prepareImage. */
-  prepareImage?: (f: File) => Promise<Blob>
+  prepareImage?: (f: File) => Promise<PreparedImage>
   /** The photo store of a source; defaults to Uploadcare (Neon with a key) or the device store (demo). */
   fileStores?: (config: SourceConfig) => FileStore | null
   /** Looks for a new version of the app now (the service worker's `registration.update()`); never throws. Called when
@@ -182,6 +183,7 @@ export interface Workspace {
         | 'cloudinaryCloudName'
         | 'cloudinaryUploadPreset'
         | 'imgurClientId'
+        | 'imgbbApiKey'
       >>,
   ): Promise<void>
   /** Its saved list goes before the source itself: a removal that fails midway leaves no list without its source, and

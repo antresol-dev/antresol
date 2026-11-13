@@ -67,7 +67,7 @@ const rows = computed(() =>
           @contextmenu="press.onContextmenu"
           @click.capture="press.onClickCapture"
         >
-          <ItemThumb :name="item.name" :cover-url="item.coverUrl" class="size-[42px] rounded-thumb text-[15px]" />
+          <ItemThumb :name="item.name" :cover="item.cover" class="size-[42px] rounded-thumb text-[15px]" />
           <span class="flex min-w-0 grow flex-col gap-0.5">
             <span class="flex min-w-0 items-center gap-1.5">
               <span class="min-w-[min(7.5rem,100%)] truncate text-[15px] font-bold" :class="item.outOfStock && 'text-dimmed-foreground'">{{ item.name }}</span>

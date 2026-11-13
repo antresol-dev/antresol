@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { variantLabel, type Id } from '@antresol/core'
-import { Plus } from '@lucide/vue'
+import { ExternalLink, Plus } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { toast } from 'vue-sonner'
 import type { StockTarget } from '~/components/StockSheet.vue'
@@ -195,6 +195,7 @@ async function removeAttribute(): Promise<void> {
 // The values shown in lists ("Show in lists") at the top of the card, and shop searches by the name (spec 4.10, 4.11).
 const pinned = computed(() => (snapshot.value && view.value ? pinnedValues(snapshot.value, props.itemId) : []))
 const shops = computed(() => (view.value ? shopLinks(view.value.item.name) : []))
+const hasAbout = computed(() => !!view.value && (!!view.value.item.description || view.value.tags.length > 0))
 
 const highlight = computed(() => (view.value?.hasVariants ? props.variantId : null))
 const linkClass =
@@ -215,21 +216,13 @@ const linkClass =
           {{ value }}
         </li>
       </ul>
-      <ItemGallery :item-id="itemId" :photos="view.photos" />
-      <div v-if="view.item.description || view.tags.length > 0" class="grid min-w-0 gap-2">
-        <p v-if="view.item.description" class="text-base whitespace-pre-line text-muted-foreground wrap-anywhere">
-          {{ view.item.description }}
-        </p>
-        <ul v-if="view.tags.length > 0" class="flex min-w-0 flex-wrap gap-1.5" :aria-label="$t('item.tags')">
-          <li
-            v-for="tag in view.tags"
-            :key="tag.id"
-            class="tag-chip max-w-full truncate px-3 py-1 text-xs font-semibold"
-          >
-            {{ tag.name }}
-          </li>
-        </ul>
-      </div>
+      <!-- Without photos the description and tags sit beside the 64 px photo tile (design system F1). -->
+      <ItemGallery :item-id="itemId" :photos="view.photos">
+        <template v-if="hasAbout && view.photos.length === 0" #beside>
+          <ItemAbout :description="view.item.description" :tags="view.tags" />
+        </template>
+      </ItemGallery>
+      <ItemAbout v-if="hasAbout && view.photos.length > 0" :description="view.item.description" :tags="view.tags" />
       <StockCard
         :total="view.total"
         :unit="view.unit"
@@ -323,11 +316,24 @@ const linkClass =
       />
       <AttributeValueSheet :view="view" :open="attributeOpen" :attribute-id="attributeId" @close="attributeOpen = false" />
       <VariantValuesSheet :view="view" :variant-id="valuesId" @close="valuesId = null" />
-      <nav class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5" :aria-label="$t('shops.title')">
+      <!-- Shops: one row of chips that scrolls sideways instead of wrapping (design system, audit #20); the row bleeds to
+           the screen's edges so the last chip is not cut by the column's padding, and pads vertically for the chips'
+           shadows. -->
+      <nav class="grid min-w-0 gap-2" :aria-label="$t('shops.title')">
         <span class="text-sm font-semibold text-subtle-foreground">{{ $t('shops.title') }}</span>
-        <a v-for="shop in shops" :key="shop.name" :href="shop.url" target="_blank" rel="noopener noreferrer" :class="linkClass">
-          {{ shop.name }}
-        </a>
+        <ul class="-mx-4 -my-1 flex gap-2 overflow-x-auto px-4 py-1 [scrollbar-width:none] lg:mx-0 lg:flex-wrap lg:overflow-visible lg:px-0">
+          <li v-for="shop in shops" :key="shop.name" class="shrink-0">
+            <a
+              :href="shop.url"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="raised pressable inline-flex h-11 items-center gap-2 px-3 text-sm btn-text"
+            >
+              {{ shop.name }}
+              <ExternalLink class="size-4 text-icon" aria-hidden="true" />
+            </a>
+          </li>
+        </ul>
       </nav>
       <JournalList :item-id="itemId" />
     </template>

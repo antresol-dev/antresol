@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import type { Photo } from '@antresol/core'
 import { FileError } from '@antresol/core'
-import { Plus } from '@lucide/vue'
+import { ImagePlus, Plus } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import { errorMessageKey } from '~/lib/errors'
 
 const props = defineProps<{ itemId: string; photos: Photo[] }>()
+defineSlots<{
+  /** Without photos: what stands beside the 64 px photo tile (the item's description and tags). */
+  beside?: () => unknown
+}>()
 
 const { t } = useI18n()
 const router = useRouter()
@@ -121,7 +125,7 @@ const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thu
 
 <template>
   <section
-    v-if="photos.length > 0 || progress || !readOnly"
+    v-if="photos.length > 0 || progress || !readOnly || $slots.beside"
     :aria-label="$t('photos.viewer')"
     :class="['grid min-w-0 gap-1.5 rounded-card', dragging && 'ring-2 ring-ring']"
     @dragover="onDragOver"
@@ -161,40 +165,56 @@ const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thu
         </button>
       </div>
     </template>
-    <template v-else>
+    <!-- No photos (design system F1): a 64 px tile instead of the cover-sized block, so the stock and variants stay on
+         the first screen; beside it the description and tags, or one line on what the tile is for. -->
+    <div v-else class="flex min-w-0 items-start gap-3">
       <div
         v-if="progress"
-        :class="['aspect-[4/3] max-h-96 w-full rounded-card text-sm', pending]"
         role="status"
         :aria-label="$t('photos.uploading', { n: progress.done + 1, total: progress.total })"
+        :class="[tile, 'photo-thumb', pending]"
       >
         {{ $t('photos.progress', { n: progress.done + 1, total: progress.total }) }}
       </div>
-      <div
-        v-else
-        class="raised-card photo-empty grid aspect-[4/3] max-h-96 w-full place-items-center gap-2 p-4 text-center"
+      <button
+        v-else-if="!readOnly"
+        type="button"
+        :class="[tile, 'add-tile pressable grid place-items-center text-icon']"
+        :aria-label="$t('photos.add')"
+        :disabled="busy"
+        @click="addOpen = true"
       >
-        <p v-if="!hasStore" class="text-sm text-muted-foreground">{{ $t('photos.noStore') }}</p>
-        <PhotoPicker v-else multiple :disabled="!canAdd" @pick="upload" />
+        <ImagePlus class="size-6" aria-hidden="true" />
+      </button>
+      <div class="min-w-0 flex-1 self-center">
+        <slot name="beside">
+          <p v-if="!readOnly" class="text-sm text-muted-foreground">{{ $t(hasStore ? 'photos.emptyHint' : 'photos.noStore') }}</p>
+        </slot>
       </div>
-      <div v-if="skeletons.length > 1" class="flex flex-wrap gap-1.5">
-        <div v-for="n in skeletons.slice(1)" :key="`up${n}`" :class="[tile, 'photo-thumb', pending]">
-          {{ $t('photos.progress', { n, total: progress?.total ?? 0 }) }}
-        </div>
-      </div>
-    </template>
+    </div>
     <p v-if="!hasStore && photos.length > 0 && !readOnly" class="pt-2 text-sm text-muted-foreground">
       {{ $t('photos.noStore') }}
     </p>
     <NuxtLink
-      v-if="!hasStore && sourceId && !readOnly"
+      v-if="!hasStore && sourceId && !readOnly && photos.length > 0"
       :to="`/settings/sources/${sourceId}`"
       class="min-h-11 content-center rounded-chip text-sm font-semibold text-accent-ink underline-offset-4 hover:underline"
     >
       {{ $t('photos.noStoreLink') }}
     </NuxtLink>
     <AppSheet v-model:open="addOpen" :title="$t('photos.addTitle')">
-      <PhotoPicker multiple :disabled="!canAdd" class="py-2" @pick="pickedFromSheet" />
+      <PhotoPicker v-if="hasStore" multiple :disabled="!canAdd" class="py-2" @pick="pickedFromSheet" />
+      <div v-else class="grid gap-2 py-2">
+        <p class="text-sm text-muted-foreground">{{ $t('photos.noStore') }}</p>
+        <NuxtLink
+          v-if="sourceId"
+          :to="`/settings/sources/${sourceId}`"
+          class="min-h-11 content-center rounded-chip text-sm font-semibold text-accent-ink underline-offset-4 hover:underline"
+          @click="addOpen = false"
+        >
+          {{ $t('photos.noStoreLink') }}
+        </NuxtLink>
+      </div>
     </AppSheet>
     <PhotoViewer v-model:open="viewerOpen" v-model:index="viewerIndex" :item-id="itemId" :photos="photos" :locked="progress !== null" />
   </section>

@@ -10,7 +10,9 @@
     "settings": "Settings",
     "menu": "Menu",
     "back": "Back",
-    "forward": "Forward"
+    "forward": "Forward",
+    "up": "Up to {name}",
+    "more": "More actions"
   },
   "intakes": {
     "title": "Intakes",
@@ -350,6 +352,7 @@
     "progress": "{n} / {total}",
     "noStore": "Set up a photo store in this source’s settings to attach photos",
     "noStoreLink": "Open source settings",
+    "emptyHint": "No photo yet. Add one to spot this item at a glance.",
     "viewer": "Photos",
     "counter": "{n} / {total}",
     "previous": "Previous photo",

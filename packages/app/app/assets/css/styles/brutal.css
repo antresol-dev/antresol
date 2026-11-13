@@ -98,39 +98,6 @@
   --ring: var(--brutal-ink);
 }
 
-/* 5. The empty photo block: a card shaped like the photo (ItemGallery gives it the cover's aspect ratio), drawn as the
-   neutral `photo` (F8: the panel with a faint hatch) instead of a Memphis colour, so what is in it keeps the page's
-   colours, not the ink of a Memphis card. */
-[data-style='brutal'] .raised-card.photo-empty {
-  --foreground: var(--st-fg);
-  --icon: var(--st-icon);
-  --accent-ink: var(--st-ink);
-  --muted-foreground: var(--st-muted);
-  --subtle-foreground: var(--st-subtle);
-  --dimmed-foreground: var(--st-dimmed);
-  --destructive: var(--st-destructive);
-  --warning: var(--st-warning);
-  --accent-soft: var(--st-accent-soft);
-  --accent-soft-foreground: var(--st-accent-soft-fg);
-  --surface: var(--st-surface);
-  --field: var(--st-field);
-  --chip: var(--st-chip);
-  --hover: var(--st-row-hover);
-  --input: var(--st-field-line);
-  --divider: var(--st-divider-color);
-  --border: var(--st-border);
-  --ring: var(--st-ring);
-  border-radius: var(--st-photo-r);
-  background: var(--st-photo);
-  box-shadow: var(--st-photo-sh);
-  color: var(--st-photo-fg);
-}
-@media (prefers-contrast: more) {
-  [data-style='brutal'] .raised-card.photo-empty {
-    background: var(--st-photo-solid);
-  }
-}
-
 /* Raised controls on a card or the selected row: white, the ink line, the light theme's offsets. */
 [data-style='brutal'] :is(.raised-card, .row-selected) :is(.raised, .raised-sm, .add-tile) {
   --n-bg: var(--brutal-paper);

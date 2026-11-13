@@ -297,12 +297,6 @@ describe('Neo-brutal: plan 12 (F8)', () => {
     }
   })
 
-  it('brutal.css draws the empty photo block (a card with an aspect ratio) as the neutral photo, in the page\'s colours', () => {
-    const code = brutalCss().replace(/\/\*[\s\S]*?\*\//g, '')
-    const rule = /\[data-style='brutal'\] \.raised-card\.photo-empty\s*\{([^}]*)\}/.exec(code)?.[1] ?? ''
-    for (const d of ['background: var(--st-photo)', 'box-shadow: var(--st-photo-sh)', 'color: var(--st-photo-fg)', '--foreground: var(--st-fg)', '--muted-foreground: var(--st-muted)', '--input: var(--st-field-line)']) expect(rule).toContain(d)
-  })
-
   it('controls nested in a card or the selected row draw a 1.5 px line (brutal.css), the card its 2 px', () => {
     expect(brutalCss()).toMatch(/--brutal-ring: inset 0 0 0 1\.5px var\(--brutal-ink\)/)
     expect(brutalCss()).toMatch(/\.pill > \.pill-step \+ \.pill-step\s*\{\s*border-left-color: var\(--brutal-ink\)/)

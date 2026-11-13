@@ -43,9 +43,7 @@ const linkState = (key: Section): string => (section.value === key ? 'row-select
       </ul>
     </nav>
 
-    <div v-if="props.variant === 'drawer' && state.snapshot" class="min-h-0 flex-1 overflow-y-auto p-1.5">
-      <FolderTree variant="drawer" />
-    </div>
+    <FolderTree v-if="props.variant === 'drawer' && state.snapshot" variant="drawer" />
 
     <div class="mt-auto shrink-0">
       <NuxtLink to="/settings" :class="[link, linkState('settings')]" :aria-current="current('settings', '/settings')">

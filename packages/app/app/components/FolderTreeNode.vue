@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Archive, Boxes, ChevronRight, Folder, FolderInput, FolderPlus, Pencil, Plus } from '@lucide/vue'
 import { treeAriaCurrent } from '~/lib/shell'
-import { rowClickAction, type TreeRow } from '~/lib/tree-state'
+import { longPressExpands, rowClickAction, type TreeRow } from '~/lib/tree-state'
 import { piecesLabel } from '~/lib/views'
 import type RowMenu from './RowMenu.vue'
 
@@ -58,9 +58,13 @@ function select(key: string): void {
   else if (key === 'rename' || key === 'move' || key === 'archive') open({ kind: key, folderId })
 }
 
-// A long press on a folder row (in the drawer, or the panel on a touch screen) opens the row menu as a sheet.
+// A long press on a folder row (in the drawer, or the panel on a touch screen) opens the row menu as a sheet, and
+// also opens a closed folder that has children.
 const menu = useTemplateRef<InstanceType<typeof RowMenu>>('rowMenu')
-const press = useLongPress(() => menu.value?.openSheet())
+const press = useLongPress(() => {
+  if (longPressExpands(props.row.hasChildren, props.row.open)) emit('toggle', props.row.id)
+  menu.value?.openSheet()
+})
 // Object syntax on a component: `clickCapture` becomes onClickCapture, a capture-phase click listener on the <a>.
 const pressHandlers = computed(() =>
   props.root

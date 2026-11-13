@@ -22,6 +22,11 @@ export function rowClickAction(isPage: boolean): 'select' | 'toggle' {
   return isPage ? 'toggle' : 'select'
 }
 
+/** A fired long press on a folder row also opens it when it has children and is closed; the menu opens either way. */
+export function longPressExpands(hasChildren: boolean, isOpen: boolean): boolean {
+  return hasChildren && !isOpen
+}
+
 export function treeRows(s: InventorySnapshot, open: TreeOpen, current: Id | 'root' | null): TreeRow[] {
   const build = (nodes: TreeNode[]): TreeRow[] =>
     nodes.map((n) => {
@@ -50,6 +55,25 @@ export function openPath(s: InventorySnapshot, open: TreeOpen, folderId: Id | nu
   const next: TreeOpen = { ...open }
   for (const c of closed) next[c.id!] = true
   return next
+}
+
+/** Every folder closed. */
+export function collapseAll(): TreeOpen {
+  return {}
+}
+
+/** Every active folder that has children open. */
+export function expandAll(s: InventorySnapshot): TreeOpen {
+  const open: TreeOpen = {}
+  const walk = (nodes: TreeNode[]): void => {
+    for (const n of nodes) {
+      if (n.children.length === 0) continue
+      open[n.id] = true
+      walk(n.children)
+    }
+  }
+  walk(folderTree(s))
+  return open
 }
 
 export function toggleOpen(open: TreeOpen, id: Id): TreeOpen {

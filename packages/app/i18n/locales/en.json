@@ -481,7 +481,10 @@
     "open": "Scan QR code",
     "title": "Scan a source",
     "hint": "On the other device open Settings → Share next to the source, and point the camera at the code.",
-    "received": "Settings received from another device. Check the connection and save.",
+    "received": "This form was filled in from a QR code or a link.",
+    "database": "Database: {host}",
+    "photoStore": "Photos: {store}",
+    "trust": "Save it only if this is your own database and photo account; anything you add here goes there.",
     "problem": {
       "denied": "Camera access is blocked. Allow it in the browser’s site settings.",
       "camera": "The camera could not be started.",

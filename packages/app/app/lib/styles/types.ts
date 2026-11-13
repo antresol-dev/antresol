@@ -302,6 +302,13 @@ export interface AppSurfaces {
   chip: string
   /** Photo and thumbnail backing in lists (--thumb). Default: thumbs[0]. */
   thumb: string
+  /** Six thumbnail tones for list rows (plan 12): background and letter colour of each, picked by the item's id. Written
+   *  as --st-thumb-tone-<i> and --st-thumb-tone-fg-<i>, i = 0…5. Default: the design system's six pairs for the mode; a
+   *  style with fewer colours repeats them up to six. */
+  thumbTones: ThumbTones
+  /** The out-of-stock dot (--status-out). Decorative: the word "Out" always stands next to it, so it is not contrast
+   *  checked. Default: #B4BAC4 light, #6B7280 dark. */
+  statusOut: string
   /** An opaque surface: the desktop tree panel, badges, shadcn's --card (--surface). Default: `card` made opaque. */
   surface: string
   /** The desktop sidebar and the navigation drawer (--rail). A translucent tint is laid over pageColor (the rail is
@@ -367,6 +374,13 @@ export interface AppSurfaces {
 }
 
 /** Everything a style gives the app. */
+/** A thumbnail tone: background and the letters' colour on it. */
+export interface ThumbTone {
+  bg: string
+  fg: string
+}
+export type ThumbTones = [ThumbTone, ThumbTone, ThumbTone, ThumbTone, ThumbTone, ThumbTone]
+
 export type StyleTokens = MockupTokens & AppSurfaces
 
 /** What a style's build() hands to finish(): the mock-up's keys (the shared fallbacks optional) and any app surface it

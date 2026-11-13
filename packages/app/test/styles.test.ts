@@ -454,6 +454,10 @@ function contrastProblems(t: StyleTokens, neumorphismGhostSel = false, stateInk:
   const n = Math.max(t.chips.length, t.chipFgs.length) * Math.min(t.chips.length, t.chipFgs.length)
   for (let i = 0; i < n; i++) check(`chipFgs[${i % t.chipFgs.length}] on chips[${i % t.chips.length}]`, t.chipFgs[i % t.chipFgs.length]!, on(t.chips[i % t.chips.length]!, page))
   t.thumbs.forEach((thumb, i) => check(`thumbFg on thumbs[${i}]`, t.thumbFg, on(thumb, page)))
+  // Row thumbnails (plan 12): the letters of each of the six tones on their tone. statusOut is not paired: the word "Out"
+  // always stands beside the dot, so its colour is decorative.
+  expect(t.thumbTones).toHaveLength(6)
+  t.thumbTones.forEach((tone, i) => check(`thumbTones[${i}].fg on thumbTones[${i}].bg`, tone.fg, on(tone.bg, page)))
   // Controls: the text of each state on its fill (and image), over what the control sits on.
   const pill = on(t.pillBg, page)
   const pillSel = on(t.pillSelBg, cur)
@@ -1093,5 +1097,28 @@ describe('derived: the bottom bar and plain button labels', () => {
     const t = deriveSurfaces({ ...rest, hdrSh: 'inset 0 -2px 0 #111111', btnWeight: '600' }, 'light')
     expect(t.barSh).toBe('inset 0 2px 0 #111111')
     expect(t.plainBtnWeight).toBe('600')
+  })
+})
+
+describe('plan 12 tokens: thumbnail tones, out-of-stock dot, motion, num-font', () => {
+  it('writes six tone pairs and the status colour as CSS variables, from the design system by default', () => {
+    const vars = Object.fromEntries(styleVars(STYLES.base.build('light', 'indigo')))
+    for (let i = 0; i < 6; i++) {
+      expect(vars[`--st-thumb-tone-${i}`]).toMatch(/^#[0-9A-F]{6}$/)
+      expect(vars[`--st-thumb-tone-fg-${i}`]).toMatch(/^#[0-9A-F]{6}$/)
+    }
+    expect(vars['--st-thumb-tone-0']).toBe('#E5EAF5')
+    expect(vars['--st-thumb-tone-fg-5']).toBe('#28585C')
+    expect(vars['--st-status-out']).toBe('#B4BAC4')
+    const dark = Object.fromEntries(styleVars(STYLES.base.build('dark', 'indigo')))
+    expect(dark['--st-thumb-tone-1']).toBe('#3A3328')
+    expect(dark['--st-status-out']).toBe('#6B7280')
+  })
+
+  it('main.css exposes the semantic status colour, motion tokens and .num-font', () => {
+    expect(css).toMatch(/--status-out:\s*var\(--st-status-out\)/)
+    expect(css).toMatch(/--color-status-out:\s*var\(--status-out\)/)
+    for (const v of ['--dur-fast', '--dur-base', '--dur-slow', '--ease-standard', '--ease-exit']) expect(css).toContain(`${v}:`)
+    expect(css).toMatch(/\.num-font\s*\{\s*font-family:\s*var\(--st-num-font\);\s*\}/)
   })
 })

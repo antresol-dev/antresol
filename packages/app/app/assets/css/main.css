@@ -41,6 +41,7 @@
  *                        headings ("Variants", "Attributes", "History", settings sections)
  *   stock-card           (no rules: the hook for a style's LED, `led`, ledColor, ledGlow)  the stock card
  *   tabular-nums         numFont                                        every number
+ *   num-font             numFont                                        a single large number (proportional digits)
  *   amount               numWeight                                      the amounts the mock-up draws: stock total,
  *                                                                       stepper count, list and history amounts
  *   btn-text / btn-label plainBtnWeight / btnWeight                     every Button's label / the emphasised actions
@@ -75,6 +76,12 @@
 
 :root {
   color-scheme: light;
+  /* Motion (plan 12): layers enter with --ease-standard and leave with --ease-exit. */
+  --dur-fast: 100ms;
+  --dur-base: 180ms;
+  --dur-slow: 280ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-exit: cubic-bezier(0.3, 0, 1, 1);
   /* The page before the style is applied (only until the app's script runs): the default style's page colour. */
   --boot-page: #F4F5F7;
 
@@ -107,6 +114,7 @@
   --destructive: var(--st-destructive);
   --destructive-foreground: var(--st-destructive-fg);
   --warning: var(--st-warning);
+  --status-out: var(--st-status-out);
 
   --divider: var(--st-divider-color);
   --border: var(--st-border);
@@ -137,6 +145,24 @@
 
 /* The radius scale (spec 4.2): cards and sheets, buttons/fields/row tiles, chips and nested elements, circles.
    A nested element is never rounder than its parent. The style sets the numbers. */
+/* The text scale (plan 12): one scale on every screen size, six steps, each a role of the design system:
+   xs caption 12/16, sm body-sm 14/20, base body 16/24, lg title-sm 18/24, 2xl title 24/30, 4xl display 36/40.
+   No other text size is allowed (text-xl, text-3xl, text-5xl+, text-[…]): test/design-scale.test.ts. */
+@theme {
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.5rem;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 1.875rem;
+  --text-4xl: 2.25rem;
+  --text-4xl--line-height: 2.5rem;
+}
+
 @theme {
   --radius-card: var(--st-card-r);
   /* The button radius, bounded: --radius-field also shapes tall boxes (text areas, picker lists, notices, banners). A style
@@ -170,6 +196,7 @@
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-warning: var(--warning);
+  --color-status-out: var(--status-out);
   --color-hover: var(--hover);
   --color-pressed: var(--pressed);
   --color-field: var(--field);
@@ -191,14 +218,14 @@
      style (spec §3). Navigation drawer: slides in from the left. Bottom sheets: slide up; from 768 px they are centred
      windows that appear with a slight scale, like dropdown menus. Translate utilities use the `translate` property, so
      these transforms add to them instead of replacing them. */
-  --animate-drawer-in: drawer-in 200ms ease-out;
-  --animate-drawer-out: drawer-out 200ms ease-in;
-  --animate-sheet-in: sheet-in 200ms ease-out;
-  --animate-sheet-out: sheet-out 160ms ease-in;
-  --animate-pop-in: pop-in 160ms ease-out;
-  --animate-pop-out: pop-out 120ms ease-in;
-  --animate-fade-in: fade-in 200ms ease-out;
-  --animate-fade-out: fade-out 200ms ease-in;
+  --animate-drawer-in: drawer-in var(--dur-slow) var(--ease-standard);
+  --animate-drawer-out: drawer-out var(--dur-base) var(--ease-exit);
+  --animate-sheet-in: sheet-in var(--dur-slow) var(--ease-standard);
+  --animate-sheet-out: sheet-out var(--dur-base) var(--ease-exit);
+  --animate-pop-in: pop-in var(--dur-base) var(--ease-standard);
+  --animate-pop-out: pop-out var(--dur-fast) var(--ease-exit);
+  --animate-fade-in: fade-in var(--dur-slow) var(--ease-standard);
+  --animate-fade-out: fade-out var(--dur-base) var(--ease-exit);
 
   @keyframes drawer-in {
     from { transform: translateX(-100%); }
@@ -477,6 +504,10 @@
   }
 
   .tabular-nums {
+    font-family: var(--st-num-font);
+  }
+  /* The style's number font without tabular figures: a single large number (the stock total) keeps proportional digits. */
+  .num-font {
     font-family: var(--st-num-font);
   }
 
@@ -854,8 +885,8 @@
    Unlayered on purpose: it must beat the display and transition utilities on the same element. */
 .row-action {
   transition-property: opacity, background-color, color;
-  transition-duration: 150ms;
-  transition-timing-function: ease;
+  transition-duration: var(--dur-fast);
+  transition-timing-function: var(--ease-standard);
 }
 @media (hover: hover) {
   .row-action {

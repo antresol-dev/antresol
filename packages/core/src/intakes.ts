@@ -285,6 +285,7 @@ export function buildIntakeCommit(intake: Intake, resolved: ResolvedIntake, s: I
     intakeId: intake.id,
     inventoryId: intake.inventoryId,
     baseRev,
+    baseDraftRev: intake.draftRev,
     header: intake.header,
     newItems,
     newVariants,

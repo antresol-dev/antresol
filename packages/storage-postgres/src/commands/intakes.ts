@@ -13,8 +13,10 @@ const PENDING: Statement = { text: `current_setting('antresol.intake_done', true
 
 /**
  * The check, right after the schema guard: an intake committed already marks the batch done (a retry whose first
- * attempt landed: nothing more is written, whatever the revision); otherwise a source revision other than `baseRev`
- * fails the batch with AN004 (`conflict`): the draft was resolved against a copy that is behind.
+ * attempt landed: nothing more is written, whatever the revision); otherwise the batch fails with AN004 (`conflict`)
+ * when the source revision is not `baseRev` (the draft was resolved against a copy that is behind) or the draft row's
+ * `draft_rev` is not `baseDraftRev` (it was saved since, e.g. on another device: committing would drop those edits).
+ * A missing row (the draft deleted elsewhere) passes.
  */
 function check(c: IntakeCommit): Statement[] {
   const committed = sql`exists (select 1 from intakes where id = ${c.intakeId}::uuid and status = 'committed')`
@@ -22,7 +24,9 @@ function check(c: IntakeCommit): Statement[] {
     sql`select set_config('antresol.intake_done', case when ${committed} then '1' else '' end, true),
                set_config('antresol.stale_write',
                           (not ${committed}
-                           and (select value from antresol_meta where key = 'rev') is distinct from ${c.baseRev}::text)::text,
+                           and ((select value from antresol_meta where key = 'rev') is distinct from ${c.baseRev}::text
+                                or exists (select 1 from intakes
+                                           where id = ${c.intakeId}::uuid and draft_rev::text <> ${c.baseDraftRev}::text)))::text,
                           true)`,
     REFUSE_IF_STALE,
   ]

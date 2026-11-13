@@ -208,8 +208,37 @@ describe('intake drafts', () => {
     const updated = await intakeOf(w.storage, w.inv, id)
     expect(updated).toMatchObject({ header, status: 'committed', lines: committed.lines, draft: null, updatedBy: 'Other' })
     expect(updated.draftRev).not.toBe(committed.draftRev)
+    expect(r.draftRev).toBe(updated.draftRev)
     expect(updated.committedAt).toBe(committed.committedAt)
     expect((await w.storage.listInventories()).rev).toBe(rev)
+  })
+
+  it('updateIntakeHeader of a draft returns its new draftRev: the next save over it is not a false conflict', async () => {
+    const w = await workshop()
+    const id = newId()
+    const content = { newItems: [], lines: [line(w.cap, [{ attributeId: w.size, value: 'S' }], '1')] }
+    const first = await w.storage.saveIntakeDraft({ id, inventoryId: w.inv, header: HEADER, content }, null, TEST_ACTOR)
+    if (!first.saved) throw new Error('not saved')
+    const header = { ...HEADER, shop: 'Mouser' }
+    const r = await w.storage.updateIntakeHeader(id, header, TEST_ACTOR)
+    expect(r.draftRev).not.toBe(first.draftRev)
+    expect((await intakeOf(w.storage, w.inv, id)).draftRev).toBe(r.draftRev)
+    const next = await w.storage.saveIntakeDraft({ id, inventoryId: w.inv, header, content: { newItems: [], lines: [] } }, r.draftRev, TEST_ACTOR)
+    expect(next.saved).toBe(true)
+    await expect(w.storage.updateIntakeHeader(newId(), header, TEST_ACTOR)).rejects.toMatchObject({ code: 'not_found' })
+  })
+
+  it('a save over a draft deleted on another device writes it again (the last write wins)', async () => {
+    const w = await workshop()
+    const id = newId()
+    const empty = { newItems: [], lines: [] }
+    const first = await w.storage.saveIntakeDraft({ id, inventoryId: w.inv, header: HEADER, content: empty }, null, TEST_ACTOR)
+    if (!first.saved) throw new Error('not saved')
+    await w.storage.deleteIntakeDraft(id)
+    const content = { newItems: [], lines: [line(w.cap, [{ attributeId: w.size, value: 'S' }], '3')] }
+    const again = await w.storage.saveIntakeDraft({ id, inventoryId: w.inv, header: HEADER, content }, first.draftRev, TEST_ACTOR)
+    if (!again.saved) throw new Error('not saved')
+    expect(await intakeOf(w.storage, w.inv, id)).toMatchObject({ status: 'draft', draft: content, draftRev: again.draftRev })
   })
 
   it('lists the intakes of the inventory only, newest change first', async () => {
@@ -298,6 +327,30 @@ describe('intake.commit', () => {
     expect(await counts(w.storage, w.inv)).toEqual(before)
     expect((await w.storage.listInventories()).rev).toBe(rev)
     expect(await intakeOf(w.storage, w.inv, id)).toEqual(intake)
+    expect(await w.storage.intakesRev()).toBe(intakesRev)
+  })
+
+  it('a draft saved again after the commit was built is refused as a conflict; nothing is written', async () => {
+    const w = await workshop()
+    const { id, content, command } = await savedAndBuilt(w)
+    const built = await intakeOf(w.storage, w.inv, id)
+    // Another device saves the draft (e.g. one more line) after this device built its commit.
+    const newer = { ...content, lines: [...content.lines, line(w.cap, [{ attributeId: w.size, value: 'S' }], '1')] }
+    const saved = await w.storage.saveIntakeDraft({ id, inventoryId: w.inv, header: HEADER, content: newer }, built.draftRev, { device: 'Other' })
+    if (!saved.saved) throw new Error('not saved')
+    const before = await counts(w.storage, w.inv)
+    const { rev } = await w.storage.listInventories()
+    const intake = await intakeOf(w.storage, w.inv, id)
+    const intakesRev = await w.storage.intakesRev()
+
+    const error = await w.storage.apply(command, TEST_ACTOR).catch((e: unknown) => e)
+
+    expect(error).toBeInstanceOf(StorageError)
+    expect((error as StorageError).code).toBe('conflict')
+    expect(await counts(w.storage, w.inv)).toEqual(before)
+    expect((await w.storage.listInventories()).rev).toBe(rev)
+    expect(await intakeOf(w.storage, w.inv, id)).toEqual(intake)
+    expect(intake.draft).toEqual(newer)
     expect(await w.storage.intakesRev()).toBe(intakesRev)
   })
 

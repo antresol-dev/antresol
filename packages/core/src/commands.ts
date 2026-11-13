@@ -106,13 +106,15 @@ export type Command =
   /** Commits an intake draft in one write (spec 2026-11-13 intakes §7): new items before their variants, archived
    *  variants back from the archive, photos, one `receipt` per line marked with the intake, and the intake row becomes
    *  committed with `lines` and `header`. `baseRev`: the source revision the draft was resolved against; storage refuses
-   *  a stale one, except that a retry of an intake already committed writes nothing. `axisPosition`: null for a shared
-   *  attribute. `replaces`: undefined adds the photo; otherwise as photo.replace. */
+   *  a stale one, except that a retry of an intake already committed writes nothing. `baseDraftRev`: the draft's
+   *  `draftRev` the command was built from; storage refuses it when the draft was saved since (another device's edits
+   *  are never dropped silently). `axisPosition`: null for a shared attribute. `replaces`: undefined adds the photo; otherwise as photo.replace. */
   | {
       type: 'intake.commit'
       intakeId: Id
       inventoryId: Id
       baseRev: string
+      baseDraftRev: string
       header: IntakeHeader
       newItems: {
         id: Id

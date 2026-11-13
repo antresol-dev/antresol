@@ -176,7 +176,7 @@ describe('buildIntakeCommit', () => {
       ...s,
       attributes: [...s.attributes, attribute('pkg', 'Package', 'enum', { options: ['0805', 'THT'] })],
     })
-    expect(c).toMatchObject({ type: 'intake.commit', intakeId: 'intake1', inventoryId: 'inv', baseRev: 'rev-1' })
+    expect(c).toMatchObject({ type: 'intake.commit', intakeId: 'intake1', inventoryId: 'inv', baseRev: 'rev-1', baseDraftRev: 'rev-d' })
     expect(c.header).toEqual({ shop: 'LCSC', orderNumber: 'WM2511-0042', purchasedOn: '2026-11-12', note: null })
     expect(c.newItems).toEqual([
       {

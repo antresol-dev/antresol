@@ -697,6 +697,7 @@ describe('intake.commit', () => {
     intakeId: 'in1',
     inventoryId: 'inv',
     baseRev: 'rev',
+    baseDraftRev: 'draft-rev',
     header: { shop: 'LCSC', orderNumber: null, purchasedOn: '2026-11-12', note: null },
     newItems: [
       {

@@ -155,6 +155,7 @@ export interface InventoryStorage {
   ): Promise<SaveIntakeDraftResult>
   /** Deletes a draft; a committed intake is never deleted (nothing happens). */
   deleteIntakeDraft(id: Id): Promise<{ intakesRev: string }>
-  /** The header of a draft or of a committed intake; `rev` does not change. */
-  updateIntakeHeader(id: Id, header: IntakeHeader, actor: Actor): Promise<{ intakesRev: string }>
+  /** The header of a draft or of a committed intake; `rev` does not change. `draftRev`: the row's new one, the base for
+   *  this device's next saveIntakeDraft. Rejects with `not_found` when there is no such intake. */
+  updateIntakeHeader(id: Id, header: IntakeHeader, actor: Actor): Promise<{ intakesRev: string; draftRev: string }>
 }

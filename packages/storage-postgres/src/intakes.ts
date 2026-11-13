@@ -1,4 +1,4 @@
-import type { Actor, Id, IntakeDraftContent, IntakeHeader, SaveIntakeDraftResult } from '@antresol/core'
+import { StorageError, type Actor, type Id, type IntakeDraftContent, type IntakeHeader, type SaveIntakeDraftResult } from '@antresol/core'
 import type { PgExecutor } from './executor'
 import { INTAKES_REV_KEY, LOCK_REV } from './migrator'
 import { intakesRevStatement, intakesSql, toRev } from './queries'
@@ -54,6 +54,7 @@ export async function saveIntakeDraft(
   const draftRev = result[2]?.[0]?.draft_rev
   if (typeof draftRev === 'string') return { saved: true, draftRev, intakesRev: toRev(result[4]) }
   const current = result[3]?.[0]
+  // Unreachable: a missing row is always written, and under LOCK_REV no other write can delete it in between.
   if (!current) throw new Error('saveIntakeDraft: nothing written and no row')
   if (current.status === 'committed') return { saved: false, reason: 'committed' }
   return { saved: false, reason: 'changed', current: rows.toIntake(current) }
@@ -73,12 +74,14 @@ export async function updateIntakeHeader(
   id: Id,
   h: IntakeHeader,
   actor: Actor,
-): Promise<{ intakesRev: string }> {
+): Promise<{ intakesRev: string; draftRev: string }> {
   const update = sql`update intakes
       set shop = ${h.shop}::text, order_number = ${h.orderNumber}::text, purchased_on = ${h.purchasedOn}::text,
           note = ${h.note}::text, draft_rev = gen_random_uuid(), updated_at = now(), updated_by = ${actor.device}::text
       where id = ${id}::uuid
       returning draft_rev::text as draft_rev`
   const result = await exec.batch([LOCK_REV, guard, bumpIfChanged(update), intakesRevStatement])
-  return { intakesRev: toRev(result[3]) }
+  const draftRev = result[2]?.[0]?.draft_rev
+  if (typeof draftRev !== 'string') throw new StorageError('not_found', `intake not found: ${id}`)
+  return { intakesRev: toRev(result[3]), draftRev }
 }

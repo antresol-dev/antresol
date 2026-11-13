@@ -611,6 +611,47 @@ describe.each(FIELD_RING_3_1)('field outline at 3:1: %s', (name) => {
   })
 })
 
+/**
+ * A selected radio (plan 13, item 1): its ring (border-primary) and dot (fill-primary) are --primary, drawn on the
+ * field's fill over the surface the group sits on. Both read at 3:1 (WCAG 1.4.11) on page, card, list and sheet.
+ * Liquid dark's primary was the accent at 86 % over the dark wallpaper: too dark to see on the grey glass.
+ */
+function radioProblems(t: StyleTokens): string[] {
+  const primary = parseColor0(t.primary)
+  const fieldFill = parseColor0(t.field)
+  if (!primary) return [`primary ${t.primary} is not a colour`]
+  const page = backdrops(`${t.winBg}, ${t.page}`, [WHITE])
+  const problems: string[] = []
+  for (const [name, bgs] of [
+    ['page', page],
+    ['card', backdrops(t.card, page)],
+    ['list', backdrops(t.list, page)],
+    ['sheet', backdrops(t.sheet, page)],
+  ] as const) {
+    for (const b of bgs) {
+      const ring = contrast(over(primary, b), b)
+      if (ring < 3) problems.push(`radio ring ${t.primary} on ${name} = ${ring.toFixed(2)}`)
+      if (fieldFill) {
+        const inside = over(fieldFill, b)
+        const dot = contrast(over(primary, inside), inside)
+        if (dot < 3) problems.push(`radio dot ${t.primary} on field over ${name} = ${dot.toFixed(2)}`)
+      }
+    }
+  }
+  return problems
+}
+// Held to Liquid (the reported case); Linear, Y2K and Neo-brutal have their own owner-approved looks, listed in the plan 13 carry-over.
+const RADIO_3_1: StyleName[] = ['liquid']
+describe.each(RADIO_3_1)('selected radio at 3:1: %s', (name) => {
+  const accents: AccentName[] = STYLES[name].fixedPalette ? [STYLES[name].defaultAccent] : ACCENT_NAMES
+  it.each(MODES.flatMap((mode) => accents.map((accent) => [mode, accent] as const)))('%s, %s', (mode, accent) => {
+    expect(radioProblems(STYLES[name].build(mode, accent))).toEqual([])
+  })
+})
+it('the radio check bites: a dark accent on dark glass fails it', () => {
+  expect(radioProblems({ ...STYLES.liquid.build('dark', 'indigo'), primary: '#2A2F6B' }).length).toBeGreaterThan(0)
+})
+
 describe('fixed palettes ignore the accent they are given', () => {
   it.each(STYLE_NAMES.filter((n) => STYLES[n].fixedPalette))('%s', (name) => {
     const { build, defaultAccent } = STYLES[name]

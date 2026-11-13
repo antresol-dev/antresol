@@ -31,7 +31,7 @@ const at = (i: number): string => `calc(10px + (100% - 20px) * ${i / last})`
 
 <template>
   <div class="grid gap-1">
-    <p class="text-base font-semibold" aria-hidden="true">{{ label(shown) }}</p>
+    <p class="ps-(--field-inset) text-base font-semibold" aria-hidden="true">{{ label(shown) }}</p>
     <div class="relative h-11">
       <div class="pointer-events-none absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-muted" aria-hidden="true">
         <div class="h-full rounded-full bg-primary" :style="{ width: at(index) }" />
@@ -59,7 +59,8 @@ const at = (i: number): string => `calc(10px + (100% - 20px) * ${i / last})`
         @change="onChange"
       >
     </div>
-    <div class="flex justify-between text-xs text-subtle-foreground" aria-hidden="true">
+    <!-- Inset like the field text: the ends then sit under the first and last dots (10 px in). -->
+    <div class="flex justify-between px-(--field-inset) text-xs text-subtle-foreground" aria-hidden="true">
       <span>{{ $t('sync.intervalShortMin') }}</span>
       <span>{{ $t('sync.never') }}</span>
     </div>

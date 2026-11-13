@@ -327,9 +327,19 @@
   :where([data-slot='input'], [data-slot='textarea'], [data-slot='select-trigger'])[aria-invalid='true']:focus-visible {
     outline-color: color-mix(in oklab, var(--destructive) 35%, transparent);
   }
-  /* A field's label starts where its rounded corner straightens out, not at the box's sharp edge. */
+  /* A field's text lines up with the text inside the field (its 12 px padding and 1 px border), clear of the rounded
+     corner: the label above, and the hint and problem lines of the same group (a paragraph next to the label, or a
+     fieldset's legend and paragraphs). The field itself, buttons and sliders keep the full width. */
+  :root {
+    --field-inset: calc(0.75rem + 1px);
+  }
   [data-slot='label']:not(:has([role='radio'], [role='checkbox'], [role='switch'], button)) {
-    padding-inline-start: calc(var(--radius-field) * 0.4);
+    padding-inline-start: var(--field-inset);
+  }
+  :where(div, fieldset):has(> [data-slot='label']) > p,
+  fieldset > legend,
+  fieldset > p {
+    padding-inline-start: var(--field-inset);
   }
 
   /* Everything that can be clicked shows the pointer (spec 4.2); disabled things do not. Zero specificity, so a

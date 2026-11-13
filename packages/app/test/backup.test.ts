@@ -111,8 +111,9 @@ async function demoBackup(): Promise<{ storage: InventoryStorage; file: unknown 
 
 const ACTOR = { device: 'Test · Vitest' }
 
-/** A file whose inventory holds a committed intake (a new item, one line) and a draft (a new item, one line). */
-async function intakesBackup(): Promise<BackupFile> {
+/** A file whose inventory holds a committed intake (a new item, one line) and a draft (a new item, one line);
+ *  `deleteCommitted`: the committed intake's item is then archived and deleted permanently. */
+async function intakesBackup({ deleteCommitted = false } = {}): Promise<BackupFile> {
   const { storage } = await emptyStorage()
   const inv = newId()
   await storage.apply({ type: 'inventory.create', id: inv, name: 'Lab', description: null, currency: 'EUR' }, ACTOR)
@@ -134,6 +135,11 @@ async function intakesBackup(): Promise<BackupFile> {
   const { snapshot, rev } = await storage.loadInventoryWithRev(inv)
   const intake = (await storage.listIntakes(inv)).intakes[0]!
   await storage.apply(buildIntakeCommit(intake, resolveIntake(intake.draft!, snapshot), snapshot, rev), ACTOR)
+  if (deleteCommitted) {
+    const item = intake.draft!.lines[0]!.itemId
+    await storage.apply({ type: 'archive', target: 'item', id: item, archiveId: newId() }, ACTOR)
+    await storage.apply({ type: 'deletePermanently', target: 'item', id: item }, ACTOR)
+  }
   await save(newId(), 'Capacitor')
   return buildBackup({
     exportedAt: '2026-11-13T10:00:00.000Z', app: { schemaVersion: APP_SCHEMA_VERSION }, source: { name: 'Lab', kind: 'dev-pglite' },
@@ -240,7 +246,17 @@ describe('parseBackup: intakes', () => {
     expect(parseBackup(file)).toEqual(file)
   })
 
-  it('refuses a damaged intake, an intake whose status and content disagree, and a line without its movement', async () => {
+  it('reads a file whose committed intake names an item deleted permanently since: the lines keep their names', async () => {
+    const backup = await intakesBackup({ deleteCommitted: true })
+    const file = JSON.parse(JSON.stringify(backup)) as BackupFile
+    const parsed = parseBackup(file)
+    if ('error' in parsed) throw new Error(`refused: ${parsed.reason}`)
+    const entry = parsed.inventories[0]!
+    expect(entry.snapshot.items.map((i) => i.name)).toEqual([])
+    expect(entry.intakes.find((i) => i.lines)!.lines!.map((l) => l.itemName)).toEqual(['Resistor'])
+  })
+
+  it('refuses a damaged intake, an intake whose status and content disagree, and a movement of an unknown intake', async () => {
     const file = JSON.parse(JSON.stringify(await intakesBackup())) as { inventories: { intakes: Rec[]; movements: Rec[] }[] }
     const damaged = (change: (e: { intakes: Rec[]; movements: Rec[] }) => void) => {
       const copy = JSON.parse(JSON.stringify(file)) as typeof file
@@ -250,7 +266,9 @@ describe('parseBackup: intakes', () => {
     expect(damaged((e) => { e.intakes[0]!.header = { shop: 1 } })).toMatchObject({ error: 'format' })
     expect(damaged((e) => { e.intakes.find((i) => i.draft)!.lines = [] })).toMatchObject({ error: 'format' })
     expect(damaged((e) => { delete e.intakes.find((i) => i.draft)!.draftRev })).toMatchObject({ error: 'format' })
-    expect(damaged((e) => { e.movements = e.movements.filter((m) => m.intakeId === null) })).toMatchObject({ error: 'format' })
+    expect(damaged((e) => { e.intakes = e.intakes.filter((i) => i.draft) })).toMatchObject({ error: 'format' })
+    // A committed line without its movement is history (spec §8), not damage.
+    expect(damaged((e) => { e.movements = e.movements.filter((m) => m.intakeId === null) })).not.toHaveProperty('error')
     const extra = damaged((e) => { (e.intakes[0]!.header as Rec).secret = 'postgres://x' })
     expect(JSON.stringify(extra)).not.toContain('postgres://')
   })

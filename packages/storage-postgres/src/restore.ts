@@ -9,7 +9,7 @@ import {
   type RestoreResult,
 } from '@antresol/core'
 import type { PgExecutor } from './executor'
-import { LOCK_REV, REV_BUMP } from './migrator'
+import { INTAKES_REV_KEY, LOCK_REV, REV_BUMP } from './migrator'
 import type { Statement } from './sql'
 
 const CUSTOM_PREFIX = 'custom:'
@@ -268,23 +268,14 @@ export function backupProblems({ snapshot: s, movements, intakes }: InventoryExp
     need(fits(p.position, INT), `photo ${p.id}: position out of range`)
   }
   const intakeIds = has(intakes)
-  const movementIds = has(movements)
   for (const m of movements) {
     need(bucket(m.itemId, m.variantId), `movement ${m.id}`)
     need(m.intakeId === null || intakeIds.has(m.intakeId), `movement ${m.id}: intake`)
   }
-  for (const k of intakes) {
-    need(k.inventoryId === s.inventory.id, `intake ${k.id}: inventory`)
-    // A draft's references to attributes and units are not checked: deleting one leaves the draft's lines marked, not
-    // gone (the restore writes jsonb, which has no foreign keys).
-    const fresh = new Set(k.draft?.newItems.map((n) => n.id))
-    for (const n of k.draft?.newItems ?? []) need(n.folderId === null || folders.has(n.folderId), `intake ${k.id}: new item folder`)
-    for (const l of k.draft?.lines ?? []) need(items.has(l.itemId) || fresh.has(l.itemId), `intake ${k.id}: line ${l.id} item`)
-    for (const l of k.lines ?? []) {
-      need(bucket(l.itemId, l.variantId), `intake ${k.id}: line ${l.lineId}`)
-      need(movementIds.has(l.movementId), `intake ${k.id}: line ${l.lineId} movement`)
-    }
-  }
+  // An intake's draft and lines are not checked against the rest: they are jsonb, with no foreign keys. A committed
+  // line is history, kept with its saved names when its item, variant or movement is deleted (spec §8); a draft line
+  // whose item, folder, attribute or unit is gone is marked when the draft is opened, not lost.
+  for (const k of intakes) need(k.inventoryId === s.inventory.id, `intake ${k.id}: inventory`)
   return problems
 }
 
@@ -473,6 +464,14 @@ function isNotEmptyRefusal(e: unknown): boolean {
   return (e as { code?: unknown }).code === RESTORE_NOT_EMPTY_SQLSTATE && e.message.includes(RESTORE_NOT_EMPTY_MESSAGE)
 }
 
+/** A new intakes revision, in each batch that writes intakes: devices drop what they keep of the intakes list, as after
+ *  any other intake write. */
+const INTAKES_REV_BUMP: Statement = {
+  text: `insert into antresol_meta (key, value) values ('${INTAKES_REV_KEY}', gen_random_uuid()::text)
+  on conflict (key) do update set value = excluded.value`,
+  params: [],
+}
+
 interface Batch {
   inserts: { table: string; statement: Statement }[]
   rows: number
@@ -510,7 +509,8 @@ function plan(
 /**
  * InventoryStorage.restore (see there). Each batch is one transaction: the revision lock first (writes and migrations
  * queue on it, as with apply), then `options.guard` (the storage's schema check, AN003), in the first batch of a same-ids
- * restore the empty-source check, the inserts, the revision bump. `batchRows`: tests use small batches.
+ * restore the empty-source check, the inserts, the intakes revision bump (when it writes intakes), the revision bump.
+ * `batchRows`: tests use small batches.
  */
 export async function restoreBackup(
   exec: PgExecutor,
@@ -547,7 +547,8 @@ export async function restoreBackup(
     const guard = [...(options.guard ? [options.guard] : []), ...empty]
     let results: Record<string, unknown>[][]
     try {
-      results = await exec.batch([LOCK_REV, ...guard, ...batch.inserts.map((i) => i.statement), REV_BUMP])
+      const intakes = batch.inserts.some((i) => i.table === 'intakes') ? [INTAKES_REV_BUMP] : []
+      results = await exec.batch([LOCK_REV, ...guard, ...batch.inserts.map((i) => i.statement), ...intakes, REV_BUMP])
     } catch (e) {
       if (empty.length && isNotEmptyRefusal(e)) {
         throw new StorageError('not_empty', 'a restore with the same ids goes only into a source without inventories')

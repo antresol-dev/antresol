@@ -342,20 +342,77 @@ describe('restore', () => {
     expect((await target.listInventories()).inventories).toEqual([])
   })
 
-  it('refuses a committed intake line that names a movement outside the backup, and a movement of an unknown intake', async () => {
+  it('refuses a movement of an intake outside the backup; an intake\'s lines and draft are history and not checked', async () => {
     const source = await makeStorage()
     await seedRich(source)
     const entry = (await exported(source)).inventories[0]!
     const k = entry.intakes.find((i) => i.lines)!
-    const lostMovement = { ...entry, movements: entry.movements.filter((m) => m.id !== k.lines![0]!.movementId) }
-    expect(backupProblems(lostMovement).join()).toMatch(/movement/)
     const orphan = { ...entry, intakes: entry.intakes.filter((i) => i.id !== k.id) }
     expect(backupProblems(orphan).join()).toMatch(/intake/)
+    await expect(restoreBackup(await makeExecutor(), { inventories: [orphan] }, 'new-ids', newId())).rejects.toMatchObject({ code: 'failed' })
+    // A committed line whose movement, item or variant is gone, and a draft line or new item whose item or folder is gone:
+    // jsonb without foreign keys (spec §8: the line shows its saved name; a draft line is marked, not lost).
+    const lostMovement = { ...entry, movements: entry.movements.filter((m) => m.id !== k.lines![0]!.movementId) }
+    expect(backupProblems(lostMovement)).toEqual([])
     const draft = entry.intakes.find((i) => i.draft)!
-    const strayLine = { ...draft, draft: { ...draft.draft!, lines: [{ ...draft.draft!.lines[0]!, itemId: newId() }] } }
-    expect(backupProblems({ ...entry, intakes: [strayLine] }).join()).toMatch(/item/)
+    const strayLine = {
+      ...draft,
+      draft: {
+        newItems: draft.draft!.newItems.map((n) => ({ ...n, folderId: newId() })),
+        lines: [...draft.draft!.lines, { ...draft.draft!.lines[0]!, id: newId(), itemId: newId() }],
+      },
+    }
+    const strayCommitted = { ...k, lines: k.lines!.map((l) => ({ ...l, itemId: newId(), variantId: newId() })) }
+    expect(backupProblems({ ...entry, intakes: [strayLine, strayCommitted] })).toEqual([])
     expect(backupProblems(entry)).toEqual([])
-    await expect(restoreBackup(await makeExecutor(), { inventories: [lostMovement] }, 'new-ids', newId())).rejects.toMatchObject({ code: 'failed' })
+  })
+
+  it('restores, in both modes, an inventory whose committed intake names an item deleted permanently since', async () => {
+    const source = await makeStorage()
+    const inv = await seedRich(source)
+    const committed = (await source.listIntakes(inv)).intakes.find((i) => i.lines)!
+    const capacitor = committed.lines!.find((l) => l.itemName === 'Capacitor')!.itemId
+    const resistor = committed.lines!.find((l) => l.itemName === 'Resistor')!.itemId
+    for (const item of [capacitor, resistor]) {
+      await source.apply({ type: 'archive', target: 'item', id: item, archiveId: newId() }, TEST_ACTOR)
+      await source.apply({ type: 'deletePermanently', target: 'item', id: item }, TEST_ACTOR)
+    }
+    const backup = await exported(source)
+    const entry = backup.inventories[0]!
+    expect(entry.snapshot.items.some((i) => i.id === capacitor || i.id === resistor)).toBe(false)
+    // The draft still names the deleted resistor.
+    expect(entry.intakes.find((i) => i.draft)!.draft!.lines.some((l) => l.itemId === resistor)).toBe(true)
+    expect(backupProblems(entry)).toEqual([])
+
+    const target = await makeStorage()
+    await target.restore(backup, 'same-ids', newId())
+    const same = (await target.listIntakes(inv)).intakes
+    expect(same).toEqual((await source.listIntakes(inv)).intakes)
+    expect(same.find((i) => i.id === committed.id)!.lines).toEqual(committed.lines)
+
+    const runId = newId()
+    const [copy] = (await source.restore(backup, 'new-ids', runId)).inventoryIds
+    const restored = (await source.listIntakes(copy!)).intakes.find((i) => i.lines)!
+    expect(restored.lines!.map((l) => l.itemName)).toEqual(committed.lines!.map((l) => l.itemName))
+    expect(restored.lines!.map((l) => l.itemId)).toEqual(committed.lines!.map((l) => uuidV5(l.itemId, runId)))
+  })
+
+  it('renews the intakes revision when it writes intakes, so caches of the intakes list drop', async () => {
+    const source = await makeStorage()
+    await seedRich(source)
+    const backup = await exported(source)
+    const target = await makeStorage()
+    const before = await target.intakesRev()
+    await target.restore(backup, 'same-ids', newId())
+    const afterSame = await target.intakesRev()
+    expect(afterSame).not.toBe(before)
+    await target.restore(backup, 'new-ids', newId())
+    expect(await target.intakesRev()).not.toBe(afterSame)
+    // A file without intakes leaves it.
+    const plain = { inventories: backup.inventories.map((e) => ({ ...e, intakes: [], movements: e.movements.filter((m) => !m.intakeId) })) }
+    const settled = await target.intakesRev()
+    await target.restore(plain, 'new-ids', newId())
+    expect(await target.intakesRev()).toBe(settled)
   })
 
   it('renameIntakeIds renames every id inside a draft and a committed intake', async () => {

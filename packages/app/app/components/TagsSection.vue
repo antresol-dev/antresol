@@ -88,7 +88,7 @@ async function remove(): Promise<void> {
 
 <template>
   <section class="grid min-w-0 gap-2" aria-labelledby="dictionaries-tags">
-    <div class="flex min-h-11 items-center justify-between gap-2 px-1">
+    <div class="flex min-h-11 items-center justify-between gap-2">
       <h2 id="dictionaries-tags" class="text-[17px] font-bold tracking-[-0.01em] text-foreground">{{ $t('dictionaries.tags') }}</h2>
       <!-- Thinner than the default raised button (R(3,7), 40 px): it must not outweigh the section's heading. -->
       <Button variant="ghost" class="raised-sm h-10" :disabled="locked" @click="open({ kind: 'create' })">
@@ -112,7 +112,7 @@ async function remove(): Promise<void> {
         />
       </li>
     </ul>
-    <p v-else class="px-1 text-sm text-muted-foreground">{{ $t('dictionaries.noTags') }}</p>
+    <p v-else class="text-sm text-muted-foreground">{{ $t('dictionaries.noTags') }}</p>
 
     <AppSheet
       v-model:open="formOpen"
@@ -132,7 +132,7 @@ async function remove(): Promise<void> {
             class="h-11"
           />
         </div>
-        <p id="tag-form-error" role="alert" class="text-sm text-destructive">
+        <p id="tag-form-error" role="alert" class="field-text text-sm text-destructive">
           <template v-if="errorKey && formOpen">{{ $t(errorKey) }}</template>
         </p>
         <Button type="submit" class="h-11 rounded-field" :disabled="locked || !state.snapshot">

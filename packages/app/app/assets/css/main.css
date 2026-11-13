@@ -338,7 +338,8 @@
   }
   :where(div, fieldset):has(> [data-slot='label']) > p,
   fieldset > legend,
-  fieldset > p {
+  fieldset:has(> legend) > p,
+  .field-text {
     padding-inline-start: var(--field-inset);
   }
 

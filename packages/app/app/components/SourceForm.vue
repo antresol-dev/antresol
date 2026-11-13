@@ -337,16 +337,16 @@ async function save(): Promise<void> {
       {{ $t(checking ? 'sourceForm.checking' : 'sourceForm.check') }}
     </Button>
 
-    <div v-if="resultKey && probe?.ok && !unusable" role="status" class="grid gap-1 text-sm">
+    <div v-if="resultKey && probe?.ok && !unusable" role="status" class="field-text grid gap-1 text-sm">
       <p>{{ $t(resultKey) }}</p>
     </div>
     <!-- A database the source cannot use, or a failed check, is a problem: announced at once. -->
-    <div v-else-if="resultKey" role="alert" class="grid gap-1 text-sm text-destructive">
+    <div v-else-if="resultKey" role="alert" class="field-text grid gap-1 text-sm text-destructive">
       <p>{{ $t(resultKey) }}</p>
     </div>
-    <p v-if="checkError" role="alert" class="text-sm text-destructive">{{ $t(checkError) }}</p>
+    <p v-if="checkError" role="alert" class="field-text text-sm text-destructive">{{ $t(checkError) }}</p>
 
-    <p v-if="saveError" role="alert" class="text-sm text-destructive">{{ $t(saveError) }}</p>
+    <p v-if="saveError" role="alert" class="field-text text-sm text-destructive">{{ $t(saveError) }}</p>
 
     <Button v-if="saveKey" type="button" class="h-11 rounded-field" :disabled="saving" @click="save">
       {{ $t(saving ? 'sourceForm.saving' : saveKey) }}

@@ -163,7 +163,7 @@ function select(key: string): void {
       </h2>
       <RowMenu class="size-11" :label="$t('item.variantsTitle')" :button-label="$t('axes.menu')" :actions="actions" @select="select" />
     </div>
-    <p v-if="errorKey && !addOpen" role="alert" class="px-1 text-sm text-destructive">{{ $t(errorKey) }}</p>
+    <p v-if="errorKey && !addOpen" role="alert" class="text-sm text-destructive">{{ $t(errorKey) }}</p>
 
     <AppSheet v-model:open="addSheetOpen" :title="$t('axes.addTitle')" :description="$t('axes.addHint')" :locked="addLocked">
       <div class="mt-3.5 grid gap-3.5">
@@ -180,7 +180,7 @@ function select(key: string): void {
           </Select>
         </div>
         <AttributeForm v-if="creating" v-model:busy="formBusy" :attribute="null" @done="(id) => (choice = id)" />
-        <p v-else role="alert" class="text-sm text-destructive">
+        <p v-else role="alert" class="field-text text-sm text-destructive">
           <template v-if="errorKey">{{ $t(errorKey) }}</template>
         </p>
       </div>

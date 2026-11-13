@@ -87,7 +87,7 @@ async function submit(): Promise<void> {
         :disabled="busy"
         @update:error="(key) => (fieldErrors[a.id] = key)"
       />
-      <p v-if="fieldErrors[a.id]" role="alert" class="text-sm text-destructive">{{ $t(fieldErrors[a.id]!) }}</p>
+      <p v-if="fieldErrors[a.id]" role="alert" class="field-text text-sm text-destructive">{{ $t(fieldErrors[a.id]!) }}</p>
     </div>
     <div class="grid gap-1.5">
       <Label for="variant-description">
@@ -96,7 +96,7 @@ async function submit(): Promise<void> {
       </Label>
       <Input id="variant-description" v-model="description" autocomplete="off" class="h-11" />
     </div>
-    <p v-if="clash" role="alert" class="flex flex-wrap items-center justify-between gap-2 text-sm text-destructive">
+    <p v-if="clash" role="alert" class="field-text flex flex-wrap items-center justify-between gap-2 text-sm text-destructive">
       {{ $t(clash.archived ? 'variantForm.inArchive' : 'variantForm.exists') }}
       <Button
         v-if="clash.archived && clash.archiveId"
@@ -110,7 +110,7 @@ async function submit(): Promise<void> {
         {{ $t('variantForm.restore') }}
       </Button>
     </p>
-    <p id="variant-form-error" role="alert" class="text-sm text-destructive">
+    <p id="variant-form-error" role="alert" class="field-text text-sm text-destructive">
       <template v-if="errorKey">{{ $t(errorKey) }}</template>
     </p>
     <Button type="submit" class="h-11 rounded-field" :disabled="!canSubmit">

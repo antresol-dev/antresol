@@ -31,3 +31,22 @@ export function folderPath(s: InventorySnapshot, folderId: Id): Folder[] {
 export function isInSubtree(s: InventorySnapshot, ancestorId: Id, folderId: Id): boolean {
   return folderPath(s, folderId).some((f) => f.id === ancestorId)
 }
+
+/** True if the folder or one of its ancestors is archived. A missing folder counts as not archived. */
+export function folderArchived(s: InventorySnapshot, id: Id | null): boolean {
+  const seen = new Set<Id>()
+  let cur = id
+  while (cur !== null && !seen.has(cur)) {
+    seen.add(cur)
+    const f: Folder | undefined = s.folders.find((x) => x.id === cur)
+    if (!f) return false
+    if (f.archivedAt !== null) return true
+    cur = f.parentId
+  }
+  return false
+}
+
+/** True if the item is archived itself or lies in an archived folder. */
+export function itemArchived(s: InventorySnapshot, i: Item): boolean {
+  return i.archivedAt !== null || folderArchived(s, i.folderId)
+}

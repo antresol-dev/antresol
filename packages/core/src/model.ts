@@ -105,6 +105,8 @@ export interface Movement {
   sourceUrl: string | null
   note: string | null
   transferId: Id | null
+  /** The intake whose commit made this receipt; null for every other movement. */
+  intakeId: Id | null
   createdAt: string
   createdBy: string
 }

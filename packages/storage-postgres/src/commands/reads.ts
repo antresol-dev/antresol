@@ -194,6 +194,7 @@ export function affectedReads(c: Command): AffectedReads | null {
     case 'tag.delete':
     case 'attribute.delete':
     case 'unit.delete':
+    case 'intake.commit': // its own reads come with its statements (task 2)
       return null
   }
 }

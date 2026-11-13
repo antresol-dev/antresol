@@ -90,6 +90,7 @@ export const movement = (id: string, variantId: string | null, over: Partial<Mov
   sourceUrl: null,
   note: null,
   transferId: null,
+  intakeId: null,
   createdAt: '2026-03-01T00:00:00Z',
   createdBy: 'test',
   ...over,

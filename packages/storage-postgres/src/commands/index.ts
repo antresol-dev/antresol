@@ -63,5 +63,7 @@ export function toStatements(c: Command, actor: Actor): Statement[] {
     case 'restore':
     case 'deletePermanently':
       return archiveStatements(c, actor)
+    case 'intake.commit':
+      throw new Error('intake.commit: task 2')
   }
 }

@@ -557,9 +557,19 @@ const GENERATORS: Record<Command['type'], Generator> = {
       }),
     }),
   },
+  // Its SQL comes with task 2 of the intakes plan, and its generator with it.
+  'intake.commit': {
+    weight: 0,
+    ready: () => false,
+    build: () => {
+      throw new Error('intake.commit: task 2')
+    },
+  },
 }
 
 const COMMAND_TYPES = Object.keys(GENERATORS) as Command['type'][]
+/** Command types whose generator is still to come: never ready, so never applied. */
+const NOT_GENERATED_YET: Command['type'][] = ['intake.commit']
 
 /** The command type of a step: a weighted choice among the generators that have something to work on. */
 function chooseType(s: Snap, n: number): Command['type'] {
@@ -744,7 +754,7 @@ describe('patch property', () => {
       // run cut short before a failure fails too, instead of passing with fewer than 200 runs.
       { numRuns: 200, plugins: [fc.interruptAfterTimeLimit(120_000, { failOnInterrupt: true })] },
     )
-    expect(COMMAND_TYPES.filter((t) => !applied.has(t)), 'command types no run applied').toEqual([])
+    expect(COMMAND_TYPES.filter((t) => !applied.has(t) && !NOT_GENERATED_YET.includes(t)), 'command types no run applied').toEqual([])
     expect(refusedByDatabase, 'valid commands the database refused').toEqual([])
     expect(refusedStale.filter((m) => !/foreign key/.test(m)), 'stale commands refused for another reason').toEqual([])
     expect([...conflicts.keys()].filter((t) => t !== 'variant.setValues'), 'commands refused as stale').toEqual([])

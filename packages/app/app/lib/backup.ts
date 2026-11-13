@@ -203,13 +203,16 @@ const SHAPES = {
   movement: {
     id: uuid, seq: int, itemId: uuid, variantId: nullable(uuid),
     kind: oneOf('receipt', 'usage', 'return', 'adjustment', 'transfer'), quantity, totalPrice: nullable(int),
-    sourceUrl: nullable(str), note: nullable(str), transferId: nullable(uuid), createdAt: time, createdBy: str,
+    sourceUrl: nullable(str), note: nullable(str), transferId: nullable(uuid), intakeId: nullable(uuid), createdAt: time,
+    createdBy: str,
   },
 } satisfies Record<string, Shape>
 
 /** Fields newer than schema 3 (`pinned`: schema 4; `lastCountedAt`: Plan 8), absent from older files. */
 const ATTRIBUTE_DEFAULTS = { pinned: false }
 const STOCK_DEFAULTS = { lastCountedAt: null }
+/** `intakeId`: schema 5 (intakes), absent from older files. */
+const MOVEMENT_DEFAULTS = { intakeId: null }
 
 function inventoryExport(value: unknown): InventoryExport | null {
   if (!isRecord(value) || !isRecord(value.snapshot)) return null
@@ -227,7 +230,7 @@ function inventoryExport(value: unknown): InventoryExport | null {
     photos: records(s.photos, SHAPES.photo),
     stock: records(s.stock, SHAPES.stock, STOCK_DEFAULTS),
   }
-  const movements = records<Movement>(value.movements, SHAPES.movement)
+  const movements = records<Movement>(value.movements, SHAPES.movement, MOVEMENT_DEFAULTS)
   if (movements === null || Object.values(snapshot).some((part) => part === null)) return null
   return { snapshot: snapshot as unknown as InventorySnapshot, movements }
 }

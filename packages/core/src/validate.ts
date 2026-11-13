@@ -1,12 +1,13 @@
 import type { Command } from './commands'
 import type { Id } from './ids'
+import { snapshotAfterIntake } from './intakes'
 import { CURRENCIES } from './money'
 import type { Archivable, Attribute, AttributeKind, Folder, InventorySnapshot, Item, ItemAttribute, Variant } from './model'
 import { isCanonicalNumber } from './numbers'
 import { bucketStock } from './stock'
 import { cmpQ, parseQuantity, type Quantity } from './quantity'
 import { customUnitKey, resolveUnit, SI_PREFIXES } from './units'
-import { isInSubtree } from './tree'
+import { folderArchived, isInSubtree, itemArchived } from './tree'
 import { axisRemovalPreview, duplicateOf, duplicatesAfter, itemAxes, sameAxisValue, type VariantValuesRow } from './variants'
 
 export const DOMAIN_ERROR_CODES = [
@@ -96,6 +97,22 @@ export function normalizeCommand(c: Command): Command {
       ...(v.initialReceipt ? { initialReceipt: { ...v.initialReceipt, quantity: canon(v.initialReceipt.quantity) } } : {}),
     }))
   }
+  if (c.type === 'intake.commit') {
+    out.header = {
+      shop: desc(c.header.shop) ?? null,
+      orderNumber: desc(c.header.orderNumber) ?? null,
+      purchasedOn: c.header.purchasedOn.trim(),
+      note: desc(c.header.note) ?? null,
+    }
+    out.newItems = c.newItems.map((n) => ({
+      ...n,
+      name: n.name.trim(),
+      attributes: n.attributes.map((x) => ({ ...x, value: desc(x.value) ?? null })),
+    }))
+    out.newVariants = c.newVariants.map((v) => ({ ...v, values: v.values.map((x) => ({ ...x, value: x.value.trim() })) }))
+    out.receipts = c.receipts.map((r) => ({ ...r, quantity: canon(r.quantity) }))
+    out.lines = c.lines.map((l) => ({ ...l, quantity: canon(l.quantity) }))
+  }
   if (c.type === 'variant.setValues') {
     out.rows = c.rows.map((r) => ({ ...r, values: r.values.map((x) => ({ ...x, value: desc(x.value) ?? null })) }))
   }
@@ -141,19 +158,6 @@ function checkPrefixes(p: number[] | undefined) {
   if (p?.some((x) => !Number.isInteger(x) || !Object.hasOwn(SI_PREFIXES, x))) fail('invalid_option')
 }
 
-function folderArchived(s: Snap, id: Id | null): boolean {
-  const seen = new Set<Id>()
-  let cur = id
-  while (cur !== null && !seen.has(cur)) {
-    seen.add(cur)
-    const f: Folder | undefined = s.folders.find((x) => x.id === cur)
-    if (!f) return false
-    if (f.archivedAt !== null) return true
-    cur = f.parentId
-  }
-  return false
-}
-const itemArchived = (s: Snap, i: Item) => i.archivedAt !== null || folderArchived(s, i.folderId)
 const variantArchived = (s: Snap, v: Variant) => {
   if (v.archivedAt !== null) return true
   const i = s.items.find((x) => x.id === v.itemId)
@@ -295,6 +299,104 @@ function checkVariantValues(s: Snap, itemId: Id, rows: VariantValuesRow[]) {
     }
   }
   if (duplicatesAfter(s, itemId, rows).length > 0) fail('duplicate_variant')
+}
+
+const DATE = /^(\d{4})-(\d{2})-(\d{2})$/
+/** A calendar date as YYYY-MM-DD. */
+function checkDate(d: string) {
+  const m = DATE.exec(d)
+  const t = m ? new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))) : null
+  if (!t || t.toISOString().slice(0, 10) !== d) fail('invalid_option')
+}
+
+type IntakeCommit = Extract<Command, { type: 'intake.commit' }>
+
+/** Fails invalid_option when an id comes twice. */
+function onceEach(ids: Id[]) {
+  if (new Set(ids).size !== ids.length) fail('invalid_option')
+}
+
+/** New items of intake.commit: as item.create, plus their attributes (axes in distinct positions with no value, shared
+ *  values fitting the kind). An item the copy holds already is this command's own, landed before (a retry). */
+function checkIntakeItems(s: Snap, c: IntakeCommit) {
+  onceEach(c.newItems.map((n) => n.id))
+  for (const n of c.newItems) {
+    if (s.items.some((i) => i.id === n.id)) continue
+    checkName(n.name)
+    activeFolder(s, n.folderId)
+    if (!resolveUnit(n.unitKey, s.units)) fail('not_found')
+    onceEach(n.attributes.map((x) => x.attributeId))
+    const positions = new Set<number>()
+    for (const x of n.attributes) {
+      const a = needAttribute(s, x.attributeId)
+      if (x.axisPosition === null) {
+        checkValue(a, x.value)
+        continue
+      }
+      if (!Number.isInteger(x.axisPosition) || x.axisPosition < 0 || positions.has(x.axisPosition) || x.value !== null) {
+        fail('invalid_option')
+      }
+      positions.add(x.axisPosition)
+    }
+  }
+}
+
+/** Photos of intake.commit, against the copy after the commit: each on an active bucket, a replaced photo the variant's,
+ *  and no variant with more than one photo once the command is applied. A photo the copy holds already is this
+ *  command's own (a retry). */
+function checkIntakePhotos(s: Snap, after: Snap, photos: IntakeCommit['photos']) {
+  const ids = photos.map((p) => p.id)
+  onceEach(ids)
+  const replaced = new Set<Id>()
+  for (const p of photos) {
+    activeBucket(after, p.itemId, p.variantId)
+    const existing = s.photos.find((x) => x.id === p.id)
+    if (existing) {
+      if (existing.itemId !== p.itemId || existing.variantId !== p.variantId) fail('invalid_option')
+      continue
+    }
+    if (p.replaces === undefined) continue
+    if (p.variantId === null) fail('invalid_option')
+    if (p.replaces !== null) {
+      if (!s.photos.some((x) => x.id === p.replaces && x.variantId === p.variantId)) fail('not_found')
+      replaced.add(p.replaces)
+    }
+  }
+  const own = new Set(ids)
+  for (const variantId of new Set(photos.map((p) => p.variantId))) {
+    if (variantId === null) continue
+    const kept = s.photos.filter((x) => x.variantId === variantId && !replaced.has(x.id) && !own.has(x.id)).length
+    if (kept + photos.filter((p) => p.variantId === variantId).length > 1) fail('invalid_option')
+  }
+}
+
+/** intake.commit: every id it names is in the copy or made by the command itself; values, quantities, prices, links and
+ *  photos by the rules of the commands that make them one at a time (item.create, variant.createMany, stock.receive,
+ *  photo.add and photo.replace). Rows already made by this very command pass (a retry after an unknown outcome). */
+function checkIntakeCommit(s: Snap, c: IntakeCommit) {
+  needInventory(s, c.inventoryId)
+  checkDate(c.header.purchasedOn)
+  checkIntakeItems(s, c)
+
+  const withItems = snapshotAfterIntake(s, { ...c, newVariants: [], unarchiveVariants: [] })
+  onceEach(c.newVariants.map((v) => v.id))
+  const byItem = new Map<Id, IntakeCommit['newVariants']>()
+  for (const v of c.newVariants) byItem.set(v.itemId, [...(byItem.get(v.itemId) ?? []), v])
+  for (const [itemId, variants] of byItem) {
+    activeItem(withItems, itemId)
+    checkNewVariants(withItems, itemId, variants)
+  }
+  for (const id of c.unarchiveVariants) activeItem(s, needVariant(s, id).itemId)
+
+  const after = snapshotAfterIntake(s, c)
+  onceEach(c.receipts.map((r) => r.movementId))
+  for (const r of c.receipts) {
+    activeBucket(after, r.itemId, r.variantId)
+    checkPositive(r.quantity)
+    checkPrice(r.totalPrice)
+    checkUrl(r.sourceUrl)
+  }
+  checkIntakePhotos(s, after, c.photos)
 }
 
 function check(c: Command, s: Snap | null): void {
@@ -521,6 +623,9 @@ function check(c: Command, s: Snap | null): void {
         const own = s.photos.filter((p) => p.itemId === c.itemId).length
         if (new Set(c.orderedIds).size !== c.orderedIds.length || c.orderedIds.length !== own) fail('invalid_option')
       }
+      return
+    case 'intake.commit':
+      checkIntakeCommit(s, c)
       return
     case 'archive':
       targetOf(s, c.target, c.id)

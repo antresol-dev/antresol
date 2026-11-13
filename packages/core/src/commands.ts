@@ -1,4 +1,5 @@
 import type { Id } from './ids'
+import type { CommittedLine, IntakeHeader } from './intakes'
 import type { AttributeKind } from './model'
 import type { Quantity } from './quantity'
 
@@ -102,6 +103,30 @@ export type Command =
   | { type: 'photo.replace'; variantId: Id; id: Id; itemId: Id; replaces: Id | null; provider: string; fileId: string; url: string }
   | { type: 'photo.remove'; id: Id }
   | { type: 'photo.reorder'; itemId: Id; orderedIds: Id[] }
+  /** Commits an intake draft in one write (spec 2026-11-13 intakes §7): new items before their variants, archived
+   *  variants back from the archive, photos, one `receipt` per line marked with the intake, and the intake row becomes
+   *  committed with `lines` and `header`. `baseRev`: the source revision the draft was resolved against; storage refuses
+   *  a stale one, except that a retry of an intake already committed writes nothing. `axisPosition`: null for a shared
+   *  attribute. `replaces`: undefined adds the photo; otherwise as photo.replace. */
+  | {
+      type: 'intake.commit'
+      intakeId: Id
+      inventoryId: Id
+      baseRev: string
+      header: IntakeHeader
+      newItems: {
+        id: Id
+        folderId: Id | null
+        name: string
+        unitKey: string
+        attributes: { attributeId: Id; value: string | null; axisPosition: number | null }[]
+      }[]
+      newVariants: { id: Id; itemId: Id; values: { attributeId: Id; value: string }[] }[]
+      unarchiveVariants: Id[]
+      receipts: { movementId: Id; itemId: Id; variantId: Id | null; quantity: Quantity; totalPrice: number | null; sourceUrl: string | null }[]
+      photos: { id: Id; itemId: Id; variantId: Id | null; replaces: Id | null | undefined; provider: string; fileId: string; url: string }[]
+      lines: CommittedLine[]
+    }
   | { type: 'archive'; target: 'inventory' | 'folder' | 'item' | 'variant'; id: Id; archiveId: Id }
   | { type: 'restore'; archiveId: Id }
   | { type: 'deletePermanently'; target: 'inventory' | 'folder' | 'item' | 'variant'; id: Id }

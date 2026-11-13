@@ -161,6 +161,7 @@ export const toMovement = (r: Row): Movement => ({
   sourceUrl: (r.source_url as string | null) ?? null,
   note: (r.note as string | null) ?? null,
   transferId: (r.transfer_id as string | null) ?? null,
+  intakeId: null, // movements.intake_id comes with the intakes table (task 2)
   createdAt: toIso(r.created_at),
   createdBy: r.created_by as string,
 })

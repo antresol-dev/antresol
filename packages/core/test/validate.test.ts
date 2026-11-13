@@ -672,3 +672,133 @@ describe('Plan 9 commands', () => {
     })
   })
 })
+
+describe('intake.commit', () => {
+  type IntakeCommit = Extract<Command, { type: 'intake.commit' }>
+  const photo = (id: string, itemId: string, variantId: string | null) => ({
+    id, itemId, variantId, provider: 'uploadcare', fileId: id, url: `https://x/${id}`, position: 0, createdAt: '', createdBy: '',
+  })
+  const receipt = (itemId: string, variantId: string | null, n: string, over: Partial<IntakeCommit['receipts'][number]> = {}) => ({
+    movementId: `m${n}`, itemId, variantId, quantity: '5', totalPrice: null, sourceUrl: null, ...over,
+  })
+  /** A new item NEW (axis Resistance, shared Package) with variant n1, plus a receipt to r1k of the electronics copy. */
+  const commit = (over: Partial<IntakeCommit> = {}): Command => ({
+    type: 'intake.commit',
+    intakeId: 'in1',
+    inventoryId: 'inv',
+    baseRev: 'rev',
+    header: { shop: 'LCSC', orderNumber: null, purchasedOn: '2026-11-12', note: null },
+    newItems: [
+      {
+        id: 'NEW', folderId: null, name: 'Resistor 0.6 W', unitKey: 'pcs',
+        attributes: [
+          { attributeId: 'res', value: null, axisPosition: 0 },
+          { attributeId: 'pkg', value: 'THT', axisPosition: null },
+        ],
+      },
+    ],
+    newVariants: [{ id: 'n1', itemId: 'NEW', values: [{ attributeId: 'res', value: '1000' }] }],
+    unarchiveVariants: [],
+    receipts: [receipt('NEW', 'n1', '1'), receipt('R', 'r1k', '2')],
+    photos: [],
+    lines: [],
+    ...over,
+  })
+  const ec = (c: Command, s = electronics()) => validateCommand(normalizeCommand(c), s)?.code ?? null
+
+  it('a variant on an item of newItems passes', () => {
+    expect(ec(commit())).toBeNull()
+  })
+
+  it('every reference exists or is created by the command', () => {
+    const base = commit() as IntakeCommit
+    const attrs = [{ attributeId: 'nope', value: 'x', axisPosition: null }]
+    expect(ec(commit({ newItems: [{ ...base.newItems[0]!, attributes: [...base.newItems[0]!.attributes, ...attrs] }] }))).toBe('not_found')
+    expect(ec(commit({ newItems: [{ ...base.newItems[0]!, folderId: 'zz' }] }))).toBe('not_found')
+    expect(ec(commit({ receipts: [receipt('ZZ', null, '1')] }))).toBe('not_found')
+    expect(ec(commit({ receipts: [receipt('R', 'zz', '1')] }))).toBe('not_found')
+    expect(ec(commit({ newVariants: [{ id: 'n1', itemId: 'ZZ', values: [{ attributeId: 'res', value: '1000' }] }] }))).toBe('not_found')
+    expect(ec(commit({ unarchiveVariants: ['zz'] }))).toBe('not_found')
+  })
+
+  it('the purchase date is a calendar date', () => {
+    const header = (purchasedOn: string) => ({ shop: null, orderNumber: null, purchasedOn, note: null })
+    expect(ec(commit({ header: header('2026-02-30') }))).toBe('invalid_option')
+    expect(ec(commit({ header: header('12.11.2026') }))).toBe('invalid_option')
+    expect(ec(commit({ header: header('2028-02-29') }))).toBeNull()
+  })
+
+  it('new variants are no duplicates of each other or of existing ones', () => {
+    const v = (id: string, value: string) => ({ id, itemId: 'NEW', values: [{ attributeId: 'res', value }] })
+    expect(ec(commit({ newVariants: [v('n1', '1000'), v('n2', '1000')], receipts: [] }))).toBe('duplicate_variant')
+    expect(ec(commit({ newVariants: [{ id: 'n1', itemId: 'R', values: [{ attributeId: 'res', value: '10000' }] }], receipts: [] }))).toBe(
+      'duplicate_variant',
+    )
+    // An archived variant with these values is unarchived, not created again.
+    expect(ec(commit({ newVariants: [{ id: 'n1', itemId: 'R', values: [{ attributeId: 'res', value: '4700' }] }], receipts: [] }))).toBe(
+      'duplicate_variant',
+    )
+  })
+
+  it('axis and shared values follow the attribute', () => {
+    const base = commit() as IntakeCommit
+    expect(ec(commit({ newVariants: [{ id: 'n1', itemId: 'NEW', values: [{ attributeId: 'res', value: '4k7' }] }] }))).toBe('invalid_number')
+    expect(ec(commit({ newVariants: [{ id: 'n1', itemId: 'NEW', values: [] }] }))).toBe('axis_value_required')
+    const pkg = { attributeId: 'pkg', value: 'DIP', axisPosition: null }
+    expect(ec(commit({ newItems: [{ ...base.newItems[0]!, attributes: [base.newItems[0]!.attributes[0]!, pkg] }] }))).toBe('invalid_option')
+  })
+
+  it('a variant has at most one photo after the command', () => {
+    const add = (id: string, variantId: string | null, replaces?: string | null) => ({
+      id, itemId: variantId === null ? 'M' : 'R', variantId, replaces, provider: 'uploadcare', fileId: id, url: `https://x/${id}`,
+    })
+    expect(ec(commit({ photos: [add('p1', 'r1k'), add('p2', 'r1k')] }))).toBe('invalid_option')
+    const s = { ...electronics(), photos: [photo('old', 'R', 'r1k')] }
+    expect(ec(commit({ photos: [add('p1', 'r1k')] }), s)).toBe('invalid_option')
+    expect(ec(commit({ photos: [add('p1', 'r1k', 'old')] }), s)).toBeNull()
+    expect(ec(commit({ photos: [add('p1', 'r1k', 'gone')] }), s)).toBe('not_found')
+    expect(ec(commit({ photos: [add('p1', null), add('p2', null)] }))).toBeNull()
+  })
+
+  it('quantity, price and url follow stock.receive', () => {
+    expect(ec(commit({ receipts: [receipt('R', 'r1k', '1', { quantity: '0' })] }))).toBe('invalid_quantity')
+    expect(ec(commit({ receipts: [receipt('R', 'r1k', '1', { totalPrice: 1.5 })] }))).toBe('invalid_price')
+    expect(ec(commit({ receipts: [receipt('R', 'r1k', '1', { sourceUrl: 'ftp://x' })] }))).toBe('invalid_url')
+    expect(ec(commit({ receipts: [receipt('R', 'r4k7', '1')] }))).toBe('archived')
+    expect(ec(commit({ receipts: [receipt('R', 'r4k7', '1')], unarchiveVariants: ['r4k7'] }))).toBeNull()
+  })
+
+  it('a retry against a copy that already holds what the command made passes', () => {
+    const s = electronics()
+    const after = {
+      ...s,
+      items: [...s.items, item('NEW', 'Resistor 0.6 W')],
+      itemAttributes: [...s.itemAttributes, axis('NEW', 'res', 0), shared('NEW', 'pkg', 'THT')],
+      variants: s.variants.map((v) => (v.id === 'r4k7' ? { ...v, archivedAt: null, archiveId: null } : v)).concat(variant('n1', 'NEW')),
+      variantAttributeValues: [...s.variantAttributeValues, value('n1', 'res', '1000')],
+      photos: [photo('p1', 'NEW', 'n1')],
+    }
+    const c = commit({
+      unarchiveVariants: ['r4k7'],
+      photos: [{ id: 'p1', itemId: 'NEW', variantId: 'n1', replaces: undefined, provider: 'uploadcare', fileId: 'p1', url: 'https://x/p1' }],
+    })
+    expect(ec(c, s)).toBeNull()
+    expect(ec(c, after)).toBeNull()
+  })
+
+  it('normalizeCommand canonicalises quantities and trims values', () => {
+    const base = commit() as IntakeCommit
+    const n = normalizeCommand(
+      commit({
+        header: { shop: '  LCSC ', orderNumber: ' ', purchasedOn: '2026-11-12', note: '' },
+        newItems: [{ ...base.newItems[0]!, name: ' Resistor ', attributes: [{ attributeId: 'pkg', value: ' THT ', axisPosition: null }] }],
+        newVariants: [{ id: 'n1', itemId: 'NEW', values: [{ attributeId: 'res', value: ' 1000 ' }] }],
+        receipts: [receipt('R', 'r1k', '1', { quantity: '05.50' })],
+      }),
+    ) as IntakeCommit
+    expect(n.header).toEqual({ shop: 'LCSC', orderNumber: null, purchasedOn: '2026-11-12', note: null })
+    expect(n.newItems[0]).toMatchObject({ name: 'Resistor', attributes: [{ attributeId: 'pkg', value: 'THT', axisPosition: null }] })
+    expect(n.newVariants[0]!.values).toEqual([{ attributeId: 'res', value: '1000' }])
+    expect(n.receipts[0]!.quantity).toBe('5.5')
+  })
+})

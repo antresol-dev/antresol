@@ -239,6 +239,7 @@ describe('journalRows', () => {
       sourceUrl,
       note: null,
       transferId: null,
+      intakeId: null,
       createdAt: '2026-11-10T00:00:00Z',
       createdBy: 'Test',
     })

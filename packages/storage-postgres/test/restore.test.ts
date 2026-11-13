@@ -256,7 +256,7 @@ describe('restore', () => {
     const wire = entry.snapshot.items.find((i) => i.name === 'Wire')!.id
     const extra: Movement[] = Array.from({ length: 1200 }, (_, i) => ({
       id: newId(), seq: 1000 + i, itemId: wire, variantId: null, kind: 'receipt', quantity: q('1'), totalPrice: null,
-      sourceUrl: null, note: null, transferId: null, createdAt: '2026-11-11T10:00:00.000Z', createdBy: 'Test',
+      sourceUrl: null, note: null, transferId: null, intakeId: null, createdAt: '2026-11-11T10:00:00.000Z', createdBy: 'Test',
     }))
     const big = { inventories: [{ ...entry, movements: [...entry.movements, ...extra] }] }
 

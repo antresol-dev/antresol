@@ -808,6 +808,8 @@
     "attributes": "Attributes",
     "units": "Units",
     "itemCount": "{count} item | {count} items",
+    "usedByTitle": "Used by {count} item | Used by {count} items",
+    "usedByEmpty": "Not used by any item yet",
     "noTags": "No tags yet.",
     "noAttributes": "No attributes yet.",
     "edit": "Edit",

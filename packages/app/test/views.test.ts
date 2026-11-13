@@ -23,6 +23,7 @@ import {
   piecesLabel,
   moveTargets,
   searchRows,
+  usedBy,
   type Crumb,
 } from '../app/lib/views'
 
@@ -476,5 +477,54 @@ describe('list rows', () => {
     // Search rows carry the same chips, a variant hit its item's.
     const [row] = searchRows(s, [{ itemId: tl, variantId: null }])
     expect(row!.pinned).toEqual(['DIP-8', 'B4'])
+  })
+})
+
+describe('usedBy', () => {
+  const item = (id: string, name: string, over: Record<string, unknown> = {}) =>
+    ({ id, name, folderId: null, tagIds: [], unitKey: 'pcs', archivedAt: null, ...over }) as unknown as InventorySnapshot['items'][number]
+  const base = { photos: [], folders: [], variants: [], itemAttributes: [], variantAttributeValues: [] }
+  const make = (over: Record<string, unknown>) => ({ ...snap, ...base, ...over }) as InventorySnapshot
+
+  it('lists active items with the tag, by name, skipping archived ones', () => {
+    const s = make({
+      items: [item('b', 'beta', { tagIds: ['t1'] }), item('a', 'Alpha', { tagIds: ['t1', 't2'] }), item('c', 'Gamma'), item('d', 'Dead', { tagIds: ['t1'], archivedAt: 'x' })],
+    })
+    expect(usedBy(s, { kind: 'tag', id: 't1' }).map((r) => r.name)).toEqual(['Alpha', 'beta'])
+    expect(usedBy(s, { kind: 'tag', id: 'none' })).toEqual([])
+  })
+
+  it('matches the unit key', () => {
+    const s = make({ items: [item('a', 'Wire', { unitKey: 'm' }), item('b', 'Chip')] })
+    expect(usedBy(s, { kind: 'unit', id: 'm' }).map((r) => r.name)).toEqual(['Wire'])
+  })
+
+  it('finds an attribute on the item, on a variant, or as an axis, once per item', () => {
+    const s = make({
+      items: [item('a', 'A'), item('b', 'B'), item('c', 'C'), item('d', 'D'), item('e', 'E')],
+      variants: [{ id: 'v1', itemId: 'b', archivedAt: null }],
+      itemAttributes: [
+        { itemId: 'a', attributeId: 'x', value: '1', axisPosition: null },
+        { itemId: 'a', attributeId: 'x', value: '2', axisPosition: 0 },
+        { itemId: 'c', attributeId: 'x', value: null, axisPosition: 0 },
+        { itemId: 'd', attributeId: 'x', value: ' ', axisPosition: null },
+        { itemId: 'e', attributeId: 'y', value: '1', axisPosition: null },
+      ],
+      variantAttributeValues: [{ variantId: 'v1', attributeId: 'x', value: '5' }],
+    })
+    expect(usedBy(s, { kind: 'attribute', id: 'x' }).map((r) => r.name)).toEqual(['A', 'B', 'C'])
+  })
+
+  it('gives the folder path, the folder name and drops items under an archived folder', () => {
+    const folder = (id: string, name: string, parentId: string | null, archivedAt: string | null = null) => ({ id, name, parentId, archivedAt })
+    const s = make({
+      folders: [folder('f1', 'ICs', null), folder('f2', 'Op-amps', 'f1'), folder('f3', 'Old', null, 'x')],
+      items: [item('a', 'TL072', { folderId: 'f2', tagIds: ['t'] }), item('b', 'Root', { tagIds: ['t'] }), item('c', 'Gone', { folderId: 'f3', tagIds: ['t'] })],
+    })
+    const rows = usedBy(s, { kind: 'tag', id: 't' })
+    expect(rows.map((r) => [r.name, r.path, r.folderName])).toEqual([
+      ['Root', '', null],
+      ['TL072', 'ICs / Op-amps', 'Op-amps'],
+    ])
   })
 })

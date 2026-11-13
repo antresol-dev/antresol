@@ -140,11 +140,11 @@ onBeforeUnmount(stop)
 
 <template>
   <AppSheet v-model:open="open" :title="$t('pairing.receiveTitle')">
-    <div class="grid gap-3.5 pt-2">
+    <div class="grid gap-4 pt-2">
       <p class="text-sm text-subtle-foreground">{{ $t('pairing.receiveStep1') }}</p>
       <div class="flex items-center justify-center gap-2">
         <output
-          class="rounded-field bg-chip px-4 py-2 font-mono text-3xl font-bold tracking-[0.12em] tabular-nums select-all"
+          class="rounded-field bg-chip px-4 py-2 font-mono text-2xl font-semibold tracking-[0.12em] tabular-nums select-all"
           :aria-label="$t('pairing.codeLabel', { code: pairing ? [...pairing.code].join(' ') : '' })"
         >{{ shownCode }}</output>
         <Button type="button" variant="ghost" size="icon" class="size-11" :aria-label="$t('pairing.newCode')" @click="newCode">

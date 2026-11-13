@@ -34,7 +34,7 @@ const at = (i: number): string => `calc(10px + (100% - 20px) * ${i / last})`
 <template>
   <div class="grid gap-1">
     <!-- Pulled down into the empty top of the 44 px touch area, close to the track. -->
-    <p class="-mb-2.5 text-center text-sm font-semibold" aria-hidden="true">{{ label(shown) }}</p>
+    <p class="-mb-2 text-center text-sm font-semibold" aria-hidden="true">{{ label(shown) }}</p>
     <div class="relative h-11">
       <div class="pointer-events-none absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-muted" aria-hidden="true">
         <div class="h-full rounded-full bg-primary" :style="{ width: at(index) }" />

@@ -111,8 +111,8 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <form class="grid gap-3.5" novalidate @submit.prevent="submit">
-    <div class="grid gap-1.5">
+  <form class="grid gap-4" novalidate @submit.prevent="submit">
+    <div class="grid gap-2">
       <Label for="inventory-name">{{ $t('form.name') }}</Label>
       <Input
         id="inventory-name"
@@ -124,7 +124,7 @@ async function submit(): Promise<void> {
       />
     </div>
 
-    <div v-if="mode === 'create'" class="grid gap-1.5">
+    <div v-if="mode === 'create'" class="grid gap-2">
       <Label for="inventory-currency">{{ $t('inventoryForm.currency') }}</Label>
       <Combobox v-model="currency" v-model:open="comboOpen" ignore-filter>
         <ComboboxAnchor class="w-full">
@@ -155,7 +155,7 @@ async function submit(): Promise<void> {
       </Combobox>
     </div>
 
-    <div v-if="mode === 'create' && sources.length > 1" class="grid gap-1.5">
+    <div v-if="mode === 'create' && sources.length > 1" class="grid gap-2">
       <Label for="inventory-source">{{ $t('inventoryForm.source') }}</Label>
       <Select v-model="sourceId">
         <SelectTrigger id="inventory-source" class="h-11 w-full">
@@ -169,7 +169,7 @@ async function submit(): Promise<void> {
       </Select>
     </div>
 
-    <div v-if="mode === 'rename'" class="grid gap-1.5">
+    <div v-if="mode === 'rename'" class="grid gap-2">
       <Label for="inventory-description">
         {{ $t('form.description') }}
         <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>

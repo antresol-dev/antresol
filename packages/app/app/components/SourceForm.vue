@@ -139,13 +139,13 @@ async function save(): Promise<void> {
 </script>
 
 <template>
-  <form class="grid gap-3.5" novalidate @submit.prevent="check">
-    <div class="grid gap-1.5">
+  <form class="grid gap-4" novalidate @submit.prevent="check">
+    <div class="grid gap-2">
       <Label for="source-name">{{ $t('sourceForm.name') }}</Label>
       <Input id="source-name" v-model="name" autocomplete="off" class="h-11" />
     </div>
 
-    <div class="grid gap-1.5">
+    <div class="grid gap-2">
       <Label for="source-cs">{{ $t('sourceForm.connectionString') }}</Label>
       <div class="flex gap-2">
         <Input
@@ -178,7 +178,7 @@ async function save(): Promise<void> {
       </p>
     </div>
 
-    <fieldset class="grid gap-1.5">
+    <fieldset class="grid gap-2">
       <legend class="mb-1.5 text-sm font-medium">{{ $t('sourceForm.photoStore') }}</legend>
       <div class="flex gap-2" role="group" :aria-label="$t('sourceForm.photoStore')">
         <Button
@@ -196,7 +196,7 @@ async function save(): Promise<void> {
     </fieldset>
 
     <template v-if="photoStore === 'uploadcare'">
-    <div class="grid gap-1.5">
+    <div class="grid gap-2">
       <Label for="source-key">
         {{ $t('sourceForm.uploadcareKey') }}
         <span class="font-normal text-subtle-foreground">· {{ $t('sourceForm.optional') }}</span>
@@ -213,7 +213,7 @@ async function save(): Promise<void> {
       </p>
     </div>
 
-    <div class="grid gap-1.5">
+    <div class="grid gap-2">
       <Label for="source-cdn">
         {{ $t('sourceForm.uploadcareCdn') }}
         <span class="font-normal text-subtle-foreground">· {{ $t('sourceForm.optional') }}</span>
@@ -239,7 +239,7 @@ async function save(): Promise<void> {
     </template>
 
     <template v-else-if="photoStore === 'cloudinary'">
-      <div class="grid gap-1.5">
+      <div class="grid gap-2">
         <Label for="source-cloud">
           {{ $t('sourceForm.cloudinaryCloud') }}
           <span class="font-normal text-subtle-foreground">· {{ $t('sourceForm.optional') }}</span>
@@ -255,7 +255,7 @@ async function save(): Promise<void> {
           class="h-11"
         />
       </div>
-      <div class="grid gap-1.5">
+      <div class="grid gap-2">
         <Label for="source-preset">
           {{ $t('sourceForm.cloudinaryPreset') }}
           <span class="font-normal text-subtle-foreground">· {{ $t('sourceForm.optional') }}</span>
@@ -285,7 +285,7 @@ async function save(): Promise<void> {
       </div>
     </template>
 
-    <div v-else-if="photoStore === 'imgbb'" class="grid gap-1.5">
+    <div v-else-if="photoStore === 'imgbb'" class="grid gap-2">
       <Label for="source-imgbb">
         {{ $t('sourceForm.imgbbApiKey') }}
         <span class="font-normal text-subtle-foreground">· {{ $t('sourceForm.optional') }}</span>
@@ -309,7 +309,7 @@ async function save(): Promise<void> {
       </p>
     </div>
 
-    <div v-else-if="photoStore === 'imgur'" class="grid gap-1.5">
+    <div v-else-if="photoStore === 'imgur'" class="grid gap-2">
       <Label for="source-imgur">
         {{ $t('sourceForm.imgurClientId') }}
         <span class="font-normal text-subtle-foreground">· {{ $t('sourceForm.optional') }}</span>

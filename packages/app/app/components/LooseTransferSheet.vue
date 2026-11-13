@@ -71,7 +71,7 @@ async function move(): Promise<void> {
     :summary="summary"
     :title="$t('looseTransfer.title', { number: shown?.offer.number ?? '', unit: shown?.offer.unit ?? '' })"
   >
-    <div class="mt-3.5 grid gap-3.5">
+    <div class="mt-4 grid gap-4">
       <RadioGroup
         v-model="toId"
         :aria-label="$t('looseTransfer.choose')"
@@ -80,7 +80,7 @@ async function move(): Promise<void> {
         <label
           v-for="v in shown?.variants ?? []"
           :key="v.id"
-          class="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-chip px-3 text-sm transition-colors duration-150 hover:bg-hover"
+          class="flex min-h-11 cursor-pointer items-center gap-3 rounded-chip px-3 text-sm transition-colors duration-(--dur-fast) hover:bg-hover"
         >
           <RadioGroupItem :value="v.id" />
           <span class="min-w-0 flex-1 truncate">{{ v.name }}</span>

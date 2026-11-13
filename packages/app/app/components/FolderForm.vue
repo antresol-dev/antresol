@@ -85,8 +85,8 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <form class="grid gap-3.5" novalidate @submit.prevent="submit">
-    <div class="grid gap-1.5">
+  <form class="grid gap-4" novalidate @submit.prevent="submit">
+    <div class="grid gap-2">
       <Label for="folder-name">{{ $t('form.name') }}</Label>
       <Input
         id="folder-name"
@@ -97,22 +97,22 @@ async function submit(): Promise<void> {
         class="h-11"
       />
     </div>
-    <div v-if="mode === 'create'" class="grid gap-1.5">
+    <div v-if="mode === 'create'" class="grid gap-2">
       <Label for="folder-parent">{{ $t('folderForm.parent') }}</Label>
       <button
         id="folder-parent"
         type="button"
         :aria-expanded="picking"
-        class="flex h-11 w-full min-w-0 items-center gap-2 rounded-field border border-input bg-field px-3 text-left text-sm transition-colors duration-150 hover:bg-hover"
+        class="flex h-11 w-full min-w-0 items-center gap-2 rounded-field border border-input bg-field px-3 text-left text-sm transition-colors duration-(--dur-fast) hover:bg-hover"
         @click="picking = !picking"
       >
         <RootMark />
         <span class="min-w-0 flex-1 truncate">{{ parentPath }}</span>
-        <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-150 motion-reduce:transition-none" :class="picking ? 'rotate-180' : ''" aria-hidden="true" />
+        <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-(--dur-fast) motion-reduce:transition-none" :class="picking ? 'rotate-180' : ''" aria-hidden="true" />
       </button>
       <FolderPickerList v-if="picking" :choices="choices" :aria-label="$t('folderForm.chooseParent')" @select="pick" />
     </div>
-    <div class="grid gap-1.5">
+    <div class="grid gap-2">
       <Label for="folder-description">
         {{ $t('form.description') }}
         <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>

@@ -98,7 +98,8 @@ export interface SourceReceipt {
 
 /** The outcome of InventoryStorage.saveIntakeDraft. */
 export type SaveIntakeDraftResult =
-  | { saved: true; draftRev: string; intakesRev: string }
+  /** `previousIntakesRev`: the intakes revision just before this write (see InventoryStorage.listIntakes). */
+  | { saved: true; draftRev: string; intakesRev: string; previousIntakesRev: string }
   /** The draft changed in the database since `baseDraftRev` (another device saved it): `current` is what it holds. */
   | { saved: false; reason: 'changed'; current: Intake }
   /** The intake is committed: a draft is never written over it. */
@@ -142,7 +143,9 @@ export interface InventoryStorage {
   apply(command: Command, actor: Actor): Promise<ApplyResult>
   /** The inventory's intakes, drafts and committed, the most recently changed first, and the intakes revision read in
    *  the same snapshot. The intakes revision changes with every write of an intake (drafts, headers, intake.commit) and
-   *  only with those; `rev` does not change for drafts or headers. Opaque, like `listInventories`' rev. */
+   *  only with those; `rev` does not change for drafts or headers. Opaque, like `listInventories`' rev. The intake writes
+   *  below return it as it was just before them (`previousIntakesRev`) and after (`intakesRev`): a list read at the
+   *  former, with the write put in, is the list at the latter. */
   listIntakes(inventoryId: Id): Promise<{ intakes: Intake[]; intakesRev: string }>
   intakesRev(): Promise<string>
   /** Writes the draft whole, without changing `rev`, unless the intake is committed (`committed`) or its `draftRev` is
@@ -155,8 +158,8 @@ export interface InventoryStorage {
     options?: { force?: boolean },
   ): Promise<SaveIntakeDraftResult>
   /** Deletes a draft; a committed intake is never deleted (nothing happens). */
-  deleteIntakeDraft(id: Id): Promise<{ intakesRev: string }>
+  deleteIntakeDraft(id: Id): Promise<{ intakesRev: string; previousIntakesRev: string }>
   /** The header of a draft or of a committed intake; `rev` does not change. `draftRev`: the row's new one, the base for
    *  this device's next saveIntakeDraft. Rejects with `not_found` when there is no such intake. */
-  updateIntakeHeader(id: Id, header: IntakeHeader, actor: Actor): Promise<{ intakesRev: string; draftRev: string }>
+  updateIntakeHeader(id: Id, header: IntakeHeader, actor: Actor): Promise<{ intakesRev: string; draftRev: string; previousIntakesRev: string }>
 }

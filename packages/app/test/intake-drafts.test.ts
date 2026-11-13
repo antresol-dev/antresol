@@ -1,4 +1,4 @@
-import { newId, StorageError, type Id, type Intake, type IntakeDraftContent, type SaveIntakeDraftResult } from '@antresol/core'
+import { newId, StorageError, type DraftLine, type Id, type Intake, type IntakeDraftContent, type SaveIntakeDraftResult } from '@antresol/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryDeviceDb, type DeviceDb } from '../app/lib/device-db'
 import {
@@ -22,7 +22,7 @@ type Save = (
 /** A save that answers like the database: every write gets a new draftRev. */
 function savingDb() {
   let n = 0
-  return vi.fn<Save>(async () => ({ saved: true, draftRev: `rev-${++n}`, intakesRev: `irev-${n}` }))
+  return vi.fn<Save>(async () => ({ saved: true, draftRev: `rev-${++n}`, intakesRev: `irev-${n}`, previousIntakesRev: `irev-${n - 1}` }))
 }
 
 function setup(save: ReturnType<typeof vi.fn<Save>> = savingDb(), db: DeviceDb = createMemoryDeviceDb()) {
@@ -342,6 +342,117 @@ describe('intake draft sync', () => {
     } finally {
       process.off('unhandledRejection', onUnhandled)
     }
+  })
+})
+
+/** A save against one row kept like the database keeps it: refused as `changed` when the row's draftRev is not the base
+ *  (a draft written again over a deleted row is not modelled), its jsonb read back with keys in another order.
+ *  `loseNext`: the next write lands, then its answer is lost (the call rejects `unavailable`). */
+function rowDb(id: Id) {
+  let n = 0
+  const state = { row: null as Intake | null, loseNext: false }
+  const reordered = <T,>(value: T): T => JSON.parse(JSON.stringify(value, (_k, v: unknown) =>
+    v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).reverse()) : v)) as T
+  const save = vi.fn<Save>(async (_id, header, content, baseDraftRev, force) => {
+    if (state.row && state.row.draftRev !== baseDraftRev && !force) return { saved: false, reason: 'changed', current: state.row }
+    const draftRev = `db-${++n}`
+    state.row = { ...theirs(id, '', draftRev), header: reordered(header), draft: reordered(content) }
+    if (state.loseNext) {
+      state.loseNext = false
+      throw new StorageError('unavailable', 'the answer was lost')
+    }
+    return { saved: true, draftRev, intakesRev: `irev-${n}`, previousIntakesRev: `irev-${n - 1}` }
+  })
+  return { state, save }
+}
+
+const lineOf = (name: string): DraftLine => ({
+  id: name, itemId: `item-${name}`, axisValues: [], quantity: '1', totalPrice: null, sourceUrl: null, photo: null,
+  ids: { movementId: `m-${name}`, variantId: `v-${name}`, photoId: `p-${name}` },
+})
+const withLines = (...names: string[]) => (d: LocalIntakeDraft): LocalIntakeDraft => ({
+  ...d, content: { newItems: [], lines: names.map(lineOf) },
+})
+
+describe('intake draft sync: rows older than the copy, answers lost', () => {
+  it('a row the copy has moved on from (a stale list offline, a read answered after the save) never replaces it', async () => {
+    const id = newId()
+    const { save, state } = rowDb(id)
+    const { sync, db } = setup(save)
+    await sync.load(id, null)
+    await sync.edit(id, withLines('A'))
+    await sync.flush(id)
+    const listedWithA = state.row!
+    await sync.edit(id, withLines('A', 'B'))
+    await sync.flush(id)
+    expect(await db.getIntakeDraft(SRC, id)).toMatchObject({ dirty: false, baseDraftRev: 'db-2' })
+
+    // Offline, the list kept from before answers with the row holding only A.
+    const opened = await sync.load(id, listedWithA)
+    expect(opened.content.lines.map((l) => l.id)).toEqual(['A', 'B'])
+    expect(opened).toMatchObject({ dirty: false, baseDraftRev: 'db-2', changedElsewhere: null })
+    // Edited offline, then the same stale row again: no false conflict either.
+    await sync.edit(id, withLines('A', 'B', 'C'))
+    const reopened = await sync.load(id, listedWithA)
+    expect(reopened).toMatchObject({ dirty: true, changedElsewhere: null })
+    await sync.flush(id)
+    expect(save.mock.calls.at(-1)![3]).toBe('db-2')
+    expect(await db.getIntakeDraft(SRC, id)).toMatchObject({ dirty: false, changedElsewhere: null, baseDraftRev: 'db-3' })
+    expect(state.row!.draft!.lines.map((l) => l.id)).toEqual(['A', 'B', 'C'])
+  })
+
+  it('a newer row still replaces a clean copy', async () => {
+    const id = newId()
+    const { sync } = setup()
+    await sync.load(id, theirs(id, 'Old', 'r1'))
+    expect(await sync.load(id, theirs(id, 'Newer', 'r2'))).toMatchObject({ baseDraftRev: 'r2', header: { shop: 'Newer' } })
+  })
+
+  it('a write whose answer was lost: the next flush finds it in the database and takes it as saved', async () => {
+    const id = newId()
+    const { save, state } = rowDb(id)
+    const { sync, db } = setup(save)
+    await sync.load(id, null)
+    await sync.edit(id, withLines('A'))
+    state.loseNext = true
+    await sync.flush(id)
+    expect(await db.getIntakeDraft(SRC, id)).toMatchObject({ dirty: true, baseDraftRev: null })
+    await sync.flush()
+    expect(await db.getIntakeDraft(SRC, id)).toMatchObject({ dirty: false, changedElsewhere: null, baseDraftRev: 'db-1' })
+    expect(save).toHaveBeenCalledTimes(2)
+  })
+
+  it('a write whose answer was lost, then more edits: they go out from the revision it made', async () => {
+    const id = newId()
+    const { save, state } = rowDb(id)
+    const { sync, db } = setup(save)
+    await sync.load(id, null)
+    await sync.edit(id, withLines('A'))
+    state.loseNext = true
+    await sync.flush(id)
+    await sync.edit(id, withLines('A', 'B'))
+    await sync.flush(id)
+    expect(await db.getIntakeDraft(SRC, id)).toMatchObject({ dirty: false, changedElsewhere: null, baseDraftRev: 'db-2' })
+    expect(state.row!.draft!.lines.map((l) => l.id)).toEqual(['A', 'B'])
+  })
+
+  it('a write whose answer was lost and the page reloaded: the row that holds the copy as it is loads it as saved', async () => {
+    const id = newId()
+    const { save, state } = rowDb(id)
+    const db = createMemoryDeviceDb()
+    const before = setup(save, db)
+    await before.sync.load(id, null)
+    await before.sync.edit(id, withLines('A'))
+    state.loseNext = true
+    await before.sync.flush(id)
+
+    const after = setup(save, db)
+    const loaded = await after.sync.load(id, state.row)
+    expect(loaded).toMatchObject({ dirty: false, changedElsewhere: null, baseDraftRev: 'db-1' })
+    // Marked as changed elsewhere by an earlier version of the app: cleared the same way.
+    await db.putIntakeDraft(SRC, id, { ...loaded, baseDraftRev: null, dirty: true, changedElsewhere: state.row })
+    expect(await after.sync.load(id, state.row)).toMatchObject({ dirty: false, changedElsewhere: null, baseDraftRev: 'db-1' })
+    expect(save).toHaveBeenCalledTimes(1)
   })
 })
 

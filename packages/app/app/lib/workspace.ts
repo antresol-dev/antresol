@@ -1313,6 +1313,35 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     return listed.intakes
   }
 
+  /**
+   * An own write put into the kept list of its inventory, so the list (offline above all) shows it. The list then
+   * counts as read at the write's intakes revision only when it was read at the one just before the write: otherwise
+   * another device wrote in between, and the next listIntakes reads it again once the source answers.
+   */
+  function keepOwnWrite(
+    ref: InventoryRef,
+    revs: { intakesRev: string; previousIntakesRev: string },
+    change: (intakes: Intake[]) => Intake[],
+  ): void {
+    const key = intakesKey(ref)
+    const kept = intakeLists.get(key)
+    if (!kept) return
+    const current = kept.intakesRev === revs.previousIntakesRev
+    intakeLists.set(key, { intakes: change(kept.intakes), intakesRev: current ? revs.intakesRev : kept.intakesRev })
+  }
+
+  /** The intake's row with an own write of it: put first, as the list orders the most recently changed. */
+  function withOwnRow(intakes: Intake[], id: Id, ref: InventoryRef, write: (row: Intake) => Intake): Intake[] {
+    const at = now().toISOString()
+    const by = state.deviceName
+    const old = intakes.find((i) => i.id === id)
+    const base: Intake = old ?? {
+      id, inventoryId: ref.inventoryId, status: 'draft', header: { shop: null, orderNumber: null, purchasedOn: '', note: null },
+      draft: null, lines: null, draftRev: '', createdAt: at, createdBy: by, updatedAt: at, updatedBy: by, committedAt: null,
+    }
+    return [{ ...write(base), updatedAt: at, updatedBy: by }, ...intakes.filter((i) => i.id !== id)]
+  }
+
   async function listIntakes(): Promise<Intake[]> {
     const cur = state.current
     if (!cur) throw new StorageError('not_found')
@@ -1337,9 +1366,16 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   ): ReturnType<Workspace['saveIntakeDraft']> {
     const cur = state.current
     if (!cur) throw new StorageError('not_found')
+    const ref = { sourceId: cur.sourceId, inventoryId: cur.inventoryId }
     const { sourceId, conn } = draftSource()
     const draft = { id, inventoryId: cur.inventoryId, header, content }
-    return guarded(sourceId, conn, () => conn.storage.saveIntakeDraft(draft, baseDraftRev, { device: state.deviceName }, { force }))
+    const result = await guarded(sourceId, conn, () => conn.storage.saveIntakeDraft(draft, baseDraftRev, { device: state.deviceName }, { force }))
+    if (result.saved) {
+      keepOwnWrite(ref, result, (intakes) =>
+        withOwnRow(intakes, id, ref, (row) => ({ ...row, header, draft: content, draftRev: result.draftRev })),
+      )
+    }
+    return result
   }
 
   const intakeDrafts = createIntakeDraftSync({
@@ -1358,8 +1394,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       // when the source answers, or found in the list again.
       await intakeDrafts.forget(id)
       try {
-        const { sourceId, conn } = draftSource()
-        await guarded(sourceId, conn, () => conn.storage.deleteIntakeDraft(id))
+        await deleteDraftRow(id)
       } catch {
         // Nothing the person asked for depends on it.
       }
@@ -1368,7 +1403,17 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     const { sourceId, conn } = draftSource()
     // The device copy first, with its pending write: nothing sends the draft back after the delete.
     await intakeDrafts.forget(id)
-    await guarded(sourceId, conn, () => conn.storage.deleteIntakeDraft(id))
+    await deleteDraftRow(id, { sourceId, conn })
+  }
+
+  async function deleteDraftRow(id: Id, source: { sourceId: string; conn: SourceConnection } = draftSource()): Promise<void> {
+    const cur = state.current
+    const { sourceId, conn } = source
+    const revs = await guarded(sourceId, conn, () => conn.storage.deleteIntakeDraft(id))
+    if (cur && cur.sourceId === sourceId) {
+      const ref = { sourceId, inventoryId: cur.inventoryId }
+      keepOwnWrite(ref, revs, (intakes) => intakes.filter((i) => !(i.id === id && i.status === 'draft')))
+    }
   }
 
   async function updateIntakeHeader(id: Id, header: IntakeHeader): Promise<void> {
@@ -1386,8 +1431,15 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
       if (copy.dirty) return
       await intakeDrafts.forget(id)
     }
+    const cur = state.current
     const { sourceId, conn } = draftSource()
-    await guarded(sourceId, conn, () => conn.storage.updateIntakeHeader(id, header, { device: state.deviceName }))
+    const result = await guarded(sourceId, conn, () => conn.storage.updateIntakeHeader(id, header, { device: state.deviceName }))
+    if (cur && cur.sourceId === sourceId) {
+      const ref = { sourceId, inventoryId: cur.inventoryId }
+      keepOwnWrite(ref, result, (intakes) =>
+        intakes.some((i) => i.id === id) ? withOwnRow(intakes, id, ref, (row) => ({ ...row, header, draftRev: result.draftRev })) : intakes,
+      )
+    }
   }
 
   /** The sync before a commit. Failing, nothing was sent: `read_only` when the source cannot be reached (writes are

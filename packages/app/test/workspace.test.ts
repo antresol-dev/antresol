@@ -2976,6 +2976,56 @@ describe('workspace intakes', () => {
     })
   })
 
+  it('own saves, deletes and header edits go into the kept list: offline it shows them and opening a draft keeps its lines', async () => {
+    const { h, ws, itemId } = await started()
+    const intakeId = newId()
+    const [a, b] = [line(itemId, '1'), line(itemId, '2')]
+    await ws.intakeDrafts.load(intakeId, null)
+    await ws.intakeDrafts.edit(intakeId, (d) => ({ ...d, header, content: { newItems: [], lines: [a] } }))
+    await ws.intakeDrafts.flush(intakeId)
+    const listedWithA = (await ws.listIntakes()).find((i) => i.id === intakeId)!
+    expect(listedWithA.draft!.lines).toHaveLength(1)
+    await ws.intakeDrafts.edit(intakeId, (d) => ({ ...d, content: { newItems: [], lines: [a, b] } }))
+    await ws.intakeDrafts.flush(intakeId)
+    const gone = newId()
+    await ws.saveIntakeDraft(gone, header, { newItems: [], lines: [] }, null)
+    await ws.listIntakes()
+    await ws.deleteIntakeDraft(gone)
+
+    h.flags.offline = true
+    const listed = await ws.listIntakes()
+    expect(listed.map((i) => i.id)).toEqual([intakeId])
+    const row = listed[0]!
+    expect(row.draft!.lines.map((l) => l.id)).toEqual([a.id, b.id])
+    expect(row.updatedBy).toBe(ws.state.deviceName)
+    const opened = await ws.intakeDrafts.load(intakeId, row)
+    expect(opened).toMatchObject({ dirty: false, changedElsewhere: null })
+    expect(opened.content.lines.map((l) => l.id)).toEqual([a.id, b.id])
+    // The row read before the second save, as an answer that arrives late: the copy keeps both lines.
+    expect((await ws.intakeDrafts.load(intakeId, listedWithA)).content.lines.map((l) => l.id)).toEqual([a.id, b.id])
+
+    h.flags.offline = false
+    await ws.refresh()
+    await ws.intakeDrafts.edit(intakeId, (d) => ({ ...d, header: { ...d.header, note: 'later' } }))
+    await ws.intakeDrafts.flush(intakeId)
+    expect(await h.db.getIntakeDraft('s1', intakeId)).toMatchObject({ dirty: false, changedElsewhere: null })
+    await ws.updateIntakeHeader(intakeId, { ...header, shop: 'Digikey' })
+    h.flags.offline = true
+    expect((await ws.listIntakes())[0]).toMatchObject({ header: { ...header, shop: 'Digikey' } })
+  })
+
+  it('a kept list patched with an own write is read again when another device wrote an intake before it', async () => {
+    const { h, ws, inv, itemId } = await started()
+    const [a, b] = [newId(), newId()]
+    await ws.saveIntakeDraft(a, header, { newItems: [], lines: [line(itemId, '1')] }, null)
+    const listed = await ws.listIntakes()
+    expect(listed.map((i) => i.id)).toEqual([a])
+    const other = await h.direct(CS('one'))
+    await other.saveIntakeDraft({ id: b, inventoryId: inv, header, content: { newItems: [], lines: [] } }, null, { device: 'other' })
+    expect(await ws.saveIntakeDraft(a, { ...header, note: 'x' }, { newItems: [], lines: [] }, listed[0]!.draftRev)).toMatchObject({ saved: true })
+    expect((await ws.listIntakes()).map((i) => i.id).sort()).toEqual([a, b].sort())
+  })
+
   it('a header edit of a draft kept on the device goes with the draft: no false conflict after it', async () => {
     const { ws, itemId } = await started()
     const intakeId = newId()

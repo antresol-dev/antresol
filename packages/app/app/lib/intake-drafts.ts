@@ -37,8 +37,11 @@ export interface IntakeDraftSync {
    *  committed elsewhere, takeTheirs drops the copy and keepMine rejects with `conflict`, the copy left as it is. */
   resolveConflict(id: Id, choice: 'keepMine' | 'takeTheirs'): Promise<void>
   /** The device copy wins while it is dirty (sent now); otherwise the database row, kept on the device as what was
-   *  last seen. Null and no copy: a new empty draft, kept in memory until its first edit. A committed row: a dirty copy
-   *  is kept and marked with it (changedElsewhere); a clean one is dropped and the call rejects with `not_found`.
+   *  last seen. A row older than the copy (a draftRev it has moved on from in this session: a list kept offline, or
+   *  read before a save and answered after it) never replaces it or marks it changed; a row holding the copy's own
+   *  content (a write whose answer was lost) is taken as saved. Null and no copy: a new empty draft, kept in memory
+   *  until its first edit. A committed row: a dirty copy is kept and marked with it (changedElsewhere); a clean one is
+   *  dropped and the call rejects with `not_found`.
    *  `create: false`: an id with no row, no copy and no new draft rejects with `not_found` instead of starting one. */
   load(id: Id, fromDatabase: Intake | null, options?: { create?: boolean }): Promise<LocalIntakeDraft>
   /** The device copy as it is now; null: none. */
@@ -60,6 +63,22 @@ const fromIntake = (intake: Intake): LocalIntakeDraft => ({
   dirty: false,
   changedElsewhere: null,
 })
+
+/** JSON with every object's keys in one order: a draft as the device holds it and as the database's jsonb gives it back
+ *  (keys reordered) compare equal. */
+function canonical(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    v && typeof v === 'object' && !Array.isArray(v)
+      ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+      : v,
+  )
+}
+/** What a write sends of a draft, comparable with a row. */
+const payloadOf = (d: { header: IntakeHeader; content: IntakeDraftContent }): string => canonical({ header: d.header, content: d.content })
+const rowPayload = (row: Intake): string => canonical({ header: row.header, content: row.draft ?? emptyIntakeDraft() })
+
+/** Writes whose answer was lost, remembered per draft: the newest few are enough. */
+const UNANSWERED_KEPT = 5
 
 /** YYYY-MM-DD of the device's own day. */
 function localDay(ms: number): string {
@@ -90,6 +109,26 @@ export function createIntakeDraftSync(deps: {
   const copyLocks = new Map<Id, Promise<unknown>>()
   /** Per draft: database writes, one at a time. */
   const sends = new Map<Id, Promise<unknown>>()
+  /** Per draft: the draftRevs its copy has moved on from in this session (saved over, or replaced by a newer row). A row
+   *  holding one is older than the copy (a list kept from before the source went offline, or read before a save and
+   *  answered after it) and never replaces the copy or marks it changed. A draftRev is never made twice. */
+  const passed = new Map<Id, Set<string>>()
+  /** Per draft: what writes whose answer was lost sent (payloadOf). Such a write may have landed: the database then
+   *  holds one of them under a draftRev this copy does not know, which is this device's own write, not another's. */
+  const unanswered = new Map<Id, string[]>()
+
+  function moveOn(id: Id, from: string | null): void {
+    if (from === null) return
+    const set = passed.get(id) ?? new Set<string>()
+    set.add(from)
+    passed.set(id, set)
+  }
+  const hasPassed = (id: Id, draftRev: string): boolean => passed.get(id)?.has(draftRev) ?? false
+  function rememberUnanswered(id: Id, payload: string): void {
+    unanswered.set(id, [...(unanswered.get(id) ?? []).filter((p) => p !== payload), payload].slice(-UNANSWERED_KEPT))
+  }
+  /** The row holds a write of this device whose answer was lost. */
+  const ownUnanswered = (id: Id, row: Intake): boolean => unanswered.get(id)?.includes(rowPayload(row)) ?? false
 
   const freshKey = (sourceId: string, id: Id): string => `${sourceId}:${id}`
 
@@ -160,30 +199,48 @@ export function createIntakeDraftSync(deps: {
     if (!sent || !sent.dirty || (sent.changedElsewhere && !force)) return
     if (deps.inventoryId() !== sent.inventoryId) return
     const editsBefore = edits.get(id) ?? 0
+    const payload = payloadOf(sent)
     let result: Awaited<ReturnType<typeof save>>
     try {
       result = await save(id, sent.header, sent.content, sent.baseDraftRev, force)
     } catch {
       // Offline or refused: the copy stays dirty and goes out with the next flush (the app calls one when back online).
+      // The write may have landed with its answer lost (a phone suspending the page mid-request): remembered, so the
+      // database holding it is not taken for another device's save.
+      rememberUnanswered(id, payload)
       return
     }
+    // Refused as changed while the database holds this device's own write: this very content (an earlier write of it
+    // landed with its answer lost), or a write whose answer was lost. Taken as saved under the database's draftRev; the
+    // copy stays dirty (and goes out again at once) when the database holds an older write than this one.
+    const landed: { draftRev: string; behind: boolean } | null = result.saved
+      ? { draftRev: result.draftRev, behind: false }
+      : result.reason === 'changed' && (rowPayload(result.current) === payload || ownUnanswered(id, result.current))
+        ? { draftRev: result.current.draftRev, behind: rowPayload(result.current) !== payload }
+        : null
+    if (landed) unanswered.delete(id)
     // Committed on another device: nothing can be saved into it any more. Read before the copy is locked (a network
     // call); the edits stay, marked with it, until the person discards them (takeTheirs).
     const committed = !result.saved && result.reason === 'committed' ? await committedRow(id, sent) : null
-    await withCopy(id, async () => {
+    const again = await withCopy(id, async () => {
       const copy = await db.getIntakeDraft(sourceId, id)
-      if (!copy) return
-      if (result.saved) {
+      if (!copy) return false
+      if (landed) {
         const editedSince = (edits.get(id) ?? 0) !== editsBefore
-        await put(sourceId, id, { ...copy, baseDraftRev: result.draftRev, changedElsewhere: null, dirty: editedSince })
-        if (editedSince && !timers.has(id)) schedule(id)
-      } else if (result.reason === 'changed') {
-        await put(sourceId, id, { ...copy, changedElsewhere: result.current })
-      } else {
+        moveOn(id, copy.baseDraftRev)
+        await put(sourceId, id, { ...copy, baseDraftRev: landed.draftRev, changedElsewhere: null, dirty: editedSince || landed.behind })
+        if (editedSince && !landed.behind && !timers.has(id)) schedule(id)
+        return landed.behind
+      }
+      if (!result.saved && result.reason === 'changed') await put(sourceId, id, { ...copy, changedElsewhere: result.current })
+      else {
         cancel(id)
         await put(sourceId, id, { ...copy, changedElsewhere: committed })
       }
+      return false
     })
+    // Still in this write's turn: the copy goes out from the draftRev its lost write made.
+    if (again) await sendNow(id, false)
   }
 
   async function edit(id: Id, change: (d: LocalIntakeDraft) => LocalIntakeDraft): Promise<LocalIntakeDraft> {
@@ -232,6 +289,7 @@ export function createIntakeDraftSync(deps: {
         return false
       }
       // keepMine: from their revision on; should the forced write fail, a later plain one still sees a third version.
+      moveOn(id, copy.baseDraftRev)
       await put(
         sourceId,
         id,
@@ -260,17 +318,30 @@ export function createIntakeDraftSync(deps: {
         return marked
       }
       if (copy && isCommitted(copy)) return copy
+      // A row this copy has moved on from is older than it: the copy stays as it is.
+      const newer =
+        fromDatabase && (!copy || (fromDatabase.draftRev !== copy.baseDraftRev && !hasPassed(id, fromDatabase.draftRev))) ? fromDatabase : null
       if (copy?.dirty) {
-        const known = [copy.baseDraftRev, copy.changedElsewhere?.draftRev]
-        if (fromDatabase && !known.includes(fromDatabase.draftRev)) {
-          const shown = { ...copy, changedElsewhere: fromDatabase }
+        if (newer && (rowPayload(newer) === payloadOf(copy) || ownUnanswered(id, newer))) {
+          // This device's own write, its answer lost (the page may have been reloaded since): saved under the row's
+          // draftRev, still dirty only when the copy holds more than the row.
+          unanswered.delete(id)
+          moveOn(id, copy.baseDraftRev)
+          const saved = { ...copy, baseDraftRev: newer.draftRev, changedElsewhere: null, dirty: rowPayload(newer) !== payloadOf(copy) }
+          await put(sourceId, id, saved)
+          return saved
+        }
+        if (newer && newer.draftRev !== copy.changedElsewhere?.draftRev) {
+          const shown = { ...copy, changedElsewhere: newer }
           await put(sourceId, id, shown)
           return shown
         }
         return copy
       }
-      if (fromDatabase) {
-        const row = fromIntake(fromDatabase)
+      if (copy && fromDatabase && !newer) return copy
+      if (newer) {
+        moveOn(id, copy?.baseDraftRev ?? null)
+        const row = fromIntake(newer)
         await put(sourceId, id, row)
         return row
       }

@@ -116,6 +116,8 @@ describe('intake drafts', () => {
     const after = await storage.intakesRev()
     expect(after).not.toBe(before)
     expect(saved.intakesRev).toBe(after)
+    // What it was before the write: a device whose list was read at it may keep that list, patched (nothing else came in).
+    expect(saved.previousIntakesRev).toBe(before)
     const listed = await storage.listIntakes(inv)
     expect(listed.intakesRev).toBe(after)
     expect(listed.intakes).toHaveLength(1)
@@ -186,6 +188,7 @@ describe('intake drafts', () => {
 
     const deleted = await w.storage.deleteIntakeDraft(draftId)
     expect(deleted.intakesRev).not.toBe(before)
+    expect(deleted.previousIntakesRev).toBe(before)
     expect(deleted.intakesRev).toBe(await w.storage.intakesRev())
     expect((await w.storage.listIntakes(w.inv)).intakes.map((i) => i.id)).toEqual([committedId])
 
@@ -203,8 +206,10 @@ describe('intake drafts', () => {
     const { rev } = await w.storage.listInventories()
     const header: IntakeHeader = { shop: 'Mouser', orderNumber: null, purchasedOn: '2026-11-01', note: 'late' }
 
+    const before = await w.storage.intakesRev()
     const r = await w.storage.updateIntakeHeader(id, header, { device: 'Other' })
     expect(r.intakesRev).toBe(await w.storage.intakesRev())
+    expect(r.previousIntakesRev).toBe(before)
     const updated = await intakeOf(w.storage, w.inv, id)
     expect(updated).toMatchObject({ header, status: 'committed', lines: committed.lines, draft: null, updatedBy: 'Other' })
     expect(updated.draftRev).not.toBe(committed.draftRev)

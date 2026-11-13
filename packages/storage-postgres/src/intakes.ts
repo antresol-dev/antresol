@@ -10,7 +10,9 @@ import { sql, type Statement } from './sql'
 // inventory for them (spec 2026-11-13 intakes §4).
 
 /** `with <cte>` + a new intakes revision when the CTE `changed` returned a row. One statement: the bump sees what the
- *  write returned, with no read in JS in between (Neon HTTP runs the batch as one transaction). */
+ *  write returned, with no read in JS in between (Neon HTTP runs the batch as one transaction). Also returns the
+ *  intakes revision as it was before (`previous`): the statements of a WITH share one snapshot, so the outer select
+ *  does not see the bump. */
 const bumpIfChanged = (changed: Statement): Statement =>
   sql`with changed as (${changed}),
       bump as (
@@ -18,7 +20,11 @@ const bumpIfChanged = (changed: Statement): Statement =>
         where exists (select 1 from changed)
         on conflict (key) do update set value = excluded.value
       )
-      select (select draft_rev from changed limit 1) as draft_rev`
+      select (select draft_rev from changed limit 1) as draft_rev,
+             (select value from antresol_meta where key = ${INTAKES_REV_KEY}::text) as previous`
+
+/** The intakes revision before the write, from bumpIfChanged's row. */
+const previousOf = (result: Record<string, unknown>[] | undefined): string => toRev([{ value: result?.[0]?.previous ?? undefined }])
 
 /**
  * InventoryStorage.saveIntakeDraft: an upsert by id that writes only when the intake is not committed and either has no
@@ -52,7 +58,7 @@ export async function saveIntakeDraft(
       returning draft_rev::text as draft_rev`
   const result = await exec.batch([LOCK_REV, guard, bumpIfChanged(write), intakesSql(sql`id = ${id}::uuid`), intakesRevStatement])
   const draftRev = result[2]?.[0]?.draft_rev
-  if (typeof draftRev === 'string') return { saved: true, draftRev, intakesRev: toRev(result[4]) }
+  if (typeof draftRev === 'string') return { saved: true, draftRev, intakesRev: toRev(result[4]), previousIntakesRev: previousOf(result[2]) }
   const current = result[3]?.[0]
   // Unreachable: a missing row is always written, and under LOCK_REV no other write can delete it in between.
   if (!current) throw new Error('saveIntakeDraft: nothing written and no row')
@@ -61,10 +67,14 @@ export async function saveIntakeDraft(
 }
 
 /** InventoryStorage.deleteIntakeDraft: drafts only; a committed intake stays. */
-export async function deleteIntakeDraft(exec: PgExecutor, guard: Statement, id: Id): Promise<{ intakesRev: string }> {
+export async function deleteIntakeDraft(
+  exec: PgExecutor,
+  guard: Statement,
+  id: Id,
+): Promise<{ intakesRev: string; previousIntakesRev: string }> {
   const gone = sql`delete from intakes where id = ${id}::uuid and status = 'draft' returning draft_rev::text as draft_rev`
   const result = await exec.batch([LOCK_REV, guard, bumpIfChanged(gone), intakesRevStatement])
-  return { intakesRev: toRev(result[3]) }
+  return { intakesRev: toRev(result[3]), previousIntakesRev: previousOf(result[2]) }
 }
 
 /** InventoryStorage.updateIntakeHeader: a draft's or a committed intake's header; its lines stay as they are. */
@@ -74,7 +84,7 @@ export async function updateIntakeHeader(
   id: Id,
   h: IntakeHeader,
   actor: Actor,
-): Promise<{ intakesRev: string; draftRev: string }> {
+): Promise<{ intakesRev: string; draftRev: string; previousIntakesRev: string }> {
   const update = sql`update intakes
       set shop = ${h.shop}::text, order_number = ${h.orderNumber}::text, purchased_on = ${h.purchasedOn}::text,
           note = ${h.note}::text, draft_rev = gen_random_uuid(), updated_at = now(), updated_by = ${actor.device}::text
@@ -83,5 +93,5 @@ export async function updateIntakeHeader(
   const result = await exec.batch([LOCK_REV, guard, bumpIfChanged(update), intakesRevStatement])
   const draftRev = result[2]?.[0]?.draft_rev
   if (typeof draftRev !== 'string') throw new StorageError('not_found', `intake not found: ${id}`)
-  return { intakesRev: toRev(result[3]), draftRev }
+  return { intakesRev: toRev(result[3]), draftRev, previousIntakesRev: previousOf(result[2]) }
 }

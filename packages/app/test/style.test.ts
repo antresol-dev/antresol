@@ -714,12 +714,12 @@ describe('components and pages', () => {
       expect(css).not.toMatch(/\.concave\b|--well-shadow/)
     })
 
-    it('Tags & fields: section headings 17 px bold in the text colour, thinner "Add …" buttons (raised-sm, 40 px), a divider between sections', () => {
+    it('Tags & fields: section headings 16 px semibold in the text colour, thinner "Add …" buttons (raised-sm, 40 px), a divider between sections', () => {
       for (const name of ['components/TagsSection.vue', 'components/AttributesSection.vue', 'components/UnitsSection.vue']) {
         const heading = nodes(name).find((n) => n.tag === 'h2')
         expect(heading, name).toBeDefined()
         const h = words(classText(heading!))
-        for (const c of ['text-[17px]', 'font-bold', 'text-foreground']) expect(h.has(c), `${name} ${c}`).toBe(true)
+        for (const c of ['text-base', 'font-semibold', 'text-foreground']) expect(h.has(c), `${name} ${c}`).toBe(true)
         const add = nodes(name).filter((n) => n.tag === 'Button' && /\braised-sm\b/.test(classText(n)))
         expect(add.length, name).toBe(1)
         expect(attr(add[0]!, 'variant'), name).toBe('ghost')

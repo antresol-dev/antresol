@@ -105,7 +105,7 @@ const title = computed(() => (view.value === 'record' && intake.value ? intakeTi
       </template>
     </ScreenHeader>
     <ScreenBody>
-      <div v-if="view === 'loading' || (view === 'draft' && !snapshot)" class="grid grid-cols-1 gap-3.5" aria-hidden="true">
+      <div v-if="view === 'loading' || (view === 'draft' && !snapshot)" class="grid grid-cols-1 gap-4" aria-hidden="true">
         <Skeleton class="h-40 rounded-card" />
       </div>
       <template v-else-if="view === 'record' && intake && snapshot">

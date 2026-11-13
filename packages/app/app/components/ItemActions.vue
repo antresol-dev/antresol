@@ -46,7 +46,7 @@ const iconButton = 'size-9'
   </template>
 
   <template v-else>
-    <Button variant="outline" class="h-9 gap-[7px] px-3.5 btn-label" :disabled="locked" @click="run('edit')">
+    <Button variant="outline" class="h-9 gap-2 px-3 btn-label" :disabled="locked" @click="run('edit')">
       <Pencil aria-hidden="true" />
       {{ $t('itemMenu.edit') }}
     </Button>

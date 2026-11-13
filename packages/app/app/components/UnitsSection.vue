@@ -63,7 +63,7 @@ async function remove(): Promise<void> {
 <template>
   <section class="grid min-w-0 gap-2" aria-labelledby="dictionaries-units">
     <div class="flex min-h-11 items-center justify-between gap-2">
-      <h2 id="dictionaries-units" class="text-[17px] font-bold tracking-[-0.01em] text-foreground">{{ $t('dictionaries.units') }}</h2>
+      <h2 id="dictionaries-units" class="text-base font-semibold tracking-[-0.01em] text-foreground">{{ $t('dictionaries.units') }}</h2>
       <!-- Thinner than the default raised button (R(3,7), 40 px): it must not outweigh the section's heading. -->
       <Button variant="ghost" class="raised-sm h-10" :disabled="locked" @click="open({ kind: 'form', unit: null })">
         <Plus class="size-4" aria-hidden="true" />
@@ -74,15 +74,15 @@ async function remove(): Promise<void> {
       <li
         v-for="row in rows"
         :key="row.unit.key"
-        class="relative flex min-h-[62px] items-center gap-3 px-3.5 py-1.5 not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-3.5 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
+        class="relative flex min-h-14 items-center gap-3 px-3 py-1.5 not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
       >
         <span class="flex min-w-0 grow flex-col gap-0.5">
-          <span class="truncate text-[15px] font-bold">{{ row.unit.name }} · {{ row.unit.symbol }}</span>
-          <span v-if="row.unit.prefixPowers.length > 0" class="truncate text-[13px] text-muted-foreground">
+          <span class="truncate text-base font-semibold">{{ row.unit.name }} · {{ row.unit.symbol }}</span>
+          <span v-if="row.unit.prefixPowers.length > 0" class="truncate text-sm text-muted-foreground">
             {{ $t('dictionaries.prefixes', { list: prefixList(row.unit) }) }}
           </span>
         </span>
-        <span class="shrink-0 text-[13px] text-muted-foreground">{{ $t('dictionaries.itemCount', row.itemCount) }}</span>
+        <span class="shrink-0 text-sm text-muted-foreground">{{ $t('dictionaries.itemCount', row.itemCount) }}</span>
         <span v-if="!row.custom" class="shrink-0 rounded-full bg-chip px-2 py-0.5 text-xs font-semibold text-muted-foreground">
           {{ $t('dictionaries.builtIn') }}
         </span>

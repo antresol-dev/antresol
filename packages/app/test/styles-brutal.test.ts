@@ -43,14 +43,13 @@ const MOCKUP = {
     page: 'radial-gradient(rgba(255,255,255,0.09) 1.2px, transparent 1.6px) 0 0 / 22px 22px, #16161A',
     card: '#FF7AB6',
     cardR: '12px',
-    // Plan 12 (F8): the hard shadow black under the cream line, the panels a step lighter (mock-up: cream shadow, #222228).
-    cardSh: 'inset 0 0 0 2px #F6EFDF, 4px 4px 0 #000000',
+    cardSh: 'inset 0 0 0 2px #F6EFDF, 4px 4px 0 #F6EFDF',
     primary: '#FFD23F',
-    pop: '#2A2A31',
+    pop: '#222228',
     popR: '12px',
-    popSh: 'inset 0 0 0 2px #F6EFDF, 5px 5px 0 #000000',
-    list: '#2A2A31',
-    listSh: 'inset 0 0 0 2px #F6EFDF, 4px 4px 0 #000000',
+    popSh: 'inset 0 0 0 2px #F6EFDF, 5px 5px 0 #F6EFDF',
+    list: '#222228',
+    listSh: 'inset 0 0 0 2px #F6EFDF, 4px 4px 0 #F6EFDF',
     hdr: '#16161A',
     hdrSh: 'inset 0 -2px 0 #F6EFDF',
     fg: '#F6EFDF',
@@ -101,8 +100,8 @@ describe.each(MODES)('Neo-brutal equals the mock-up (board S6): %s', (mode) => {
 
   it('controls: lift on the ink line, a pale role colour under the pointer, sink into the shadow when pressed', () => {
     const line = mode === 'dark' ? '#F6EFDF' : '#111111'
-    const shadow = mode === 'dark' ? '#000000' : '#111111'
-    const surf = mode === 'dark' ? '#2A2A31' : '#FFFFFF'
+    const shadow = line
+    const surf = mode === 'dark' ? '#222228' : '#FFFFFF'
     const ring = `inset 0 0 0 2px ${line}`
     expect(t.kinds.btn.n).toEqual({ bg: surf, img: 'none', sh: `${ring}, 4px 4px 0 ${shadow}`, fg: m.fg, tf: 'none' })
     expect(t.kinds.btn.p).toEqual({ bg: '#5B8CFF', img: 'none', sh: `${ring}, 0 0 0 ${shadow}`, fg: '#111111', tf: 'translate(4px, 4px)' })
@@ -159,20 +158,20 @@ describe('Neo-brutal: shades changed for contrast (spec §8), and app surfaces t
   it('dark: a hovered menu item is a dark yellow with light text (on the yellow neither the light red nor the light muted text can read)', () => {
     const t = build('dark', 'blue')
     expect(t.popDanger).toBe('#FF8A8A')
-    expect([t.popHover, t.popHoverFg]).toEqual(['#3f3b32', '#F6EFDF'])
+    expect([t.popHover, t.popHoverFg]).toEqual(['#413b2b', '#F6EFDF'])
   })
 
   it.each(MODES)('%s: sheets, the opaque surface, the neutral chip and row hover are the style\'s panels, not the pink card', (mode) => {
     const t = build(mode, 'blue')
     const dark = mode === 'dark'
     const line = dark ? '#F6EFDF' : '#111111'
-    const shadow = dark ? '#000000' : '#111111'
+    const shadow = line
     expect(t.sheet).toBe(t.list)
     expect(t.sheetLine).toBe(line)
     expect(t.sheetSh).toBe(`inset 0 0 0 1px ${line}, 5px 5px 0 ${shadow}`)
-    expect(t.surface).toBe(dark ? '#2A2A31' : '#FFFFFF')
+    expect(t.surface).toBe(dark ? '#222228' : '#FFFFFF')
     expect(t.chip).toBe(dark ? '#313032' : '#ece2cc')
-    expect(t.rowHover).toBe(dark ? '#3f3b32' : '#ffe99f')
+    expect(t.rowHover).toBe(dark ? '#413b2b' : '#ffe99f')
     expect(t.fieldSh).toBe(`inset 0 0 0 1px ${line}`)
   })
 })
@@ -266,12 +265,12 @@ describe('Neo-brutal: every Memphis colour carries ink text at 4.5:1 (cards, chi
 })
 
 describe('Neo-brutal: plan 12 (F8)', () => {
-  it('dark: the hard shadow is black, the line cream, the panels a step lighter than the page', () => {
+  it('dark: the hard shadow and the line are both cream (plan 13 takes F8\'s black shadow back)', () => {
     const t = build('dark', 'blue')
     for (const [name, sh] of [['card', t.cardSh], ['list', t.listSh], ['pop', t.popSh], ['photo', t.photoSh], ['thumb', t.thumbSh], ['btn', t.kinds.btn.n.sh], ['ib', t.kinds.ib.n.sh]] as const) {
-      expect(sh, name).toMatch(/^inset 0 0 0 2px #F6EFDF, \dpx \dpx 0 #000000$/)
+      expect(sh, name).toMatch(/^inset 0 0 0 2px #F6EFDF, \dpx \dpx 0 #F6EFDF$/)
     }
-    expect(contrast(t.list, '#16161A')).toBeGreaterThan(contrast('#222228', '#16161A'))
+    expect(t.list).toBe('#222228')
   })
 
   it.each(MODES)('%s: the empty photo block is neutral (the panel with a faint hatch), its placeholder in muted text', (mode) => {

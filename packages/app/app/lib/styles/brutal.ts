@@ -19,8 +19,8 @@ import type { KindState, StyleBuild, ThumbTones } from './types'
  *    shade of the page (the chips' Memphis blue does not carry the dark theme's light text); a hovered row is the
  *    mock-up's pale yellow in light, a dark yellow in dark (rows hold light text there); fields carry the ink line at
  *    the lists' 2 px (their 1 px border and a 1 px inset).
- *  - plan 12 (F8): dark, the hard shadow is black under the cream line (the mock-up's cream shadow doubled every edge),
- *    the panels (#222228 → #2A2A31) a step lighter so it shows; the empty photo block is the panel with a faint hatch,
+ *  - plan 12 (F8), then plan 13: dark, the hard shadow is cream under the cream line again, as in the mock-up (F8's black
+ *    shadow and its lighter #2A2A31 panels are gone, the owner's call); the empty photo block is the panel with a faint hatch,
  *    not violet; the stepper nested in a panel draws a 1.5 px line; row thumbnails take the six Memphis colours with ink.
  * assets/css/styles/brutal.css draws the rest: the chips', thumbnails' and cards' colours in turn, and ink text on
  * every Memphis colour (cards, the selected row, a control under the pointer or pressed).
@@ -33,15 +33,14 @@ export const build: StyleBuild = (mode) => {
   const { dark, ink } = accentOf(mode, 'indigo')
   const P = MEMPHIS
   const lineC = dark ? '#F6EFDF' : '#111111'
-  /** The hard offset shadow: ink in light, black in dark (F8: a cream shadow under a cream line doubled every edge and
-   *  glared; black under the cream line reads as a drop, the panels a step lighter than the page so it shows). */
-  const shadowC = dark ? '#000000' : lineC
+  /** The hard offset shadow: the line's colour in both themes (ink in light, cream in dark; plan 13 took F8's black back). */
+  const shadowC = lineC
   const ring = 'inset 0 0 0 2px ' + lineC
   /** Controls nested in a lined panel (the stepper; raised controls on a card, brutal.css): 1.5 px, so no more than two
    *  levels of the 2 px line meet. */
   const thinRing = 'inset 0 0 0 1.5px ' + lineC
   const off = (x: number) => x + 'px ' + x + 'px 0 ' + shadowC
-  const surf = dark ? '#2A2A31' : '#FFFFFF'
+  const surf = dark ? '#222228' : '#FFFFFF'
   const page = dark ? '#16161A' : '#FFF4DC'
   const fg = dark ? '#F6EFDF' : '#111111'
   const muted = dark ? '#CFC7B6' : '#3D3D3D'
@@ -55,7 +54,7 @@ export const build: StyleBuild = (mode) => {
   // Hover is a pale version of the role's colour (ink text on it in both modes); press sinks into the shadow.
   const pale = (c: string) => mix(c, '#ffffff', dark ? 0.25 : 0.5)
   /** Dark: a hovered row or menu item, yellow deep enough for the theme's light text. */
-  const hoverDark = mix(surf, P[0], 0.1)
+  const hoverDark = mix(surf, P[0], 0.14)
   const danger = dark ? '#FF8A8A' : '#B80F2A'
 
   return finish(

@@ -406,10 +406,12 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-xs font-semibold text-subtle-
                     </span>
                     <span v-if="row.hit.path" class="truncate text-xs font-semibold text-muted-foreground">{{ row.hit.path }}</span>
                   </span>
-                  <StockStatus v-if="row.hit.outOfStock" class="shrink-0" />
-                  <span v-else class="shrink-0 text-sm font-semibold tabular-nums">
-                    {{ row.hit.number }}
-                    <span class="text-xs font-semibold text-muted-foreground">{{ row.hit.unit }}</span>
+                  <span class="min-w-18 shrink-0 text-right">
+                    <StockStatus v-if="row.hit.outOfStock" />
+                    <span v-else class="text-sm font-semibold tabular-nums">
+                      {{ row.hit.number }}
+                      <span class="text-xs font-semibold text-muted-foreground">{{ row.hit.unit }}</span>
+                    </span>
                   </span>
                 </template>
                 <template v-else-if="row.kind === 'nearest'">

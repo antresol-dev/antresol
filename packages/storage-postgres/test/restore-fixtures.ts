@@ -1,4 +1,15 @@
-import { customUnitKey, newId, type Command, type Id, type InventorySnapshot, type InventoryStorage, type Quantity } from '@antresol/core'
+import {
+  buildIntakeCommit,
+  customUnitKey,
+  newId,
+  resolveIntake,
+  type Command,
+  type DraftLine,
+  type Id,
+  type InventorySnapshot,
+  type InventoryStorage,
+  type Quantity,
+} from '@antresol/core'
 import { attributeCreate, TEST_ACTOR, variantsCreate } from './helpers'
 
 const q = (s: string) => s as Quantity
@@ -58,7 +69,50 @@ export async function seedRich(storage: InventoryStorage, name = 'Workshop'): Pr
   await run({ type: 'archive', target: 'variant', id: v3, archiveId: newId() })
   await run({ type: 'archive', target: 'item', id: old, archiveId: newId() })
   await run({ type: 'archive', target: 'folder', id: d, archiveId: newId() })
+  await seedIntakes(storage, inv, { folder: c, unit, ohm, size, resistor, wire, v1, v2 })
   return inv
+}
+
+const draftLine = (itemId: Id, axisValues: { attributeId: Id; value: string }[], quantity: string, extra: Partial<DraftLine> = {}): DraftLine => ({
+  id: newId(), itemId, axisValues, quantity: q(quantity), totalPrice: null, sourceUrl: null, photo: null,
+  ids: { movementId: newId(), variantId: newId(), photoId: newId() }, ...extra,
+})
+
+/** A committed intake (a new item with a custom unit, an existing variant, a new value, an item without axes, a photo) and
+ *  a draft that still holds its own new item. */
+async function seedIntakes(
+  storage: InventoryStorage,
+  inv: Id,
+  x: { folder: Id; unit: Id; ohm: Id; size: Id; resistor: Id; wire: Id; v1: Id; v2: Id },
+): Promise<void> {
+  const header = { shop: 'LCSC, "x" {y}', orderNumber: 'A-1', purchasedOn: '2026-11-13', note: 'NULL' }
+  const fresh = newId()
+  const [committed, draft] = [newId(), newId()]
+  const ohm = (value: string) => [{ attributeId: x.ohm, value }]
+  const content = {
+    newItems: [{ id: fresh, name: 'Capacitor', folderId: x.folder, unitKey: customUnitKey(x.unit), attributes: [{ attributeId: x.ohm, value: null, axis: true }] }],
+    lines: [
+      draftLine(fresh, ohm('100'), '5', { totalPrice: 500, photo: { provider: 'uploadcare', fileId: 'f9', url: 'https://u.example/f9', replace: false } }),
+      draftLine(x.resistor, [...ohm('1000'), { attributeId: x.size, value: 'S' }], '10', { totalPrice: 100, sourceUrl: 'https://shop.example/r' }),
+      draftLine(x.resistor, [...ohm('2200'), { attributeId: x.size, value: 'M' }], '3'),
+      draftLine(x.wire, [], '2.5'),
+    ],
+  }
+  const saved = await storage.saveIntakeDraft({ id: committed, inventoryId: inv, header, content }, null, TEST_ACTOR)
+  if (!saved.saved) throw new Error('seed: draft not saved')
+  const { snapshot, rev } = await storage.loadInventoryWithRev(inv)
+  const intake = (await storage.listIntakes(inv)).intakes.find((i) => i.id === committed)!
+  const resolved = resolveIntake(intake.draft!, snapshot)
+  if (!resolved.ok) throw new Error('seed: intake does not resolve')
+  await storage.apply(buildIntakeCommit(intake, resolved, snapshot, rev), TEST_ACTOR)
+
+  const later = newId()
+  const open = {
+    newItems: [{ id: later, name: 'Inductor', folderId: x.folder, unitKey: customUnitKey(x.unit), attributes: [] }],
+    lines: [draftLine(later, [], '7'), draftLine(x.resistor, [...ohm('4700'), { attributeId: x.size, value: 'M' }], '1', { totalPrice: null })],
+  }
+  const second = await storage.saveIntakeDraft({ id: draft, inventoryId: inv, header: { ...header, shop: null, note: null }, content: open }, null, TEST_ACTOR)
+  if (!second.saved) throw new Error('seed: second draft not saved')
 }
 
 /** The snapshot with every id and reference renamed by `m` (null stays null), as the new-ids restore should give it. */

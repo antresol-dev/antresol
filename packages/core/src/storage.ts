@@ -53,10 +53,11 @@ export interface ApplyResult {
   patch: SnapshotPatch | null
 }
 
-/** One inventory as a backup holds it: the snapshot and every movement, oldest first (seq asc). */
+/** One inventory as a backup holds it: the snapshot, every movement, oldest first (seq asc), and its intakes (drafts too). */
 export interface InventoryExport {
   snapshot: InventorySnapshot
   movements: Movement[]
+  intakes: Intake[]
 }
 
 /** `same-ids`: restored rows keep their ids; `new-ids`: they get deterministic new ones (see InventoryStorage.restore). */

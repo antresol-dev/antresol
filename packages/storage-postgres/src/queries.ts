@@ -1,6 +1,7 @@
 import {
   StorageError,
   type Id,
+  type InventoryExport,
   type Intake,
   type InventorySnapshot,
   type Movement,
@@ -48,10 +49,14 @@ export async function loadInventoryWithRev(exec: PgExecutor, id: Id): Promise<{ 
 export async function exportInventory(
   exec: PgExecutor,
   id: Id,
-): Promise<{ snapshot: InventorySnapshot; movements: Movement[] }> {
-  const result = await exec.readBatch([...snapshotStatements(id), movementsStatement(id)])
+): Promise<InventoryExport> {
+  const result = await exec.readBatch([...snapshotStatements(id), movementsStatement(id), intakesSql(sql`inventory_id = ${id}`)])
   const snapshot = toSnapshot(result.slice(0, SNAPSHOT_STATEMENTS) as SnapshotRows, id)
-  return { snapshot, movements: (result[SNAPSHOT_STATEMENTS] ?? []).map(rows.toMovement) }
+  return {
+    snapshot,
+    movements: (result[SNAPSHOT_STATEMENTS] ?? []).map(rows.toMovement),
+    intakes: (result[SNAPSHOT_STATEMENTS + 1] ?? []).map(rows.toIntake),
+  }
 }
 
 const SNAPSHOT_STATEMENTS = 11

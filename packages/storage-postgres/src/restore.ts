@@ -2,6 +2,7 @@ import {
   CURRENCIES,
   StorageError,
   type Id,
+  type Intake,
   type InventoryExport,
   type RestoreMode,
   type RestoreOptions,
@@ -10,6 +11,8 @@ import {
 import type { PgExecutor } from './executor'
 import { LOCK_REV, REV_BUMP } from './migrator'
 import type { Statement } from './sql'
+
+const CUSTOM_PREFIX = 'custom:'
 
 /** Rows per write transaction: small enough for one Neon HTTP request, few enough requests for a large backup. */
 export const RESTORE_BATCH_ROWS = 500
@@ -118,7 +121,8 @@ export interface RestoreTable {
   columns: RestoreColumn[]
 }
 
-type Raw = string | number | boolean | null | readonly (string | number)[]
+/** A jsonb cell is a function of the id renaming: the restore's `rename` is known only when the row is finished. */
+type Raw = string | number | boolean | null | readonly (string | number)[] | ((rename: (old: Id) => Id) => unknown)
 
 const id = (name: string): RestoreColumn => ({ name, type: 'uuid', ref: 'id' })
 const text = (name: string): RestoreColumn => ({ name, type: 'text' })
@@ -214,7 +218,7 @@ const fits = (value: number, bound: number): boolean => Number.isInteger(value) 
  * column's range, two attributes of an item at one axis position). Checked before anything is written, so a bad file
  * never fails a restore halfway.
  */
-export function backupProblems({ snapshot: s, movements }: InventoryExport): string[] {
+export function backupProblems({ snapshot: s, movements, intakes }: InventoryExport): string[] {
   const has = (rows: { id: Id }[]) => new Set(rows.map((r) => r.id))
   const folders = has(s.folders)
   const items = has(s.items)
@@ -263,8 +267,62 @@ export function backupProblems({ snapshot: s, movements }: InventoryExport): str
     need(bucket(p.itemId, p.variantId), `photo ${p.id}`)
     need(fits(p.position, INT), `photo ${p.id}: position out of range`)
   }
-  for (const m of movements) need(bucket(m.itemId, m.variantId), `movement ${m.id}`)
+  const intakeIds = has(intakes)
+  const movementIds = has(movements)
+  for (const m of movements) {
+    need(bucket(m.itemId, m.variantId), `movement ${m.id}`)
+    need(m.intakeId === null || intakeIds.has(m.intakeId), `movement ${m.id}: intake`)
+  }
+  for (const k of intakes) {
+    need(k.inventoryId === s.inventory.id, `intake ${k.id}: inventory`)
+    // A draft's references to attributes and units are not checked: deleting one leaves the draft's lines marked, not
+    // gone (the restore writes jsonb, which has no foreign keys).
+    const fresh = new Set(k.draft?.newItems.map((n) => n.id))
+    for (const n of k.draft?.newItems ?? []) need(n.folderId === null || folders.has(n.folderId), `intake ${k.id}: new item folder`)
+    for (const l of k.draft?.lines ?? []) need(items.has(l.itemId) || fresh.has(l.itemId), `intake ${k.id}: line ${l.id} item`)
+    for (const l of k.lines ?? []) {
+      need(bucket(l.itemId, l.variantId), `intake ${k.id}: line ${l.lineId}`)
+      need(movementIds.has(l.movementId), `intake ${k.id}: line ${l.lineId} movement`)
+    }
+  }
   return problems
+}
+
+const renameUnitKey = (key: string, rename: (id: Id) => Id): string =>
+  key.startsWith(CUSTOM_PREFIX) ? CUSTOM_PREFIX + rename(key.slice(CUSTOM_PREFIX.length)) : key
+
+/** The intake with every id inside its `draft` and `lines` renamed, `custom:<id>` unit keys included, as items are. The
+ *  row's own columns (id, inventory, revision) are renamed with the rest of the row, not here. */
+export function renameIntakeIds(intake: Intake, rename: (id: Id) => Id): Intake {
+  const opt = (id: Id | null): Id | null => (id === null ? null : rename(id))
+  const { draft, lines } = intake
+  return {
+    ...intake,
+    draft: draft && {
+      newItems: draft.newItems.map((n) => ({
+        ...n,
+        id: rename(n.id),
+        folderId: opt(n.folderId),
+        unitKey: renameUnitKey(n.unitKey, rename),
+        attributes: n.attributes.map((a) => ({ ...a, attributeId: rename(a.attributeId) })),
+      })),
+      lines: draft.lines.map((l) => ({
+        ...l,
+        id: rename(l.id),
+        itemId: rename(l.itemId),
+        axisValues: l.axisValues.map((v) => ({ ...v, attributeId: rename(v.attributeId) })),
+        ids: { movementId: rename(l.ids.movementId), variantId: rename(l.ids.variantId), photoId: rename(l.ids.photoId) },
+      })),
+    },
+    lines: lines && lines.map((l) => ({
+      ...l,
+      lineId: rename(l.lineId),
+      itemId: rename(l.itemId),
+      variantId: opt(l.variantId),
+      movementId: rename(l.movementId),
+      unitKey: renameUnitKey(l.unitKey, rename),
+    })),
+  }
 }
 
 function checkBackup(entry: InventoryExport): void {
@@ -288,7 +346,7 @@ function parentsFirst<T extends { id: Id; parentId: Id | null }>(folders: T[]): 
 }
 
 function segmentsOf(entry: InventoryExport): Segment[] {
-  const { snapshot: s, movements } = entry
+  const { snapshot: s, movements, intakes } = entry
   const inv = s.inventory.id
   const audit = (r: { createdAt: string; updatedAt: string; createdBy: string; updatedBy: string }): Raw[] => [
     r.createdAt, r.updatedAt, r.createdBy, r.updatedBy,
@@ -307,21 +365,28 @@ function segmentsOf(entry: InventoryExport): Segment[] {
     ['variant_attribute_values', s.variantAttributeValues.map((r) => [r.variantId, r.attributeId, r.value])],
     ['photos', s.photos.map((p) => [p.id, p.itemId, p.variantId, p.provider, p.fileId, p.url, p.position, p.createdAt, p.createdBy])],
     [
+      'intakes',
+      intakes.map((k) => [
+        k.id, inv, k.status, k.header.shop, k.header.orderNumber, k.header.purchasedOn, k.header.note,
+        k.draft && ((rename) => renameIntakeIds(k, rename).draft),
+        k.lines && ((rename) => renameIntakeIds(k, rename).lines),
+        k.draftRev, ...audit(k), k.committedAt,
+      ]),
+    ],
+    [
       'movements',
       // Oldest first: the new `seq` keeps the journal's order (last price, last recount).
       [...movements]
         .sort((a, b) => a.seq - b.seq)
         .map((m) => [
-          // intake_id: none until backups carry their intakes, which the reference needs.
           m.id, inv, m.itemId, m.variantId, m.kind, m.quantity, m.totalPrice, m.sourceUrl, m.note, m.transferId, m.createdAt,
-          m.createdBy, null,
+          m.createdBy, m.intakeId,
         ]),
     ],
   ]
   return rows.filter(([, list]) => list.length > 0).map(([name, list]) => ({ table: TABLE.get(name)!, rows: list }))
 }
 
-const CUSTOM = 'custom:'
 
 /** A row's values as they are written: ids renamed by `rename`, arrays as JSON, everything else as text. */
 function finalRow(columns: RestoreColumn[], raw: Raw[], rename: (old: Id) => Id): (string | null)[] {
@@ -329,9 +394,10 @@ function finalRow(columns: RestoreColumn[], raw: Raw[], rename: (old: Id) => Id)
     const value = raw[i] ?? null
     if (value === null) return null
     if (column.ref === 'id') return rename(String(value))
-    if (column.ref === 'unitKey' && typeof value === 'string' && value.startsWith(CUSTOM)) {
-      return CUSTOM + rename(value.slice(CUSTOM.length))
+    if (column.ref === 'unitKey' && typeof value === 'string' && value.startsWith(CUSTOM_PREFIX)) {
+      return renameUnitKey(value, rename)
     }
+    if (typeof value === 'function') return JSON.stringify(value(rename))
     if (Array.isArray(value)) return JSON.stringify(value)
     return String(value)
   })

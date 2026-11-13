@@ -9,7 +9,7 @@ import {
 } from '@antresol/core'
 import { describe, expect, it } from 'vitest'
 import type { PgExecutor } from '../src/executor'
-import { backupProblems, RESTORE_BATCH_ROWS, RESTORE_TABLES, restoreBackup, uuidV5 } from '../src/restore'
+import { backupProblems, RESTORE_BATCH_ROWS, RESTORE_TABLES, renameIntakeIds, restoreBackup, uuidV5 } from '../src/restore'
 import { LOCK_REV, REV_BUMP } from '../src/migrator'
 import { sql, type Statement } from '../src/sql'
 import { openPostgresStorage } from '../src/storage'
@@ -64,6 +64,15 @@ function idsIn(rows: Map<string, string[]>, columns: { table: string; column: st
     }
   }
   return ids
+}
+
+/** Old ids that still occur anywhere in the text of an added row's jsonb columns (intakes.draft, intakes.lines). */
+function oldIdsInJson(rows: string[], oldIds: Set<string>): string[] {
+  const text = rows.map((json) => {
+    const row = JSON.parse(json) as Record<string, unknown>
+    return JSON.stringify([row.draft, row.lines])
+  }).join('\n')
+  return [...oldIds].filter((id) => text.includes(id))
 }
 
 /** An executor that records its batches; batch number `failAt` (1-based; 0: none) fails before reaching the database,
@@ -154,6 +163,8 @@ describe('restore', () => {
     expect(result.added).toEqual({ inventories: 2, rows: progress.at(-1)![1] })
     expect((await target.listInventories()).inventories).toEqual((await source.listInventories()).inventories)
     for (const id of [inv, second]) {
+      expect((await target.listIntakes(id)).intakes).toEqual((await source.listIntakes(id)).intakes)
+      expect((await source.listIntakes(id)).intakes.map((i) => i.status).sort()).toEqual(['committed', 'draft'])
       expect(normSnapshot(await target.loadInventory(id))).toEqual(normSnapshot(await source.loadInventory(id)))
       expect(withoutSeq(await target.loadAllMovements(id))).toEqual(withoutSeq(await source.loadAllMovements(id)))
     }
@@ -184,7 +195,7 @@ describe('restore', () => {
     const copy = await storage.loadInventory(m(inv))
     expect(normSnapshot(copy)).toEqual(normSnapshot(renamed(original, m)))
     const journal = withoutSeq(await storage.loadAllMovements(inv)).map((x) => ({
-      ...x, id: m(x.id), itemId: m(x.itemId), variantId: x.variantId && m(x.variantId), transferId: x.transferId && m(x.transferId),
+      ...x, id: m(x.id), itemId: m(x.itemId), variantId: x.variantId && m(x.variantId), transferId: x.transferId && m(x.transferId), intakeId: x.intakeId && m(x.intakeId),
     }))
     expect(withoutSeq(await storage.loadAllMovements(m(inv)))).toEqual(journal)
 
@@ -196,7 +207,19 @@ describe('restore', () => {
       expect(added.length, table).toBe(before.get(table)!.length)
       const leaked = [...idsIn(new Map([[table, added]]), columns)].filter((id) => oldIds.has(id))
       expect(leaked, table).toEqual([])
+      if (table === 'intakes') {
+        expect(added.length).toBe(2)
+        expect(oldIdsInJson(added, oldIds), 'intakes jsonb').toEqual([])
+      }
     }
+    // The movements the committed intake made point at the copy of it, and its lines at the copy's movements.
+    const rows = await exec.query<{ id: string; lines: { movementId: string }[] | null; draft: unknown }>(
+      sql`select id, lines, draft from intakes where inventory_id = ${m(inv)}`,
+    )
+    const committed = rows.find((r) => r.lines)!
+    const made = await exec.query<{ id: string }>(sql`select id from movements where intake_id = ${committed.id}`)
+    expect(made.map((r) => r.id).sort()).toEqual(committed.lines!.map((l) => l.movementId).sort())
+    expect(made.length).toBeGreaterThan(0)
   })
 
   it('new-ids: a run that breaks after its first batch and is run again leaves no duplicate and no old id', async () => {
@@ -223,6 +246,7 @@ describe('restore', () => {
       const added = rows.filter((r) => !old.has(r))
       expect(added.length, table).toBe(before.get(table)!.length)
       expect([...idsIn(new Map([[table, added]]), columns)].filter((id) => oldIds.has(id)), table).toEqual([])
+      if (table === 'intakes') expect(oldIdsInJson(added, oldIds)).toEqual([])
     }
     // And a third run of the same file adds nothing at all.
     expect((await restoreBackup(exec, backup, 'new-ids', runId, undefined, 7)).added).toEqual({ inventories: 0, rows: 0 })
@@ -252,7 +276,7 @@ describe('restore', () => {
     const inv = await seedRich(source)
     const backup = await exported(source)
     const entry = backup.inventories[0]!
-    // 1 200 more receipts of the wire.
+    // 1 200 more receipts of the wire (11.75 before them, 2.5 of it from the seeded intake).
     const wire = entry.snapshot.items.find((i) => i.name === 'Wire')!.id
     const extra: Movement[] = Array.from({ length: 1200 }, (_, i) => ({
       id: newId(), seq: 1000 + i, itemId: wire, variantId: null, kind: 'receipt', quantity: q('1'), totalPrice: null,
@@ -286,7 +310,7 @@ describe('restore', () => {
     expect(counting.calls[0]![2]!.text).toMatch(/antresol_restore_not_empty/)
     expect(counting.calls.slice(1).flat().some((st) => /antresol_restore_not_empty/.test(st.text))).toBe(false)
     const stock = (await target.loadInventory(inv)).stock.find((l) => l.itemId === wire)!
-    expect(stock.quantity).toBe('1211.75')
+    expect(stock.quantity).toBe('1214.25')
   })
 
   it('checks every reference before writing anything', async () => {
@@ -316,6 +340,42 @@ describe('restore', () => {
     expect(await refusal(target.restore(cycle, 'same-ids', newId()))).toMatchObject({ code: 'failed', message: expect.stringMatching(/cycle/) })
     expect((await target.listInventories()).rev).toBe(rev)
     expect((await target.listInventories()).inventories).toEqual([])
+  })
+
+  it('refuses a committed intake line that names a movement outside the backup, and a movement of an unknown intake', async () => {
+    const source = await makeStorage()
+    await seedRich(source)
+    const entry = (await exported(source)).inventories[0]!
+    const k = entry.intakes.find((i) => i.lines)!
+    const lostMovement = { ...entry, movements: entry.movements.filter((m) => m.id !== k.lines![0]!.movementId) }
+    expect(backupProblems(lostMovement).join()).toMatch(/movement/)
+    const orphan = { ...entry, intakes: entry.intakes.filter((i) => i.id !== k.id) }
+    expect(backupProblems(orphan).join()).toMatch(/intake/)
+    const draft = entry.intakes.find((i) => i.draft)!
+    const strayLine = { ...draft, draft: { ...draft.draft!, lines: [{ ...draft.draft!.lines[0]!, itemId: newId() }] } }
+    expect(backupProblems({ ...entry, intakes: [strayLine] }).join()).toMatch(/item/)
+    expect(backupProblems(entry)).toEqual([])
+    await expect(restoreBackup(await makeExecutor(), { inventories: [lostMovement] }, 'new-ids', newId())).rejects.toMatchObject({ code: 'failed' })
+  })
+
+  it('renameIntakeIds renames every id inside a draft and a committed intake', async () => {
+    const source = await makeStorage()
+    await seedRich(source)
+    const { intakes } = (await exported(source)).inventories[0]!
+    const m = (id: Id) => `m:${id}`
+    for (const k of intakes) {
+      const text = JSON.stringify(renameIntakeIds(k, m))
+      const idsOf = k.draft
+        ? [...k.draft.newItems.flatMap((n) => [n.id, n.folderId, ...n.attributes.map((a) => a.attributeId)]),
+           ...k.draft.lines.flatMap((l) => [l.id, l.itemId, l.ids.movementId, l.ids.variantId, l.ids.photoId, ...l.axisValues.map((v) => v.attributeId)])]
+        : k.lines!.flatMap((l) => [l.lineId, l.itemId, l.variantId, l.movementId])
+      for (const id of idsOf) {
+        if (id === null) continue
+        expect(text, id).toContain(`"${m(id)}"`)
+        expect(text, id).not.toContain(`"${id}"`)
+      }
+    }
+    expect(JSON.stringify(renameIntakeIds(intakes.find((i) => i.draft)!, m))).toContain('custom:m:')
   })
 
   it('same-ids: refused into a source that holds any inventory, its live original or another one; nothing is written', async () => {

@@ -1,4 +1,4 @@
-import { parseQuantity, type InventoryExport, type InventorySnapshot, type Movement, type RestoreMode } from '@antresol/core'
+import { parseQuantity, type Intake, type InventoryExport, type InventorySnapshot, type Movement, type RestoreMode } from '@antresol/core'
 import { APP_SCHEMA_VERSION, backupProblems, SCHEMA_BASE } from '@antresol/storage-postgres'
 import { computed, watch, type WatchStopHandle } from 'vue'
 import type { BackupInfo, RestoreRun } from './device-db'
@@ -13,7 +13,7 @@ export interface BackupFile {
   /** Name and type only: never the connection string or any key. */
   source: { name: string; kind: string }
   /** Every inventory of the source, archived ones included; movements oldest first. */
-  inventories: { snapshot: InventorySnapshot; movements: Movement[] }[]
+  inventories: { snapshot: InventorySnapshot; movements: Movement[]; intakes: Intake[] }[]
 }
 
 export function buildBackup(input: Omit<BackupFile, 'format' | 'version'>): BackupFile {
@@ -175,6 +175,22 @@ function records<T>(value: unknown, shape: Shape, defaults?: Record<string, unkn
 const AUDIT: Shape = { createdAt: time, updatedAt: time, createdBy: str, updatedBy: str }
 const ARCHIVE: Shape = { archivedAt: nullable(time), archiveId: nullable(uuid) }
 
+const SHAPES_HEADER: Shape = { shop: nullable(str), orderNumber: nullable(str), purchasedOn: str, note: nullable(str) }
+const DRAFT_NEW_ITEM: Shape = {
+  id: uuid, name: str, folderId: nullable(uuid), unitKey: str,
+  attributes: (v) => records(v, { attributeId: uuid, value: nullable(str), axis: bool }) !== null,
+}
+const DRAFT_LINE: Shape = {
+  id: uuid, itemId: uuid, axisValues: (v) => records(v, { attributeId: uuid, value: str }) !== null, quantity,
+  totalPrice: nullable(int), sourceUrl: nullable(str),
+  photo: nullable((v) => record(v, { provider: str, fileId: str, url: str, replace: bool }) !== null),
+  ids: (v) => record(v, { movementId: uuid, variantId: uuid, photoId: uuid }) !== null,
+}
+const COMMITTED_LINE: Shape = {
+  lineId: uuid, kind: oneOf('add', 'newValue', 'newItem'), itemId: uuid, variantId: nullable(uuid), movementId: uuid,
+  itemName: str, variantLabel: nullable(str), quantity, unitKey: str, totalPrice: nullable(int), sourceUrl: nullable(str),
+}
+
 const SHAPES = {
   inventory: { id: uuid, name: str, description: nullable(str), currency: str, ...AUDIT, ...ARCHIVE },
   folder: { id: uuid, inventoryId: uuid, parentId: nullable(uuid), name: str, description: nullable(str), ...AUDIT, ...ARCHIVE },
@@ -206,6 +222,11 @@ const SHAPES = {
     sourceUrl: nullable(str), note: nullable(str), transferId: nullable(uuid), intakeId: nullable(uuid), createdAt: time,
     createdBy: str,
   },
+  /** The row's own fields; `draft` and `lines` are checked and rebuilt by `intakeRecord`. */
+  intake: {
+    id: uuid, inventoryId: uuid, status: oneOf('draft', 'committed'), header: (v) => record(v, SHAPES_HEADER) !== null,
+    draft: nullable(isRecord), lines: nullable((v) => Array.isArray(v)), draftRev: str, ...AUDIT, committedAt: nullable(time),
+  },
 } satisfies Record<string, Shape>
 
 /** Fields newer than schema 3 (`pinned`: schema 4; `lastCountedAt`: Plan 8), absent from older files. */
@@ -213,6 +234,29 @@ const ATTRIBUTE_DEFAULTS = { pinned: false }
 const STOCK_DEFAULTS = { lastCountedAt: null }
 /** `intakeId`: schema 5 (intakes), absent from older files. */
 const MOVEMENT_DEFAULTS = { intakeId: null }
+
+/** An intake as the file has it, every nested record rebuilt field by field; a draft has `draft`, a committed one `lines`. */
+function intakeRecord(value: unknown): Intake | null {
+  const row = record<Intake>(value, SHAPES.intake)
+  if (row === null) return null
+  const header = record<Intake['header']>(row.header, SHAPES_HEADER)
+  if (!header) return null
+  let draft: Intake['draft'] = null
+  if (row.draft !== null) {
+    const raw = row.draft as unknown as Record<string, unknown>
+    const newItems = records<NonNullable<Intake['draft']>['newItems'][number]>(raw.newItems, DRAFT_NEW_ITEM)
+    const lines = records<NonNullable<Intake['draft']>['lines'][number]>(raw.lines, DRAFT_LINE)
+    if (newItems === null || lines === null) return null
+    draft = { newItems, lines }
+  }
+  let lines: Intake['lines'] = null
+  if (row.lines !== null) {
+    lines = records<NonNullable<Intake['lines']>[number]>(row.lines, COMMITTED_LINE)
+    if (lines === null) return null
+  }
+  if ((row.status === 'draft') !== (draft !== null) || (row.status === 'committed') !== (lines !== null)) return null
+  return { ...row, header, draft, lines }
+}
 
 function inventoryExport(value: unknown): InventoryExport | null {
   if (!isRecord(value) || !isRecord(value.snapshot)) return null
@@ -231,8 +275,10 @@ function inventoryExport(value: unknown): InventoryExport | null {
     stock: records(s.stock, SHAPES.stock, STOCK_DEFAULTS),
   }
   const movements = records<Movement>(value.movements, SHAPES.movement, MOVEMENT_DEFAULTS)
-  if (movements === null || Object.values(snapshot).some((part) => part === null)) return null
-  return { snapshot: snapshot as unknown as InventorySnapshot, movements }
+  // Files of schema 4 and older have no intakes.
+  const intakes = Object.hasOwn(value, 'intakes') ? (Array.isArray(value.intakes) ? value.intakes.map(intakeRecord) : null) : []
+  if (movements === null || intakes === null || intakes.includes(null) || Object.values(snapshot).some((part) => part === null)) return null
+  return { snapshot: snapshot as unknown as InventorySnapshot, movements, intakes: intakes as Intake[] }
 }
 
 /** The last schema whose files may come from a pre-release build: variants with names, item attributes without an

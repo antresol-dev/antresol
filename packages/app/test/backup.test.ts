@@ -1,5 +1,5 @@
 import { PGlite } from '@electric-sql/pglite'
-import { newId, StorageError, type InventoryStorage, type Movement, type Quantity } from '@antresol/core'
+import { buildIntakeCommit, newId, resolveIntake, StorageError, type InventoryStorage, type Movement, type Quantity } from '@antresol/core'
 import { APP_SCHEMA_VERSION, createPgliteExecutor, openPostgresStorage, type PgExecutor } from '@antresol/storage-postgres'
 import { createStore, set } from 'idb-keyval'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -109,6 +109,38 @@ async function demoBackup(): Promise<{ storage: InventoryStorage; file: unknown 
   return { storage, file: JSON.parse(JSON.stringify(backup)) }
 }
 
+const ACTOR = { device: 'Test · Vitest' }
+
+/** A file whose inventory holds a committed intake (a new item, one line) and a draft (a new item, one line). */
+async function intakesBackup(): Promise<BackupFile> {
+  const { storage } = await emptyStorage()
+  const inv = newId()
+  await storage.apply({ type: 'inventory.create', id: inv, name: 'Lab', description: null, currency: 'EUR' }, ACTOR)
+  const header = { shop: 'LCSC', orderNumber: 'A-1', purchasedOn: '2026-11-13', note: null }
+  const save = async (id: string, name: string) => {
+    const item = newId()
+    const content = {
+      newItems: [{ id: item, name, folderId: null, unitKey: 'pcs', attributes: [] }],
+      lines: [{
+        id: newId(), itemId: item, axisValues: [], quantity: '5' as Quantity, totalPrice: 120, sourceUrl: 'https://s.example/x',
+        photo: { provider: 'uploadcare', fileId: 'f', url: 'https://u.example/f', replace: false },
+        ids: { movementId: newId(), variantId: newId(), photoId: newId() },
+      }],
+    }
+    await storage.saveIntakeDraft({ id, inventoryId: inv, header, content }, null, ACTOR)
+  }
+  const done = newId()
+  await save(done, 'Resistor')
+  const { snapshot, rev } = await storage.loadInventoryWithRev(inv)
+  const intake = (await storage.listIntakes(inv)).intakes[0]!
+  await storage.apply(buildIntakeCommit(intake, resolveIntake(intake.draft!, snapshot), snapshot, rev), ACTOR)
+  await save(newId(), 'Capacitor')
+  return buildBackup({
+    exportedAt: '2026-11-13T10:00:00.000Z', app: { schemaVersion: APP_SCHEMA_VERSION }, source: { name: 'Lab', kind: 'dev-pglite' },
+    inventories: [await storage.exportInventory(inv)],
+  })
+}
+
 const withoutSeq = (movements: Movement[]) => movements.map(({ seq: _seq, ...m }) => m)
 
 /** A record of a backup's raw JSON, to damage on purpose. */
@@ -178,6 +210,49 @@ describe('parseBackup', () => {
     expect(parsed.app.schemaVersion).toBe(3)
     expect(parsed.inventories.flatMap((e) => e.snapshot.attributes).every((a) => a.pinned === false)).toBe(true)
     expect(parsed.inventories.flatMap((e) => e.snapshot.stock).every((l) => l.lastCountedAt === null)).toBe(true)
+  })
+})
+
+describe('parseBackup: intakes', () => {
+  it('reads a file of schema 4 without intakes: intakes [], movements without an intake', async () => {
+    const { file } = await demoBackup()
+    const old = JSON.parse(JSON.stringify(file)) as {
+      app: { schemaVersion: number }
+      inventories: { intakes?: unknown; movements: Rec[] }[]
+    }
+    old.app.schemaVersion = 4
+    for (const e of old.inventories) {
+      delete e.intakes
+      for (const m of e.movements) delete m.intakeId
+    }
+    const parsed = parseBackup(old) as BackupFile
+    expect(parsed.app.schemaVersion).toBe(4)
+    expect(parsed.inventories.every((e) => Array.isArray(e.intakes) && e.intakes.length === 0)).toBe(true)
+    expect(parsed.inventories.flatMap((e) => e.movements).every((m) => m.intakeId === null)).toBe(true)
+  })
+
+  it('reads a file of schema 5 with a committed intake and a draft without losing a field', async () => {
+    const backup = await intakesBackup()
+    const file = JSON.parse(JSON.stringify(backup))
+    const entry = backup.inventories[0]!
+    expect(entry.intakes.map((i) => i.status).sort()).toEqual(['committed', 'draft'])
+    expect(entry.movements.some((m) => m.intakeId !== null)).toBe(true)
+    expect(parseBackup(file)).toEqual(file)
+  })
+
+  it('refuses a damaged intake, an intake whose status and content disagree, and a line without its movement', async () => {
+    const file = JSON.parse(JSON.stringify(await intakesBackup())) as { inventories: { intakes: Rec[]; movements: Rec[] }[] }
+    const damaged = (change: (e: { intakes: Rec[]; movements: Rec[] }) => void) => {
+      const copy = JSON.parse(JSON.stringify(file)) as typeof file
+      change(copy.inventories[0]!)
+      return parseBackup(copy)
+    }
+    expect(damaged((e) => { e.intakes[0]!.header = { shop: 1 } })).toMatchObject({ error: 'format' })
+    expect(damaged((e) => { e.intakes.find((i) => i.draft)!.lines = [] })).toMatchObject({ error: 'format' })
+    expect(damaged((e) => { delete e.intakes.find((i) => i.draft)!.draftRev })).toMatchObject({ error: 'format' })
+    expect(damaged((e) => { e.movements = e.movements.filter((m) => m.intakeId === null) })).toMatchObject({ error: 'format' })
+    const extra = damaged((e) => { (e.intakes[0]!.header as Rec).secret = 'postgres://x' })
+    expect(JSON.stringify(extra)).not.toContain('postgres://')
   })
 })
 
@@ -439,7 +514,7 @@ describe('workspace restore', () => {
         const itemId = e.snapshot.items[0]!.id
         const extra: Movement[] = Array.from({ length: count }, (_, i) => ({
           id: newId(), seq: 100_000 + i, itemId, variantId: null, kind: 'receipt', quantity: '1' as Quantity, totalPrice: null,
-          sourceUrl: null, note: null, transferId: null, createdAt: '2026-11-11T10:00:00.000Z', createdBy: 'Test',
+          sourceUrl: null, note: null, transferId: null, intakeId: null, createdAt: '2026-11-11T10:00:00.000Z', createdBy: 'Test',
         }))
         return { ...e, movements: [...e.movements, ...extra] }
       }),

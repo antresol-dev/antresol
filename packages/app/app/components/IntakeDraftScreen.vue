@@ -225,7 +225,7 @@ const retryErrorKey = computed(() =>
 
       <button
         type="button"
-        class="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-field px-1 text-left text-[13px] text-muted-foreground transition-colors duration-150 hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none"
+        class="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-field px-3.5 text-left text-[13px] text-muted-foreground transition-colors duration-150 hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none"
         :disabled="readOnly"
         @click="editingHeader = true"
       >

@@ -19,7 +19,7 @@ const actions = computed(() => [
 
 <template>
   <section class="grid min-w-0 grid-cols-1 gap-2">
-    <h2 class="section-label px-1 text-[15px]">{{ $t('item.attributes') }}</h2>
+    <h2 class="section-label text-[15px]">{{ $t('item.attributes') }}</h2>
     <!-- A flat list on the page, rows divided by lines. -->
     <dl v-if="attributes.length > 0" class="surface-list">
       <div

@@ -119,7 +119,7 @@ function partsOf(row: JournalRow): Part[] {
 
 <template>
   <section class="grid min-w-0 grid-cols-1 gap-2">
-    <h2 class="section-label px-1 text-[15px]">{{ $t('journal.title') }}</h2>
+    <h2 class="section-label text-[15px]">{{ $t('journal.title') }}</h2>
 
     <div v-if="waiting" role="status" class="grid gap-5 px-3.5 py-4">
       <span class="sr-only">{{ $t('journal.loading') }}</span>
@@ -147,7 +147,7 @@ function partsOf(row: JournalRow): Part[] {
 
     <template v-else>
       <section v-for="day in days" :key="day.key" class="grid min-w-0 gap-1.5" :aria-label="day.label">
-        <h3 class="px-1 pt-1 text-[13px] font-semibold text-muted-foreground">{{ day.label }}</h3>
+        <h3 class="pt-1 text-[13px] font-semibold text-muted-foreground">{{ day.label }}</h3>
         <!-- A flat list on the page, rows divided by lines. -->
         <ul class="surface-list">
           <li

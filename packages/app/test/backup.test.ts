@@ -123,7 +123,7 @@ describe('parseBackup', () => {
   })
 
   it('refuses what is not a Antresol backup', () => {
-    const ok = buildBackup({ exportedAt: '2026-11-11T10:00:00Z', app: { schemaVersion: 4 }, source: { name: 'H', kind: 'neon' }, inventories: [] })
+    const ok = buildBackup({ exportedAt: '2026-11-11T10:00:00Z', app: { schemaVersion: 5 }, source: { name: 'H', kind: 'neon' }, inventories: [] })
     expect(parseBackup(JSON.parse(JSON.stringify(ok)))).toEqual(ok)
     for (const bad of [null, 'text', [], {}, { ...ok, format: 'other' }, { ...ok, inventories: {} }, { ...ok, exportedAt: 'soon' }]) {
       expect(parseBackup(bad), JSON.stringify(bad)).toEqual({ error: 'format' })
@@ -131,7 +131,7 @@ describe('parseBackup', () => {
   })
 
   it('tells an unknown file version and a newer schema apart', () => {
-    const ok = buildBackup({ exportedAt: '2026-11-11T10:00:00Z', app: { schemaVersion: 4 }, source: { name: 'H', kind: 'neon' }, inventories: [] })
+    const ok = buildBackup({ exportedAt: '2026-11-11T10:00:00Z', app: { schemaVersion: 5 }, source: { name: 'H', kind: 'neon' }, inventories: [] })
     expect(parseBackup({ ...ok, version: 2, inventories: 'whatever' })).toEqual({ error: 'version' })
     expect(parseBackup({ ...ok, app: { schemaVersion: APP_SCHEMA_VERSION + 1 }, inventories: 'whatever' })).toEqual({ error: 'newer_schema' })
     expect(parseBackup({ ...ok, app: { schemaVersion: APP_SCHEMA_VERSION } })).toEqual({ ...ok, app: { schemaVersion: APP_SCHEMA_VERSION } })
@@ -601,7 +601,7 @@ describe('shareOrDownload', () => {
     vi.useRealTimers()
     vi.unstubAllGlobals()
   })
-  const backup = buildBackup({ exportedAt: 't', app: { schemaVersion: 4 }, source: { name: 'Home', kind: 'neon' }, inventories: [] })
+  const backup = buildBackup({ exportedAt: 't', app: { schemaVersion: 5 }, source: { name: 'Home', kind: 'neon' }, inventories: [] })
   const at = new Date('2026-11-11T00:00:00Z')
 
   function stubDownload() {

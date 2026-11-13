@@ -1,4 +1,4 @@
-import { newId, type Command, type Quantity } from '@antresol/core'
+import { buildIntakeCommit, newId, resolveIntake, type Command, type DraftLine, type Intake, type Quantity } from '@antresol/core'
 import { describe, expect, it } from 'vitest'
 import { attributeCreate, makeStorage, sizeAxis, TEST_ACTOR, variantsCreate } from './helpers'
 
@@ -214,5 +214,36 @@ describe('replaying a command with client ids is a no-op', () => {
     await twice(storage, { type: 'unit.create', id: newId(), inventoryId: inv, name: 'Roll', symbol: 'rl', prefixPowers: [] })
     const s = await storage.loadInventory(inv)
     expect([s.folders.length, s.tags.length, s.attributes.length, s.units.length]).toEqual([1, 2, 1, 1])
+  })
+
+  it('intake.commit: new item, new variant, replaced photo and receipts, the intake row missing (deleted elsewhere)', async () => {
+    const { storage, inv } = await setup()
+    const item = await plainItem(storage, inv)
+    const [size, v, old, made, intakeId] = [newId(), newId(), newId(), newId(), newId()]
+    for (const c of sizeAxis(inv, item, size)) await storage.apply(c, TEST_ACTOR)
+    await storage.apply(variantsCreate(item, [[v, { [size]: 'S' }]]), TEST_ACTOR)
+    await storage.apply({ type: 'photo.add', id: old, itemId: item, variantId: v, provider: 'imgbb', fileId: old, url: `https://x/${old}` }, TEST_ACTOR)
+    const line = (itemId: string, value: string | null, extra: Partial<DraftLine> = {}): DraftLine => ({
+      id: newId(), itemId, axisValues: value === null ? [] : [{ attributeId: size, value }], quantity: q('3'), totalPrice: 90,
+      sourceUrl: null, photo: null, ids: { movementId: newId(), variantId: newId(), photoId: newId() }, ...extra,
+    })
+    const photo = { provider: 'imgbb', fileId: 'n', url: 'https://x/n', replace: true }
+    const intake: Intake = {
+      id: intakeId, inventoryId: inv, status: 'draft',
+      header: { shop: null, orderNumber: null, purchasedOn: '2026-11-13', note: null },
+      draft: {
+        newItems: [{ id: made, name: 'Fuse', folderId: null, unitKey: 'pcs', attributes: [] }],
+        lines: [line(item, 'S', { photo }), line(item, 'M'), line(made, null)],
+      },
+      lines: null, draftRev: newId(), createdAt: '', createdBy: '', updatedAt: '', updatedBy: '', committedAt: null,
+    }
+    const { snapshot, rev } = await storage.loadInventoryWithRev(inv)
+    await twice(storage, buildIntakeCommit(intake, resolveIntake(intake.draft!, snapshot), snapshot, rev))
+    const s = await storage.loadInventory(inv)
+    expect(s.items.map((i) => i.name).sort()).toEqual(['Fuse', 'R'])
+    expect(s.variants).toHaveLength(2)
+    expect(s.photos.map((p) => [p.variantId, p.fileId, p.position])).toEqual([[v, 'n', 0]])
+    expect((await storage.loadAllMovements(inv)).map((m) => m.intakeId)).toEqual([intakeId, intakeId, intakeId])
+    expect((await storage.listIntakes(inv)).intakes.map((i) => [i.id, i.status, i.lines?.length])).toEqual([[intakeId, 'committed', 3]])
   })
 })

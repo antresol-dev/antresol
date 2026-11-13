@@ -1,4 +1,14 @@
-import { newId, normalizeCommand, patchSnapshot, type Command, type InventorySnapshot, type Quantity } from '@antresol/core'
+import {
+  buildIntakeCommit,
+  newId,
+  normalizeCommand,
+  patchSnapshot,
+  resolveIntake,
+  type Command,
+  type IntakeDraftContent,
+  type InventorySnapshot,
+  type Quantity,
+} from '@antresol/core'
 import { neonConfig } from '@neondatabase/serverless'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { assertTestDatabase, createNeonHttpExecutor, createNeonWsExecutor, inspectSchema, type PgExecutor } from '../src'
@@ -7,7 +17,7 @@ import { ensureSchema, LOCK_REV, REV_BUMP } from '../src/migrator'
 import { sql } from '../src/sql'
 import { uuidV5 } from '../src/restore'
 import { openPostgresStorage } from '../src/storage'
-import { attributeCreate, itemCreate, normSnapshot, TEST_ACTOR, variantsCreate } from './helpers'
+import { attributeCreate, itemCreate, normSnapshot, sizeAxis, TEST_ACTOR, variantsCreate } from './helpers'
 import { renamed, seedRich } from './restore-fixtures'
 
 describe('assertTestDatabase', () => {
@@ -288,6 +298,57 @@ describe.skipIf(!url)('Neon conformance', () => {
         }
       })
 
+      it('runs the intakes scenario: drafts leave rev, a stale commit is refused, the commit is one batch, a retry adds nothing', async () => {
+        const { storage } = await openPostgresStorage(exec)
+        const run = (c: Command) => storage.apply(c, TEST_ACTOR)
+        const [inv, cap, size, vS, made, intakeId] = [newId(), newId(), newId(), newId(), newId(), newId()]
+        await run({ type: 'inventory.create', id: inv, name: `intakes-${name}`, description: null, currency: 'USD' })
+        await run(itemCreate(inv, cap, 'Capacitor'))
+        for (const c of sizeAxis(inv, cap, size)) await run(c)
+        await run(variantsCreate(cap, [[vS, { [size]: 'S' }]]))
+        const ids = () => ({ movementId: newId(), variantId: newId(), photoId: newId() })
+        const content: IntakeDraftContent = {
+          newItems: [{ id: made, name: 'Fuse', folderId: null, unitKey: 'pcs', attributes: [] }],
+          lines: [
+            { id: newId(), itemId: cap, axisValues: [{ attributeId: size, value: 'S' }], quantity: '5' as Quantity, totalPrice: 50,
+              sourceUrl: null, photo: { provider: 'imgbb', fileId: 'f', url: 'https://i.example/f', replace: false }, ids: ids() },
+            { id: newId(), itemId: cap, axisValues: [{ attributeId: size, value: 'M' }], quantity: '2' as Quantity, totalPrice: null,
+              sourceUrl: null, photo: null, ids: ids() },
+            { id: newId(), itemId: made, axisValues: [], quantity: '1' as Quantity, totalPrice: null, sourceUrl: null, photo: null, ids: ids() },
+          ],
+        }
+        const header = { shop: 'LCSC', orderNumber: null, purchasedOn: '2026-11-13', note: null }
+        const rev0 = (await storage.listInventories()).rev
+        const saved = await storage.saveIntakeDraft({ id: intakeId, inventoryId: inv, header, content }, null, TEST_ACTOR)
+        if (!saved.saved) throw new Error('not saved')
+        expect((await storage.listInventories()).rev).toBe(rev0)
+        const stale = await storage.saveIntakeDraft({ id: intakeId, inventoryId: inv, header, content }, null, TEST_ACTOR)
+        expect(stale).toMatchObject({ saved: false, reason: 'changed', current: { id: intakeId, draft: content, draftRev: saved.draftRev } })
+
+        const { snapshot, rev } = await storage.loadInventoryWithRev(inv)
+        const intake = (await storage.listIntakes(inv)).intakes[0]!
+        const commit = buildIntakeCommit(intake, resolveIntake(intake.draft!, snapshot), snapshot, rev)
+        await run({ type: 'folder.create', id: newId(), inventoryId: inv, parentId: null, name: 'Shelf', description: null })
+        const behind = (await storage.listInventories()).rev
+        await expect(run(commit)).rejects.toMatchObject({ code: 'conflict' })
+        expect((await storage.listInventories()).rev).toBe(behind)
+
+        const fresh = await storage.loadInventoryWithRev(inv)
+        const r = await run(buildIntakeCommit(intake, resolveIntake(intake.draft!, fresh.snapshot), fresh.snapshot, fresh.rev))
+        const after = await storage.loadInventory(inv)
+        expect(normSnapshot(patchSnapshot(fresh.snapshot, r.patch!))).toEqual(normSnapshot(after))
+        expect([...r.patch!.itemIds].sort()).toEqual([cap, made].sort())
+        expect((await storage.loadAllMovements(inv)).filter((m) => m.intakeId === intakeId)).toHaveLength(3)
+        expect(after.photos).toHaveLength(1)
+        expect((await storage.listIntakes(inv)).intakes[0]).toMatchObject({ status: 'committed', draft: null, lines: expect.any(Array) })
+        // The same command again, after the revision moved on: nothing more.
+        await run(commit)
+        expect(normSnapshot(await storage.loadInventory(inv))).toEqual(normSnapshot(after))
+        const updated = await storage.updateIntakeHeader(intakeId, { ...header, note: 'late' }, TEST_ACTOR)
+        expect(updated.intakesRev).toBe(await storage.intakesRev())
+        expect((await storage.listIntakes(inv)).intakes[0]!.header.note).toBe('late')
+      })
+
       it('concurrent applies are serialized on the revision row', async () => {
         // Deterministic: one transaction holds the revision row (pg_sleep under LOCK_REV); an apply is sent only once
         // that hold is seen running, and the hold ends only after the apply is seen waiting for the row's lock.
@@ -408,14 +469,14 @@ describe.skipIf(!url)('Neon conformance', () => {
           ensureSchema(migrator),
           ...[0, 1, 2, 3].map((i) => write(attributeCreate(inv, newId(), `A${i}`))),
         ])
-        expect(status).toEqual({ state: 'ready', dbVersion: 4, appVersion: 4, minAppSchema: 3 })
+        expect(status).toEqual({ state: 'ready', dbVersion: 5, appVersion: 5, minAppSchema: 3 })
         const prevRevs = writes.map((rows) => rows[0]?.[0]?.value)
         const revs = writes.map((rows) => rows.at(-1)?.[0]?.value)
         // All went through (no deadlock), each after a different revision: none ran beside another.
         expect(new Set(prevRevs).size).toBe(writes.length)
         expect(new Set(revs).size).toBe(writes.length)
         // The app of schema 3 still writes: min_app_schema is 3.
-        expect(await ensureSchema(writer, 3)).toEqual({ state: 'ready', dbVersion: 4, appVersion: 3, minAppSchema: 3 })
+        expect(await ensureSchema(writer, 3)).toEqual({ state: 'ready', dbVersion: 5, appVersion: 3, minAppSchema: 3 })
 
         const { storage } = await openPostgresStorage(migrator)
         const snapshot = await storage.loadInventory(inv)

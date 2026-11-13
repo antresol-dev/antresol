@@ -22,7 +22,7 @@ export function isStaleWrite(e: unknown): boolean {
 
 /** Fails the batch with AN004 when the check before it set `antresol.stale_write` (transaction-local) to true. A `do` block
  *  takes no parameters, hence the setting in between; plain statements, so they fit one Neon HTTP transaction. */
-const REFUSE_IF_STALE: Statement = {
+export const REFUSE_IF_STALE: Statement = {
   text: `do $$ begin
   if current_setting('antresol.stale_write', true) = 'true' then
     raise exception '${STALE_WRITE_MESSAGE}' using errcode = '${STALE_WRITE_SQLSTATE}';

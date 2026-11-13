@@ -1,5 +1,14 @@
-import { StorageError, type Id, type InventorySnapshot, type Movement, type Inventory, type SourceReceipt } from '@antresol/core'
+import {
+  StorageError,
+  type Id,
+  type Intake,
+  type InventorySnapshot,
+  type Movement,
+  type Inventory,
+  type SourceReceipt,
+} from '@antresol/core'
 import type { PgExecutor } from './executor'
+import { INTAKES_REV_KEY } from './migrator'
 import * as rows from './rows'
 import { sql, type Statement } from './sql'
 
@@ -10,7 +19,7 @@ const ARCHIVE = 'archived_at, archive_id'
 const revStatement = sql`select value from antresol_meta where key = 'rev'`
 
 /** A missing row (hand-edited database) is "unknown": a value that never equals one a device cached. */
-const toRev = (result: Record<string, unknown>[] | undefined): string =>
+export const toRev = (result: Record<string, unknown>[] | undefined): string =>
   String((result?.[0] as { value?: unknown } | undefined)?.value ?? `unknown:${Math.random().toString(36).slice(2)}`)
 
 export async function listInventories(exec: PgExecutor): Promise<{ inventories: Inventory[]; rev: string }> {
@@ -156,7 +165,7 @@ function toSnapshot(
 export async function loadMovements(exec: PgExecutor, itemId: Id): Promise<Movement[]> {
   const result = await exec.query(
     sql`select id, seq::text as seq, item_id, variant_id, kind, quantity::text as quantity,
-               total_price::text as total_price, source_url, note, transfer_id, created_at, created_by
+               total_price::text as total_price, source_url, note, transfer_id, intake_id, created_at, created_by
         from movements m where item_id = ${itemId} order by m.seq desc`,
   )
   return result.map(rows.toMovement)
@@ -169,8 +178,27 @@ export async function loadAllMovements(exec: PgExecutor, inventoryId: Id): Promi
 
 function movementsStatement(inventoryId: Id) {
   return sql`select id, seq::text as seq, item_id, variant_id, kind, quantity::text as quantity,
-               total_price::text as total_price, source_url, note, transfer_id, created_at, created_by
+               total_price::text as total_price, source_url, note, transfer_id, intake_id, created_at, created_by
         from movements m where inventory_id = ${inventoryId} order by m.seq asc`
+}
+
+/** The intakes revision (see InventoryStorage.listIntakes). */
+export const intakesRevStatement = sql`select value from antresol_meta where key = ${INTAKES_REV_KEY}`
+
+/** Every column toIntake reads, of the intakes the condition selects. */
+export const intakesSql = (where: Statement) =>
+  sql`select id, inventory_id, status, shop, order_number, purchased_on, note, draft, lines, draft_rev::text as draft_rev,
+             ${raw(AUDIT)}, committed_at
+      from intakes where ${where} order by updated_at desc, id`
+
+/** The inventory's intakes, the most recently changed first, and the intakes revision, in one snapshot. */
+export async function listIntakes(exec: PgExecutor, inventoryId: Id): Promise<{ intakes: Intake[]; intakesRev: string }> {
+  const [list, rev] = await exec.readBatch([intakesSql(sql`inventory_id = ${inventoryId}`), intakesRevStatement])
+  return { intakes: (list ?? []).map(rows.toIntake), intakesRev: toRev(rev) }
+}
+
+export async function intakesRev(exec: PgExecutor): Promise<string> {
+  return toRev(await exec.query(intakesRevStatement))
 }
 
 /** Receipts a link search returns at most. */

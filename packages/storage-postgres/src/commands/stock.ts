@@ -3,20 +3,32 @@ import { sql, type Statement } from '../sql'
 
 type StockCommand = Extract<Command, { type: 'stock.receive' | 'stock.use' | 'stock.return' | 'stock.set' | 'stock.transfer' }>
 
-/** One journal row; `inventory_id` is derived from the item inside the statement. */
-function movement(
+/** One journal row; `inventory_id` is derived from the item inside the statement. `intakeId` (intake.commit only): the
+ *  column is named only then, so the stock commands send what they sent before schema 5. `when`: an SQL condition the
+ *  insert also needs (intake.commit writes nothing on a retry of a committed intake). */
+export function movement(
   id: string,
   itemId: string,
   variantId: string | null,
   kind: 'receipt' | 'usage' | 'return' | 'transfer',
   quantity: string,
-  extra: { totalPrice?: number | null; sourceUrl?: string | null; note?: string | null; transferId?: string | null },
+  extra: {
+    totalPrice?: number | null
+    sourceUrl?: string | null
+    note?: string | null
+    transferId?: string | null
+    intakeId?: string
+  },
   by: string,
+  when: Statement = { text: 'true', params: [] },
 ): Statement {
-  return sql`insert into movements (id, inventory_id, item_id, variant_id, kind, quantity, total_price, source_url, note, transfer_id, created_by)
+  const intake = extra.intakeId === undefined
+    ? { column: sql``, value: sql`` }
+    : { column: sql`, intake_id`, value: sql`, ${extra.intakeId}::uuid` }
+  return sql`insert into movements (id, inventory_id, item_id, variant_id, kind, quantity, total_price, source_url, note, transfer_id${intake.column}, created_by)
       select ${id}::uuid, i.inventory_id, i.id, ${variantId}::uuid, ${kind}, ${quantity}::numeric,
-             ${extra.totalPrice ?? null}::bigint, ${extra.sourceUrl ?? null}, ${extra.note ?? null}, ${extra.transferId ?? null}::uuid, ${by}
-      from items i where i.id = ${itemId}::uuid
+             ${extra.totalPrice ?? null}::bigint, ${extra.sourceUrl ?? null}, ${extra.note ?? null}, ${extra.transferId ?? null}::uuid${intake.value}, ${by}
+      from items i where i.id = ${itemId}::uuid and ${when}
       on conflict (id) do nothing`
 }
 

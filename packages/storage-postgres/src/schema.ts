@@ -9,6 +9,7 @@ import {
   foreignKey,
   index,
   integer,
+  jsonb,
   numeric,
   pgTable,
   primaryKey,
@@ -238,6 +239,10 @@ export const movements = pgTable(
     sourceUrl: text('source_url'),
     note: text('note'),
     transferId: uuid('transfer_id'),
+    /** The intake the receipt came with. No `on delete`: an intake is never deleted once a movement names it (only a
+     *  draft is, and a draft has none), and deleting the inventory takes both in one statement. `set null` would be an
+     *  UPDATE, which the journal trigger refuses. */
+    intakeId: uuid('intake_id').references(() => intakes.id),
     createdAt: createdAt(),
     createdBy: createdBy(),
   },
@@ -246,5 +251,33 @@ export const movements = pgTable(
     index('movements_inventory_id_idx').on(t.inventoryId),
     index('movements_item_variant_idx').on(t.itemId, t.variantId),
     index('movements_variant_id_idx').on(t.variantId),
+    index('movements_intake_id_idx').on(t.intakeId),
+  ],
+)
+
+/** An intake (spec 2026-11-13 intakes): a draft (`draft` holds its new items and lines) until committed (`lines` holds
+ *  what it wrote). The header columns serve both. `draft_rev` changes on every write of the row. */
+export const intakes = pgTable(
+  'intakes',
+  {
+    id: uuid('id').primaryKey(),
+    inventoryId: uuid('inventory_id')
+      .notNull()
+      .references(() => inventories.id, { onDelete: 'cascade' }),
+    status: text('status').notNull(),
+    shop: text('shop'),
+    orderNumber: text('order_number'),
+    /** YYYY-MM-DD. */
+    purchasedOn: text('purchased_on').notNull(),
+    note: text('note'),
+    draft: jsonb('draft'),
+    lines: jsonb('lines'),
+    draftRev: uuid('draft_rev').notNull(),
+    ...audit(),
+    committedAt: timestamp('committed_at', { withTimezone: true }),
+  },
+  (t) => [
+    check('intakes_status_check', sql`${t.status} in ('draft', 'committed')`),
+    index('intakes_inventory_id_idx').on(t.inventoryId),
   ],
 )

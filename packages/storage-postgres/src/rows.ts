@@ -2,8 +2,12 @@ import {
   parseQuantity,
   type Attribute,
   type AttributeKind,
+  type CommittedLine,
   type CustomUnit,
   type Folder,
+  type Intake,
+  type IntakeDraftContent,
+  type IntakeStatus,
   type Inventory,
   type Item,
   type ItemAttribute,
@@ -161,7 +165,7 @@ export const toMovement = (r: Row): Movement => ({
   sourceUrl: (r.source_url as string | null) ?? null,
   note: (r.note as string | null) ?? null,
   transferId: (r.transfer_id as string | null) ?? null,
-  intakeId: null, // movements.intake_id comes with the intakes table (task 2)
+  intakeId: (r.intake_id as string | null) ?? null,
   createdAt: toIso(r.created_at),
   createdBy: r.created_by as string,
 })
@@ -181,4 +185,22 @@ export const toStockLine = (r: Row): StockLine => ({
           at: toIso(r.last_at),
         },
   lastCountedAt: r.last_counted_at === null || r.last_counted_at === undefined ? null : toIso(r.last_counted_at),
+})
+
+export const toIntake = (r: Row): Intake => ({
+  id: r.id as string,
+  inventoryId: r.inventory_id as string,
+  status: r.status as IntakeStatus,
+  header: {
+    shop: (r.shop as string | null) ?? null,
+    orderNumber: (r.order_number as string | null) ?? null,
+    purchasedOn: r.purchased_on as string,
+    note: (r.note as string | null) ?? null,
+  },
+  // jsonb arrives parsed (PGlite and Neon alike).
+  draft: (r.draft as IntakeDraftContent | null) ?? null,
+  lines: (r.lines as CommittedLine[] | null) ?? null,
+  draftRev: r.draft_rev as string,
+  ...audited(r),
+  committedAt: toIsoOrNull(r.committed_at),
 })

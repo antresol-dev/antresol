@@ -3,6 +3,7 @@ import { toStatements } from './commands'
 import { isStaleWrite } from './commands/variants'
 import { affectedReads } from './commands/reads'
 import type { PgExecutor } from './executor'
+import * as intakes from './intakes'
 import { inspectSchema } from './inspect'
 import { APP_SCHEMA_VERSION, ensureSchema, isNewerSchema, LOCK_REV, REV_BUMP, schemaGuard } from './migrator'
 import * as queries from './queries'
@@ -81,6 +82,20 @@ export async function openPostgresStorage(
           patch: reads ? reads.toPatch(result.slice(bumpAt + 1)) : null,
         }
       })
+    },
+    listIntakes: (inventoryId) => wrapFailure(() => queries.listIntakes(exec, inventoryId)),
+    intakesRev: () => wrapFailure(() => queries.intakesRev(exec)),
+    async saveIntakeDraft(draft, baseDraftRev, actor, options) {
+      if (readOnly) throw new StorageError('read_only')
+      return wrapFailure(() => intakes.saveIntakeDraft(exec, guard, draft, baseDraftRev, actor, options?.force ?? false))
+    },
+    async deleteIntakeDraft(id) {
+      if (readOnly) throw new StorageError('read_only')
+      return wrapFailure(() => intakes.deleteIntakeDraft(exec, guard, id))
+    },
+    async updateIntakeHeader(id, header, actor) {
+      if (readOnly) throw new StorageError('read_only')
+      return wrapFailure(() => intakes.updateIntakeHeader(exec, guard, id, header, actor))
     },
   }
   return { storage, status }

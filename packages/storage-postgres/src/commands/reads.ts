@@ -65,29 +65,44 @@ const REMEMBERED_INVENTORY: Statement = { text: `nullif(current_setting('antreso
 const itemOfVariant = (variantId: Id): Statement => sql`(select item_id from variants where id = ${variantId}::uuid)`
 const inventoryOfItem = (item: Statement): Statement => sql`(select inventory_id from items where id = ${item})`
 
-/** One item's slice: the snapshot's per-item queries, filtered to that item. Same order as `toPatch` reads them. */
-function sliceStatements(item: Statement): Statement[] {
-  const where = sql`i.id = ${item}`
+/** The slices of the items `where` selects (a condition on the item, aliased `i`; `stock` the same on `movements`): the
+ *  snapshot's per-item queries, filtered. Same order as `toPatch` reads them. */
+function sliceStatements(where: Statement, stock: Statement): Statement[] {
   return [
     snapshotSql.items(where),
     snapshotSql.variants(where),
     snapshotSql.itemAttributes(where),
     snapshotSql.variantAttributeValues(where),
     snapshotSql.photos(where),
-    snapshotSql.stock(sql`item_id = ${item}`),
+    snapshotSql.stock(stock),
   ]
 }
 
 /**
- * The reads for one command: a header, then the item's slice (when there is an item), then each touched small table
- * whole. The header takes the inventory id from `inventories`, so a command whose inventory or target is gone gets no
- * header row and no patch.
+ * The reads for one command: a header, then the slice of its item or items (when there are any), then each touched
+ * small table whole. `item`: an expression for one item's id; `items`: one for a uuid[] of ids (not both). The header
+ * takes the inventory id from `inventories`, so a command whose inventory or target is gone gets no header row and no
+ * patch.
  */
-function reads(scope: { inventory: Statement; item?: Statement; tables?: Table[]; before?: Statement[] }): AffectedReads {
-  const { inventory, item, tables = [], before = [] } = scope
-  const head = sql`select ${item ?? sql`null`}::text as item_id, id::text as inventory_id
-                   from inventories where id = ${inventory}`
-  const slice = item ? sliceStatements(item) : []
+function reads(scope: {
+  inventory: Statement
+  item?: Statement
+  items?: Statement
+  tables?: Table[]
+  before?: Statement[]
+}): AffectedReads {
+  const { inventory, tables = [], before = [] } = scope
+  const ids = scope.items
+    ? sql`array(select distinct x::text from unnest(${scope.items}) as x)`
+    : scope.item
+      ? sql`array[${scope.item}::text]`
+      : sql`array[]::text[]`
+  const head = sql`select ${ids} as item_ids, id::text as inventory_id from inventories where id = ${inventory}`
+  const slice = scope.items
+    ? sliceStatements(sql`i.id = any(${scope.items})`, sql`item_id = any(${scope.items})`)
+    : scope.item
+      ? sliceStatements(sql`i.id = ${scope.item}`, sql`item_id = ${scope.item}`)
+      : []
   return {
     before,
     statements: [head, ...slice, ...tables.map((t) => TABLES[t].read(inventory))],
@@ -98,7 +113,7 @@ function reads(scope: { inventory: Statement; item?: Statement; tables?: Table[]
         rest.slice(0, slice.length)
       const patch: SnapshotPatch = {
         inventoryId: h.inventory_id as Id,
-        itemIds: item ? [h.item_id as Id] : [],
+        itemIds: (h.item_ids as Id[] | null) ?? [],
         items: items.map(rows.toItem),
         variants: variants.map(rows.toVariant),
         itemAttributes: itemAttributes.map(rows.toItemAttribute),
@@ -127,6 +142,15 @@ function rememberedItemSlice(item: Statement): AffectedReads {
     item: REMEMBERED_ITEM,
     inventory: REMEMBERED_INVENTORY,
   })
+}
+
+const ALL_TABLES = Object.keys(TABLES) as Table[]
+
+/** The items intake.commit touches, as a uuid[]: its new items, the items of its receipts and photos, and those of the
+ *  variants it brings back from the archive. */
+function intakeItems(c: Extract<Command, { type: 'intake.commit' }>): Statement {
+  const named = [...new Set([...c.newItems.map((n) => n.id), ...c.receipts.map((r) => r.itemId), ...c.photos.map((p) => p.itemId)])]
+  return sql`(${named}::uuid[] || array(select item_id from variants where id = any(${c.unarchiveVariants}::uuid[])))`
 }
 
 /**
@@ -190,11 +214,12 @@ export function affectedReads(c: Command): AffectedReads | null {
       if (c.target === 'item') return rememberedItemSlice(id(c.id))
       if (c.target === 'variant') return rememberedItemSlice(itemOfVariant(c.id))
       return null // an inventory or a folder: everything under it
+    case 'intake.commit':
+      return reads({ inventory: id(c.inventoryId), items: intakeItems(c), tables: ALL_TABLES })
     case 'restore':
     case 'tag.delete':
     case 'attribute.delete':
     case 'unit.delete':
-    case 'intake.commit': // its own reads come with its statements (task 2)
       return null
   }
 }

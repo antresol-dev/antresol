@@ -1,5 +1,6 @@
 import type { Command } from './commands'
 import type { Id } from './ids'
+import type { Intake, IntakeDraftContent, IntakeHeader } from './intakes'
 import type { Inventory, InventorySnapshot, Movement } from './model'
 import type { SnapshotPatch } from './patch'
 import type { Quantity } from './quantity'
@@ -94,6 +95,14 @@ export interface SourceReceipt {
   quantity: Quantity
 }
 
+/** The outcome of InventoryStorage.saveIntakeDraft. */
+export type SaveIntakeDraftResult =
+  | { saved: true; draftRev: string; intakesRev: string }
+  /** The draft changed in the database since `baseDraftRev` (another device saved it): `current` is what it holds. */
+  | { saved: false; reason: 'changed'; current: Intake }
+  /** The intake is committed: a draft is never written over it. */
+  | { saved: false; reason: 'committed' }
+
 export interface InventoryStorage {
   readonly readOnly: boolean
   /** `rev`: the source's revision counter, read in the same snapshot as the list. It changes with every `apply`, so an
@@ -130,4 +139,22 @@ export interface InventoryStorage {
   /** One atomic write: the command, the revision bump and the reads of what it touched. Opaque revisions, like
    *  `listInventories`' rev. */
   apply(command: Command, actor: Actor): Promise<ApplyResult>
+  /** The inventory's intakes, drafts and committed, the most recently changed first, and the intakes revision read in
+   *  the same snapshot. The intakes revision changes with every write of an intake (drafts, headers, intake.commit) and
+   *  only with those; `rev` does not change for drafts or headers. Opaque, like `listInventories`' rev. */
+  listIntakes(inventoryId: Id): Promise<{ intakes: Intake[]; intakesRev: string }>
+  intakesRev(): Promise<string>
+  /** Writes the draft whole, without changing `rev`, unless the intake is committed (`committed`) or its `draftRev` is
+   *  no longer `baseDraftRev` (`changed`, nothing written); `force` writes over a changed draft. `baseDraftRev` null: a
+   *  draft new on this device. A draft deleted on another device is written again (the last write wins). */
+  saveIntakeDraft(
+    draft: { id: Id; inventoryId: Id; header: IntakeHeader; content: IntakeDraftContent },
+    baseDraftRev: string | null,
+    actor: Actor,
+    options?: { force?: boolean },
+  ): Promise<SaveIntakeDraftResult>
+  /** Deletes a draft; a committed intake is never deleted (nothing happens). */
+  deleteIntakeDraft(id: Id): Promise<{ intakesRev: string }>
+  /** The header of a draft or of a committed intake; `rev` does not change. */
+  updateIntakeHeader(id: Id, header: IntakeHeader, actor: Actor): Promise<{ intakesRev: string }>
 }

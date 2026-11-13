@@ -92,11 +92,23 @@ export function uuidV5(name: string, namespace: string): string {
  * One column the restore writes. `ref`: what the value names, renamed in new-ids mode: `id` for a uuid (the row's own id
  * or a reference to another row, archive and transfer groups included), `unitKey` for `custom:<unit id>`. A test checks
  * against the database that every uuid column of the schema is declared `id`, so a new one cannot be forgotten.
- * `type`: the Postgres array type its values travel in (`json` for an array column: one JSON text per row).
+ * `type`: the Postgres array type its values travel in (`json-*` for an array column: one JSON text per row; `jsonb` for a
+ * jsonb column, its JSON text).
  */
 export interface RestoreColumn {
   name: string
-  type: 'uuid' | 'text' | 'timestamptz' | 'boolean' | 'int' | 'smallint' | 'numeric' | 'bigint' | 'json-text' | 'json-smallint'
+  type:
+    | 'uuid'
+    | 'text'
+    | 'timestamptz'
+    | 'boolean'
+    | 'int'
+    | 'smallint'
+    | 'numeric'
+    | 'bigint'
+    | 'json-text'
+    | 'json-smallint'
+    | 'jsonb'
   ref?: 'id' | 'unitKey'
 }
 export interface RestoreTable {
@@ -165,12 +177,20 @@ export const RESTORE_TABLES: readonly RestoreTable[] = [
     ],
   },
   {
+    name: 'intakes',
+    key: ['id'],
+    columns: [
+      id('id'), id('inventory_id'), text('status'), text('shop'), text('order_number'), text('purchased_on'), text('note'),
+      { name: 'draft', type: 'jsonb' }, { name: 'lines', type: 'jsonb' }, id('draft_rev'), ...AUDIT, time('committed_at'),
+    ],
+  },
+  {
     name: 'movements',
     key: ['id'],
     columns: [
       id('id'), id('inventory_id'), id('item_id'), id('variant_id'), text('kind'), { name: 'quantity', type: 'numeric' },
       { name: 'total_price', type: 'bigint' }, text('source_url'), text('note'), id('transfer_id'), time('created_at'),
-      text('created_by'),
+      text('created_by'), id('intake_id'),
     ],
   },
 ]
@@ -292,8 +312,9 @@ function segmentsOf(entry: InventoryExport): Segment[] {
       [...movements]
         .sort((a, b) => a.seq - b.seq)
         .map((m) => [
+          // intake_id: none until backups carry their intakes, which the reference needs.
           m.id, inv, m.itemId, m.variantId, m.kind, m.quantity, m.totalPrice, m.sourceUrl, m.note, m.transferId, m.createdAt,
-          m.createdBy,
+          m.createdBy, null,
         ]),
     ],
   ]
@@ -327,6 +348,7 @@ const ARRAY_TYPE: Record<RestoreColumn['type'], string> = {
   bigint: 'bigint[]',
   'json-text': 'text[]',
   'json-smallint': 'text[]',
+  jsonb: 'text[]',
 }
 
 function selectExpression(column: RestoreColumn): string {
@@ -337,6 +359,7 @@ function selectExpression(column: RestoreColumn): string {
   if (column.type === 'json-smallint') {
     return `array(select x.e::smallint from jsonb_array_elements_text(${value}::jsonb) with ordinality as x(e, n) order by x.n)`
   }
+  if (column.type === 'jsonb') return `${value}::jsonb`
   return value
 }
 

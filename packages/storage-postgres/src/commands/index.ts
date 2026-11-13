@@ -3,6 +3,7 @@ import type { Statement } from '../sql'
 import { archiveStatements } from './archive'
 import { dictionaryStatements } from './dictionaries'
 import { folderStatements } from './folders'
+import { intakeStatements } from './intakes'
 import { inventoryStatements } from './inventory'
 import { itemStatements } from './items'
 import { photoStatements } from './photos'
@@ -64,6 +65,6 @@ export function toStatements(c: Command, actor: Actor): Statement[] {
     case 'deletePermanently':
       return archiveStatements(c, actor)
     case 'intake.commit':
-      throw new Error('intake.commit: task 2')
+      return intakeStatements(c, actor)
   }
 }

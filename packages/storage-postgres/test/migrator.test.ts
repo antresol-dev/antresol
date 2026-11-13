@@ -33,8 +33,10 @@ describe('ensureSchema', () => {
     const names = rows.map((r) => r.table_name)
     expect(names).toContain('items')
     expect(names).toContain('movements')
-    expect(APP_SCHEMA_VERSION).toBe(4)
+    expect(names).toContain('intakes')
+    expect(APP_SCHEMA_VERSION).toBe(5)
     expect(await exec.query(sql`select 1 from antresol_meta where key = 'rev'`)).toHaveLength(1)
+    expect(await exec.query(sql`select 1 from antresol_meta where key = 'intakes_rev'`)).toHaveLength(1)
   })
 
   it('rejects a pre-release database as outdated and leaves it as it was', async () => {
@@ -247,7 +249,7 @@ describe('schema 4 (migration 0001)', () => {
     const before = await exec.readBatch(schema3.snapshotStatements(inv))
 
     const { wrapped, batches } = recording(exec)
-    expect(await ensureSchema(wrapped)).toEqual({ state: 'ready', dbVersion: 4, appVersion: 4, minAppSchema: 3 })
+    expect(await ensureSchema(wrapped, 4)).toEqual({ state: 'ready', dbVersion: 4, appVersion: 4, minAppSchema: 3 })
     const migrationBatches = batches.filter((b) => b.some((t) => t.includes('antresol_concurrent_migration')))
     expect(migrationBatches).toHaveLength(1)
     expect(migrationBatches[0]!.join('\n')).toContain('"pinned"')
@@ -261,13 +263,14 @@ describe('schema 4 (migration 0001)', () => {
     expect(attributes.map((a) => a.pinned)).toEqual(attributes.map(() => false))
   })
 
-  it('an empty database runs the initial migration, then 0001', async () => {
+  it('an empty database runs the initial migration, then 0001 and 0002', async () => {
     const { wrapped, batches } = recording(await makeExecutor())
     await ensureSchema(wrapped)
     const migrationBatches = batches.filter((b) => b.some((t) => t.includes('antresol_concurrent_migration')))
-    expect(migrationBatches).toHaveLength(2)
+    expect(migrationBatches).toHaveLength(3)
     expect(migrationBatches[0]!.join('\n')).toContain('CREATE TABLE "attributes"')
     expect(migrationBatches[1]!.join('\n')).toContain('"pinned"')
+    expect(migrationBatches[2]!.join('\n')).toContain('CREATE TABLE "intakes"')
     expect(migrationBatches.map((b) => b.at(-1))).toEqual(migrationBatches.map(() => expect.stringContaining('schema_version')))
   })
 
@@ -344,7 +347,7 @@ describe('schema 4 (migration 0001)', () => {
           return rows
         },
       }
-      expect(await ensureSchema(migrating)).toMatchObject({ state: 'ready', dbVersion: 4 })
+      expect(await ensureSchema(migrating, 4)).toMatchObject({ state: 'ready', dbVersion: 4 })
       const r = await write!
       expect(typeof migrationRev).toBe('string')
       if (writeFirst) {
@@ -358,19 +361,57 @@ describe('schema 4 (migration 0001)', () => {
   })
 })
 
+describe('schema 5 (migration 0002)', () => {
+  it('moves a schema-4 database to 5, keeping its data: the intakes table, movements.intake_id, intakes_rev', async () => {
+    const exec = await makeExecutor()
+    await ensureSchema(exec, 4)
+    const inv = newId()
+    await writeAsSchema3(exec, sampleCommands(inv))
+    const before = await exec.readBatch(schema3.snapshotStatements(inv))
+    const journal = await exec.query(schema3.movementsOfInventory(inv))
+    expect(await metaValue(exec, 'intakes_rev')).toBeNull()
+
+    expect(await ensureSchema(exec)).toEqual({ state: 'ready', dbVersion: 5, appVersion: 5, minAppSchema: 3 })
+    expect(await metaValue(exec, 'schema_version')).toBe('5')
+    expect(await metaValue(exec, 'min_app_schema')).toBe('3')
+    expect(await metaValue(exec, 'intakes_rev')).toEqual(expect.any(String))
+    expect(await exec.readBatch(schema3.snapshotStatements(inv))).toEqual(before)
+    expect(await exec.query(schema3.movementsOfInventory(inv))).toEqual(journal)
+    const { storage } = await openPostgresStorage(exec)
+    expect((await storage.loadAllMovements(inv)).map((m) => m.intakeId)).toEqual(journal.map(() => null))
+    expect(await storage.listIntakes(inv)).toEqual({ intakes: [], intakesRev: await metaValue(exec, 'intakes_rev') })
+  })
+
+  it('an app of schema 4 reads and writes a schema-5 database', async () => {
+    const exec = await makeExecutor()
+    await ensureSchema(exec)
+    const { storage, status } = await openPostgresStorage(exec, { appVersion: 4 })
+    expect(status).toEqual({ state: 'ready', dbVersion: 5, appVersion: 4, minAppSchema: 3 })
+    expect(storage.readOnly).toBe(false)
+    const inv = newId()
+    for (const c of sampleCommands(inv)) await storage.apply(c, TEST_ACTOR)
+    // Schema 4's own writes: the commands it sends name no column of schema 5.
+    const more = newId()
+    await writeAsSchema3(exec, [itemCreate(inv, more, 'Fuse')])
+    const snapshot = await storage.loadInventory(inv)
+    expect(snapshot.items.map((i) => i.name)).toContain('Fuse')
+    expect(snapshot.items.map((i) => i.name)).toContain('TL072')
+  })
+})
+
 describe('soft migrations (min_app_schema)', () => {
   const setMeta = (exec: PgExecutor, key: string, value: number) =>
     exec.batch([sql`update antresol_meta set value = ${String(value)} where key = ${key}`])
 
-  it('an app of schema 3 on a schema-4 database writes while min_app_schema is 3, only reads above', async () => {
+  it('an app of schema 3 on a schema-5 database writes while min_app_schema is 3, only reads above', async () => {
     const exec = await makeExecutor()
     await ensureSchema(exec)
-    expect(await ensureSchema(exec, 3)).toEqual({ state: 'ready', dbVersion: 4, appVersion: 3, minAppSchema: 3 })
+    expect(await ensureSchema(exec, 3)).toEqual({ state: 'ready', dbVersion: 5, appVersion: 3, minAppSchema: 3 })
     const { storage, status } = await openPostgresStorage(exec, { appVersion: 3 })
     expect(status.state).toBe('ready')
     expect(storage.readOnly).toBe(false)
     await setMeta(exec, 'min_app_schema', 4)
-    expect(await ensureSchema(exec, 3)).toEqual({ state: 'newer', dbVersion: 4, appVersion: 3, minAppSchema: 4 })
+    expect(await ensureSchema(exec, 3)).toEqual({ state: 'newer', dbVersion: 5, appVersion: 3, minAppSchema: 4 })
     const reopened = await openPostgresStorage(exec, { appVersion: 3 })
     expect(reopened.storage.readOnly).toBe(true)
     await expect(
@@ -466,7 +507,7 @@ describe('soft migrations (min_app_schema)', () => {
 })
 
 // Review Focus 2: the schema-3 app keeps running its own reads and writes against a database a newer app migrated.
-describe('an app of schema 3 on a schema-4 database', () => {
+describe('an app of schema 3 on a schema-5 database', () => {
   it('reads every row as before: its frozen selects return what the current ones do, minus the new columns', async () => {
     const exec = await makeExecutor()
     const { storage } = await openPostgresStorage(exec)

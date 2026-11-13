@@ -1,5 +1,6 @@
 import { PGlite } from '@electric-sql/pglite'
 import {
+  buildIntakeCommit,
   cmpQ,
   customUnitKey,
   duplicateOf,
@@ -8,13 +9,18 @@ import {
   newId,
   normalizeCommand,
   patchSnapshot,
+  pruneNewItems,
+  resolveIntake,
   StorageError,
   validateCommand,
   type Actor,
   type ApplyResult,
   type Attribute,
   type Command,
+  type DraftLine,
+  type DraftNewItem,
   type Id,
+  type Intake,
   type InventorySnapshot,
   type InventoryStorage,
   type Quantity,
@@ -185,7 +191,8 @@ interface Generator {
   weight: number
   /** False when the snapshot has nothing for the command to work on. */
   ready?: (s: Snap) => boolean
-  build: (s: Snap, p: Picks) => Command
+  /** `rev`: the source revision the copy is at, as the device knows it. */
+  build: (s: Snap, p: Picks, rev: string) => Command
 }
 
 const has = (key: 'folders' | 'items' | 'variants' | 'tags' | 'attributes' | 'units' | 'photos') => (s: Snap) =>
@@ -557,19 +564,59 @@ const GENERATORS: Record<Command['type'], Generator> = {
       }),
     }),
   },
-  // Its SQL comes with task 2 of the intakes plan, and its generator with it.
   'intake.commit': {
-    weight: 0,
-    ready: () => false,
-    build: () => {
-      throw new Error('intake.commit: task 2')
+    weight: 3,
+    build: (s, p, rev) => {
+      // A draft of up to three lines on existing items and maybe one new item (axes, shared values), resolved against
+      // the copy; lines with problems are dropped, as the user would fix them first.
+      const newItem: DraftNewItem | null = p.bool()
+        ? {
+            id: newId(),
+            name: p.one(NAMES),
+            folderId: p.oneOrNull(ids(s.folders)),
+            unitKey: unitKey(s, p),
+            attributes: p.some(s.attributes).map((a) => {
+              const axis = p.bool()
+              return { attributeId: a.id, axis, value: axis ? null : p.oneOrNull(valuesFor(a)) }
+            }),
+          }
+        : null
+      // Variants a line may bring back from the archive or give a new photo in place of the one it has.
+      const special = s.variants.filter((v) => v.archivedAt !== null || s.photos.some((x) => x.variantId === v.id))
+      const lines = Array.from({ length: 1 + p.nat(3) }, (): DraftLine => {
+        const target = special.length > 0 && p.nat(3) === 0 ? p.one(special) : null
+        const itemId = target?.itemId ?? (newItem && (s.items.length === 0 || p.bool()) ? newItem.id : p.one(ids(s.items)))
+        const axes = newItem?.id === itemId
+          ? newItem.attributes.filter((x) => x.axis).map((x) => s.attributes.find((a) => a.id === x.attributeId)!)
+          : itemAxes(s, itemId)
+        // Otherwise, half the time, the values of a variant the item has (archived ones too): the line adds to it.
+        const like = target?.id ?? (p.bool() ? p.oneOrNull(variantIdsOf(s, itemId)) : null)
+        const photoId = newId()
+        return {
+          id: newId(),
+          itemId,
+          axisValues: axes.map((a) => ({ attributeId: a.id, value: (like && storedValue(s, like, a.id)) ?? p.one(valuesFor(a)) })),
+          quantity: p.one(QUANTITIES),
+          totalPrice: p.one(PRICES),
+          sourceUrl: p.one(URLS),
+          photo: p.nat(3) === 0 ? { provider: 'imgbb', fileId: photoId, url: `https://i.example/${photoId}`, replace: p.bool() } : null,
+          ids: { movementId: newId(), variantId: newId(), photoId },
+        }
+      })
+      const first = resolveIntake({ newItems: newItem ? [newItem] : [], lines }, s)
+      const fine = new Set(first.lines.filter((l) => l.resolution.kind !== 'problem').map((l) => l.lineId))
+      const draft = pruneNewItems({ newItems: newItem ? [newItem] : [], lines: lines.filter((l) => fine.has(l.id)) })
+      const intake: Intake = {
+        id: newId(), inventoryId: s.inventory.id, status: 'draft',
+        header: { shop: p.oneOrNull(['LCSC', ' Mouser ']), orderNumber: null, purchasedOn: '2026-11-13', note: p.one(NOTES) },
+        draft, lines: null, draftRev: newId(), createdAt: '', createdBy: '', updatedAt: '', updatedBy: '', committedAt: null,
+      }
+      return buildIntakeCommit(intake, resolveIntake(draft, s), s, rev)
     },
   },
 }
 
 const COMMAND_TYPES = Object.keys(GENERATORS) as Command['type'][]
-/** Command types whose generator is still to come: never ready, so never applied. */
-const NOT_GENERATED_YET: Command['type'][] = ['intake.commit']
 
 /** The command type of a step: a weighted choice among the generators that have something to work on. */
 function chooseType(s: Snap, n: number): Command['type'] {
@@ -668,7 +715,9 @@ describe('patch property', () => {
           const other = step.device % 2 === 0
           const base = other ? theirs.copy : copy
           const behind = other && theirs.rev !== rev
-          const c = normalizeCommand(GENERATORS[chooseType(base, step.kind)].build(base, new Picks(step.numbers)))
+          // A copy marked stale knows no revision: whatever it sends with one is refused as stale.
+          const known = other ? (theirs.rev ?? 'stale') : rev
+          const c = normalizeCommand(GENERATORS[chooseType(base, step.kind)].build(base, new Picks(step.numbers), known))
           const refusals = refusedStale.length
           const conflicted = conflicts.get(c.type) ?? 0
           const r = await send(c, base, other ? OTHER : TEST_ACTOR, behind)
@@ -730,6 +779,11 @@ describe('patch property', () => {
               }
             }
           }
+          if (c.type === 'intake.commit') {
+            // Committed whole: one receipt per line, each marked with the intake.
+            const marked = (await storage.loadAllMovements(inv)).filter((m) => m.intakeId === c.intakeId).map(byId)
+            expect(marked.sort(), label).toEqual(c.receipts.map((r) => r.movementId).sort())
+          }
           if (c.type === 'photo.replace') {
             // Never a second photo on a variant; validated on an up-to-date copy, the new one. Only the photo the command
             // names is replaced (or none, when it names none): otherwise, as for a late replay, nothing changes.
@@ -754,10 +808,11 @@ describe('patch property', () => {
       // run cut short before a failure fails too, instead of passing with fewer than 200 runs.
       { numRuns: 200, plugins: [fc.interruptAfterTimeLimit(120_000, { failOnInterrupt: true })] },
     )
-    expect(COMMAND_TYPES.filter((t) => !applied.has(t) && !NOT_GENERATED_YET.includes(t)), 'command types no run applied').toEqual([])
+    expect(COMMAND_TYPES.filter((t) => !applied.has(t)), 'command types no run applied').toEqual([])
     expect(refusedByDatabase, 'valid commands the database refused').toEqual([])
     expect(refusedStale.filter((m) => !/foreign key/.test(m)), 'stale commands refused for another reason').toEqual([])
-    expect([...conflicts.keys()].filter((t) => t !== 'variant.setValues'), 'commands refused as stale').toEqual([])
+    // intake.commit carries the revision its draft was resolved at: from a copy that is behind, it is always refused.
+    expect([...conflicts.keys()].filter((t) => t !== 'variant.setValues' && t !== 'intake.commit'), 'commands refused as stale').toEqual([])
     expect(staleWrites, 'writes validated on an older copy').toBeGreaterThan(100)
   })
 

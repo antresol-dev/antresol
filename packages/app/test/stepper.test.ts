@@ -335,7 +335,7 @@ describe('StepperPill markup', () => {
   it('the number has a fixed minimum width, so the ± of neighbouring rows stay on one vertical', async () => {
     const { readFileSync } = await import('node:fs')
     const src = readFileSync(new URL('../app/components/StepperPill.vue', import.meta.url), 'utf8')
-    expect(src).toMatch(/min-w-18[^"]*text-base[^"]*tabular-nums|min-w-18[^"]*amount tabular-nums/)
+    expect(src).toMatch(/class="[^"]*\bmin-w-18\b[^"]*\bamount\b[^"]*\btabular-nums\b[^"]*"/)
     expect(src).toContain('size-11 shrink-0')
   })
 })

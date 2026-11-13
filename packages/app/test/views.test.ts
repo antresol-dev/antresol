@@ -290,6 +290,8 @@ describe('index and edge cases', () => {
       { itemId: item.id, variantId: null },
     ])
     expect(rows.map((r) => r.cover?.url)).toEqual(['v-early.jpg', 'cover.jpg'])
+    expect(rows[0]!.variantName).not.toBeNull()
+    expect(rows.map((r) => r.folderName)).toEqual(['Resistors', 'Resistors'])
     // Snapshots are indexed once, so each case gets its own.
     const coverOnly = clone()
     coverOnly.photos = [photo(item.id, null, 0, 'cover.jpg')]

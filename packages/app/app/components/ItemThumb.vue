@@ -4,11 +4,6 @@ import { monogram } from '~/lib/monogram'
 import type { PhotoRef } from '~/lib/photo-url'
 import { thumbTone } from '~/lib/thumb-tone'
 
-// The picture of an item in a list: its photo, else the letters of its folder ("IC"), else a general item icon (in the
-// inventory root, or a folder name without letters). The tone comes from the item's id, so it survives renames. Size,
-// radius and the letters' font size come from the parent's class.
-const props = defineProps<{ id: string; folderName: string | null; cover: PhotoRef | null }>()
-const letters = computed(() => (props.folderName === null ? '' : monogram(props.folderName)))
 const TONES = [
   { background: 'var(--st-thumb-tone-0)', color: 'var(--st-thumb-tone-fg-0)' },
   { background: 'var(--st-thumb-tone-1)', color: 'var(--st-thumb-tone-fg-1)' },
@@ -17,6 +12,12 @@ const TONES = [
   { background: 'var(--st-thumb-tone-4)', color: 'var(--st-thumb-tone-fg-4)' },
   { background: 'var(--st-thumb-tone-5)', color: 'var(--st-thumb-tone-fg-5)' },
 ]
+
+// The picture of an item in a list: its photo, else the letters of its folder ("IC"), else a general item icon (in the
+// inventory root, or a folder name without letters). The tone comes from the item's id, so it survives renames. Size,
+// radius and the letters' font size come from the parent's class.
+const props = defineProps<{ id: string; folderName: string | null; cover: PhotoRef | null }>()
+const letters = computed(() => (props.folderName === null ? '' : monogram(props.folderName)))
 const tone = computed(() => TONES[thumbTone(props.id, TONES.length)]!)
 </script>
 

@@ -6,7 +6,7 @@ defineProps<{ preview: ExpressionPreview | null }>()
 </script>
 
 <template>
-  <p v-if="preview" class="text-xs tabular-nums" :class="'errorKey' in preview ? 'text-destructive' : 'text-muted-foreground'" aria-live="polite">
+  <p v-if="preview" class="field-text text-xs tabular-nums" :class="'errorKey' in preview ? 'text-destructive' : 'text-muted-foreground'" aria-live="polite">
     {{ 'errorKey' in preview ? $t(preview.errorKey) : $t('expression.result', { value: preview.text }) }}
   </p>
 </template>

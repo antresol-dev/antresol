@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import { ScanQrCode } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { canPair } from '~/lib/connection-share'
 import { defaultDeviceName } from '~/lib/device-name'
 import { errorMessageKey } from '~/lib/errors'
 import type { SourceConfig } from '~/lib/types'
@@ -40,6 +41,17 @@ const sourceAction = 'h-11'
 
 const reloading = ref<string | null>(null)
 
+// Moving a source to another device: a QR code here, the camera there.
+const sharing = ref<SourceConfig | null>(null)
+const shareOpen = computed({
+  get: () => sharing.value !== null,
+  set: (open) => {
+    if (!open) sharing.value = null
+  },
+})
+const receiveOpen = ref(false)
+const canReceive = canPair()
+
 async function reload(config: SourceConfig): Promise<void> {
   if (reloading.value) return
   reloading.value = config.id
@@ -52,8 +64,6 @@ async function reload(config: SourceConfig): Promise<void> {
     reloading.value = null
   }
 }
-
-const intervals: CheckInterval[] = ['5m', '15m', '1h', '6h', '1d', 'never']
 
 async function changeInterval(value: CheckInterval): Promise<void> {
   try {
@@ -101,6 +111,9 @@ async function confirmRemove(): Promise<void> {
               >
                 {{ reloading === s.config.id ? $t('sync.reloading') : $t('sync.reload') }}
               </Button>
+              <Button v-if="s.config.kind === 'neon'" variant="ghost" :class="[sourceAction, 'text-accent-ink']" @click="sharing = s.config">
+                {{ $t('settings.sources.share') }}
+              </Button>
               <Button variant="ghost" :class="[sourceAction, 'text-destructive']" @click="removing = s.config">
                 {{ $t('settings.sources.remove') }}
               </Button>
@@ -115,6 +128,12 @@ async function confirmRemove(): Promise<void> {
         <Button as-child variant="outline" class="h-11">
           <NuxtLink to="/settings/sources/new">{{ $t('settings.sources.add') }}</NuxtLink>
         </Button>
+        <Button v-if="canReceive" variant="outline" class="h-11" @click="receiveOpen = true">
+          <ScanQrCode class="size-5" aria-hidden="true" />
+          {{ $t('pairing.receive') }}
+        </Button>
+        <ConnectionShareSheet v-model:open="shareOpen" :source="sharing" />
+        <ReceiveSourceSheet v-if="canReceive" v-model:open="receiveOpen" />
       </section>
 
       <section class="grid gap-2" aria-labelledby="settings-device">
@@ -131,14 +150,7 @@ async function confirmRemove(): Promise<void> {
           />
           <p class="text-sm text-subtle-foreground">{{ $t('settings.device.hint') }}</p>
           <Label for="check-interval" class="mt-2">{{ $t('sync.interval') }}</Label>
-          <Select :model-value="state.checkInterval" @update:model-value="changeInterval($event as CheckInterval)">
-            <SelectTrigger id="check-interval" class="h-11 w-full">
-              <SelectValue v-slot="{ modelValue }">{{ $t(`sync.${modelValue === 'never' ? 'never' : `every${modelValue}`}`) }}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem v-for="i in intervals" :key="i" :value="i">{{ $t(i === 'never' ? 'sync.never' : `sync.every${i}`) }}</SelectItem>
-            </SelectContent>
-          </Select>
+          <IntervalSlider id="check-interval" :model-value="state.checkInterval" @update:model-value="changeInterval" />
           <p class="text-sm text-subtle-foreground">{{ $t('sync.intervalHint') }}</p>
         </div>
       </section>

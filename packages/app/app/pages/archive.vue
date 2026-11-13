@@ -127,11 +127,11 @@ async function remove(): Promise<void> {
     <ScreenHeader :title="$t('archive.title')" />
     <ScreenBody>
       <section v-if="inventoryJobs.length > 0" class="grid min-w-0 grid-cols-1 gap-2">
-        <h2 class="section-label px-1 text-[13px]">{{ $t('archive.inventories') }}</h2>
+        <h2 class="section-label text-[13px]">{{ $t('archive.inventories') }}</h2>
         <ArchiveList :rows="rowsOf(inventoryJobs)" @restore="restore" @remove="ask" />
       </section>
       <section v-if="snapshot && entryJobs.length > 0" class="grid min-w-0 grid-cols-1 gap-2">
-        <h2 class="section-label px-1 text-[13px] wrap-anywhere">{{ snapshot.inventory.name }}</h2>
+        <h2 class="section-label text-[13px] wrap-anywhere">{{ snapshot.inventory.name }}</h2>
         <ArchiveList :rows="rowsOf(entryJobs)" @restore="restore" @remove="ask" />
       </section>
       <div v-else-if="loading" class="grid grid-cols-1 gap-3.5" aria-hidden="true">

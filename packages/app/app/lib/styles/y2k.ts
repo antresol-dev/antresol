@@ -81,6 +81,8 @@ export const build: StyleBuild = (mode, accent) => {
       mark: '✦ ',
       markColor: dark ? AD : AL,
       page,
+      // The sidebar: a frosted panel over the page, edged by the style's line.
+      rail: dark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.45)',
       fg,
       muted,
       subtle: muted,

@@ -113,8 +113,8 @@ async function save(): Promise<void> {
             @update:error="(key) => (inputError = key)"
           />
         </div>
-        <p v-if="inputError" class="text-sm text-destructive">{{ $t(inputError) }}</p>
-        <p role="alert" class="text-sm text-destructive">
+        <p v-if="inputError" class="field-text text-sm text-destructive">{{ $t(inputError) }}</p>
+        <p role="alert" class="field-text text-sm text-destructive">
           <template v-if="errorKey">{{ $t(errorKey) }}</template>
         </p>
       </template>

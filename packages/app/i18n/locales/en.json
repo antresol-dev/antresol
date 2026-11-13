@@ -188,6 +188,7 @@
     "ellipsis": "…",
     "items": "Items · {count}",
     "summary": "{folders} · {items}",
+    "root": "Root folder",
     "folderCount": "{count} folder | {count} folders",
     "itemCount": "{count} item | {count} items"
   },
@@ -472,11 +473,20 @@
     "interval": "Check for changes",
     "intervalHint": "How often to look for changes made on other devices",
     "every5m": "Every 5 min",
+    "every10m": "Every 10 min",
     "every15m": "Every 15 min",
+    "every30m": "Every 30 min",
     "every1h": "Every hour",
+    "every2h": "Every 2 hours",
+    "every3h": "Every 3 hours",
     "every6h": "Every 6 hours",
+    "every12h": "Every 12 hours",
     "every1d": "Once a day",
-    "never": "Never"
+    "every2d": "Every 2 days",
+    "every3d": "Every 3 days",
+    "every1w": "Once a week",
+    "never": "Never",
+    "intervalShortMin": "5 min"
   },
   "settings": {
     "title": "Settings",
@@ -486,6 +496,7 @@
       "empty": "No sources yet.",
       "edit": "Edit",
       "remove": "Remove",
+      "share": "Share",
       "exportBackup": "Export backup",
       "exporting": "Exporting…",
       "exportHint": "Neon's free plan keeps only a few hours of history. Keep a copy of your data on this device.",
@@ -591,6 +602,40 @@
     "cleared": "Photo cache cleared",
     "failed": "Could not clear the photo cache"
   },
+  "pairing": {
+    "receive": "Receive from another device",
+    "receiveTitle": "Receive a source",
+    "receiveStep1": "On the other device open Settings → Share next to the source and type this code:",
+    "codeLabel": "Code: {code}",
+    "newCode": "New code",
+    "expires": "Works once, for {minutes} min",
+    "receiveStep2Scan": "Then point the camera at the QR code it shows.",
+    "receiveStep2Camera": "Then scan the QR code it shows with this phone's camera app.",
+    "opening": "Opening…",
+    "received": "Received from your other device. Check the connection and save.",
+    "database": "Database: {host}",
+    "photoStore": "Photos: {store}",
+    "shareTitle": "Share to another device",
+    "shareStep1": "On the other device open Settings → Receive from another device. Type the code it shows.",
+    "codeField": "Code from the other device",
+    "badCode": "The code has 8 letters and digits, like K7M2-Q9XP.",
+    "makeQr": "Make QR code",
+    "sealing": "Encrypting…",
+    "shareStep2": "Scan this QR code on the other device. It is encrypted with that device’s code and opens only there.",
+    "qrLabel": "Encrypted QR code with this source’s settings",
+    "otherCode": "Use another code",
+    "insecure": "Sharing needs a secure page (https or localhost).",
+    "link": {
+      "noCode": "This link needs a code from this device. Open Receive from another device, type its code on the other device and scan the new QR code.",
+      "mismatch": "This QR code was made with another code, or it has expired. Make a new one with the code shown here."
+    },
+    "problem": {
+      "denied": "Camera access is blocked. Allow it in the browser’s site settings.",
+      "camera": "The camera could not be started.",
+      "foreign": "This QR code is not an Antresol source.",
+      "mismatch": "This QR code was made with another code. Make a new one with the code shown here."
+    }
+  },
   "sourceForm": {
     "newTitle": "Add source",
     "editTitle": "Edit source",
@@ -617,7 +662,7 @@
     "uploadcareKeyHint": "Public key from your Uploadcare project. Turn signed uploads off; files are stored permanently.",
     "uploadcareKeyLink": "Open the Uploadcare dashboard",
     "uploadcareCdn": "Photo address",
-    "uploadcareCdnHint": "Must be the ….ucarecd.net address from your Uploadcare dashboard → Delivery, without a path. Leave empty to use ucarecdn.com, which is right for projects created before September 2025.",
+    "uploadcareCdnHint": "Must be the ….ucarecd.net address from your Uploadcare project → Settings → Delivery, without a path. Leave empty to use ucarecdn.com, which is right for projects created before September 2025.",
     "optional": "Optional",
     "check": "Check",
     "checking": "Checking…",

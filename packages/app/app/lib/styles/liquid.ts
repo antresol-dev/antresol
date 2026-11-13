@@ -63,6 +63,8 @@ export const build: StyleBuild = (mode, accent) => {
       stroke: '1.75',
       btnWeight: '600',
       page: wall,
+      // The sidebar: a pane of the glass over the wallpaper, edged by the style's hairline.
+      rail: dark ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.4)',
       fg,
       muted,
       subtle: muted,

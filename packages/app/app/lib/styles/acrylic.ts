@@ -57,6 +57,8 @@ export const build: StyleBuild = (mode, accent) => {
       btnWeight: '600',
       stroke: '1.5',
       page: wall,
+      // The sidebar: a frosted pane over the wallpaper (opaque, see rail), edged by the style's hairline.
+      rail: dark ? 'rgba(255,255,255,0.035)' : 'rgba(255,255,255,0.45)',
       winBg,
       winBlur: 'blur(60px) saturate(140%)',
       fg,

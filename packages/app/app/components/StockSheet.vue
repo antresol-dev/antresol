@@ -166,7 +166,7 @@ function settle(outcome: SendOutcome): void {
         </div>
 
         <div v-if="mode === 'transfer'" class="grid gap-1.5">
-          <span id="stock-to-label" class="text-sm leading-none font-medium">{{ $t('stockForm.moveTo') }}</span>
+          <span id="stock-to-label" class="field-text text-sm leading-none font-medium">{{ $t('stockForm.moveTo') }}</span>
           <RadioGroup
             v-model="toKey"
             aria-labelledby="stock-to-label"
@@ -224,7 +224,7 @@ function settle(outcome: SendOutcome): void {
         </div>
       </fieldset>
 
-      <p role="alert" class="text-sm text-destructive">
+      <p role="alert" class="field-text text-sm text-destructive">
         <template v-if="unconfirmed">
           {{ $t('unconfirmed.hint') }}<template v-if="retryErrorKey"> {{ $t(retryErrorKey) }}</template>
         </template>

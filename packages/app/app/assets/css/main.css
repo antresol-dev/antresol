@@ -25,11 +25,13 @@
  *   glass                pop (pop, popSh, popR, popBlur, popFg, popBorder, popMuted, popDanger; items popHover,
  *                        popHoverFg, popItemR; separators popDiv)       menus, select lists, combobox lists
  *   raised-card          card (card, cardSh, cardR, cardFg, cardMuted, surfBlur)  cards: stock, settings, photo block
+ *   surface-rail         rail, railLine                                 the desktop sidebar
  *   surface-list         list (list, listSh, listR, surfBlur)           lists of rows: variants, attributes, history,
  *                                                                       folders, items, Tags & fields, archive
  *   surface-header       hdr (hdr, hdrSh, hdrLine, hdrBlur)             the screen header
  *   surface-bar          hdr, hdrLine, hdrBlur; barSh                   a bottom bar (the count screen's)
  *   surface-sheet        sheet (sheet, sheetSh, sheetLine, sheetBlur)   sheets, dialogs, the search palette
+ *   palette-window       paletteImg, paletteSh, paletteLine             the desktop search palette (with surface-sheet)
  *   surface-tip          tip (tip, tipFg, tipSh)                        tooltips
  *   photo-cover          photo (photo, photoSh, photoR, photoFg, surfBlur)  the item's cover photo
  *   photo-thumb          thumbs (thumbs-0, thumbSh, thumbR, thumbFg, surfBlur)  the gallery's thumbnails
@@ -310,6 +312,38 @@
     outline: 2px solid var(--ring);
     outline-offset: 2px;
   }
+  /* Fields: a soft halo hugging the border, which itself turns accent (the markup's focus-visible:border-ring). The
+     2 px offset ring above reached the label text over the field. */
+  /* The halo's colour is set at rest too: the fields' transition-colors also animates outline-color, which otherwise
+     starts from currentColor (white in the dark theme) and flashed on every focus. */
+  :where([data-slot='input'], [data-slot='textarea'], [data-slot='select-trigger']) {
+    outline-color: color-mix(in oklab, var(--ring) 35%, transparent);
+  }
+  :where([data-slot='input'], [data-slot='textarea'], [data-slot='select-trigger'])[aria-invalid='true'] {
+    outline-color: color-mix(in oklab, var(--destructive) 35%, transparent);
+  }
+  :where([data-slot='input'], [data-slot='textarea'], [data-slot='select-trigger']):focus-visible {
+    outline: 3px solid color-mix(in oklab, var(--ring) 35%, transparent);
+    outline-offset: 0;
+  }
+  :where([data-slot='input'], [data-slot='textarea'], [data-slot='select-trigger'])[aria-invalid='true']:focus-visible {
+    outline-color: color-mix(in oklab, var(--destructive) 35%, transparent);
+  }
+  /* A field's text lines up with the text inside the field (its 12 px padding and 1 px border), clear of the rounded
+     corner: the label above, and the hint and problem lines of the same group (a paragraph next to the label, or a
+     fieldset's legend and paragraphs). The field itself, buttons and sliders keep the full width. */
+  :root {
+    --field-inset: calc(0.75rem + 1px);
+  }
+  [data-slot='label']:not(:has([role='radio'], [role='checkbox'], [role='switch'], button)) {
+    padding-inline-start: var(--field-inset);
+  }
+  :where(div, fieldset):has(> [data-slot='label']) > p,
+  fieldset > legend,
+  fieldset:has(> legend) > p,
+  .field-text {
+    padding-inline-start: var(--field-inset);
+  }
 
   /* Everything that can be clicked shows the pointer (spec 4.2); disabled things do not. Zero specificity, so a
      cursor-* utility wins and the disabled rule wins over the pointer one. */
@@ -343,6 +377,12 @@
     backdrop-filter: var(--st-surf-blur);
   }
 
+  /* The desktop sidebar: its own background and a right edge, so it stays apart from a page of the same colour. */
+  .surface-rail {
+    background: var(--rail);
+    border-right: var(--st-rail-line);
+  }
+
   .surface-list {
     border-radius: var(--st-list-r);
     background: var(--st-list);
@@ -358,6 +398,12 @@
     box-shadow: var(--st-sheet-sh);
     -webkit-backdrop-filter: var(--st-sheet-blur);
     backdrop-filter: var(--st-sheet-blur);
+  }
+  /* The desktop search palette: a sheet with its own layer, shadow and border colour. */
+  .surface-sheet.palette-window {
+    border-color: var(--st-palette-line);
+    background-image: var(--st-palette-img);
+    box-shadow: var(--st-palette-sh);
   }
 
   /* A bottom bar (the count screen's sticky bar): the header's surface, its line on the top edge. */
@@ -883,3 +929,4 @@
 .dark:not([data-style='neumorphism'], [data-style='brutal']) #nav-drawer {
   box-shadow: inset -1px 0 0 var(--st-sheet-line);
 }
+

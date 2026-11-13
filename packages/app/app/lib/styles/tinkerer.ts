@@ -67,6 +67,8 @@ export const build: StyleBuild = (mode, accent) => {
       cap: 'square',
       join: 'miter',
       page: grid + ', ' + (dark ? '#0F1113' : '#E9E7E2'),
+      // The sidebar: the bench's paper a shade darker (no grid), edged by a hairline.
+      rail: dark ? 'rgba(255,255,255,0.025)' : 'rgba(0,0,0,0.04)',
       fg,
       muted,
       subtle: muted,

@@ -198,7 +198,7 @@ async function restore(archiveId: Id): Promise<void> {
           </Label>
           <Input id="variants-axis-unit" v-model="newUnit" autocomplete="off" class="h-11" />
         </div>
-        <label class="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm font-semibold">
+        <label class="field-text flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm font-semibold">
           {{ $t('variantsForm.siPrefixes') }}
           <Switch v-model="newPrefixes" :disabled="busy" />
         </label>
@@ -207,7 +207,7 @@ async function restore(archiveId: Id): Promise<void> {
         {{ $t('variantsForm.pickAttribute') }}
       </Button>
     </template>
-    <p role="alert" class="text-sm text-destructive">
+    <p role="alert" class="field-text text-sm text-destructive">
       <template v-if="errorKey">{{ $t(errorKey) }}</template>
     </p>
     <Button type="submit" class="h-11 rounded-field" :disabled="!canAddAxis">
@@ -262,7 +262,7 @@ async function restore(archiveId: Id): Promise<void> {
         <span v-else-if="l.repeat" class="text-[13px] text-subtle-foreground">{{ $t('variantsForm.repeat') }}</span>
       </li>
     </ul>
-    <p id="variants-error" role="alert" class="text-sm text-destructive">
+    <p id="variants-error" role="alert" class="field-text text-sm text-destructive">
       <template v-if="errorKey">{{ $t(errorKey) }}</template>
     </p>
     <Button type="submit" class="h-11 rounded-field" :disabled="!canSubmit">

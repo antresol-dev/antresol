@@ -62,6 +62,9 @@ export const build: StyleBuild = (mode) => {
       numWeight: '600',
       btnWeight: '600',
       page,
+      // The sidebar: the cream a shade toward tan (no atoms), cut off by the style's 1.5 px ink outline.
+      rail: dark ? 'rgba(0,0,0,0.18)' : 'rgba(150,100,40,0.08)',
+      railLine: '1.5px solid ' + lineC,
       fg,
       muted,
       subtle: muted,

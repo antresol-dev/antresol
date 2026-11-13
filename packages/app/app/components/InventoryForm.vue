@@ -177,7 +177,7 @@ async function submit(): Promise<void> {
       <Input id="inventory-description" v-model="description" autocomplete="off" class="h-11" />
     </div>
 
-    <p id="inventory-form-error" role="alert" class="text-sm text-destructive">
+    <p id="inventory-form-error" role="alert" class="field-text text-sm text-destructive">
       <template v-if="errorKey">{{ $t(errorKey) }}</template>
     </p>
 

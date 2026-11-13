@@ -147,23 +147,23 @@ async function submit(): Promise<void> {
         <p class="text-[13px] text-subtle-foreground">{{ $t('attributeForm.unitHint') }}</p>
       </div>
       <div class="grid gap-1">
-        <label class="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm font-semibold">
+        <label class="field-text flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm font-semibold">
           {{ $t('attributeForm.siPrefixes') }}
           <Switch v-model="siPrefixes" />
         </label>
-        <p v-if="example" class="text-[13px] text-subtle-foreground">{{ $t('attributeForm.siExample', { example }) }}</p>
+        <p v-if="example" class="field-text text-[13px] text-subtle-foreground">{{ $t('attributeForm.siExample', { example }) }}</p>
       </div>
     </template>
     <div class="grid gap-1">
-      <label class="flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm font-semibold" :class="pinnedFull && 'cursor-default'">
+      <label class="field-text flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm font-semibold" :class="pinnedFull && 'cursor-default'">
         {{ $t('attributeForm.showInLists') }}
         <Switch v-model="pinned" :disabled="pinnedFull" aria-describedby="attribute-pinned-hint" />
       </label>
-      <p id="attribute-pinned-hint" class="text-[13px] text-subtle-foreground">
+      <p id="attribute-pinned-hint" class="field-text text-[13px] text-subtle-foreground">
         {{ $t(pinnedFull ? 'attributeForm.pinnedFull' : 'attributeForm.showInListsHint') }}
       </p>
     </div>
-    <p id="attribute-form-error" role="alert" class="text-sm text-destructive">
+    <p id="attribute-form-error" role="alert" class="field-text text-sm text-destructive">
       <template v-if="errorKey">{{ $t(errorKey) }}</template>
     </p>
     <Button type="submit" class="h-11 rounded-field" :disabled="!canSubmit">

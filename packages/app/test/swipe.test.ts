@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SWIPE, swipeAction } from '../app/lib/swipe'
+import { SWIPE, SWIPE_DOWN, swipeAction, swipeDownCloses } from '../app/lib/swipe'
 
 describe('swipeAction', () => {
   it('opens the menu with a rightward swipe', () => {
@@ -36,5 +36,19 @@ describe('swipeAction', () => {
   it('does nothing against the menu state', () => {
     expect(swipeAction({ x: 300, y: 300 }, { x: 200, y: 300 }, false)).toBeNull()
     expect(swipeAction({ x: 40, y: 300 }, { x: 120, y: 300 }, true)).toBeNull()
+  })
+})
+
+describe('swipeDownCloses', () => {
+  it('closes on a long, mostly vertical swipe down when the list cannot scroll up', () => {
+    expect(swipeDownCloses({ x: 100, y: 200 }, { x: 110, y: 200 + SWIPE_DOWN.minDistance }, false)).toBe(true)
+  })
+  it('lets the list scroll when it has content above', () => {
+    expect(swipeDownCloses({ x: 100, y: 200 }, { x: 100, y: 400 }, true)).toBe(false)
+  })
+  it('ignores short, upward and diagonal moves', () => {
+    expect(swipeDownCloses({ x: 100, y: 200 }, { x: 100, y: 250 }, false)).toBe(false)
+    expect(swipeDownCloses({ x: 100, y: 400 }, { x: 100, y: 200 }, false)).toBe(false)
+    expect(swipeDownCloses({ x: 100, y: 200 }, { x: 220, y: 300 }, false)).toBe(false)
   })
 })

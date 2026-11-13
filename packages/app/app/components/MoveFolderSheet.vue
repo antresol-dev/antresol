@@ -48,7 +48,10 @@ async function choose(parentId: Id | null, current: boolean): Promise<void> {
           :style="{ paddingLeft: `${8 + Math.min(target.depth * 16, 64)}px` }"
           @click="choose(target.id, target.current)"
         >
-          <span class="min-w-0 flex-1 truncate">{{ target.name }}</span>
+          <span class="flex min-w-0 flex-1 items-center gap-1.5">
+            <span class="min-w-0 truncate">{{ target.name }}</span>
+            <RootMark v-if="target.id === null" />
+          </span>
           <Check v-if="target.current" class="size-4 shrink-0" aria-hidden="true" />
         </button>
       </li>

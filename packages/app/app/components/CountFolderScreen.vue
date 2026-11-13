@@ -118,7 +118,7 @@ const divider =
         <NuxtLink :to="`/folder/${folderId}`" :class="linkClass">{{ $t('countFolder.back') }}</NuxtLink>
       </EmptyState>
       <template v-else>
-        <p class="px-1 text-sm text-muted-foreground">{{ $t('countFolder.hint') }}</p>
+        <p class="text-sm text-muted-foreground">{{ $t('countFolder.hint') }}</p>
         <ul ref="list">
           <template v-for="g in groups" :key="g.itemId">
             <li v-if="g.hasVariants" :class="[divider, 'px-3.5 pt-2.5 pb-1 text-[15px] font-bold wrap-anywhere']">{{ g.name }}</li>

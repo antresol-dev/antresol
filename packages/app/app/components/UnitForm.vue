@@ -111,7 +111,7 @@ async function submit(): Promise<void> {
         </label>
       </div>
     </fieldset>
-    <p id="unit-form-error" role="alert" class="text-sm text-destructive">
+    <p id="unit-form-error" role="alert" class="field-text text-sm text-destructive">
       <template v-if="errorKey">{{ $t(errorKey) }}</template>
     </p>
     <Button type="submit" class="h-11 rounded-field" :disabled="!canSubmit">

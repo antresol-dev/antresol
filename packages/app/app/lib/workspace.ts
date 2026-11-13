@@ -83,10 +83,18 @@ export const DEFAULT_CHECK_INTERVAL: CheckInterval = '15m'
 /** How long a successful check holds before syncIfDue checks again. */
 export const CHECK_INTERVAL_MS: Record<Exclude<CheckInterval, 'never'>, number> = {
   '5m': 5 * 60_000,
+  '10m': 10 * 60_000,
   '15m': 15 * 60_000,
+  '30m': 30 * 60_000,
   '1h': 60 * 60_000,
+  '2h': 120 * 60_000,
+  '3h': 180 * 60_000,
   '6h': 360 * 60_000,
+  '12h': 720 * 60_000,
   '1d': 1440 * 60_000,
+  '2d': 2 * 1440 * 60_000,
+  '3d': 3 * 1440 * 60_000,
+  '1w': 7 * 1440 * 60_000,
 }
 const isCheckInterval = (value: unknown): value is CheckInterval =>
   value === 'never' || (typeof value === 'string' && Object.hasOwn(CHECK_INTERVAL_MS, value))

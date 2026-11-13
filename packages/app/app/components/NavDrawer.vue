@@ -37,7 +37,7 @@ function returnFocus(event: Event): void {
       <DialogContent
         :id="NAV_DRAWER_ID"
         :aria-describedby="undefined"
-        class="fixed inset-y-0 left-0 z-50 flex w-[86%] max-w-[340px] flex-col bg-rail shadow-xl outline-none motion-safe:data-[state=open]:animate-drawer-in motion-safe:data-[state=closed]:animate-drawer-out motion-reduce:animate-none"
+        class="fixed inset-y-0 left-0 z-50 flex w-[86%] max-w-[340px] flex-col bg-rail pb-[env(safe-area-inset-bottom)] shadow-xl outline-none motion-safe:data-[state=open]:animate-drawer-in motion-safe:data-[state=closed]:animate-drawer-out motion-reduce:animate-none"
         @close-auto-focus="returnFocus"
       >
         <DialogTitle class="sr-only">{{ $t('nav.menu') }}</DialogTitle>

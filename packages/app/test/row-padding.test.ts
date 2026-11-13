@@ -16,10 +16,11 @@ describe('highlight fills the row', () => {
     expect(/\.row-selected::after \{([^}]*)\}/.exec(css)?.[1]).toMatch(/inset:\s*var\(--row-inset,\s*0\)/)
     expect(/\.row-inset \{([^}]*)\}/.exec(css)?.[1]).toMatch(/--row-inset:\s*var\(--st-cur-m\)/)
   })
+  // Right: 14 px, where the dividers end (right-3.5), so the "⋯" button's hover clears the list's rounded corner.
   it('only the variant list insets its current row, and pads for the largest inset (8 px) plus 12', () => {
     const bucket = read('components/BucketList.vue')
     expect(bucket).toContain('row-selected row-inset')
-    expect(bucket).toMatch(/pr-2\.5 pl-5/)
+    expect(bucket).toMatch(/pr-3\.5 pl-5/)
     for (const f of ['AppNav', 'FolderTreeNode', 'SearchPalette', 'FolderPickerList'])
       expect(read(`components/${f}.vue`)).not.toContain('row-inset')
   })

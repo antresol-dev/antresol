@@ -36,8 +36,10 @@ export interface SourceState {
   reason: FailureReason | null
 }
 export type ReadOnlyReason = 'offline' | 'schema_newer' | 'source_error'
-/** How often syncIfDue checks healthy sources; 'never': not by time. A device setting. */
-export type CheckInterval = '5m' | '15m' | '1h' | '6h' | '1d' | 'never'
+/** How often syncIfDue checks healthy sources; 'never': not by time. A device setting. The steps grow roughly
+ *  geometrically, so a slider over them reads as a logarithmic scale from 5 minutes to a week. */
+export const CHECK_INTERVALS = ['5m', '10m', '15m', '30m', '1h', '2h', '3h', '6h', '12h', '1d', '2d', '3d', '1w', 'never'] as const
+export type CheckInterval = (typeof CHECK_INTERVALS)[number]
 
 export interface WorkspaceState {
   started: boolean

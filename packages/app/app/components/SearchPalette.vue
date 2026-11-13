@@ -8,6 +8,7 @@ import { DialogOverlay } from '@/components/ui/dialog'
 import { errorMessageKey } from '~/lib/errors'
 import { bottomUp, paletteResults, pastedShare, snapshotSearch, stepSelection, type PaletteAction, type PaletteRow } from '~/lib/palette'
 import { currentInventoryName, NAV_SECTIONS, treeCurrent } from '~/lib/shell'
+import { swipeDownCloses } from '~/lib/swipe'
 import { pathOf, snapshotIndex } from '~/lib/views'
 
 type GoSection = Extract<PaletteAction, { kind: 'go' }>['section']
@@ -227,6 +228,36 @@ async function act(action: PaletteAction): Promise<void> {
   }
 }
 
+// Phone: a swipe down closes the palette, unless it would scroll the results back up. The window follows the finger.
+let swipeStart: { x: number; y: number; canScrollUp: boolean } | null = null
+const dragY = ref(0)
+function onTouchStart(event: TouchEvent): void {
+  if (desktop.value || event.touches.length !== 1) return
+  const touch = event.touches[0]!
+  const list = scroller.value
+  // The results scroll upwards (column-reverse): scrollTop runs from 0 (bottom) to -(scrollHeight - clientHeight).
+  const inList = !!list && list.contains(event.target as Node)
+  const canScrollUp = inList && list!.scrollHeight - list!.clientHeight + list!.scrollTop > 1
+  swipeStart = { x: touch.clientX, y: touch.clientY, canScrollUp }
+}
+function onTouchMove(event: TouchEvent): void {
+  if (!swipeStart || swipeStart.canScrollUp) return
+  const dy = event.touches[0]!.clientY - swipeStart.y
+  dragY.value = dy > 0 ? dy * 0.6 : 0
+}
+function onTouchCancel(): void {
+  swipeStart = null
+  dragY.value = 0
+}
+function onTouchEnd(event: TouchEvent): void {
+  const start = swipeStart
+  swipeStart = null
+  dragY.value = 0
+  const touch = event.changedTouches[0]
+  if (!start || !touch) return
+  if (swipeDownCloses(start, { x: touch.clientX, y: touch.clientY }, start.canScrollUp)) paletteOpen.value = false
+}
+
 // A match is a square chip inside the text; keys are chips (radius scale, spec 4.2).
 const markClass = 'rounded-none bg-chip text-foreground'
 const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-subtle-foreground'
@@ -242,11 +273,16 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
         :aria-describedby="undefined"
         :class="
           desktop
-            ? 'fixed top-[72px] left-1/2 z-50 flex max-h-[calc(100dvh-144px)] w-[580px] max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col overflow-hidden surface-sheet rounded-card border shadow-2xl outline-none motion-safe:data-[state=open]:animate-pop-in motion-safe:data-[state=closed]:animate-pop-out motion-reduce:data-[state=open]:animate-fade-in motion-reduce:data-[state=closed]:animate-fade-out'
+            ? 'fixed top-[72px] left-1/2 z-50 flex max-h-[calc(100dvh-144px)] w-[580px] max-w-[calc(100%-2rem)] -translate-x-1/2 flex-col overflow-hidden palette-window surface-sheet rounded-card border outline-none motion-safe:data-[state=open]:animate-pop-in motion-safe:data-[state=closed]:animate-pop-out motion-reduce:data-[state=open]:animate-fade-in motion-reduce:data-[state=closed]:animate-fade-out'
             : 'surface-sheet fixed inset-0 z-50 flex flex-col-reverse outline-none data-[state=open]:animate-fade-in data-[state=closed]:animate-fade-out'
         "
+        :style="dragY > 0 ? { transform: `translateY(${dragY}px)`, opacity: Math.max(0.4, 1 - dragY / 400) } : undefined"
         @open-auto-focus="onOpenAutoFocus"
         @close-auto-focus="onCloseAutoFocus"
+        @touchstart.passive="onTouchStart"
+        @touchmove.passive="onTouchMove"
+        @touchend.passive="onTouchEnd"
+        @touchcancel.passive="onTouchCancel"
       >
         <DialogTitle class="sr-only">{{ $t('search.label') }}</DialogTitle>
 
@@ -321,13 +357,13 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
               : 'flex min-h-0 flex-1 flex-col-reverse overflow-y-auto overscroll-contain p-2'
           "
         >
-          <div v-if="shownRows.length > 0" :id="listId" role="listbox" :aria-label="$t('search.results')" class="grid gap-0.5">
+          <div v-if="shownRows.length > 0" :id="listId" role="listbox" :aria-label="$t('search.results')" class="grid min-w-0 grid-cols-1 gap-0.5">
             <div
               v-for="group in shown"
               :key="group.key"
               role="group"
               :aria-labelledby="`${listId}-${group.key}`"
-              class="grid gap-0.5"
+              class="grid min-w-0 grid-cols-1 gap-0.5"
             >
               <div
                 :id="`${listId}-${group.key}`"
@@ -343,7 +379,8 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
                 :aria-selected="row.key === selected?.key"
                 :class="[
                   // The selected option is a selected row (spec 4.1): accent gradient, text and icons in its ink.
-                  'flex min-h-11 cursor-pointer items-center gap-2.5 rounded-field px-3.5 select-none',
+                  // min-w-0 and the one-column grids above: a long name truncates instead of widening the list past its edge.
+                  'flex min-h-11 min-w-0 cursor-pointer items-center gap-2.5 rounded-field px-3.5 select-none',
                   desktop ? 'py-1.5' : 'py-2',
                   row.key === selected?.key ? 'row-selected' : '',
                 ]"

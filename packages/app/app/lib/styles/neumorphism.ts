@@ -190,6 +190,8 @@ export const build: StyleBuild = (mode, accent) => {
       thumb: dark ? '#323743' : '#E2E5EB',
       surface: B,
       rail: dark ? '#252931' : '#E4E7ED',
+      // Set apart by its own shade, as the style does everything: no line.
+      railLine: 'none',
       border,
       dividerColor: border,
       treeLine: dark ? '#414653' : '#CDD2DB',
@@ -201,6 +203,12 @@ export const build: StyleBuild = (mode, accent) => {
       sheetSh: SHADOW_LG,
       sheetLine: border,
       sheetBlur: 'none',
+      // Experiment (the owner, 2026-11-13): the desktop search palette is gently convex. Its surface softly darkens
+      // toward the bottom-right edge into the dimmed backdrop's colour (the page under the 80 % scrim), with a faint
+      // light rim top-left; no border.
+      paletteImg: `radial-gradient(140% 130% at 30% 20%, transparent 62%, ${rgba(mix(B, '#000000', 0.78), 0.1)} 100%)`,
+      paletteSh: `inset 4px 4px 9px -5px ${dark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(255, 255, 255, 0.6)'}, inset -8px -8px 16px -8px ${rgba(mix(B, '#000000', 0.78), 0.35)}`,
+      paletteLine: 'transparent',
       overlay: 'rgba(0, 0, 0, 0.8)',
       popSolid: B,
       popBorder: dark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.65)',

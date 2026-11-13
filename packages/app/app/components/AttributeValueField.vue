@@ -95,7 +95,7 @@ function onSelect(value: unknown): void {
         class="h-11"
         @update:model-value="onInput"
       />
-      <p v-if="hint !== null" class="text-xs text-muted-foreground">{{ $t('item.numberHint', { value: hint }) }}</p>
+      <p v-if="hint !== null" class="field-text text-xs text-muted-foreground">{{ $t('item.numberHint', { value: hint }) }}</p>
     </template>
   </div>
 </template>

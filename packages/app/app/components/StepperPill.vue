@@ -29,8 +29,12 @@ const minusLabel = computed(() => (props.name === null ? t('stockActions.useOne'
 const plusLabel = computed(() => (props.name === null ? t('stockActions.addOne') : t('stockActions.addOneOf', { name: props.name })))
 
 function press(step: 1 | -1): void {
-  buzz()
   props.stepper.press(step)
+}
+// The tick comes when the finger lands, not when it lifts (click), so it is felt with the touch itself. Touch only: a
+// mouse or keyboard press has no vibration to give.
+function tick(event: PointerEvent): void {
+  if (event.pointerType === 'touch') buzz()
 }
 // The pill (R(3,8), radius 14) and its halves: each sinks as its own rectangle, rounded on the pill's outer side only.
 const zone = 'pill-step size-11 shrink-0'
@@ -46,6 +50,7 @@ const zone = 'pill-step size-11 shrink-0'
           :class="zone"
           :aria-label="minusLabel"
           :disabled="locked || !stepper.canDecrease.value"
+          @pointerdown="tick"
           @click="press(-1)"
         >
           <Minus class="size-5" aria-hidden="true" />
@@ -68,7 +73,7 @@ const zone = 'pill-step size-11 shrink-0'
     </button>
     <Tooltip>
       <TooltipTrigger as-child>
-        <Button variant="ghost" size="icon" :class="zone" :aria-label="plusLabel" :disabled="locked" @click="press(1)">
+        <Button variant="ghost" size="icon" :class="zone" :aria-label="plusLabel" :disabled="locked" @pointerdown="tick" @click="press(1)">
           <Plus class="size-5" aria-hidden="true" />
         </Button>
       </TooltipTrigger>

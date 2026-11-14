@@ -8,7 +8,7 @@ import {
   type InventoryStorage,
 } from '@antresol/core'
 import { describe, expect, it } from 'vitest'
-import { attributeCreate, makeStorage, TEST_ACTOR, variantsCreate } from './helpers'
+import { attributeCreate, itemCreate, makeStorage, TEST_ACTOR, variantsCreate } from './helpers'
 
 async function setup(): Promise<{ storage: InventoryStorage; inv: string; t1: string; t2: string }> {
   const storage = await makeStorage()
@@ -479,5 +479,52 @@ describe('duplicate tag ids', () => {
     expect(await tags()).toEqual([t1])
     await storage.apply({ type: 'item.update', id, tagIds: [t2, t2, t1, t2] }, TEST_ACTOR)
     expect([...(await tags())].sort()).toEqual([t1, t2].sort())
+  })
+})
+
+describe('icons', () => {
+  async function setup() {
+    const storage = await makeStorage()
+    const inv = newId()
+    await storage.apply({ type: 'inventory.create', id: inv, name: 'A', description: null, currency: 'USD' }, TEST_ACTOR)
+    return { storage, inv }
+  }
+
+  it('an item is created without an icon, with one, changed, kept by other updates and cleared', async () => {
+    const { storage, inv } = await setup()
+    const [plain, iconic] = [newId(), newId()]
+    await storage.apply(itemCreate(inv, plain), TEST_ACTOR)
+    await storage.apply({ ...(itemCreate(inv, iconic, 'Chip') as Extract<Command, { type: 'item.create' }>), icon: 'microchip' }, TEST_ACTOR)
+    const icons = async () => Object.fromEntries((await storage.loadInventory(inv)).items.map((i) => [i.id, i.icon]))
+    expect(await icons()).toEqual({ [plain]: null, [iconic]: 'microchip' })
+    await storage.apply({ type: 'item.update', id: iconic, icon: 'cpu' }, TEST_ACTOR)
+    await storage.apply({ type: 'item.update', id: iconic, name: 'Chip 2' }, TEST_ACTOR)
+    expect((await icons())[iconic]).toBe('cpu')
+    await storage.apply({ type: 'item.update', id: iconic, icon: null }, TEST_ACTOR)
+    expect((await icons())[iconic]).toBeNull()
+  })
+
+  it('a folder is created without an icon, with one, changed, kept by other updates and cleared', async () => {
+    const { storage, inv } = await setup()
+    const [plain, iconic] = [newId(), newId()]
+    await storage.apply({ type: 'folder.create', id: plain, inventoryId: inv, parentId: null, name: 'P', description: null }, TEST_ACTOR)
+    await storage.apply({ type: 'folder.create', id: iconic, inventoryId: inv, parentId: null, name: 'I', description: null, icon: 'box' }, TEST_ACTOR)
+    const icons = async () => Object.fromEntries((await storage.loadInventory(inv)).folders.map((f) => [f.id, f.icon]))
+    expect(await icons()).toEqual({ [plain]: null, [iconic]: 'box' })
+    await storage.apply({ type: 'folder.update', id: iconic, icon: 'archive' }, TEST_ACTOR)
+    await storage.apply({ type: 'folder.update', id: iconic, name: 'I2' }, TEST_ACTOR)
+    expect((await icons())[iconic]).toBe('archive')
+    await storage.apply({ type: 'folder.update', id: iconic, icon: null }, TEST_ACTOR)
+    expect((await icons())[iconic]).toBeNull()
+  })
+
+  it('the patch rows of an item and a folder write carry the icon', async () => {
+    const { storage, inv } = await setup()
+    const [f, i] = [newId(), newId()]
+    const fr = await storage.apply({ type: 'folder.create', id: f, inventoryId: inv, parentId: null, name: 'F', description: null, icon: 'box' }, TEST_ACTOR)
+    expect(fr.patch!.folders!.find((x) => x.id === f)!.icon).toBe('box')
+    await storage.apply(itemCreate(inv, i), TEST_ACTOR)
+    const ir = await storage.apply({ type: 'item.update', id: i, icon: 'microchip' }, TEST_ACTOR)
+    expect(ir.patch!.items!.find((x) => x.id === i)!.icon).toBe('microchip')
   })
 })

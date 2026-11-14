@@ -23,6 +23,8 @@ export interface Folder extends Audited, Archivable {
   parentId: Id | null
   name: string
   description: string | null
+  /** An icon name (isIconName) or null. */
+  icon: string | null
 }
 export interface Item extends Audited, Archivable {
   id: Id
@@ -30,6 +32,7 @@ export interface Item extends Audited, Archivable {
   folderId: Id | null
   name: string
   description: string | null
+  icon: string | null
   unitKey: string
   tagIds: Id[]
 }

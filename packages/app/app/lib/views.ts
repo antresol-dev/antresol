@@ -9,7 +9,7 @@ import {
   formatAttributeValue,
   itemAxes,
   resolveUnit,
-  variantLabel,
+  variantDisplayLabel,
   type Folder,
   type Id,
   type InventorySnapshot,
@@ -137,7 +137,7 @@ function buildIndex(s: InventorySnapshot): Index {
   const activeVariantCount = new Map<Id, number>()
   const itemVariants = new Map<Id, Variant[]>()
   for (const v of s.variants) {
-    variants.set(v.id, { name: variantLabel(s, v), archived: v.archivedAt !== null })
+    variants.set(v.id, { name: variantDisplayLabel(s, v), archived: v.archivedAt !== null })
     if (v.archivedAt === null) {
       activeVariantCount.set(v.itemId, (activeVariantCount.get(v.itemId) ?? 0) + 1)
       push(itemVariants, v.itemId, v)

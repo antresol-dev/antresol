@@ -1,4 +1,4 @@
-import { createSearch, newId, variantLabel, type Actor, type Id, type InventorySnapshot, type InventoryStorage } from '@antresol/core'
+import { createSearch, newId, variantDisplayLabel, variantLabel, type Actor, type Id, type InventorySnapshot, type InventoryStorage } from '@antresol/core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import {
@@ -138,7 +138,7 @@ describe('palette', () => {
     expect(new Set(keys).size).toBe(keys.length)
 
     const resistor = snap.items.find((i) => i.name === 'Резистор 0,25 Вт')!
-    const label10k = variantLabel(snap, snap.variants.find((v) => v.itemId === resistor.id && variantLabel(snap, v).replace(/\s/g, '').toLowerCase().startsWith('10k'))!)
+    const label10k = variantDisplayLabel(snap, snap.variants.find((v) => v.itemId === resistor.id && variantLabel(snap, v).replace(/\s/g, '').toLowerCase().startsWith('10k'))!)
     // A variant hit highlights the variant's label; the empty query lists only the actions.
     const [variantRow] = paletteResults(snap, createSearch(snap), { ...ctx, query: '10k' }, label)[0]!.rows
     expect(variantRow).toMatchObject({

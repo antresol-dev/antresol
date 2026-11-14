@@ -8,16 +8,16 @@ describe('planVariantBatch', () => {
     expect(lines).toEqual([])
     const s = axisSnapshot()
     const r = planVariantBatch(s, 'R', '2k, 4k7, 4,7k')
-    expect(r.map((l) => l.label)).toEqual(['2 kΩ', '4.7 kΩ', '4.7 kΩ'])
+    expect(r.map((l) => l.label)).toEqual(['2 kΩ', '4.7 kΩ', '4.7 kΩ'])
     expect(r.map((l) => l.repeat)).toEqual([false, false, true])
   })
 
   it('reads one variant per line on several axes', () => {
     const lines = planVariantBatch(axisSnapshot(), 'C', '100n; 50V\n100n; 16V\n47n; 25V')
     expect(lines.map((l) => [l.label, l.error])).toEqual([
-      ['100 nF · 50 V', null],
-      ['100 nF · 16 V', null],
-      ['47 nF · 25 V', null],
+      ['100 nF · 50 V', null],
+      ['100 nF · 16 V', null],
+      ['47 nF · 25 V', null],
     ])
     expect(lines[0]!.duplicate).toMatchObject({ archived: false })
     expect(lines[1]!.duplicate).toBeNull()
@@ -43,16 +43,16 @@ describe('planVariantBatch', () => {
   it('reads a quantity after the values and previews it', () => {
     const lines = planVariantBatch(axisSnapshot(), 'C', '100n; 50V; 10\n100n; 16V')
     expect(lines.map((l) => [l.label, l.quantity, l.quantityLabel, l.error])).toEqual([
-      ['100 nF · 50 V', '10', '10 pcs', null],
-      ['100 nF · 16 V', null, null, null],
+      ['100 nF · 50 V', '10', '10 pcs', null],
+      ['100 nF · 16 V', null, null, null],
     ])
   })
 
   it('reads a quantity on one axis and keeps the comma list without one', () => {
     const [one] = planVariantBatch(axisSnapshot(), 'R', '1k; 100')
-    expect([one!.label, one!.quantity]).toEqual(['1 kΩ', '100'])
+    expect([one!.label, one!.quantity]).toEqual(['1 kΩ', '100'])
     const list = planVariantBatch(axisSnapshot(), 'R', '1k, 10k')
-    expect(list.map((l) => [l.label, l.quantity])).toEqual([['1 kΩ', null], ['10 kΩ', null]])
+    expect(list.map((l) => [l.label, l.quantity])).toEqual([['1 kΩ', null], ['10 kΩ', null]])
   })
 
   it('always shows the unit on the quantity, also from a thousand up', () => {

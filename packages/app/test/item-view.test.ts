@@ -481,7 +481,7 @@ describe('bucketDescription', () => {
     await run({ type: 'attribute.create', id: tolerance, inventoryId, name: 'Tolerance', kind: 'number', options: [], unit: '%', siPrefixes: false })
     await run({ type: 'item.setAttribute', itemId: resistor, attributeId: tolerance, value: '5' })
     const v = s.variants.find((x) => x.itemId === resistor && itemView(s, resistor)!.buckets.find((b) => b.variantId === x.id)?.name?.replace(/\s/g, '').toLowerCase().startsWith('10k'))!
-    expect(bucketDescription(s, resistor, v.id)).toBe('10 kΩ · Резистор 0,25 Вт · 5 %')
+    expect(bucketDescription(s, resistor, v.id)).toBe('10 kΩ · Резистор 0,25 Вт · 5 %')
   })
 
   it('is the item name and its attributes for the item itself, three attributes at most', async () => {

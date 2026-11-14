@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BUILTIN_UNITS, formatAmountParts, itemArchived, resolveUnit, type CommittedLine, type Intake, type InventorySnapshot } from '@antresol/core'
+import { BUILTIN_UNITS, formatAmountParts, itemArchived, keepValuesTogether, resolveUnit, type CommittedLine, type Intake, type InventorySnapshot } from '@antresol/core'
 import { ExternalLink } from '@lucide/vue'
 import { formatDateTime, formatMoney } from '~/lib/format'
 import { formatDay } from '~/lib/intake-list'
@@ -38,7 +38,7 @@ const lines = computed<LineView[]>(() =>
   }),
 )
 
-const label = (l: CommittedLine): string => (l.variantLabel ? `${l.itemName} · ${l.variantLabel}` : l.itemName)
+const label = (l: CommittedLine): string => (l.variantLabel ? `${l.itemName} · ${keepValuesTogether(l.variantLabel)}` : l.itemName)
 const meta = computed(() => {
   const i = props.intake
   return [formatDay(i.header.purchasedOn), i.committedAt ? formatDateTime(i.committedAt) : null, i.updatedBy || null]

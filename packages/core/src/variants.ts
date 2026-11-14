@@ -88,6 +88,17 @@ export function variantLabel(s: InventorySnapshot, v: Variant): string {
   return parts.length > 0 ? parts.join(SEPARATOR) : EMPTY
 }
 
+/** A label for the screen: the spaces inside each value (`4.7 kΩ`) become no-break spaces so a value and its unit stay on
+ *  one line, and only the ` · ` separators can wrap. Never stored, searched or exported; `variantLabel` stays plain. */
+export function keepValuesTogether(label: string): string {
+  return label.split(SEPARATOR).map((part) => part.replace(/ /g, '\u00a0')).join(SEPARATOR)
+}
+
+/** `variantLabel` for display, see `keepValuesTogether`. */
+export function variantDisplayLabel(s: InventorySnapshot, v: Variant): string {
+  return keepValuesTogether(variantLabel(s, v))
+}
+
 /** Two non-empty values of one axis. Values that do not fit the kind (none should) go after the ones that do. */
 function compareValues(a: Attribute, x: string, y: string): number {
   const text = () => x.localeCompare(y, undefined, { numeric: true, sensitivity: 'base' })

@@ -5,6 +5,7 @@ import {
   itemStock,
   newId,
   resolveUnit,
+  variantDisplayLabel,
   variantLabel,
   type InventorySnapshot,
   type InventoryStorage,
@@ -123,7 +124,7 @@ describe('searchRows', () => {
   it('describes a variant hit with its path', () => {
     const hits = createSearch(snap).search('10k')
     const rows = searchRows(snap, hits)
-    const row = rows.find((r) => r.variantName === variantLabel(snap, byValue(snap, snap.items.find((i) => i.name === 'Резистор 0,25 Вт')!.id, '10k')))!
+    const row = rows.find((r) => r.variantName === variantDisplayLabel(snap, byValue(snap, snap.items.find((i) => i.name === 'Резистор 0,25 Вт')!.id, '10k')))!
     expect(row.number).toBe('100')
     expect(row.path).toBe('Passive components / Resistors')
   })

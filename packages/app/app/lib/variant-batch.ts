@@ -1,4 +1,4 @@
-import { BUILTIN_UNITS, duplicateOf, formatAmountParts, formatAttributeValue, itemAxes, resolveUnit, sameAxisValue, type Id, type InventorySnapshot, type Quantity, type UnitDef } from '@antresol/core'
+import { BUILTIN_UNITS, duplicateOf, formatAmountParts, formatAttributeValue, itemAxes, keepValuesTogether, resolveUnit, sameAxisValue, type Id, type InventorySnapshot, type Quantity, type UnitDef } from '@antresol/core'
 import { parseAmountText } from './amounts'
 import { parseAttributeInput } from './attribute-values'
 import { splitValueList, splitVariantLines } from './lists'
@@ -69,7 +69,7 @@ export function planVariantBatch(s: InventorySnapshot, itemId: Id, input: string
     return {
       raw,
       values,
-      label: axes.map((a) => formatAttributeValue(a, byAxis.get(a.id)!)).join(SEPARATOR),
+      label: axes.map((a) => keepValuesTogether(formatAttributeValue(a, byAxis.get(a.id)!))).join(SEPARATOR),
       error: null,
       duplicate: existing ? { variantId: existing.id, archived: existing.archivedAt !== null, archiveId: existing.archiveId } : null,
       repeat,

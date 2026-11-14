@@ -176,9 +176,9 @@ describe('existingMatches', () => {
 
   it('finds a variant by a value read by its attribute rules', () => {
     const rows = existingMatches('10k', s)
-    expect(names(rows)[0]).toBe('Резистор 0,25 Вт · 10 kΩ')
+    expect(names(rows)[0]).toBe('Резистор 0,25 Вт · 10 kΩ')
     expect(rows[0]!.number).toBe('100')
-    expect(names(existingMatches('10000', s))[0]).toBe('Резистор 0,25 Вт · 10 kΩ')
+    expect(names(existingMatches('10000', s))[0]).toBe('Резистор 0,25 Вт · 10 kΩ')
   })
 
   it('makes no guesses: no fuzzy hits, nothing for a blank or one-letter name', () => {

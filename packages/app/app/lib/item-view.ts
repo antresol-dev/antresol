@@ -9,7 +9,8 @@ import {
   negQ,
   resolveUnit,
   unitPrice,
-  variantLabel,
+  variantDisplayLabel,
+  keepValuesTogether,
   type Attribute,
   type AttributeKind,
   type Folder,
@@ -144,7 +145,7 @@ export function bucketDescription(s: InventorySnapshot, itemId: Id, variantId: I
   if (!item) return ''
   const label = variantId === null ? null : (ix.variants.get(variantId)?.name ?? null)
   const values = sharedAttributes(s, itemId)
-    .flatMap((a) => (a.display === null ? [] : [a.display]))
+    .flatMap((a) => (a.display === null ? [] : [keepValuesTogether(a.display)]))
     .slice(0, 3)
   return [label, item.name, ...values].filter((part): part is string => !!part).join(' · ')
 }
@@ -215,9 +216,9 @@ export function itemView(s: InventorySnapshot, itemId: Id): ItemView | null {
   for (const v of variants) {
     const values = axisAttributes.map((a) => {
       const value = variantValues.get(v.id)?.get(a.id) ?? null
-      return { attributeId: a.id, name: a.name, value, display: value === null ? '—' : formatAttributeValue(a, value) }
+      return { attributeId: a.id, name: a.name, value, display: value === null ? '—' : keepValuesTogether(formatAttributeValue(a, value)) }
     })
-    buckets.push(bucket(v.id, variantLabel(s, v), v.description, values))
+    buckets.push(bucket(v.id, variantDisplayLabel(s, v), v.description, values))
   }
 
   // Same rule as core's itemStock: every bucket except archived variants.

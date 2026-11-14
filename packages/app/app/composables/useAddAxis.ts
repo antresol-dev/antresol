@@ -1,4 +1,4 @@
-import { newId, variantLabel, type Id } from '@antresol/core'
+import { newId, variantDisplayLabel, type Id } from '@antresol/core'
 import { axisAddLoss } from '~/lib/axes'
 import { looseTransferOffer } from '~/lib/item-view'
 
@@ -26,7 +26,7 @@ export function useAddAxis() {
     const after = workspace.state.snapshot
     const created = after?.variants.find((v) => v.id === firstVariantId)
     if (!offer || !after || !created) return null
-    return { offer, variants: [{ id: created.id, name: variantLabel(after, created) }] }
+    return { offer, variants: [{ id: created.id, name: variantDisplayLabel(after, created) }] }
   }
   return { add, loss }
 }

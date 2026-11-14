@@ -1,4 +1,4 @@
-import { newId, variantLabel, type Id, type InventorySnapshot, type InventoryStorage } from '@antresol/core'
+import { newId, variantDisplayLabel, variantLabel, type Id, type InventorySnapshot, type InventoryStorage } from '@antresol/core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import { boughtRows, cleanTitle, isShareLike, lotKey, parseShare, shareMatches, shareParams, shopLinks, valueChips } from '../app/lib/share'
@@ -157,7 +157,7 @@ describe('with the demo inventory', () => {
   it('finds the best matches for a cleaned title, the 10K variant among them', () => {
     const rows = shareMatches('Metal Film Resistor 1% 10K', snap)
     expect(rows.length).toBeLessThanOrEqual(5)
-    const ten = variantLabel(snap, snap.variants.find((v) => v.itemId === resistor && variantLabel(snap, v).startsWith('10 k'))!)
+    const ten = variantDisplayLabel(snap, snap.variants.find((v) => v.itemId === resistor && variantLabel(snap, v).startsWith('10 k'))!)
     expect(rows[0]).toMatchObject({ itemId: resistor, variantName: ten, number: '100' })
     expect(shareMatches('', snap)).toEqual([])
     // "1" of "1/4W" and "1%" is no word of its own: it would match "16 V" and "100 nF" as a prefix.
@@ -176,7 +176,7 @@ describe('with the demo inventory', () => {
       snap,
     )
     expect(rows.map(({ name, variantName, bought, left }) => ({ name, variantName, bought, left }))).toEqual([
-      { name: 'Резистор 0,25 Вт', variantName: '10 kΩ', bought: '100 pcs', left: '100 pcs' },
+      { name: 'Резистор 0,25 Вт', variantName: '10 kΩ', bought: '100 pcs', left: '100 pcs' },
       { name: 'TL072', variantName: null, bought: '40 pcs', left: '37 pcs' },
     ])
     expect(rows[0]!.at).toBe('2026-08-12T10:00:00Z')

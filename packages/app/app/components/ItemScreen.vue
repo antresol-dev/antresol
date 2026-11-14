@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { variantLabel, type Id } from '@antresol/core'
-import { ExternalLink, Plus } from '@lucide/vue'
+import { Plus } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { toast } from 'vue-sonner'
 import type { StockTarget } from '~/components/StockSheet.vue'
@@ -9,7 +9,6 @@ import { lastCounted } from '~/lib/counted'
 import { errorMessageKey } from '~/lib/errors'
 import { bucketDescription, itemView } from '~/lib/item-view'
 import { archiveNow } from '~/lib/undo'
-import { shopLinks } from '~/lib/share'
 import type { StockMode } from '~/lib/stock-forms'
 import { pinnedValues } from '~/lib/views'
 
@@ -192,9 +191,8 @@ async function removeAttribute(): Promise<void> {
   }
 }
 
-// The values shown in lists ("Show in lists") at the top of the card, and shop searches by the name (spec 4.10, 4.11).
+// The values shown in lists ("Show in lists") (spec 4.10).
 const pinned = computed(() => (snapshot.value && view.value ? pinnedValues(snapshot.value, props.itemId) : []))
-const shops = computed(() => (view.value ? shopLinks(view.value.item.name) : []))
 const hasAbout = computed(() => !!view.value && (!!view.value.item.description || view.value.tags.length > 0))
 
 const highlight = computed(() => (view.value?.hasVariants ? props.variantId : null))
@@ -319,25 +317,8 @@ const linkClass =
       />
       <AttributeValueSheet :view="view" :open="attributeOpen" :attribute-id="attributeId" @close="attributeOpen = false" />
       <VariantValuesSheet :view="view" :variant-id="valuesId" @close="valuesId = null" />
-      <!-- Shops: one row of chips that scrolls sideways instead of wrapping (design system, audit #20); the row bleeds to
-           the screen's edges so the last chip is not cut by the column's padding, and pads vertically for the chips'
-           shadows. -->
-      <nav class="grid min-w-0 gap-2" :aria-label="$t('shops.title')">
-        <span class="text-sm font-semibold text-subtle-foreground">{{ $t('shops.title') }}</span>
-        <ul class="-mx-4 -my-1 flex gap-2 overflow-x-auto px-4 py-1 [scrollbar-width:none] lg:mx-0 lg:flex-wrap lg:overflow-visible lg:px-0">
-          <li v-for="shop in shops" :key="shop.name" class="shrink-0">
-            <a
-              :href="shop.url"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="raised pressable inline-flex h-11 items-center gap-2 px-3 text-sm btn-text"
-            >
-              {{ shop.name }}
-              <ExternalLink class="size-4 text-icon" aria-hidden="true" />
-            </a>
-          </li>
-        </ul>
-      </nav>
+      <!-- "Find in shops" is hidden (owner, 2026-11-14): a fixed list of electronics shops is wrong for other kinds of
+           items and other countries. shopLinks (lib/share.ts) stays for the per-inventory shops in the backlog. -->
       <JournalList :item-id="itemId" />
     </template>
     <EmptyState v-else-if="snapshot || blocker?.kind === 'gone'" :text="$t('empty.itemGone')">

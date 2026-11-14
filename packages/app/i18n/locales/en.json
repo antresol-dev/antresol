@@ -290,6 +290,20 @@
     "balance": "→ {amount}"
   },
   "form": { "name": "Name", "description": "Description", "optional": "Optional" },
+  "iconPicker": {
+    "title": "Icon",
+    "search": "Search icons",
+    "none": "No icon",
+    "empty": "No icons match.",
+    "loading": "Loading icons",
+    "field": "Icon",
+    "noneValue": "None",
+    "choose": "Choose icon",
+    "tileTitle": "Photo or icon",
+    "photo": "Photo",
+    "icon": "Icon",
+    "remove": "Remove icon"
+  },
   "stockForm": {
     "title": { "receive": "Receive", "use": "Use", "set": "Count", "transfer": "Move stock" },
     "submit": { "receive": "Receive", "use": "Use", "set": "Save count", "transfer": "Move" },

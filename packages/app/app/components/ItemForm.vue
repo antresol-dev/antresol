@@ -21,6 +21,8 @@ const name = ref(props.item.name)
 const description = ref(props.item.description ?? '')
 const unitKey = ref(props.item.unitKey)
 const tagIds = ref<Id[]>([...props.item.tagIds])
+const icon = ref<string | null>(props.item.icon)
+const pickingIcon = ref(false)
 // The sheet around the form locks while this is set.
 const busy = defineModel<boolean>('busy', { default: false })
 const errorKey = ref<string | null>(null)
@@ -34,11 +36,12 @@ const baseline = captureBaseline({
   description: props.item.description,
   unitKey: props.item.unitKey,
   tagIds: props.item.tagIds,
+  icon: props.item.icon,
 })
 const changes = computed(() =>
   changedFields(
     baseline,
-    { name: name.value.trim(), description: description.value.trim() || null, unitKey: unitKey.value, tagIds: tagIds.value },
+    { name: name.value.trim(), description: description.value.trim() || null, unitKey: unitKey.value, tagIds: tagIds.value, icon: icon.value },
   ),
 )
 const canSubmit = computed(() => !locked.value && !!snapshot.value && Object.keys(changes.value).length > 0)
@@ -103,6 +106,7 @@ async function submit(): Promise<void> {
         </SelectContent>
       </Select>
     </div>
+    <IconField v-model:picking="pickingIcon" :icon="icon" :disabled="locked" @pick="icon = $event" />
     <div v-if="snapshot" class="grid gap-2">
       <Label>{{ $t('itemForm.tags') }}</Label>
       <TagPicker v-model="tagIds" :snapshot="snapshot" :locked="locked" @create="createTag" />

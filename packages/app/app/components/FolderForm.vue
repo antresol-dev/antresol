@@ -18,6 +18,8 @@ const { state } = workspace
 const existing = props.mode === 'rename' ? props.folder : null
 const name = ref(existing?.name ?? '')
 const description = ref(existing?.description ?? '')
+const icon = ref<string | null>(existing?.icon ?? null)
+const pickingIcon = ref(false)
 // New folder: where it goes, the current folder to begin with (or the root). The same list-picker as in "Add item".
 const parentId = ref<Id | null>(props.parentId)
 const picking = ref(false)
@@ -38,11 +40,11 @@ const busy = defineModel<boolean>('busy', { default: false })
 const errorKey = ref<string | null>(null)
 
 // Rename sends only what differs from the folder as it was opened: a stale form must not revert another device's edit.
-const baseline = captureBaseline({ name: existing?.name ?? '', description: existing?.description ?? null })
+const baseline = captureBaseline({ name: existing?.name ?? '', description: existing?.description ?? null, icon: existing?.icon ?? null })
 const changes = computed(() =>
   changedFields(
     baseline,
-    { name: name.value.trim(), description: description.value.trim() || null },
+    { name: name.value.trim(), description: description.value.trim() || null, icon: icon.value },
   ),
 )
 const canSubmit = computed(
@@ -67,6 +69,7 @@ async function submit(): Promise<void> {
         parentId: parentId.value,
         name: name.value.trim(),
         description: description.value.trim() || null,
+        icon: icon.value,
       })
     } else if (existing) {
       await workspace.apply({
@@ -119,6 +122,7 @@ async function submit(): Promise<void> {
       </Label>
       <Input id="folder-description" v-model="description" autocomplete="off" class="h-11" />
     </div>
+    <IconField v-model:picking="pickingIcon" :icon="icon" :disabled="busy || !!state.readOnly" @pick="icon = $event" />
     <p id="folder-form-error" role="alert" class="field-text text-sm text-destructive">
       <template v-if="errorKey">{{ $t(errorKey) }}</template>
     </p>

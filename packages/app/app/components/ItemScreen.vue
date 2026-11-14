@@ -193,6 +193,10 @@ async function removeAttribute(): Promise<void> {
 
 // The values shown in lists ("Show in lists") (spec 4.10).
 const pinned = computed(() => (snapshot.value && view.value ? pinnedValues(snapshot.value, props.itemId) : []))
+const folderIcon = computed(() => {
+  const folderId = view.value?.item.folderId
+  return folderId && snapshot.value ? (snapshot.value.folders.find((f) => f.id === folderId)?.icon ?? null) : null
+})
 const hasAbout = computed(() => !!view.value && (!!view.value.item.description || view.value.tags.length > 0))
 
 const highlight = computed(() => (view.value?.hasVariants ? props.variantId : null))
@@ -218,7 +222,7 @@ const linkClass =
     <template v-if="view && snapshot">
       <StockSheet :view="view" :target="stockTarget" @close="stockTarget = null" />
       <!-- Without photos the description and tags sit beside the 64 px photo tile (design system F1). -->
-      <ItemGallery :item-id="itemId" :photos="view.photos">
+      <ItemGallery :item-id="itemId" :photos="view.photos" :icon="view.item.icon" :folder-icon="folderIcon">
         <template v-if="hasAbout && view.photos.length === 0" #beside>
           <ItemAbout :description="view.item.description" :tags="view.tags" />
         </template>

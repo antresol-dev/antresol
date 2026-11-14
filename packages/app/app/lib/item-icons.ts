@@ -77,3 +77,12 @@ export function loadItemIconSet(): Promise<ItemIconSet> {
 /** The component for an icon name, or null when the name is unknown or the set has not loaded: callers fall to the next step. */
 export const iconFrom = (set: ItemIconSet | null, name: string | null | undefined): Component | null =>
   set && isItemIcon(name) ? (set[name] ?? null) : null
+
+/** The groups with only the names matching the query (case-insensitive; spaces match hyphens); groups left empty are dropped. */
+export function filterIconGroups(groups: ItemIconGroup[], query: string): ItemIconGroup[] {
+  const q = query.trim().toLowerCase().replace(/\s+/g, '-')
+  if (q === '') return groups
+  return groups
+    .map((g) => ({ title: g.title, names: g.names.filter((n) => n.includes(q)) }))
+    .filter((g) => g.names.length > 0)
+}

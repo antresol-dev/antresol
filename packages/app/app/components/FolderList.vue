@@ -2,10 +2,13 @@
 import type { Id } from '@antresol/core'
 import { Archive, ClipboardCheck, Folder, FolderInput, Pencil } from '@lucide/vue'
 import type { ComponentPublicInstance } from 'vue'
+import { iconFrom } from '~/lib/item-icons'
 import { piecesLabel, type FolderRow } from '~/lib/views'
 import type RowMenu from './RowMenu.vue'
 
 defineProps<{ folders: FolderRow[] }>()
+
+const iconSet = useItemIconSet()
 
 const { t } = useI18n()
 const { state } = useWorkspace()
@@ -59,7 +62,7 @@ function pointerdown(id: Id, e: PointerEvent): void {
         @click.capture="press.onClickCapture"
       >
         <span class="flex size-9 shrink-0 items-center justify-center rounded-thumb bg-accent-soft text-accent-soft-foreground">
-          <Folder class="size-5" aria-hidden="true" />
+          <component :is="iconFrom(iconSet, f.icon) ?? Folder" class="size-5" aria-hidden="true" />
         </span>
         <span class="min-w-0 grow truncate text-base font-semibold">{{ f.name }}</span>
         <span v-if="f.pieces !== null" class="min-w-18 shrink-0 text-right text-sm font-semibold text-muted-foreground tabular-nums">{{ piecesLabel(f.pieces) }}</span>

@@ -30,6 +30,8 @@ export interface Crumb {
 export interface FolderRow {
   id: Id
   name: string
+  /** The folder's icon name; null when none. */
+  icon: string | null
   /** Pieces in stock over the active subtree (items counted in pcs only); null when no such item is in it. */
   pieces: Quantity | null
 }
@@ -47,6 +49,10 @@ export interface ItemRow {
   name: string
   /** The name of the item's folder (its thumbnail's letters); null in the inventory root. */
   folderName: string | null
+  /** The item's own icon name; null when none. */
+  icon: string | null
+  /** The icon name of the item's folder (the default for its items); null when none or in the root. */
+  folderIcon: string | null
   description: string | null
   variantCount: number
   number: string
@@ -295,6 +301,7 @@ function listBuckets(s: InventorySnapshot, ix: Index, item: Item): { buckets: Li
   return { buckets: all.slice(0, LIST_BUCKETS), moreBuckets: Math.max(0, all.length - LIST_BUCKETS) }
 }
 
+const folderIconOf = (ix: Index, item: Item): string | null => (item.folderId === null ? null : (ix.folders.get(item.folderId)?.icon ?? null))
 const folderNameOf = (ix: Index, item: Item): string | null => (item.folderId === null ? null : (ix.folders.get(item.folderId)?.name ?? null))
 
 function itemRow(s: InventorySnapshot, ix: Index, item: Item): ItemRow {
@@ -303,6 +310,8 @@ function itemRow(s: InventorySnapshot, ix: Index, item: Item): ItemRow {
     id: item.id,
     name: item.name,
     folderName: folderNameOf(ix, item),
+    icon: item.icon ?? null,
+    folderIcon: folderIconOf(ix, item),
     description: item.description,
     variantCount: ix.activeVariantCount.get(item.id) ?? 0,
     ...suffixAmount(quantity, unitOf(s, item)),
@@ -332,6 +341,7 @@ export function folderView(s: InventorySnapshot, folderId: Id | null): FolderVie
     folders: (ix.childFolders.get(folderId) ?? []).map((f) => ({
       id: f.id,
       name: f.name,
+      icon: f.icon ?? null,
       pieces: ix.subtreePieces.get(f.id) ?? null,
     })),
     items: (ix.folderItems.get(folderId) ?? []).map((i) => itemRow(s, ix, i)),
@@ -355,6 +365,10 @@ export interface SearchRow {
   path: string
   /** The name of the item's folder (its thumbnail's letters); null in the inventory root. */
   folderName: string | null
+  /** The item's own icon name; null when none. */
+  icon: string | null
+  /** The icon name of the item's folder (the default for its items); null when none or in the root. */
+  folderIcon: string | null
   /** The matched variant's photo, else the item's cover. */
   cover: PhotoRef | null
   /** The item's pinned values (as ItemRow.pinned). */
@@ -385,6 +399,8 @@ export function searchRows(s: InventorySnapshot, hits: SearchHit[]): SearchRow[]
       amount: formatAmount(quantity, unitOf(s, item)),
       outOfStock: isEmpty(quantity),
       folderName: folderNameOf(ix, item),
+      icon: item.icon ?? null,
+      folderIcon: folderIconOf(ix, item),
       path: item.folderId === null ? '' : pathOf(ix, item.folderId).map((f) => f.name).join(' / '),
       cover: (variant && hit.variantId !== null ? ix.variantCovers.get(hit.variantId) : undefined) ?? ix.covers.get(item.id) ?? null,
       pinned: ix.pinned.get(item.id) ?? [],
@@ -491,6 +507,10 @@ export interface UsedByRow {
   name: string
   /** The name of the item's folder (its thumbnail's letters); null in the inventory root. */
   folderName: string | null
+  /** The item's own icon name; null when none. */
+  icon: string | null
+  /** The icon name of the item's folder (the default for its items); null when none or in the root. */
+  folderIcon: string | null
   /** Folder names from the root, " / "-joined; '' in the inventory root. */
   path: string
   cover: PhotoRef | null
@@ -524,6 +544,8 @@ export function usedBy(s: InventorySnapshot, target: UsageTarget): UsedByRow[] {
       id: item.id,
       name: item.name,
       folderName: folderNameOf(ix, item),
+      icon: item.icon ?? null,
+      folderIcon: folderIconOf(ix, item),
       path: path.map((f) => f.name).join(' / '),
       cover: ix.covers.get(item.id) ?? null,
     })

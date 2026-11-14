@@ -61,11 +61,20 @@ const thumb = rend('thumb', 180, 180, 'cover')
 describe('pickRendition', () => {
   it('takes the smallest copy that is big enough, else the largest there is', () => {
     const all = [original, medium, thumb]
-    expect(pickRendition(all, 'thumb')).toBe(thumb)
+    expect(pickRendition(all, 'thumb')).toBe(medium)
     expect(pickRendition(all, 'card')).toBe(original)
     expect(pickRendition(all, 'full')).toBe(original)
     expect(pickRendition([medium, thumb], 'full')).toBe(medium)
-    expect(pickRendition([medium, thumb], 'thumb')).toBe(thumb)
+    expect(pickRendition([medium, thumb], 'thumb')).toBe(medium)
+  })
+  it('gives thumb an uncropped copy first (CSS centres it), a cover copy only when there is none', () => {
+    const small = rend('small', 200, 150, 'inside')
+    const mid = rend('mid', 480, 360, 'inside')
+    expect(pickRendition([original, mid, small, thumb], 'thumb')).toBe(mid)
+    expect(pickRendition([original, small, thumb], 'thumb')).toBe(original)
+    expect(pickRendition([small, thumb], 'thumb')).toBe(small)
+    expect(pickRendition([thumb], 'thumb')).toBe(thumb)
+    expect(pickRendition([thumb, rend('big', 400, 400, 'cover')], 'thumb')?.role).toBe('thumb')
   })
   it('never takes a cover copy for a bigger size', () => {
     expect(pickRendition([thumb], 'full')).toBeNull()
@@ -108,7 +117,8 @@ describe('pickRendition', () => {
 describe('displayablePhotoUrl with renditions', () => {
   it('returns the chosen copy, else the address derived from the url', () => {
     const photo = { url: HOST, urls: [original, medium, thumb] }
-    expect(displayablePhotoUrl(photo, 'thumb')).toBe(thumb.url)
+    expect(displayablePhotoUrl(photo, 'thumb')).toBe(medium.url)
+    expect(displayablePhotoUrl({ url: HOST, urls: [thumb] }, 'thumb')).toBe(thumb.url)
     expect(displayablePhotoUrl(photo, 'full')).toBe(original.url)
     expect(displayablePhotoUrl({ url: HOST, urls: [thumb] }, 'full')).toBe(photoUrl(HOST, 'full'))
     expect(displayablePhotoUrl({ url: HOST, urls: [null] as unknown as Rendition[] }, 'thumb')).toBe(photoUrl(HOST, 'thumb'))
@@ -128,17 +138,19 @@ describe('displayablePhotoUrl on ImgBB', () => {
   const ibb = 'https://i.ibb.co/o/photo.webp'
   const copies = [rend(2048, 'inside', 'original', 'o.webp'), rend(640, 'inside', 'medium', 'm.webp'), rend(180, 'cover', 'thumb', 'p.webp')]
   it('marks only the copy chosen for thumb, so the service worker caches it with the thumbnails', () => {
-    expect(displayablePhotoUrl({ url: ibb, urls: copies }, 'thumb')).toBe('https://i.ibb.co/c/p.webp?antresol=thumb')
+    const medium = rend(320, 'inside', 'medium', 'm2.webp')
+    expect(displayablePhotoUrl({ url: ibb, urls: [copies[0]!, medium, copies[2]!] }, 'thumb')).toBe('https://i.ibb.co/c/m2.webp?antresol=thumb')
+    expect(displayablePhotoUrl({ url: ibb, urls: [copies[2]!] }, 'thumb')).toBe('https://i.ibb.co/c/p.webp?antresol=thumb')
     expect(displayablePhotoUrl({ url: ibb, urls: copies }, 'card')).toBe('https://i.ibb.co/c/o.webp')
     expect(displayablePhotoUrl({ url: ibb, urls: copies }, 'full')).toBe('https://i.ibb.co/c/o.webp')
   })
-  it('marks a copy picked for thumb only when it is small (short side up to 320), not a big one picked for lack of a thumb', () => {
+  it('marks a copy picked for thumb only when it is small (short side up to 640), not a big one picked for lack of a thumb', () => {
     const [original, medium] = copies
-    // No thumb copy: the 640×640 medium is the smallest big enough, then the original.
-    expect(displayablePhotoUrl({ url: ibb, urls: [original!, medium!] }, 'thumb')).toBe('https://i.ibb.co/c/m.webp')
+    // The 640×640 medium is the smallest big enough, and still small enough to be marked; the original is not.
+    expect(displayablePhotoUrl({ url: ibb, urls: [original!, medium!] }, 'thumb')).toBe('https://i.ibb.co/c/m.webp?antresol=thumb')
     expect(displayablePhotoUrl({ url: ibb, urls: [original!] }, 'thumb')).toBe('https://i.ibb.co/c/o.webp')
-    expect(displayablePhotoUrl({ url: ibb, urls: [rend(320, 'inside', 'small', 's.webp')] }, 'thumb')).toBe('https://i.ibb.co/c/s.webp?antresol=thumb')
-    expect(displayablePhotoUrl({ url: ibb, urls: [rend(321, 'inside', 'small', 's.webp')] }, 'thumb')).toBe('https://i.ibb.co/c/s.webp')
+    expect(displayablePhotoUrl({ url: ibb, urls: [rend(640, 'inside', 'small', 's.webp')] }, 'thumb')).toBe('https://i.ibb.co/c/s.webp?antresol=thumb')
+    expect(displayablePhotoUrl({ url: ibb, urls: [rend(641, 'inside', 'small', 's.webp')] }, 'thumb')).toBe('https://i.ibb.co/c/s.webp')
     const wide = { ...rend(0, 'inside', 'wide', 'w.webp'), width: 1200, height: 300 }
     expect(displayablePhotoUrl({ url: ibb, urls: [wide] }, 'thumb')).toBe('https://i.ibb.co/c/w.webp?antresol=thumb')
   })

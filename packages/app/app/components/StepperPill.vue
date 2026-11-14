@@ -28,13 +28,11 @@ const locked = computed(() => !!workspace.state.readOnly || busy.value)
 const minusLabel = computed(() => (props.name === null ? t('stockActions.useOne') : t('stockActions.useOneOf', { name: props.name })))
 const plusLabel = computed(() => (props.name === null ? t('stockActions.addOne') : t('stockActions.addOneOf', { name: props.name })))
 
+// The tick comes with the click, when the finger lifts: a touch that turned into a scroll fires no click, so a scroll
+// that starts on a button stays silent. A disabled button gets no click either, so it never ticks.
 function press(step: 1 | -1): void {
+  buzz()
   props.stepper.press(step)
-}
-// The tick comes when the finger lands, not when it lifts (click), so it is felt with the touch itself. Touch only: a
-// mouse or keyboard press has no vibration to give.
-function tick(event: PointerEvent): void {
-  if (event.pointerType === 'touch' && !(event.currentTarget as HTMLButtonElement).disabled) buzz()
 }
 // The pill (R(3,8), radius 14) and its halves: each sinks as its own rectangle, rounded on the pill's outer side only.
 const zone = 'pill-step size-11 shrink-0'
@@ -50,7 +48,6 @@ const zone = 'pill-step size-11 shrink-0'
           :class="zone"
           :aria-label="minusLabel"
           :disabled="locked || !stepper.canDecrease.value"
-          @pointerdown="tick"
           @click="press(-1)"
         >
           <Minus class="size-5" aria-hidden="true" />
@@ -73,7 +70,7 @@ const zone = 'pill-step size-11 shrink-0'
     </button>
     <Tooltip>
       <TooltipTrigger as-child>
-        <Button variant="ghost" size="icon" :class="zone" :aria-label="plusLabel" :disabled="locked" @pointerdown="tick" @click="press(1)">
+        <Button variant="ghost" size="icon" :class="zone" :aria-label="plusLabel" :disabled="locked" @click="press(1)">
           <Plus class="size-5" aria-hidden="true" />
         </Button>
       </TooltipTrigger>

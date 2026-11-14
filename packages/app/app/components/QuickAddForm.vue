@@ -180,7 +180,7 @@ async function send(command: ItemCreate): Promise<void> {
           <h3 id="quick-add-existing" class="pt-1 text-xs font-semibold text-subtle-foreground">{{ $t('quickAdd.existing') }}</h3>
           <ul class="grid gap-0.5">
             <li v-for="m in matches" :key="`${m.itemId}:${m.variantId ?? ''}`" class="flex min-h-11 items-center gap-3 rounded-field px-1">
-              <ItemThumb :id="m.itemId" :folder-name="m.folderName" :cover="m.cover" class="size-9 rounded-thumb text-xs" />
+              <ItemThumb :id="m.itemId" :folder-name="m.folderName" :icon="m.icon" :folder-icon="m.folderIcon" :cover="m.cover" class="size-9 rounded-thumb text-xs" />
               <span class="flex min-w-0 flex-1 flex-col">
                 <span class="truncate text-sm font-semibold">
                   {{ m.name }}<span v-if="m.variantName" class="font-semibold text-muted-foreground"> · {{ m.variantName }}</span>

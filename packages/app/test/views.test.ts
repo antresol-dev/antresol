@@ -336,6 +336,28 @@ describe('index and edge cases', () => {
     moved.items.find((i) => i.id === tl.id)!.folderId = null
     expect(folderView(moved, null)!.items.find((r) => r.id === tl.id)!.folderName).toBeNull()
   })
+
+  it('gives rows the item icon and the folder icon, from the snapshot index; null when unset', () => {
+    const s = clone()
+    const tl = s.items.find((i) => i.name === 'TL072')!
+    const folder = s.folders.find((f) => f.id === tl.folderId)!
+    tl.icon = 'microchip'
+    folder.icon = 'cpu'
+    const row = folderView(s, folder.id)!.items.find((r) => r.id === tl.id)!
+    expect([row.icon, row.folderIcon]).toEqual(['microchip', 'cpu'])
+    expect(folderView(s, folder.parentId)!.folders.find((f) => f.id === folder.id)!.icon).toBe('cpu')
+    const [hit] = searchRows(s, [{ itemId: tl.id, variantId: null }])
+    expect([hit!.icon, hit!.folderIcon]).toEqual(['microchip', 'cpu'])
+    const bare = clone()
+    const other = bare.items.find((i) => i.name === 'TL072')!
+    other.icon = null
+    const [none] = searchRows(bare, [{ itemId: other.id, variantId: null }])
+    expect(none!.icon).toBeNull()
+    expect(none!.folderIcon).toBeNull()
+    const root = clone()
+    root.items.find((i) => i.id === other.id)!.folderId = null
+    expect(folderView(root, null)!.items.find((r) => r.id === other.id)!.folderIcon).toBeNull()
+  })
 })
 
 describe('moveTargets', () => {

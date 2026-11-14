@@ -48,6 +48,10 @@ export const ITEM_ICON_GROUPS: ItemIconGroup[] = [
     title: 'Еда и продукты',
     names: ['apple', 'banana', 'carrot', 'egg', 'wheat', 'bean', 'cookie', 'cake', 'croissant', 'pizza', 'sandwich', 'soup', 'salad', 'cherry', 'grape', 'citrus', 'avocado', 'mango', 'broccoli', 'leafy-green', 'beef', 'ham', 'bacon', 'drumstick', 'fish', 'shrimp', 'candy', 'lollipop', 'ice-cream-cone', 'popsicle', 'donut', 'cupcake', 'popcorn', 'wine', 'beer', 'martini'],
   },
+  {
+    title: 'Сад и природа',
+    names: ['sprout', 'flower', 'leaf', 'rose', 'stone', 'shell', 'bone', 'bird', 'cat', 'dog'],
+  },
 ]
 
 const KNOWN = new Set(ITEM_ICON_GROUPS.flatMap((g) => g.names))

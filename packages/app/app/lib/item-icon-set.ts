@@ -360,6 +360,16 @@ import {
   Wine,
   Beer,
   Martini,
+  Sprout,
+  Flower,
+  Leaf,
+  Rose,
+  Stone,
+  Shell,
+  Bone,
+  Bird,
+  Cat,
+  Dog,
 } from '@lucide/vue'
 
 export const ITEM_ICON_SET: Record<string, Component> = {
@@ -721,4 +731,14 @@ export const ITEM_ICON_SET: Record<string, Component> = {
   'wine': Wine,
   'beer': Beer,
   'martini': Martini,
+  'sprout': Sprout,
+  'flower': Flower,
+  'leaf': Leaf,
+  'rose': Rose,
+  'stone': Stone,
+  'shell': Shell,
+  'bone': Bone,
+  'bird': Bird,
+  'cat': Cat,
+  'dog': Dog,
 }

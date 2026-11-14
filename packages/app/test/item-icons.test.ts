@@ -14,6 +14,10 @@ describe('item icons', () => {
     }
   })
 
+  it('has the owner\'s 368 names', () => {
+    expect(all.length).toBe(368)
+  })
+
   it('every name is a @lucide/vue icon and is in the loaded set', async () => {
     const set = await loadItemIconSet()
     for (const n of all) {

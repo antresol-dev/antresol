@@ -348,6 +348,7 @@ export function snapshotAfterIntake(s: InventorySnapshot, c: IntakeCommit): Inve
           folderId: n.folderId,
           name: n.name,
           description: null,
+          icon: null,
           unitKey: n.unitKey,
           tagIds: [],
           ...NO_AUDIT,

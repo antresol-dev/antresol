@@ -148,8 +148,9 @@ function checkName(name: string | undefined) {
   if (t.length > MAX_NAME_LENGTH) fail('name_too_long')
 }
 
-function checkIcon(icon: string | null | undefined) {
-  if (icon != null && !isIconName(icon)) fail('invalid_option')
+function checkIcon(icon: unknown) {
+  // A command may come from untyped JSON (a replayed outbox, a draft): a number would pass the pattern as text.
+  if (icon != null && (typeof icon !== 'string' || !isIconName(icon))) fail('invalid_option')
 }
 
 /** numeric(20,6) holds absolute values below 10^14. */

@@ -74,7 +74,7 @@ describe('validateCommand', () => {
       expect(code({ type: 'folder.update', id: 'F', icon })).toBeNull()
       expect(code({ type: 'folder.create', id: U('8'), inventoryId: 'inv', parentId: null, name: 'N', description: null, icon })).toBeNull()
     }
-    for (const icon of ['', 'Microchip', 'chip_2', 'chip 2', 'x'.repeat(41), 'чип', '../x']) {
+    for (const icon of ['', 'Microchip', 'chip_2', 'chip 2', 'x'.repeat(41), 'чип', '../x', 5, true] as unknown as string[]) {
       expect(code(newItem({ icon }))).toBe('invalid_option')
       expect(code({ type: 'item.update', id: 'i1', icon })).toBe('invalid_option')
       expect(code({ type: 'folder.update', id: 'F', icon })).toBe('invalid_option')

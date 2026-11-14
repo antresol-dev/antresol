@@ -9,6 +9,7 @@ import { pricePreview, unitChoices } from '~/lib/amounts'
 import { errorMessageKey } from '~/lib/errors'
 import { clearDraft, linkNeedsAmount, saveDraft, type QuickAddDraft } from '~/lib/quick-add-draft'
 import { buildQuickAdd, existingMatches, type MatchRow } from '~/lib/quick-add'
+import { stepOnEnter } from '~/lib/sheet-keys'
 import { isUnknownOutcome } from '~/lib/unconfirmed'
 import { folderChoices, pathOf, snapshotIndex } from '~/lib/views'
 
@@ -170,7 +171,7 @@ async function send(command: ItemCreate): Promise<void> {
 </script>
 
 <template>
-  <form class="grid gap-4" novalidate @submit.prevent="submit">
+  <form class="grid gap-4" novalidate @submit.prevent="submit" @keydown.enter="stepOnEnter($event, $event.currentTarget as HTMLFormElement)">
     <fieldset :disabled="unconfirmed" class="grid min-w-0 gap-4">
       <div class="grid gap-2">
         <Label for="quick-add-name">{{ $t('form.name') }}</Label>

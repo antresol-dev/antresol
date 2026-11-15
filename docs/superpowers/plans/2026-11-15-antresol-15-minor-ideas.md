@@ -32,7 +32,7 @@
 
 ---
 
-### Задача 1: данные — `color` у предмета и тега
+### Task 1: данные — `color` у предмета и тега
 
 **Files:**
 - Modify: `packages/core/src/model.ts` (`Item.color`, `Tag.color`), `limits.ts` (`isColorHex`), `commands.ts`, `validate.ts`, `intakes.ts` (`snapshotAfterIntake`: `color: null`)
@@ -61,7 +61,7 @@
 - [ ] **Шаг 9:** `pnpm test --maxWorkers=3` и `pnpm typecheck` — зелёные (в т.ч. `demo-source.test.ts`, если сид называет поля).
 - [ ] **Шаг 10: commit** `feat(core,storage): items and tags carry a colour (migration 0005), tag.update, kept in backups`.
 
-### Задача 2: как цвет рисуется — миниатюры
+### Task 2: как цвет рисуется — миниатюры
 
 **Files:**
 - Create: `packages/app/app/lib/item-colors.ts`, `packages/app/test/item-colors.test.ts`
@@ -85,7 +85,7 @@
 - [ ] **Шаг 4:** тесты PASS, `pnpm typecheck`, design-scale guard зелёный.
 - [ ] **Шаг 5: commit** `feat(app): item thumbnails take the item's colour from the accent palette, framed; the default comes from the id`.
 
-### Задача 3: выбор цвета — предмет и тег
+### Task 3: выбор цвета — предмет и тег
 
 **Files:**
 - Create: `packages/app/app/components/ColorSwatches.vue`, `packages/app/test/color-swatches.test.ts` (логика списка — в `item-colors.ts`)
@@ -104,7 +104,7 @@
 - [ ] **Шаг 5:** строки i18n: подпись поля «Colour», «Auto», «None»; `pnpm test --maxWorkers=3`, `pnpm typecheck`, guard — зелёные.
 - [ ] **Шаг 6: commit** `feat(app): pick a colour for an item beside its icon, and for a tag`.
 
-### Задача 4: поиск по всем инвентарям
+### Task 4: поиск по всем инвентарям
 
 **Files:**
 - Modify: `packages/app/app/lib/workspace-types.ts`, `workspace.ts` (`cachedSnapshot`), `packages/app/app/lib/palette.ts`, `packages/app/app/components/SearchPalette.vue`, `i18n/locales/en.json`

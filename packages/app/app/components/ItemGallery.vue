@@ -220,7 +220,7 @@ const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thu
         :disabled="busy"
         @click="shownIcon ? (tileOpen = true) : (addOpen = true)"
       >
-        <ItemThumb v-if="shownIcon" :id="itemId" :folder-name="null" :icon="icon" :folder-icon="folderIcon" :cover="null" :color="color ?? null" class="size-full" />
+        <ItemThumb v-if="shownIcon" :id="itemId" :folder-name="null" :icon="icon" :folder-icon="folderIcon" :cover="null" :color="color ?? null" class="size-full" style="border-radius: inherit" />
         <ImagePlus v-else class="size-6" aria-hidden="true" />
       </button>
       <div class="min-w-0 flex-1 self-center">

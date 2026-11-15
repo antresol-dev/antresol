@@ -123,8 +123,8 @@ export interface Workspace {
   selectInventory(ref: InventoryRef): Promise<void>
   /** The copy of an inventory saved on this device (as selectInventory would show it), without the network or any
    *  change of the current inventory; null when there is none or it is from another app format. Not for the current
-   *  inventory: its copy is `state.snapshot`. */
-  cachedSnapshot(ref: InventoryRef): Promise<InventorySnapshot | null>
+   *  inventory: its copy is `state.snapshot`. `savedAt` tells whether it changed since an earlier read. */
+  cachedSnapshot(ref: InventoryRef): Promise<{ snapshot: InventorySnapshot; savedAt: string } | null>
   /** Throws DomainError | StorageError; calls run one after another in call order. When the interval has passed, the
    *  target's source alone is checked first (never another source), so the command is validated against the copy
    *  that check loads. The rows the command touched go into the shown copy; only a wide command (restore,

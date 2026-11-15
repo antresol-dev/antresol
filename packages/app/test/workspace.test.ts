@@ -525,8 +525,9 @@ describe('workspace', () => {
     await ws.flushCache()
     await ws.selectInventory(current)
     const copy = await ws.cachedSnapshot(other.ref)
-    expect(copy?.inventory.id).toBe(other.inventory.id)
-    expect(isReactive(copy)).toBe(false)
+    expect(copy?.snapshot.inventory.id).toBe(other.inventory.id)
+    expect(isReactive(copy?.snapshot)).toBe(false)
+    expect(typeof copy?.savedAt).toBe('string')
     expect(ws.state.current).toEqual(current)
   })
 

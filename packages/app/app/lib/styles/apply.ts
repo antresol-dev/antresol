@@ -11,7 +11,7 @@ import type { Kind, KindState, StyleName, StyleTokens } from './types'
  *
  * Variable names: --st-<key in kebab-case> (popHoverFg → --st-pop-hover-fg, pillRL → --st-pill-r-l); control states
  * --st-<kind>-<n|h|p>-<bg|img|sh|fg|tf> (kinds.primary.h.bg → --st-primary-h-bg, stepSel → --st-step-sel-…); lists
- * --st-<key>-<i> (chips[1] → --st-chips-1; thumbTones[i] → --st-thumb-tone-<i> and --st-thumb-tone-fg-<i>); `led` 1 or 0; `mark` a CSS string or `none`; and, for the high-contrast
+ * --st-<key>-<i> (chips[1] → --st-chips-1); `led` 1 or 0; `mark` a CSS string or `none`; and, for the high-contrast
  * fallback, opaque versions of the translucent surfaces: --st-{hdr,card,list,photo,sheet}-solid.
  */
 
@@ -45,11 +45,6 @@ export function styleVars(t: StyleTokens): [string, string][] {
       for (const [name, k] of Object.entries(t.kinds)) kind(name, k)
     } else if (KIND_KEYS.has(key)) {
       kind(kebab(key), value as Kind)
-    } else if (key === 'thumbTones') {
-      t.thumbTones.forEach((tone, i) => {
-        put(`--st-thumb-tone-${i}`, tone.bg)
-        put(`--st-thumb-tone-fg-${i}`, tone.fg)
-      })
     } else if (Array.isArray(value)) {
       value.forEach((v: string, i) => put(`--st-${kebab(key)}-${i}`, v))
     } else if (typeof value === 'boolean') {

@@ -264,11 +264,4 @@ describe('Y2K: plan 12', () => {
       expect(page.match(/var\(--y2k-grid, 1\)/g)?.length, mode).toBe(mode === 'light' ? 2 : 1)
     }
   })
-
-  it.each(MODES.flatMap((mode) => ACCENT_NAMES.map((accent) => [mode, accent] as const)))('%s, %s: six row thumbnail tones round the accent\'s hue, the body text on them', (mode, accent) => {
-    const t = build(mode, accent)
-    expect(new Set(t.thumbTones.map((x) => x.bg)).size).toBe(6)
-    expect(t.thumbTones[0]!.bg).toBe(t.thumbs[0])
-    for (const x of t.thumbTones) expect(x.fg).toBe(t.fg)
-  })
 })

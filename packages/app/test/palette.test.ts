@@ -399,9 +399,22 @@ describe('palette across inventories', () => {
     }
     const arch = paletteResults(ele, createSearch(ele), ctxFor('hammer', [{ entry: archived, snapshot: work }]), labelOf)
     expect(itemsOf(arch).every((r) => r.kind === 'item' && r.inventory === null)).toBe(true)
-    expect(arch.find((g) => g.key === 'items')!.skipped).toBeUndefined()
-    const noCopy = paletteResults(ele, createSearch(ele), ctxFor('hammer', [{ entry: entryOf(workshop), snapshot: null }, { entry: archived, snapshot: null }]), labelOf)
-    expect(noCopy.find((g) => g.key === 'items')!.skipped).toBe(1)
+    expect(itemsOf(paletteResults(ele, createSearch(ele), ctxFor('hammer', [{ entry: entryOf(workshop), snapshot: null }, { entry: archived, snapshot: null }]), labelOf)).every((r) => r.kind === 'item' && r.inventory === null)).toBe(true)
+  })
+
+  it('never lists the current inventory among the cross-inventory results, even when passed in others', () => {
+    const groups = paletteResults(
+      ele,
+      createSearch(ele),
+      ctxFor('bolt', [{ entry: entryOf(electronics), snapshot: ele }, { entry: entryOf(workshop), snapshot: work }]),
+      labelOf,
+    )
+    const rows = itemsOf(groups).concat(groups.filter((g) => g.key === 'folders').flatMap((g) => g.rows))
+    expect(rows.some((r) => (r.kind === 'item' || r.kind === 'folder') && r.inventory?.ref.inventoryId === electronics.inventoryId)).toBe(false)
+    expect(rows.some((r) => (r.kind === 'item' || r.kind === 'folder') && r.inventory?.name === 'Workshop')).toBe(true)
+    const own = paletteResults(ele, createSearch(ele), ctxFor('bolt', null), labelOf)
+    const onlyOwn = paletteResults(ele, createSearch(ele), ctxFor('bolt', [{ entry: entryOf(electronics), snapshot: ele }]), labelOf)
+    expect(onlyOwn).toEqual(own)
   })
 
   it('keys rows of equal ids in two sources apart', () => {

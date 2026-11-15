@@ -1,7 +1,7 @@
 import { mix, rgba, rot } from './color'
 import { accentOf, K, MOCKUP_DEFAULTS, S, finish } from './derive'
 import { stack } from './fonts'
-import type { StyleBuild, ThumbTones } from './types'
+import type { StyleBuild } from './types'
 
 /*
  * S7 Y2K: iridescent pastels, frosted bubbles, chrome and aqua gel buttons (the owner's board S7). The mock-up's `y2k`
@@ -154,8 +154,6 @@ export const build: StyleBuild = (mode, accent) => {
       popDiv: dark ? 'rgba(255,255,255,0.1)' : 'rgba(120,110,200,0.18)',
       tr: 'background-color 160ms ease, box-shadow 160ms ease, color 160ms ease, transform 260ms cubic-bezier(0.34,1.56,0.64,1)',
       sheet: gloss + ', ' + (dark ? frost : 'rgba(255,255,255,0.85)'),
-      // Row thumbnails (plan 12): the gallery's pastels all the way round the accent's hue, 60° apart, with the body text.
-      thumbTones: [0, 60, 120, 180, 240, 300].map((deg) => ({ bg: pastel(deg), fg })) as ThumbTones,
       // Chips, row "⋯" buttons, folder icons and list thumbnails (none taller than 44 px) stay capsules and circles as
       // with the mock-up's 999px; a two-line tooltip or a skeleton block becomes a rounded box instead of a pill.
       smallR: '22px',

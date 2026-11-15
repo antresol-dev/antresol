@@ -174,7 +174,7 @@ export function searchAcross(others: PaletteOther[], query: string, limit: numbe
   return result
 }
 
-const sameRef = (a: InventoryRef, b: InventoryRef | null): boolean =>
+export const sameRef = (a: InventoryRef, b: InventoryRef | null): boolean =>
   !!b && a.sourceId === b.sourceId && a.inventoryId === b.inventoryId
 
 /** In this order: addItem (a non-empty query and canWrite), newFolder (with a folder and canWrite), switchInventory for each other inventory, go for each section.
@@ -201,8 +201,6 @@ export type PaletteRow =
 export interface PaletteGroup {
   key: 'nearest' | 'items' | 'folders' | 'actions'
   rows: PaletteRow[]
-  /** Items group only: inventories with no copy on this device, so not searched (set when there are any and the group has rows). */
-  skipped?: number
 }
 
 export const ITEM_LIMIT = 20
@@ -247,8 +245,9 @@ export function paletteResults(
       }))
     : []
   // The same inventory-spanning search the future advanced page uses; the current inventory's rows stay first.
-  const across = ctx.others ? searchAcross(ctx.others, q, ITEM_LIMIT - items.length, FOLDER_LIMIT - folders.length) : null
-  const skipped = across?.skipped ?? 0
+  // The current inventory is never one of `others`, even when the caller passes it in.
+  const others = ctx.others?.filter((o) => !sameRef(o.entry.ref, ctx.current)) ?? null
+  const across = others ? searchAcross(others, q, ITEM_LIMIT - items.length, FOLDER_LIMIT - folders.length) : null
   for (const { inventory, hit } of across?.items ?? []) {
     const { sourceId, inventoryId } = inventory.ref
     items.push({
@@ -280,7 +279,7 @@ export function paletteResults(
   const nearest: PaletteRow[] = suggestion ? [{ kind: 'nearest', key: 'nearest', suggestion }] : []
   const groups: PaletteGroup[] = [
     { key: 'nearest', rows: nearest },
-    { key: 'items', rows: items, ...(skipped > 0 ? { skipped } : {}) },
+    { key: 'items', rows: items },
     { key: 'folders', rows: folders },
     { key: 'actions', rows: actions },
   ]

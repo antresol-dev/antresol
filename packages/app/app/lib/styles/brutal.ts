@@ -1,7 +1,7 @@
 import { mix } from './color'
 import { accentOf, finish, K, MOCKUP_DEFAULTS, S } from './derive'
 import { stack, withFallbacks } from './fonts'
-import type { KindState, StyleBuild, ThumbTones } from './types'
+import type { KindState, StyleBuild } from './types'
 
 /*
  * S6 Neo-brutal / Memphis: 2 px ink lines, hard offset shadows, Memphis colour blocks, Rubik with Unbounded titles,
@@ -158,8 +158,6 @@ export const build: StyleBuild = (mode) => {
       chip: mix(page, lineC, dark ? 0.12 : 0.08),
       rowHover: dark ? hoverDark : pale(P[0]),
       fieldSh: 'inset 0 0 0 1px ' + lineC,
-      // Row thumbnails (plan 12): the six Memphis colours from mint (as the gallery's), ink letters in both themes.
-      thumbTones: [P[3], P[4], P[1], P[0], P[2], P[5]].map((bg) => ({ bg, fg: onP })) as ThumbTones,
     },
     mode,
   )

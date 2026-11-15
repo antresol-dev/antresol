@@ -734,9 +734,9 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     if (isConnected(statusOf(ref.sourceId))) await loadCurrent(true)
   }
 
-  async function cachedSnapshot(ref: InventoryRef): Promise<InventorySnapshot | null> {
+  async function cachedSnapshot(ref: InventoryRef): Promise<{ snapshot: InventorySnapshot; savedAt: string } | null> {
     const cached = shownCopy(await db.getSnapshot({ sourceId: ref.sourceId, inventoryId: ref.inventoryId }))
-    return cached ? markRaw(cached.snapshot) : null
+    return cached ? { snapshot: markRaw(cached.snapshot), savedAt: cached.savedAt } : null
   }
 
   async function startFromCache(): Promise<void> {

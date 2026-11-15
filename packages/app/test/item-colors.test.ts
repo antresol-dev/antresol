@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ACCENT_NAMES } from '../app/lib/accent'
-import { PALETTE, colorVars, darkShade, defaultItemColor, itemColor, paletteName } from '../app/lib/item-colors'
+import { PALETTE, colorVars, darkShade, defaultItemColor, itemColor, paletteName, swatchChoices } from '../app/lib/item-colors'
 
 describe('item colours', () => {
   it('the palette is the accents, light shades, in order', () => {
@@ -35,5 +35,13 @@ describe('item colours', () => {
 
   it('colorVars gives both shades', () => {
     expect(colorVars('#4F46E5')).toEqual({ '--c-light': '#4F46E5', '--c-dark': '#B0ACF3' })
+  })
+})
+
+describe('swatchChoices', () => {
+  it('is the palette, plus a colour outside it at the end', () => {
+    expect(swatchChoices(null)).toEqual(PALETTE)
+    expect(swatchChoices('#2563EB')).toEqual(PALETTE)
+    expect(swatchChoices('#123456')).toEqual([...PALETTE, '#123456'])
   })
 })

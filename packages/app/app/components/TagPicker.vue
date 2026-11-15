@@ -3,6 +3,7 @@ import type { Id, InventorySnapshot } from '@antresol/core'
 import { Plus } from '@lucide/vue'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
+import { colorVars } from '~/lib/item-colors'
 import { tagMatches } from '~/lib/tags'
 
 // A filter field over the inventory's tags as checkboxes. A tag typed in the field that doesn't exist yet can be created
@@ -31,6 +32,7 @@ function create(): void {
       <li v-for="tag in matches.tags" :key="tag.id" class="min-w-0">
         <label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-chip px-3 text-sm transition-colors duration-(--dur-fast) hover:bg-hover has-focus-visible:ring-2 has-focus-visible:ring-ring">
           <Checkbox :model-value="selected.includes(tag.id)" @update:model-value="toggle(tag.id, $event === true)" />
+          <span v-if="tag.color" class="colored size-2 shrink-0 rounded-full bg-(--c)" :style="colorVars(tag.color)" aria-hidden="true" />
           <span class="min-w-0 flex-1 truncate">{{ tag.name }}</span>
         </label>
       </li>

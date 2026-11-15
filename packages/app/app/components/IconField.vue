@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { ChevronRight } from '@lucide/vue'
+import { colorVars } from '~/lib/item-colors'
 import { iconFrom } from '~/lib/item-icons'
 
 // The "Icon" row of the item and folder forms: the current icon (or "None") and a button that opens the icon sheet.
-const props = defineProps<{ icon: string | null; disabled?: boolean }>()
+const props = defineProps<{ icon: string | null; color?: string; disabled?: boolean }>()
 const emit = defineEmits<{ pick: [name: string | null] }>()
 const picking = defineModel<boolean>('picking', { default: false })
 const iconSet = useItemIconSet()
@@ -20,7 +21,7 @@ const current = computed(() => iconFrom(iconSet.value, props.icon))
       :disabled="disabled"
       @click="picking = true"
     >
-      <component :is="current" v-if="current" class="size-5 shrink-0 text-icon" aria-hidden="true" />
+      <component :is="current" v-if="current" class="size-5 shrink-0" :class="color ? 'colored text-(--c)' : 'text-icon'" :style="color ? colorVars(color) : undefined" aria-hidden="true" />
       <span id="icon-field-value" class="min-w-0 flex-1 truncate">{{ icon ?? $t('iconPicker.noneValue') }}</span>
       <ChevronRight class="size-4 shrink-0 text-icon" aria-hidden="true" />
     </button>

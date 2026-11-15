@@ -292,6 +292,11 @@
     "balance": "→ {amount}"
   },
   "form": { "name": "Name", "description": "Description", "optional": "Optional" },
+  "colors": {
+    "label": "Colour",
+    "auto": "Auto",
+    "none": "None"
+  },
   "iconPicker": {
     "title": "Icon",
     "search": "Search icons",

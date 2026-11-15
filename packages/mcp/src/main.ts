@@ -1,6 +1,7 @@
 import os from 'node:os'
 import { openPostgresStorage, createNeonHttpExecutor } from '@antresol/storage-postgres'
 import type { InventoryStorage } from '@antresol/core'
+import { createFileStore } from '@antresol/kit'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { readConfig } from './config'
 import type { ToolContext } from './context'
@@ -27,7 +28,7 @@ async function main(): Promise<void> {
     storage,
     config,
     actor: () => ({ device: ACTOR_FALLBACK }),
-    files: null,
+    files: config.connection ? createFileStore(config.connection) : null,
     now: () => new Date(),
     openError,
   }

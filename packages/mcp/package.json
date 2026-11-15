@@ -10,7 +10,12 @@
     "@antresol/core": "workspace:*",
     "@antresol/kit": "workspace:*",
     "@antresol/storage-postgres": "workspace:*",
+    "@jsquash/jpeg": "^1.6.0",
+    "@jsquash/png": "^3.1.1",
+    "@jsquash/resize": "^2.1.1",
+    "@jsquash/webp": "^1.5.0",
     "@modelcontextprotocol/sdk": "^1.32.2",
+    "heic-decode": "^2.1.0",
     "zod": "^4.6.7"
   },
   "devDependencies": {

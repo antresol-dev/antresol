@@ -5,6 +5,7 @@ import type { ToolContext } from './context'
 import { jsonResult, secretsOf, toToolResult } from './errors'
 import { intakeFromPhotosPrompt } from './prompts'
 import * as drafts from './tools/drafts'
+import * as photos from './tools/photos'
 import * as read from './tools/read'
 
 export const ACTOR_FALLBACK = 'AI · MCP'
@@ -105,6 +106,31 @@ export function registerReadTools(server: McpServer, ctx: ToolContext): void {
   )
 }
 
+export function registerPhotoTools(server: McpServer, ctx: ToolContext): void {
+  server.registerTool(
+    'list_photos',
+    {
+      description:
+        'Lists the pictures (jpg, png, webp, heic) in the photos folder, newest first, with the draft line each one is already attached to. Folder defaults to the photos folder from get_overview.',
+      inputSchema: {
+        folder: z.string().optional().describe('A sub-folder or absolute path; the photos folder when left out.'),
+        onlyNew: z.boolean().optional().describe('Only pictures not yet attached to a draft line.'),
+      },
+      annotations: READ_ONLY,
+    },
+    handler(ctx, photos.listPhotos),
+  )
+  server.registerTool(
+    'view_photos',
+    {
+      description: 'Shows 1 to 6 pictures (path from list_photos) so you can see what is on them. Each is preceded by its path.',
+      inputSchema: { paths: z.array(z.string()).describe('Absolute paths, or paths relative to the photos folder.') },
+      annotations: READ_ONLY,
+    },
+    (args) => photos.viewPhotos(ctx, args),
+  )
+}
+
 const WRITE = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } as const
 const intakeId = z.string().describe('Intake id, from list_intakes or create_intake.')
 
@@ -144,7 +170,7 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
     'add_intake_lines',
     {
       description:
-        'Add receipt lines to an intake draft, all or none: if any line is wrong nothing is saved and every problem is listed. Search first (search) and top up what already exists: add a value ("4k7") to an existing item before creating a new item. A line is an item (id from search, or the id or ref of a new item), its values for the item\'s variant attributes (by attribute name or id), an amount and optionally the price paid for the whole line and a link. Write amounts, values and prices as a person would: "10", "4k7", "2.5 m", "35.50". To bring something that is not in the inventory, describe it in newItems (ref, name, folder, unit, attributes, tags) and point lines at its ref; an attribute with axis: true makes each line give its own value. Unknown tag names become new tags.',
+        'Add receipt lines to an intake draft, all or none: if any line is wrong nothing is saved and every problem is listed. Search first (search) and top up what already exists: add a value ("4k7") to an existing item before creating a new item. A line is an item (id from search, or the id or ref of a new item), its values for the item\'s variant attributes (by attribute name or id), an amount and optionally the price paid for the whole line and a link. Write amounts, values and prices as a person would: "10", "4k7", "2.5 m", "35.50". To bring something that is not in the inventory, describe it in newItems (ref, name, folder, unit, attributes, tags) and point lines at its ref; an attribute with axis: true makes each line give its own value. Unknown tag names become new tags. A line may carry a photo (path from list_photos); pictures are uploaded before anything is saved.',
       inputSchema: {
         intake: intakeId,
         newItems: z
@@ -168,8 +194,8 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
             amount: z.string().describe('How much is received, like "10" or "2.5 m".'),
             price: z.string().optional().describe('Total price of the line, like "35.50".'),
             url: z.string().optional().describe('Link to the product, https://...'),
-            photo: z.string().optional(),
-            replacePhoto: z.boolean().optional(),
+            photo: z.string().optional().describe('A picture to attach to the line: a path from list_photos (absolute or relative to the photos folder). It is uploaded once to the photo store, whatever line it is used on.'),
+            replacePhoto: z.boolean().optional().describe('Replace the photo the variant already has in stock with this one; otherwise the variant keeps its photo.'),
           }),
         ),
       },
@@ -180,7 +206,7 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
     'update_intake_line',
     {
-      description: 'Change one line of an intake draft: only what is passed changes. An empty price or url clears it.',
+      description: 'Change one line of an intake draft: only what is passed changes. An empty price or url clears it; photo sets or (empty) removes the line\'s picture.',
       inputSchema: {
         intake: intakeId,
         line: z.string().describe('Line id, from get_intake.'),
@@ -188,8 +214,8 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
         amount: z.string().optional(),
         price: z.string().optional(),
         url: z.string().optional(),
-        photo: z.string().optional().describe('An empty text removes the line\'s photo.'),
-        replacePhoto: z.boolean().optional(),
+        photo: z.string().optional().describe('A picture path from list_photos to attach to the line (uploaded once); an empty text removes the line\'s photo.'),
+        replacePhoto: z.boolean().optional().describe('With a photo: replace the photo the variant already has in stock; otherwise it keeps its photo.'),
       },
       annotations: { ...WRITE, idempotentHint: true },
     },
@@ -250,6 +276,7 @@ export function createServer(ctx: ToolContext): McpServer {
     return { device: name ? `${name} · MCP` : ACTOR_FALLBACK }
   }
   registerReadTools(server, ctx)
+  registerPhotoTools(server, ctx)
   registerDraftTools(server, ctx)
   registerPrompts(server)
   return server

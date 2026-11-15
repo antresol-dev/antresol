@@ -38,6 +38,9 @@ importers:
       '@antresol/files-uploadcare':
         specifier: workspace:*
         version: link:../files-uploadcare
+      '@antresol/kit':
+        specifier: workspace:*
+        version: link:../kit
       '@antresol/storage-postgres':
         specifier: workspace:*
         version: link:../storage-postgres
@@ -165,6 +168,24 @@ importers:
       '@antresol/core':
         specifier: workspace:*
         version: link:../core
+
+  packages/kit:
+    dependencies:
+      '@antresol/core':
+        specifier: workspace:*
+        version: link:../core
+      '@antresol/files-cloudinary':
+        specifier: workspace:*
+        version: link:../files-cloudinary
+      '@antresol/files-imgbb':
+        specifier: workspace:*
+        version: link:../files-imgbb
+      '@antresol/files-imgur':
+        specifier: workspace:*
+        version: link:../files-imgur
+      '@antresol/files-uploadcare':
+        specifier: workspace:*
+        version: link:../files-uploadcare
 
   packages/storage-postgres:
     dependencies:
@@ -5666,6 +5687,7 @@ packages:
   postcss-selector-parser@7.2.0:
     resolution: {integrity: sha512-Khh/tERVBn0I1499dvBSHY0pWJloMJWUxDsOBM0CCDPAcVZ10Jl2L1qy1f19uEX22spa8Mv7DCdEQJc0cGwBhQ==}
     engines: {node: '>=4'}
+    deprecated: Double-escapes CSS Modules class names (#362). Use 7.2.1.
 
   postcss-value-parser@4.2.0:
     resolution: {integrity: sha512-1NNCs6uurfkVbeXG4S8JFT9t19m45ICnif8zWLd5oPSZ50QnwMfK+H3jv408d4jw/7Bttv5axS5IiHoLaVNHeQ==}

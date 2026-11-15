@@ -1,4 +1,5 @@
 import { checkConnectionString } from './sources'
+import type { ConnectionSettings } from '@antresol/kit'
 import type { PhotoStore, SourceConfig } from './types'
 
 /**
@@ -15,19 +16,7 @@ import type { PhotoStore, SourceConfig } from './types'
  */
 
 /** What the new-source form takes from another device: no id, no creation time. */
-export type SharedConnection = Pick<SourceConfig, 'name' | 'connectionString'> &
-  Partial<
-    Pick<
-      SourceConfig,
-      | 'photoStore'
-      | 'uploadcarePublicKey'
-      | 'uploadcareCdnBase'
-      | 'cloudinaryCloudName'
-      | 'cloudinaryUploadPreset'
-      | 'imgurClientId'
-      | 'imgbbApiKey'
-    >
-  >
+export type SharedConnection = ConnectionSettings
 
 export const PAIR_PARAM = 'pair'
 export const PAIRING_TTL_MS = 10 * 60_000

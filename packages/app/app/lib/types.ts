@@ -1,4 +1,7 @@
 import type { Id } from '@antresol/core'
+import type { PhotoStore } from '@antresol/kit'
+
+export type { PhotoStore }
 
 export interface InventoryRef {
   sourceId: string
@@ -6,8 +9,6 @@ export interface InventoryRef {
 }
 
 export type SourceKind = 'neon' | 'dev-pglite'
-
-export type PhotoStore = 'uploadcare' | 'cloudinary' | 'imgbb' | 'imgur'
 
 export interface SourceConfig {
   id: string

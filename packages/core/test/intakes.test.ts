@@ -6,11 +6,13 @@ import {
   emptyIntakeDraft,
   pruneNewItems,
   resolveIntake,
+  snapshotAfterIntake,
   type DraftLine,
   type DraftNewItem,
   type Intake,
   type IntakeDraftContent,
 } from '../src/intakes'
+import { MAX_NAME_LENGTH } from '../src/limits'
 import { normalizeCommand, validateCommand } from '../src/validate'
 import { ARCHIVED, attribute, axis, electronics, folder, item, makeSnapshot, value, variant } from './fixtures'
 
@@ -203,7 +205,7 @@ describe('buildIntakeCommit', () => {
     expect(c.header).toEqual({ shop: 'LCSC', orderNumber: 'WM2511-0042', purchasedOn: '2026-11-12', note: null })
     expect(c.newItems).toEqual([
       {
-        id: 'NEW', folderId: null, name: 'Resistor 0.6 W', unitKey: 'pcs',
+        id: 'NEW', folderId: null, name: 'Resistor 0.6 W', unitKey: 'pcs', tagIds: [],
         attributes: [
           { attributeId: 'pkg', value: 'THT', axisPosition: null },
           { attributeId: 'res', value: null, axisPosition: 0 },
@@ -287,6 +289,73 @@ describe('buildIntakeCommit', () => {
   it('refuses a draft with problem lines', () => {
     const content = draft([line('GONE')])
     expect(() => buildIntakeCommit(intakeOf(content), resolveIntake(content, electronics()), electronics(), 'rev-1')).toThrow()
+  })
+})
+
+describe('tags of new items', () => {
+  const tag = (id: string, name: string) => ({ id, inventoryId: 'inv', name, createdAt: '', updatedAt: '', createdBy: '', updatedBy: '' })
+  const base = () => ({ ...electronics(), tags: [tag('smd', 'SMD')] })
+  const tagged = (tagIds: string[] | undefined, newTags: { id: string; name: string }[] | undefined, lines = [line('NEW')]) => ({
+    ...draft(lines, [{ ...resistorItem(), attributes: [], ...(tagIds ? { tagIds } : {}) }]),
+    ...(newTags ? { newTags } : {}),
+  })
+  const build = (content: IntakeDraftContent, s = base()) =>
+    buildIntakeCommit(intakeOf(content), resolveIntake(content, s), s, 'rev-1') as IntakeCommit
+  const code = (content: IntakeDraftContent) => {
+    const r = resolveIntake(content, base()).lines[0]!.resolution
+    return r.kind === 'problem' ? r.code : r.kind
+  }
+
+  it('marks the lines of a new item with a tag that is nowhere, or a new tag with a bad name', () => {
+    expect(code(tagged(['ghost'], []))).toBe('invalid_value')
+    expect(code(tagged(['T1'], [{ id: 'T1', name: '  ' }]))).toBe('invalid_value')
+    expect(code(tagged(['T1'], [{ id: 'T1', name: 'x'.repeat(MAX_NAME_LENGTH + 1) }]))).toBe('invalid_value')
+    expect(code(tagged(['smd', 'T1'], [{ id: 'T1', name: 'Kit A' }]))).toBe('newItem')
+  })
+
+  it('builds newTags and the item tagIds, existing tag first as the item lists them', () => {
+    const c = build(tagged(['smd', 'T1'], [{ id: 'T1', name: 'Kit A' }]))
+    expect(c.newTags).toEqual([{ id: 'T1', name: 'Kit A' }])
+    expect(c.newItems[0]!.tagIds).toEqual(['smd', 'T1'])
+    expect(validateCommand(normalizeCommand(c), base())).toBeNull()
+  })
+
+  it('a new tag named as an existing one (trim, no case) is the existing tag', () => {
+    const c = build(tagged(['T1'], [{ id: 'T1', name: ' smd ' }]))
+    expect(c.newTags).toEqual([])
+    expect(c.newItems[0]!.tagIds).toEqual(['smd'])
+  })
+
+  it('two new tags with one name are created once', () => {
+    const c = build(tagged(['T1', 'T2'], [{ id: 'T1', name: 'Kit' }, { id: 'T2', name: 'KIT' }]))
+    expect(c.newTags).toEqual([{ id: 'T1', name: 'Kit' }])
+    expect(c.newItems[0]!.tagIds).toEqual(['T1'])
+  })
+
+  it('a new tag only a deleted line referenced is not created', () => {
+    const content = {
+      ...tagged(['T1'], [{ id: 'T1', name: 'Kit A' }, { id: 'T2', name: 'Kit B' }], [line('NEW'), line('M')]),
+    }
+    content.newItems.push({ ...resistorItem('GONE'), attributes: [], tagIds: ['T2'] })
+    const c = build(content)
+    expect(c.newTags).toEqual([{ id: 'T1', name: 'Kit A' }])
+    expect(c.newItems.map((n) => n.id)).toEqual(['NEW'])
+  })
+
+  it('a draft saved before tags existed commits with no tags', () => {
+    const c = build(tagged(undefined, undefined))
+    expect(c.newTags).toEqual([])
+    expect(c.newItems[0]!.tagIds).toEqual([])
+  })
+
+  it('snapshotAfterIntake holds the new tags and the tags of the new items', () => {
+    const s = base()
+    const c = build(tagged(['smd', 'T1'], [{ id: 'T1', name: 'Kit A' }]), s)
+    const after = snapshotAfterIntake(s, c)
+    expect(after.tags.map((t) => [t.id, t.name])).toEqual([['smd', 'SMD'], ['T1', 'Kit A']])
+    expect(after.items.find((i) => i.id === 'NEW')!.tagIds).toEqual(['smd', 'T1'])
+    // Applied again (a retry) it adds nothing.
+    expect(snapshotAfterIntake(after, c).tags).toHaveLength(2)
   })
 })
 

@@ -118,9 +118,11 @@ export function normalizeCommand(c: Command): Command {
       purchasedOn: c.header.purchasedOn.trim(),
       note: desc(c.header.note) ?? null,
     }
+    out.newTags = c.newTags.map((t) => ({ ...t, name: t.name.trim() }))
     out.newItems = c.newItems.map((n) => ({
       ...n,
       name: n.name.trim(),
+      tagIds: [...new Set(n.tagIds)],
       attributes: n.attributes.map((x) => ({ ...x, value: desc(x.value) ?? null })),
     }))
     out.newVariants = c.newVariants.map((v) => ({ ...v, values: v.values.map((x) => ({ ...x, value: x.value.trim() })) }))
@@ -348,6 +350,17 @@ function onceEach(ids: Id[]) {
   if (new Set(ids).size !== ids.length) fail('invalid_option')
 }
 
+/** New tags of intake.commit: as tag.create. A tag the copy holds already is this command's own, landed before (a retry),
+ *  no duplicate of itself. */
+function checkIntakeTags(s: Snap, c: IntakeCommit) {
+  onceEach(c.newTags.map((t) => t.id))
+  for (const t of c.newTags) {
+    checkName(t.name)
+    if (s.tags.some((x) => x.id !== t.id && same(x.name, t.name))) fail('duplicate_name')
+    if (c.newTags.some((x) => x.id !== t.id && same(x.name, t.name))) fail('duplicate_name')
+  }
+}
+
 /** New items of intake.commit: as item.create, plus their attributes (axes in distinct positions with no value, shared
  *  values fitting the kind). An item the copy holds already is this command's own, landed before (a retry). */
 function checkIntakeItems(s: Snap, c: IntakeCommit) {
@@ -357,6 +370,7 @@ function checkIntakeItems(s: Snap, c: IntakeCommit) {
     checkName(n.name)
     activeFolder(s, n.folderId)
     if (!resolveUnit(n.unitKey, s.units)) fail('not_found')
+    for (const id of n.tagIds) if (!s.tags.some((t) => t.id === id) && !c.newTags.some((t) => t.id === id)) fail('not_found')
     onceEach(n.attributes.map((x) => x.attributeId))
     const positions = new Set<number>()
     for (const x of n.attributes) {
@@ -421,6 +435,7 @@ function checkIntakeLines(c: IntakeCommit) {
 function checkIntakeCommit(s: Snap, c: IntakeCommit) {
   needInventory(s, c.inventoryId)
   checkDate(c.header.purchasedOn)
+  checkIntakeTags(s, c)
   checkIntakeItems(s, c)
 
   const withItems = snapshotAfterIntake(s, { ...c, newVariants: [], unarchiveVariants: [] })

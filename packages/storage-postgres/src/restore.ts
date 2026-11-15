@@ -289,9 +289,12 @@ export function renameIntakeIds(intake: Intake, rename: (id: Id) => Id): Intake 
   return {
     ...intake,
     draft: draft && {
+      ...draft,
+      ...(draft.newTags ? { newTags: draft.newTags.map((t) => ({ ...t, id: rename(t.id) })) } : {}),
       newItems: draft.newItems.map((n) => ({
         ...n,
         id: rename(n.id),
+        ...(n.tagIds ? { tagIds: n.tagIds.map(rename) } : {}),
         folderId: opt(n.folderId),
         unitKey: renameUnitKey(n.unitKey, rename),
         attributes: n.attributes.map((a) => ({ ...a, attributeId: rename(a.attributeId) })),

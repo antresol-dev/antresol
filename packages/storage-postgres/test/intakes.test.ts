@@ -299,6 +299,34 @@ describe('intake.commit', () => {
     expect(normSnapshot(patchSnapshot(snapshot, r.patch!))).toEqual(normSnapshot(after))
   })
 
+  it('creates the new tags once, tags the new item with them and the existing ones; a replay adds neither tag nor link', async () => {
+    const w = await workshop()
+    const [smd, kit, id] = [newId(), newId(), newId()]
+    await w.storage.apply({ type: 'tag.create', id: smd, inventoryId: w.inv, name: 'SMD' }, TEST_ACTOR)
+    const content = draftFor(w)
+    content.newTags = [{ id: kit, name: 'Kit A' }]
+    content.newItems[0]!.tagIds = [smd, kit]
+    expect((await w.storage.saveIntakeDraft({ id, inventoryId: w.inv, header: HEADER, content }, null, TEST_ACTOR)).saved).toBe(true)
+    const { snapshot, rev } = await w.storage.loadInventoryWithRev(w.inv)
+    const intake = await intakeOf(w.storage, w.inv, id)
+    const command = buildIntakeCommit(intake, resolveIntake(intake.draft!, snapshot), snapshot, rev) as IntakeCommit
+    expect(command.newTags).toEqual([{ id: kit, name: 'Kit A' }])
+
+    const r = await w.storage.apply(command, TEST_ACTOR)
+
+    const after = await w.storage.loadInventory(w.inv)
+    expect(sorted(after.tags.map((x) => x.name), (x) => x)).toEqual(['Kit A', 'SMD'])
+    expect(after.items.find((i) => i.id === content.newItems[0]!.id)!.tagIds.sort()).toEqual([smd, kit].sort())
+    expect(normSnapshot(patchSnapshot(snapshot, r.patch!))).toEqual(normSnapshot(after))
+
+    await w.storage.apply({ type: 'folder.create', id: newId(), inventoryId: w.inv, parentId: null, name: 'Shelf', description: null }, TEST_ACTOR)
+    const again = await w.storage.loadInventory(w.inv)
+    await w.storage.apply(command, TEST_ACTOR)
+    const replayed = await w.storage.loadInventory(w.inv)
+    expect(replayed.tags).toEqual(again.tags)
+    expect(replayed.items.find((i) => i.id === content.newItems[0]!.id)!.tagIds.sort()).toEqual([smd, kit].sort())
+  })
+
   it('a retry after the revision moved on succeeds and adds nothing (Review Focus 1)', async () => {
     const w = await workshop()
     const { id, command } = await savedAndBuilt(w)

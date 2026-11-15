@@ -127,11 +127,14 @@ export type Command =
       baseRev: string
       baseDraftRev: string
       header: IntakeHeader
+      /** Tags the commit creates (`newItems[].tagIds` may name them); a tag the copy holds already is this command's own. */
+      newTags: { id: Id; name: string }[]
       newItems: {
         id: Id
         folderId: Id | null
         name: string
         unitKey: string
+        tagIds: Id[]
         attributes: { attributeId: Id; value: string | null; axisPosition: number | null }[]
       }[]
       newVariants: { id: Id; itemId: Id; values: { attributeId: Id; value: string }[] }[]

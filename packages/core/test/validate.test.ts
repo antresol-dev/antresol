@@ -711,9 +711,10 @@ describe('intake.commit', () => {
     baseRev: 'rev',
     baseDraftRev: 'draft-rev',
     header: { shop: 'LCSC', orderNumber: null, purchasedOn: '2026-11-12', note: null },
+    newTags: [],
     newItems: [
       {
-        id: 'NEW', folderId: null, name: 'Resistor 0.6 W', unitKey: 'pcs',
+        id: 'NEW', folderId: null, name: 'Resistor 0.6 W', unitKey: 'pcs', tagIds: [],
         attributes: [
           { attributeId: 'res', value: null, axisPosition: 0 },
           { attributeId: 'pkg', value: 'THT', axisPosition: null },
@@ -742,6 +743,22 @@ describe('intake.commit', () => {
     expect(ec(commit({ receipts: [receipt('R', 'zz', '1')] }))).toBe('not_found')
     expect(ec(commit({ newVariants: [{ id: 'n1', itemId: 'ZZ', values: [{ attributeId: 'res', value: '1000' }] }] }))).toBe('not_found')
     expect(ec(commit({ unarchiveVariants: ['zz'] }))).toBe('not_found')
+  })
+
+  it('new tags and the tags of new items', () => {
+    const base = commit() as IntakeCommit
+    const withTags = (tagIds: string[], newTags: IntakeCommit['newTags']) =>
+      commit({ newTags, newItems: [{ ...base.newItems[0]!, tagIds }] })
+    const s = { ...electronics(), tags: [{ id: 'smd', inventoryId: 'inv', name: 'SMD', createdAt: '', updatedAt: '', createdBy: '', updatedBy: '' }] }
+    expect(ec(withTags(['smd', 'T1'], [{ id: 'T1', name: 'Kit A' }]), s)).toBeNull()
+    expect(ec(withTags(['T1'], [{ id: 'T1', name: 'Kit A' }, { id: 'T1', name: 'Kit B' }]), s)).toBe('invalid_option')
+    expect(ec(withTags(['T1'], [{ id: 'T1', name: ' smd ' }]), s)).toBe('duplicate_name')
+    expect(ec(withTags(['T1'], [{ id: 'T1', name: 'A' }, { id: 'T2', name: 'a' }]), s)).toBe('duplicate_name')
+    expect(ec(withTags(['T1'], [{ id: 'T1', name: ' ' }]), s)).toBe('name_required')
+    // The tag this very command created, landed before (a retry), is no duplicate of itself.
+    const landed = { ...s, tags: [...s.tags, { ...s.tags[0]!, id: 'T1', name: 'Kit A' }] }
+    expect(ec(withTags(['T1'], [{ id: 'T1', name: 'Kit A' }]), landed)).toBeNull()
+    expect(ec(withTags(['zz'], [{ id: 'T1', name: 'Kit A' }]), s)).toBe('not_found')
   })
 
   it('the lines match the receipts one to one', () => {

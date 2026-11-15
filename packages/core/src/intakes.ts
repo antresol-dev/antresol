@@ -1,7 +1,7 @@
 import type { Command, PhotoFile } from './commands'
 import type { Id } from './ids'
 import { isSourceUrl, MAX_NAME_LENGTH } from './limits'
-import type { Attribute, InventorySnapshot, Item, ItemAttribute, Variant, VariantAttributeValue } from './model'
+import type { Attribute, InventorySnapshot, Item, ItemAttribute, Tag, Variant, VariantAttributeValue } from './model'
 import { parseNumberValue } from './numbers'
 import type { Quantity } from './quantity'
 import { folderArchived, itemArchived } from './tree'
@@ -19,6 +19,12 @@ export interface IntakeHeader {
   purchasedOn: string
   note: string | null
 }
+/** A tag the draft declares by name; the commit creates it. New items reference it by `id` in `tagIds`. It lives while a
+ *  new item references it. */
+export interface DraftNewTag {
+  id: Id
+  name: string
+}
 /** An item a line of the draft creates; lines reference it by `id`. It lives while a line references it. */
 export interface DraftNewItem {
   id: Id
@@ -27,6 +33,8 @@ export interface DraftNewItem {
   unitKey: string
   /** Axes in axis order; an axis has value null. */
   attributes: { attributeId: Id; value: string | null; axis: boolean }[]
+  /** Existing tags and/or DraftNewTag.id of this draft; absent in drafts saved before tags existed. */
+  tagIds?: Id[]
 }
 /** The stored file (renditions, size and delete handle as the upload gave them; absent in drafts saved before they
  *  existed) and whether it replaces the variant's photo. */
@@ -49,6 +57,8 @@ export interface DraftLine {
   ids: { movementId: Id; variantId: Id; photoId: Id }
 }
 export interface IntakeDraftContent {
+  /** Absent in drafts saved before tags existed. */
+  newTags?: DraftNewTag[]
   newItems: DraftNewItem[]
   lines: DraftLine[]
 }
@@ -105,10 +115,30 @@ export function emptyIntakeDraft(): IntakeDraftContent {
   return { newItems: [], lines: [] }
 }
 
-/** Drops the new items no line references. */
+/** Drops the new items no line references, and the new tags no remaining new item references. */
 export function pruneNewItems(draft: IntakeDraftContent): IntakeDraftContent {
   const used = new Set(draft.lines.map((l) => l.itemId))
-  return { ...draft, newItems: draft.newItems.filter((n) => used.has(n.id)) }
+  const newItems = draft.newItems.filter((n) => used.has(n.id))
+  const tagged = new Set(newItems.flatMap((n) => n.tagIds ?? []))
+  return { ...draft, newItems, ...(draft.newTags ? { newTags: draft.newTags.filter((t) => tagged.has(t.id)) } : {}) }
+}
+
+const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
+
+/** Where each tag id a new item may name ends up: an existing tag id stays; a new tag of the draft goes to the existing
+ *  tag with the same name (trim, no case) or to the first new tag with that name. Ids of no tag are absent. */
+function tagTargets(draft: IntakeDraftContent, s: InventorySnapshot): Map<Id, Id> {
+  const targets = new Map<Id, Id>(s.tags.map((t) => [t.id, t.id] as const))
+  const firstNew: { id: Id; name: string }[] = []
+  for (const t of draft.newTags ?? []) {
+    const known = s.tags.find((x) => sameName(x.name, t.name)) ?? firstNew.find((x) => sameName(x.name, t.name))
+    if (known) targets.set(t.id, known.id)
+    else {
+      firstNew.push(t)
+      targets.set(t.id, t.id)
+    }
+  }
+  return targets
 }
 
 /** A typed value as the attribute stores it: a canonical number ("4k7" -> "4700"), a list option as the list spells it
@@ -139,14 +169,15 @@ function lineValues(line: DraftLine, axes: readonly Attribute[]): Map<Id, string
 }
 
 /** The axes of a new item of the draft, in order; or what keeps it from being created: its folder archived (or gone,
- *  which needs an archive first), an empty or too long name, a unit gone, an attribute gone, a shared value that does
- *  not fit. */
-function newItemAxes(n: DraftNewItem, s: InventorySnapshot): Attribute[] | Problem {
+ *  which needs an archive first), an empty or too long name, a unit gone, a tag that is neither in the copy nor a new tag
+ *  of the draft (or a new tag with a bad name), an attribute gone, a shared value that does not fit. */
+function newItemAxes(n: DraftNewItem, s: InventorySnapshot, tags: ReadonlyMap<Id, Id>, badTags: ReadonlySet<Id>): Attribute[] | Problem {
   if (n.folderId !== null && (!s.folders.some((f) => f.id === n.folderId) || folderArchived(s, n.folderId))) {
     return 'item_archived'
   }
   const name = n.name.trim()
   if (name === '' || name.length > MAX_NAME_LENGTH || !resolveUnit(n.unitKey, s.units)) return 'invalid_value'
+  if ((n.tagIds ?? []).some((id) => !tags.has(id) || badTags.has(id))) return 'invalid_value'
   const axes: Attribute[] = []
   for (const x of n.attributes) {
     const a = s.attributes.find((y) => y.id === x.attributeId)
@@ -172,13 +203,15 @@ function variantKey(itemId: Id, axes: readonly Attribute[], values: ReadonlyMap<
 export function resolveIntake(draft: IntakeDraftContent, s: InventorySnapshot): ResolvedIntake {
   const newItems = new Map(draft.newItems.map((n) => [n.id, n] as const))
   const creators = new Map<string, { lineId: Id; variantId: Id }>()
+  const tags = tagTargets(draft, s)
+  const badTags = new Set((draft.newTags ?? []).filter((t) => t.name.trim() === '' || t.name.trim().length > MAX_NAME_LENGTH).map((t) => t.id))
 
   const resolve = (line: DraftLine): LineResolution => {
     const problem = (code: Problem): LineResolution => ({ kind: 'problem', code })
     const draftItem = newItems.get(line.itemId)
     let axes: readonly Attribute[]
     if (draftItem) {
-      const found = newItemAxes(draftItem, s)
+      const found = newItemAxes(draftItem, s, tags, badTags)
       if (typeof found === 'string') return problem(found)
       axes = found
       if (axes.length === 0) return { kind: 'newItem', itemId: line.itemId, variantId: null }
@@ -227,6 +260,9 @@ export function buildIntakeCommit(intake: Intake, resolved: ResolvedIntake, s: I
   const resolutions = new Map(resolved.lines.map((l) => [l.lineId, l.resolution] as const))
   const attributes = new Map(s.attributes.map((a) => [a.id, a] as const))
   const draftItems = new Map(draft.newItems.map((n) => [n.id, n] as const))
+  const targets = tagTargets(draft, s)
+  const created = new Set([...targets.values()].filter((id) => !s.tags.some((t) => t.id === id)))
+  const newTags = (draft.newTags ?? []).filter((t) => targets.get(t.id) === t.id && created.has(t.id)).map((t) => ({ id: t.id, name: t.name }))
 
   const newItems: IntakeCommit['newItems'] = draft.newItems.map((n) => {
     let position = 0
@@ -235,6 +271,7 @@ export function buildIntakeCommit(intake: Intake, resolved: ResolvedIntake, s: I
       folderId: n.folderId,
       name: n.name,
       unitKey: n.unitKey,
+      tagIds: [...new Set((n.tagIds ?? []).map((id) => targets.get(id)!))],
       attributes: n.attributes.map((x) => {
         const a = attributes.get(x.attributeId)
         const value = x.axis || x.value === null ? null : a ? canonicalValue(a, x.value) : x.value
@@ -296,6 +333,7 @@ export function buildIntakeCommit(intake: Intake, resolved: ResolvedIntake, s: I
     baseRev,
     baseDraftRev: intake.draftRev,
     header: intake.header,
+    newTags,
     newItems,
     newVariants,
     unarchiveVariants: [...unarchive],
@@ -327,18 +365,21 @@ export function buildIntakeCommit(intake: Intake, resolved: ResolvedIntake, s: I
 const NO_AUDIT = { createdAt: '', updatedAt: '', createdBy: '', updatedBy: '' }
 
 /**
- * The copy's items and variants as the commit leaves them: its new items with their attributes, its new variants with
+ * The copy's tags, items and variants as the commit leaves them: its new tags, its new items with their tags and attributes, its new variants with
  * their values, its unarchived variants active. Rows the copy holds already (a retried commit) are not added again.
  * Photos and stock stay as they are. New rows carry empty audit fields.
  */
 export function snapshotAfterIntake(s: InventorySnapshot, c: IntakeCommit): InventorySnapshot {
+  const knownTags = new Set(s.tags.map((t) => t.id))
   const knownItems = new Set(s.items.map((i) => i.id))
   const knownVariants = new Set(s.variants.map((v) => v.id))
+  const tags = c.newTags.filter((t) => !knownTags.has(t.id))
   const items = c.newItems.filter((n) => !knownItems.has(n.id))
   const variants = c.newVariants.filter((v) => !knownVariants.has(v.id))
   const unarchive = new Set(c.unarchiveVariants)
   return {
     ...s,
+    tags: [...s.tags, ...tags.map((t): Tag => ({ id: t.id, inventoryId: c.inventoryId, name: t.name, ...NO_AUDIT }))],
     items: [
       ...s.items,
       ...items.map(
@@ -349,7 +390,7 @@ export function snapshotAfterIntake(s: InventorySnapshot, c: IntakeCommit): Inve
           name: n.name,
           description: null,
           unitKey: n.unitKey,
-          tagIds: [],
+          tagIds: n.tagIds,
           ...NO_AUDIT,
           archivedAt: null,
           archiveId: null,

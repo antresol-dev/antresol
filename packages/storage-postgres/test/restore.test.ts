@@ -439,6 +439,19 @@ describe('restore', () => {
     expect(JSON.stringify(renameIntakeIds(intakes.find((i) => i.draft)!, m))).toContain('custom:m:')
   })
 
+  it('renameIntakeIds renames new tags and their references; a draft without them stays without', async () => {
+    const m = (id: Id) => `m:${id}`
+    const base = { id: 'i', inventoryId: 'v', status: 'draft', header: { shop: null, orderNumber: null, purchasedOn: '2026-11-13', note: null },
+      lines: null, draftRev: 'r', createdAt: '', createdBy: '', updatedAt: '', updatedBy: '', committedAt: null } as const
+    const item = { id: 'n1', name: 'X', folderId: null, unitKey: 'pcs', attributes: [] }
+    const tagged = renameIntakeIds({ ...base, draft: { newTags: [{ id: 't1', name: 'Kit' }], newItems: [{ ...item, tagIds: ['t1', 'old'] }], lines: [] } }, m)
+    expect(tagged.draft!.newTags).toEqual([{ id: 'm:t1', name: 'Kit' }])
+    expect(tagged.draft!.newItems[0]!.tagIds).toEqual(['m:t1', 'm:old'])
+    const plain = renameIntakeIds({ ...base, draft: { newItems: [item], lines: [] } }, m)
+    expect(plain.draft!.newItems[0]).not.toHaveProperty('tagIds')
+    expect(plain.draft).not.toHaveProperty('newTags')
+  })
+
   it('same-ids: refused into a source that holds any inventory, its live original or another one; nothing is written', async () => {
     const source = await makeStorage()
     const inv = await seedRich(source)

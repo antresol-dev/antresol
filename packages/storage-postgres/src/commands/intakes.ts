@@ -32,10 +32,23 @@ function check(c: IntakeCommit): Statement[] {
   ]
 }
 
-/** New items and their attributes; the attributes hang off the rows this insert created. */
+/** New tags, before the items that name them. */
+function newTags(c: IntakeCommit, by: string): Statement[] {
+  if (c.newTags.length === 0) return []
+  return [
+    sql`insert into tags (id, inventory_id, name, created_by, updated_by)
+        select t.id, ${c.inventoryId}::uuid, t.name, ${by}, ${by}
+        from unnest(${c.newTags.map((t) => t.id)}::uuid[], ${c.newTags.map((t) => t.name)}::text[]) as t(id, name)
+        where ${PENDING}
+        on conflict (id) do nothing`,
+  ]
+}
+
+/** New items with their tags and attributes; both hang off the rows this insert created, so a replay adds nothing. */
 function newItems(c: IntakeCommit, by: string): Statement[] {
   if (c.newItems.length === 0) return []
   const attributes = c.newItems.flatMap((n) => n.attributes.map((x) => ({ itemId: n.id, ...x })))
+  const tags = c.newItems.flatMap((n) => [...new Set(n.tagIds)].map((tagId) => ({ itemId: n.id, tagId })))
   return [
     sql`with ins as (
           insert into items (id, inventory_id, folder_id, name, unit_key, created_by, updated_by)
@@ -47,6 +60,13 @@ function newItems(c: IntakeCommit, by: string): Statement[] {
           order by n.ord
           on conflict (id) do nothing
           returning id
+        ), tagged as (
+          insert into item_tags (item_id, tag_id)
+          select x.item_id, x.tag_id
+          from unnest(${tags.map((x) => x.itemId)}::uuid[], ${tags.map((x) => x.tagId)}::uuid[]) as x(item_id, tag_id)
+          join ins on ins.id = x.item_id
+          on conflict do nothing
+          returning 1
         )
         insert into item_attributes (item_id, attribute_id, value, axis_position)
         select x.item_id, x.attribute_id, x.value, x.axis_position
@@ -114,8 +134,8 @@ function committed(c: IntakeCommit, by: string): Statement {
 }
 
 /**
- * intake.commit in one batch (spec 2026-11-13 intakes §7), in order: the check (see `check`), new items with their
- * attributes, new variants with their values, archived variants back, photos (as photo.add and photo.replace), the
+ * intake.commit in one batch (spec 2026-11-13 intakes §7), in order: the check (see `check`), new tags, new items with
+ * their tags and attributes, new variants with their values, archived variants back, photos (as photo.add and photo.replace), the
  * intake row committed, one receipt per line marked with the intake, a new intakes revision. Every write after the check
  * waits on PENDING, and every insert is `on conflict (id) do nothing`.
  */
@@ -123,6 +143,7 @@ export function intakeStatements(c: IntakeCommit, actor: Actor): Statement[] {
   const by = actor.device
   return [
     ...check(c),
+    ...newTags(c, by),
     ...newItems(c, by),
     ...newVariants(c, by),
     ...unarchive(c, by),

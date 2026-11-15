@@ -3,6 +3,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
 import type { ToolContext } from './context'
 import { jsonResult, secretsOf, toToolResult } from './errors'
+import * as photos from './tools/photos'
 import * as read from './tools/read'
 
 export const ACTOR_FALLBACK = 'AI · MCP'
@@ -103,6 +104,31 @@ export function registerReadTools(server: McpServer, ctx: ToolContext): void {
   )
 }
 
+export function registerPhotoTools(server: McpServer, ctx: ToolContext): void {
+  server.registerTool(
+    'list_photos',
+    {
+      description:
+        'Lists the pictures (jpg, png, webp, heic) in the photos folder, newest first, with the draft line each one is already attached to. Folder defaults to the photos folder from get_overview.',
+      inputSchema: {
+        folder: z.string().optional().describe('A sub-folder or absolute path; the photos folder when left out.'),
+        onlyNew: z.boolean().optional().describe('Only pictures not yet attached to a draft line.'),
+      },
+      annotations: READ_ONLY,
+    },
+    handler(ctx, photos.listPhotos),
+  )
+  server.registerTool(
+    'view_photos',
+    {
+      description: 'Shows 1 to 6 pictures (path from list_photos) so you can see what is on them. Each is preceded by its path.',
+      inputSchema: { paths: z.array(z.string()).describe('Absolute paths, or paths relative to the photos folder.') },
+      annotations: READ_ONLY,
+    },
+    (args) => photos.viewPhotos(ctx, args),
+  )
+}
+
 /**
  * The server with its tools. Sets `ctx.actor`: the connected client's name after `initialize`, as "<name> · MCP"
  * ("AI · MCP" without a client name).
@@ -114,5 +140,6 @@ export function createServer(ctx: ToolContext): McpServer {
     return { device: name ? `${name} · MCP` : ACTOR_FALLBACK }
   }
   registerReadTools(server, ctx)
+  registerPhotoTools(server, ctx)
   return server
 }

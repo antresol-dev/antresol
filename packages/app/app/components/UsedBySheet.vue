@@ -27,7 +27,7 @@ function go(id: string): void {
         class="relative not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
       >
         <button type="button" class="flex min-h-14 w-full min-w-0 items-center gap-3 px-3 py-1.5 text-left" @click="go(row.id)">
-          <ItemThumb :id="row.id" :folder-name="row.folderName" :icon="row.icon" :folder-icon="row.folderIcon" :cover="row.cover" class="size-9 rounded-thumb text-xs" />
+          <ItemThumb :id="row.id" :folder-name="row.folderName" :icon="row.icon" :folder-icon="row.folderIcon" :cover="row.cover" :color="row.color" class="size-9 rounded-thumb text-xs" />
           <span class="flex min-w-0 grow flex-col gap-0.5">
             <span class="truncate text-base font-semibold">{{ row.name }}</span>
             <span v-if="row.path" class="truncate text-sm text-muted-foreground">{{ row.path }}</span>

@@ -280,6 +280,19 @@ describe('index and edge cases', () => {
     expect(folderView(onlyVariant, idOf(onlyVariant, 'Resistors'))!.items[0]!.cover).toBeNull()
   })
 
+  it('gives list and search rows the item colour (null when it has none)', () => {
+    const s = clone()
+    const item = s.items.find((i) => i.name === 'Резистор 0,25 Вт')!
+    const folderId = item.folderId
+    const rowOf = (snap: typeof s) => folderView(snap, folderId)!.items.find((r) => r.id === item.id)!
+    expect(rowOf(s).color).toBeNull()
+    expect(searchRows(s, [{ itemId: item.id, variantId: null }])[0]!.color).toBeNull()
+    const painted = clone()
+    painted.items.find((i) => i.id === item.id)!.color = '#9A4F1E'
+    expect(rowOf(painted).color).toBe('#9A4F1E')
+    expect(searchRows(painted, [{ itemId: item.id, variantId: null }])[0]!.color).toBe('#9A4F1E')
+  })
+
   it('gives search rows the cover, and the variant photo when a variant matched', () => {
     const s = clone()
     const item = s.items.find((i) => i.name === 'Резистор 0,25 Вт')!

@@ -5,7 +5,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { readConfig } from './config'
 import type { ToolContext } from './context'
 import { scrub, secretsOf } from './errors'
-import { createServer } from './server'
+import { ACTOR_FALLBACK, createServer } from './server'
 import { createSource, type Source } from './source'
 
 async function main(): Promise<void> {
@@ -26,7 +26,7 @@ async function main(): Promise<void> {
     source,
     storage,
     config,
-    actor: () => ({ device: 'MCP' }),
+    actor: () => ({ device: ACTOR_FALLBACK }),
     files: null,
     now: () => new Date(),
     openError,

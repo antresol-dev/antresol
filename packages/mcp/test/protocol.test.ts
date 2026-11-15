@@ -53,6 +53,13 @@ describe('protocol', () => {
     expect(f.ctx.actor()).toEqual({ device: 'Test Client · MCP' })
   })
 
+  it('falls back to "AI · MCP" when the client has no name', async () => {
+    const f = await makeContext()
+    expect(f.ctx.actor()).toEqual({ device: 'Test · Vitest' })
+    await connect(f.ctx, '  ')
+    expect(f.ctx.actor()).toEqual({ device: 'AI · MCP' })
+  })
+
   it('answers a tool error as isError without secrets', async () => {
     const conn = 'postgresql://user:hunter2@ep-1.neon.tech/db'
     const key = encodeConnectionKey({ name: 'Home', connectionString: conn })

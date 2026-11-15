@@ -5,6 +5,7 @@ import type { ToolContext } from './context'
 import { jsonResult, secretsOf, toToolResult } from './errors'
 import * as read from './tools/read'
 
+export const ACTOR_FALLBACK = 'AI · MCP'
 export const SERVER_NAME = 'antresol'
 export const SERVER_INSTRUCTIONS =
   'Antresol is a home inventory. These tools only read it and prepare intake drafts (receipts of purchased items); nothing is added to the stock until the person reviews and commits the intake in the Antresol app. Start with get_overview to learn the inventories, folders, attributes and units. Search before proposing a new item.'
@@ -104,13 +105,13 @@ export function registerReadTools(server: McpServer, ctx: ToolContext): void {
 
 /**
  * The server with its tools. Sets `ctx.actor`: the connected client's name after `initialize`, as "<name> · MCP"
- * ("MCP" until the client has introduced itself).
+ * ("AI · MCP" without a client name).
  */
 export function createServer(ctx: ToolContext): McpServer {
   const server = new McpServer({ name: SERVER_NAME, version: '0.1.0' }, { instructions: SERVER_INSTRUCTIONS })
   ctx.actor = () => {
     const name = server.server.getClientVersion()?.name?.trim()
-    return { device: name ? `${name} · MCP` : 'MCP' }
+    return { device: name ? `${name} · MCP` : ACTOR_FALLBACK }
   }
   registerReadTools(server, ctx)
   return server

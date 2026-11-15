@@ -21,6 +21,9 @@ const target = shallowRef<Target | null>(null)
 const shown = shallowRef<Target | null>(null)
 const name = ref('')
 const color = ref<string | null>(null)
+// Bumped on every open: the swatch row is built from the colour the sheet opened with, so it is rebuilt each time, even
+// when the sheet opens again before the last one finished animating out.
+const opened = ref(0)
 const busy = ref(false)
 const errorKey = ref<string | null>(null)
 const locked = computed(() => !!state.readOnly || state.saving || busy.value)
@@ -31,6 +34,7 @@ function open(next: Target): void {
   shown.value = next
   name.value = next.kind === 'rename' ? next.tag.name : ''
   color.value = next.kind === 'rename' ? next.tag.color : null
+  opened.value++
   errorKey.value = null
 }
 const sheetOpen = (kinds: Target['kind'][]) =>
@@ -156,7 +160,7 @@ async function remove(): Promise<void> {
             class="h-11"
           />
         </div>
-        <ColorSwatches v-model="color" :auto="null" :label="$t('colors.label')" :disabled="busy" />
+        <ColorSwatches :key="opened" v-model="color" :auto="null" :label="$t('colors.label')" :disabled="busy" />
         <p id="tag-form-error" role="alert" class="field-text text-sm text-destructive">
           <template v-if="errorKey && formOpen">{{ $t(errorKey) }}</template>
         </p>

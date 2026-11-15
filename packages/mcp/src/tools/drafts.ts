@@ -6,6 +6,7 @@ import {
   pruneNewItems,
   type Attribute,
   type DraftLine,
+  type DraftLinePhoto,
   type DraftNewItem,
   type DraftNewTag,
   type Id,
@@ -19,6 +20,7 @@ import { editDraft, locateIntake, viewOf } from '../draft-edit'
 import { ToolError } from '../errors'
 import { messageFor } from '../messages'
 import { folderPath } from '../shape'
+import { attachPhoto } from './photos'
 
 export interface NewItemArgs {
   ref: string
@@ -184,10 +186,6 @@ function resolveValues(s: InventorySnapshot, axes: Attribute[], values: Record<s
   return out
 }
 
-function photoArg(args: { photo?: string }): void {
-  if (args.photo !== undefined && args.photo.trim() !== '') throw new ToolError('Adding photos is not available yet.')
-}
-
 const problems = (list: string[]): ToolError => new ToolError(`Nothing was saved.\n${list.join('\n')}`)
 
 /** Runs `step`, turning a refusal into one problem line instead of stopping. */
@@ -204,6 +202,23 @@ function collect(errors: string[], label: string, step: () => void): void {
 
 export async function addIntakeLines(ctx: ToolContext, args: { intake: string; newItems?: NewItemArgs[]; lines: LineArgs[] }) {
   if (!args.lines || args.lines.length === 0) throw new ToolError('Pass at least one line.')
+  // Uploads come first and the ids are fixed here: editDraft may run its callback twice, and neither may upload again.
+  const lineIds = args.lines.map(() => newId())
+  const photos: (DraftLinePhoto | null)[] = []
+  for (const [i, l] of args.lines.entries()) {
+    const path = l.photo?.trim()
+    if (!path) {
+      photos.push(null)
+      continue
+    }
+    try {
+      const photo = await attachPhoto(ctx, path, args.intake.trim(), lineIds[i]!)
+      photos.push({ ...photo, replace: l.replacePhoto ?? false })
+    } catch (e) {
+      if (e instanceof ToolError) throw new ToolError(`line ${i + 1}: ${e.message}`)
+      throw e
+    }
+  }
   return editDraft(ctx, args.intake, (draft, header, s) => {
     const errors: string[] = []
     const tags: DraftNewTag[] = [...(draft.newTags ?? [])]
@@ -227,7 +242,6 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
     let next = draft
     args.lines.forEach((l, i) => {
       collect(errors, `line ${i + 1}`, () => {
-        photoArg(l)
         const ref = l.item?.trim() ?? ''
         const made = fresh.get(ref)
         const inDraft = made ? undefined : draft.newItems.find((n) => n.id === ref)
@@ -241,7 +255,7 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
         const axisValues = resolveValues(s, axesOf(s, newItem, itemId), l.values)
         const built = buildDraftLine(
           {
-            lineId: newId(),
+            lineId: lineIds[i]!,
             ids: { movementId: newId(), variantId: newId(), photoId: newId() },
             itemId,
             newItem,
@@ -250,7 +264,7 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
             price: l.price ?? '',
             url: l.url ?? '',
             urlPrefix: null,
-            photo: null,
+            photo: photos[i] ?? null,
             newTags: tags,
           },
           s,
@@ -280,8 +294,9 @@ export async function updateIntakeLine(
   ctx: ToolContext,
   args: { intake: string; line: string; values?: Record<string, string>; amount?: string; price?: string; url?: string; photo?: string; replacePhoto?: boolean },
 ) {
+  const path = args.photo?.trim()
+  const uploaded = path ? { ...(await attachPhoto(ctx, path, args.intake.trim(), args.line.trim())), replace: args.replacePhoto ?? false } : null
   return editDraft(ctx, args.intake, (draft, header, s) => {
-    photoArg(args)
     const old = findLine(draft, args.line)
     const newItem = draft.newItems.find((n) => n.id === old.itemId) ?? null
     const axes = axesOf(s, newItem, old.itemId)
@@ -299,7 +314,7 @@ export async function updateIntakeLine(
         price: args.price ?? '',
         url: args.url ?? '',
         urlPrefix: null,
-        photo: args.photo === '' ? null : old.photo ? { ...old.photo, replace: args.replacePhoto ?? old.photo.replace } : null,
+        photo: uploaded ?? (args.photo !== undefined ? null : old.photo ? { ...old.photo, replace: args.replacePhoto ?? old.photo.replace } : null),
         newTags: draft.newTags ?? [],
       },
       s,

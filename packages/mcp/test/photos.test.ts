@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { copyFile, mkdir, mkdtemp, readFile, utimes, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import type { FileStore } from '@antresol/core'
+import { newId, type FileStore } from '@antresol/core'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { describe, expect, it } from 'vitest'
@@ -12,7 +12,9 @@ import { ToolError } from '../src/errors'
 import { createPhotoState } from '../src/photo-state'
 import { createServer } from '../src/server'
 import { attachPhoto, listPhotos, viewPhotos } from '../src/tools/photos'
-import { TEST_ACTOR } from './fixture'
+import * as drafts from '../src/tools/drafts'
+import * as read from '../src/tools/read'
+import { makeContext, TEST_ACTOR } from './fixture'
 
 const FIXTURES = path.join(__dirname, 'fixtures')
 
@@ -145,5 +147,64 @@ describe('view_photos through the server', () => {
   it('viewPhotos rejects an empty list', async () => {
     const { ctx } = await setup()
     expect((await viewPhotos(ctx, { paths: [] })).isError).toBe(true)
+  })
+})
+
+describe('photo in draft lines', () => {
+  async function draftSetup(withStore: boolean) {
+    const { files, uploads } = fakeStore()
+    const s = await setup(withStore ? files : null)
+    await copyFile(path.join(FIXTURES, 'gradient.png'), path.join(s.photosDir, 'a.png'))
+    const f = await makeContext()
+    const ctx: ToolContext = { ...f.ctx, config: s.ctx.config, files: s.ctx.files }
+    const id = ((await drafts.createIntake(ctx, { shop: 'LCSC' })) as any).id as string
+    return { ...s, f, ctx, id, uploads }
+  }
+
+  it('one upload for the same file in two lines and in two calls; usedIn afterwards; photo is on the line', async () => {
+    const { ctx, id, f, uploads } = await draftSetup(true)
+    let v = (await drafts.addIntakeLines(ctx, {
+      intake: id,
+      lines: [
+        { item: f.ids.esp32, amount: '1', photo: 'a.png' },
+        { item: f.ids.esp32, amount: '2', photo: 'a.png' },
+      ],
+    })) as any
+    v = (await drafts.addIntakeLines(ctx, { intake: id, lines: [{ item: f.ids.esp32, amount: '3', photo: 'a.png' }] })) as any
+    expect(uploads).toHaveLength(1)
+    expect(v.lines.map((l: any) => l.photo?.url)).toEqual(Array(3).fill('https://img.example/1'))
+    expect(v.lines[0].photo.replace).toBe(false)
+    const listed = await listPhotos(ctx, {})
+    expect(listed.photos[0]!.usedIn).toEqual({ intakeId: id, lineId: v.lines[0].id })
+  })
+
+  it('replacePhoto sets replace; update sets, keeps and removes (empty) the photo', async () => {
+    const { ctx, id, f, uploads } = await draftSetup(true)
+    let v = (await drafts.addIntakeLines(ctx, { intake: id, lines: [{ item: f.ids.resistor, values: { Resistance: '4k7' }, amount: '1' }] })) as any
+    const line = v.lines[0].id as string
+    expect(v.lines[0].photo).toBeNull()
+    // The variant has no photo in stock: "replace" has nothing to replace and is dropped.
+    v = (await drafts.updateIntakeLine(ctx, { intake: id, line, photo: 'a.png', replacePhoto: true })) as any
+    expect(v.lines[0].photo).toMatchObject({ url: 'https://img.example/1', replace: false })
+    await f.apply({ type: 'photo.add', id: newId(), itemId: f.ids.resistor, variantId: f.ids.v4k7, provider: 'x', fileId: 'x', url: 'https://x/1' })
+    ctx.source!.refresh()
+    v = (await drafts.updateIntakeLine(ctx, { intake: id, line, photo: 'a.png', replacePhoto: true })) as any
+    expect(v.lines[0].photo).toMatchObject({ url: 'https://img.example/1', replace: true })
+    v = (await drafts.updateIntakeLine(ctx, { intake: id, line, amount: '4' })) as any
+    expect(v.lines[0].photo).toMatchObject({ url: 'https://img.example/1' })
+    v = (await drafts.updateIntakeLine(ctx, { intake: id, line, photo: '' })) as any
+    expect(v.lines[0].photo).toBeNull()
+    expect(uploads).toHaveLength(1)
+    expect((await read.getIntake(ctx, { intake: id }) as any).lines[0].photo).toBeNull()
+  })
+
+  it('without a photo store a line with a photo is refused and lines without photos still save', async () => {
+    const { ctx, id, f } = await draftSetup(false)
+    const error = await drafts.addIntakeLines(ctx, { intake: id, lines: [{ item: f.ids.esp32, amount: '1', photo: 'a.png' }] }).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(ToolError)
+    expect((error as Error).message).toContain('no photo store')
+    expect(((await read.getIntake(ctx, { intake: id })) as any).lines).toHaveLength(0)
+    const v = (await drafts.addIntakeLines(ctx, { intake: id, lines: [{ item: f.ids.esp32, amount: '1' }] })) as any
+    expect(v.lines).toHaveLength(1)
   })
 })

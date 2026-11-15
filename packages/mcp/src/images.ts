@@ -96,7 +96,75 @@ function sniff(b: Uint8Array): Kind | null {
 
 const own = (bytes: Uint8Array): ArrayBuffer => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer
 
-/** Decodes JPEG, PNG, WebP and HEIC/HEIF (EXIF orientation applied) to RGBA pixels. */
+/** The EXIF Orientation (1-8) of a JPEG, 1 when there is none or it cannot be read. Both byte orders. */
+export function exifOrientation(b: Uint8Array): number {
+  let i = 2
+  while (i + 4 <= b.length && b[i] === 0xff) {
+    const marker = b[i + 1]!
+    if (marker === 0xda || marker === 0xd9) break
+    if (marker === 0xff) {
+      i++
+      continue
+    }
+    const length = (b[i + 2]! << 8) | b[i + 3]!
+    const start = i + 4
+    if (marker === 0xe1 && b[start] === 0x45 && b[start + 1] === 0x78 && b[start + 2] === 0x69 && b[start + 3] === 0x66 && b[start + 4] === 0 && b[start + 5] === 0) {
+      const tiff = start + 6
+      const little = b[tiff] === 0x49
+      if (!little && b[tiff] !== 0x4d) return 1
+      const u16 = (at: number) => (at + 2 <= b.length ? (little ? b[at]! | (b[at + 1]! << 8) : (b[at]! << 8) | b[at + 1]!) : -1)
+      const u32 = (at: number) => (little ? u16(at) + u16(at + 2) * 65536 : u16(at) * 65536 + u16(at + 2))
+      const ifd = tiff + u32(tiff + 4)
+      const count = u16(ifd)
+      for (let n = 0; n < count; n++) {
+        const entry = ifd + 2 + n * 12
+        if (u16(entry) === 0x0112) {
+          const value = u16(entry + 8)
+          return value >= 1 && value <= 8 ? value : 1
+        }
+      }
+      return 1
+    }
+    i = start + length - 2
+  }
+  return 1
+}
+
+/** The picture as the camera meant it to be seen: EXIF orientation 2-8 undone (mirror, rotate 180, transpose, rotate 90 CW, transverse, rotate 90 CCW). */
+export function applyOrientation(p: Pixels, orientation: number): Pixels {
+  if (orientation < 2 || orientation > 8) return p
+  const swap = orientation >= 5
+  const width = swap ? p.height : p.width
+  const height = swap ? p.width : p.height
+  const data = new Uint8ClampedArray(width * height * 4)
+  const sw = p.width
+  const sh = p.height
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let sx: number
+      let sy: number
+      switch (orientation) {
+        case 2: sx = sw - 1 - x; sy = y; break
+        case 3: sx = sw - 1 - x; sy = sh - 1 - y; break
+        case 4: sx = x; sy = sh - 1 - y; break
+        case 5: sx = y; sy = x; break
+        case 6: sx = y; sy = sh - 1 - x; break
+        case 7: sx = sw - 1 - y; sy = sh - 1 - x; break
+        default: sx = sw - 1 - y; sy = x
+      }
+      const from = (sy * sw + sx) * 4
+      const to = (y * width + x) * 4
+      data[to] = p.data[from]!
+      data[to + 1] = p.data[from + 1]!
+      data[to + 2] = p.data[from + 2]!
+      data[to + 3] = p.data[from + 3]!
+    }
+  }
+  return { width, height, data }
+}
+
+/** Decodes JPEG, PNG, WebP and HEIC/HEIF to RGBA pixels, upright: a JPEG's EXIF orientation is applied here (the codec
+ *  ignores it and re-encoding drops it); HEIC's rotation is applied by the decoder; PNG and WebP are taken as stored. */
 export async function decodeImage(bytes: Uint8Array, name: string): Promise<Pixels> {
   const kind = sniff(bytes)
   if (kind === null) throw new ToolError(`not an image this server can read: ${name}`)
@@ -110,7 +178,8 @@ export async function decodeImage(bytes: Uint8Array, name: string): Promise<Pixe
     else await readyWebpDecoder()
     const decode = kind === 'jpeg' ? decodeJpeg : kind === 'png' ? decodePng : decodeWebp
     const image = await decode(own(bytes))
-    return { width: image.width, height: image.height, data: image.data }
+    const pixels = { width: image.width, height: image.height, data: image.data }
+    return kind === 'jpeg' ? applyOrientation(pixels, exifOrientation(bytes)) : pixels
   } catch (e) {
     throw new ToolError(`could not decode ${name}: ${e instanceof Error ? e.message : String(e)}`)
   }

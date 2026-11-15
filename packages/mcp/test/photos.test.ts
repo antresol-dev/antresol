@@ -11,7 +11,7 @@ import type { ToolContext } from '../src/context'
 import { ToolError } from '../src/errors'
 import { createPhotoState } from '../src/photo-state'
 import { createServer } from '../src/server'
-import { attachPhoto, listPhotos, viewPhotos } from '../src/tools/photos'
+import { attachPhoto, listPhotos, markPhotoUsed, viewPhotos } from '../src/tools/photos'
 import * as drafts from '../src/tools/drafts'
 import * as read from '../src/tools/read'
 import { makeContext, TEST_ACTOR } from './fixture'
@@ -70,9 +70,10 @@ describe('attachPhoto', () => {
     const { ctx, photosDir, stateDir } = await setup(files)
     await copyFile(path.join(FIXTURES, 'gradient.png'), path.join(photosDir, 'a.png'))
     await copyFile(path.join(FIXTURES, 'gradient.png'), path.join(photosDir, 'copy.png'))
-    const first = await attachPhoto(ctx, 'a.png', 'intake-1', 'line-1')
-    const second = await attachPhoto(ctx, path.join(photosDir, 'copy.png'), 'intake-1', 'line-2')
-    const third = await attachPhoto(ctx, 'a.png', 'intake-1', 'line-3')
+    const first = await attachPhoto(ctx, 'a.png')
+    const second = await attachPhoto(ctx, path.join(photosDir, 'copy.png'))
+    const third = await attachPhoto(ctx, 'a.png')
+    markPhotoUsed(ctx, 'a.png', 'intake-1', 'line-1')
     expect(uploads).toHaveLength(1)
     expect(uploads[0]).toMatchObject({ name: 'photo.webp', type: 'image/webp' })
     expect(first).toEqual({ provider: 'fake', fileId: 'f1', url: 'https://img.example/1', urls: null, deleteHandle: 'h1', width: 64, height: 48, replace: false })
@@ -91,10 +92,21 @@ describe('attachPhoto', () => {
     expect(reopened.get(sha)).toMatchObject({ fileId: 'f1', width: 64 })
   })
 
+  it('parallel calls for the same content share one upload', async () => {
+    const { files, uploads } = fakeStore()
+    const { ctx, photosDir } = await setup(files)
+    await copyFile(path.join(FIXTURES, 'gradient.png'), path.join(photosDir, 'a.png'))
+    await copyFile(path.join(FIXTURES, 'gradient.png'), path.join(photosDir, 'b.png'))
+    const results = await Promise.all([attachPhoto(ctx, 'a.png'), attachPhoto(ctx, 'b.png'), attachPhoto(ctx, 'a.png')])
+    expect(uploads).toHaveLength(1)
+    expect(results[1]).toEqual(results[0])
+    expect(results[2]).toEqual(results[0])
+  })
+
   it('without a photo store it says so', async () => {
     const { ctx, photosDir } = await setup(null)
     await copyFile(path.join(FIXTURES, 'gradient.png'), path.join(photosDir, 'a.png'))
-    const error = await attachPhoto(ctx, 'a.png', 'i', 'l').catch((e: unknown) => e)
+    const error = await attachPhoto(ctx, 'a.png').catch((e: unknown) => e)
     expect(error).toBeInstanceOf(ToolError)
     expect((error as Error).message).toMatch(/^no photo store/)
   })
@@ -103,8 +115,8 @@ describe('attachPhoto', () => {
     const { files } = fakeStore()
     const { ctx, photosDir } = await setup(files)
     await writeFile(path.join(photosDir, 'notes.jpg'), 'text')
-    expect(await attachPhoto(ctx, 'gone.jpg', 'i', 'l').catch((e: unknown) => (e as Error).message)).toBe(`file not found: ${path.join(photosDir, 'gone.jpg')}`)
-    expect(await attachPhoto(ctx, 'notes.jpg', 'i', 'l').catch((e: unknown) => (e as Error).message)).toBe('not an image this server can read: notes.jpg')
+    expect(await attachPhoto(ctx, 'gone.jpg').catch((e: unknown) => (e as Error).message)).toBe(`file not found: ${path.join(photosDir, 'gone.jpg')}`)
+    expect(await attachPhoto(ctx, 'notes.jpg').catch((e: unknown) => (e as Error).message)).toBe('not an image this server can read: notes.jpg')
   })
 })
 
@@ -175,7 +187,28 @@ describe('photo in draft lines', () => {
     expect(v.lines.map((l: any) => l.photo?.url)).toEqual(Array(3).fill('https://img.example/1'))
     expect(v.lines[0].photo.replace).toBe(false)
     const listed = await listPhotos(ctx, {})
-    expect(listed.photos[0]!.usedIn).toEqual({ intakeId: id, lineId: v.lines[0].id })
+    expect(listed.photos[0]!.usedIn).toEqual({ intakeId: id, lineId: v.lines[2].id })
+  })
+
+  it('a failed call does not mark the photo as used and a retry does not upload again', async () => {
+    const { ctx, id, f, uploads } = await draftSetup(true)
+    const bad = await drafts
+      .addIntakeLines(ctx, {
+        intake: id,
+        lines: [
+          { item: f.ids.esp32, amount: '1', photo: 'a.png' },
+          { item: f.ids.esp32, amount: '' },
+        ],
+      })
+      .catch((e: unknown) => e)
+    expect(bad).toBeInstanceOf(ToolError)
+    expect((await listPhotos(ctx, { onlyNew: true })).photos.map((p) => p.name)).toEqual(['a.png'])
+    const missingLine = await drafts.updateIntakeLine(ctx, { intake: id, line: 'nope', photo: 'a.png' }).catch((e: unknown) => e)
+    expect(missingLine).toBeInstanceOf(ToolError)
+    expect((await listPhotos(ctx, { onlyNew: true })).photos).toHaveLength(1)
+    await drafts.addIntakeLines(ctx, { intake: id, lines: [{ item: f.ids.esp32, amount: '1', photo: 'a.png' }] })
+    expect(uploads).toHaveLength(1)
+    expect((await listPhotos(ctx, { onlyNew: true })).photos).toEqual([])
   })
 
   it('replacePhoto sets replace; update sets, keeps and removes (empty) the photo', async () => {

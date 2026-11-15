@@ -6,7 +6,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import type { ToolContext } from '../context'
 import { ToolError, secretsOf, toToolResult } from '../errors'
 import { forModel, forStore } from '../images'
-import { createPhotoState, type PhotoState } from '../photo-state'
+import { createPhotoState, type PhotoState, type StoredUpload } from '../photo-state'
 
 export const PHOTOS_LIMIT = 200
 export const VIEW_MAX_PHOTOS = 6
@@ -111,27 +111,40 @@ export async function viewPhotos(ctx: ToolContext, args: { paths: string[] }): P
   }
 }
 
+// Uploads in progress by content: parallel calls for the same picture share one upload.
+const inFlight = new Map<string, Promise<StoredUpload>>()
+
 /**
- * The file as a photo for a draft line. The same content is uploaded once, whichever path or line it comes from; the
- * upload is remembered with the line it is first attached to (shown as `usedIn` by list_photos).
+ * The file as a photo for a draft line. The same content is uploaded once, whichever path it comes from, also when calls
+ * run in parallel. Nothing is marked as used here: call `markPhotoUsed` once the line is saved.
  */
-export async function attachPhoto(ctx: ToolContext, file: string, intakeId: Id, lineId: Id): Promise<DraftLinePhoto> {
-  if (!ctx.files) throw new ToolError('no photo store: the connection key has no photo store settings. Set up photos in the app and copy the key again.')
+export async function attachPhoto(ctx: ToolContext, file: string): Promise<DraftLinePhoto> {
+  const files = ctx.files
+  if (!files) throw new ToolError('no photo store: the connection key has no photo store settings. Set up photos in the app and copy the key again.')
   const { full, bytes } = await readPhoto(ctx, file)
   const state = photoState(ctx)
   const sha = createHash('sha256').update(bytes).digest('hex')
   let upload = state.get(sha)
   if (!upload) {
-    const prepared = await forStore(bytes, path.basename(full))
-    let stored
-    try {
-      stored = await ctx.files.upload(prepared.blob, prepared.name)
-    } catch (e) {
-      if (e instanceof FileError) throw e
-      throw new ToolError(`the photo store did not take ${path.basename(full)}: ${e instanceof Error ? e.message : String(e)}`)
+    const key = `${ctx.config.stateDir}\0${sha}`
+    let pending = inFlight.get(key)
+    if (!pending) {
+      pending = (async () => {
+        const prepared = await forStore(bytes, path.basename(full))
+        let stored
+        try {
+          stored = await files.upload(prepared.blob, prepared.name)
+        } catch (e) {
+          if (e instanceof FileError) throw e
+          throw new ToolError(`the photo store did not take ${path.basename(full)}: ${e instanceof Error ? e.message : String(e)}`)
+        }
+        const made = { ...stored, width: prepared.width, height: prepared.height }
+        state.put(sha, made)
+        return made
+      })().finally(() => inFlight.delete(key))
+      inFlight.set(key, pending)
     }
-    upload = { ...stored, width: prepared.width, height: prepared.height }
-    state.put(sha, { ...upload, intakeId, lineId, path: full })
+    upload = await pending
   }
   return {
     provider: upload.provider,
@@ -143,4 +156,9 @@ export async function attachPhoto(ctx: ToolContext, file: string, intakeId: Id, 
     height: upload.height,
     replace: false,
   }
+}
+
+/** The picture now belongs to a saved draft line: list_photos shows it as used. */
+export function markPhotoUsed(ctx: ToolContext, file: string, intakeId: Id, lineId: Id): void {
+  photoState(ctx).markUsed(resolvePhotoPath(ctx, file), { intakeId, lineId })
 }

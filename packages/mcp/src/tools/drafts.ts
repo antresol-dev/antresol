@@ -20,7 +20,7 @@ import { editDraft, locateIntake, viewOf } from '../draft-edit'
 import { ToolError } from '../errors'
 import { messageFor } from '../messages'
 import { folderPath } from '../shape'
-import { attachPhoto } from './photos'
+import { attachPhoto, markPhotoUsed } from './photos'
 
 export interface NewItemArgs {
   ref: string
@@ -212,14 +212,14 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
       continue
     }
     try {
-      const photo = await attachPhoto(ctx, path, args.intake.trim(), lineIds[i]!)
+      const photo = await attachPhoto(ctx, path)
       photos.push({ ...photo, replace: l.replacePhoto ?? false })
     } catch (e) {
       if (e instanceof ToolError) throw new ToolError(`line ${i + 1}: ${e.message}`)
       throw e
     }
   }
-  return editDraft(ctx, args.intake, (draft, header, s) => {
+  const view = await editDraft(ctx, args.intake, (draft, header, s) => {
     const errors: string[] = []
     const tags: DraftNewTag[] = [...(draft.newTags ?? [])]
     const fresh = new Map<string, DraftNewItem>()
@@ -280,6 +280,11 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
     if (unused.length > 0) throw problems(unused)
     return { draft: next, header }
   })
+  // Only a saved line makes its picture "used".
+  args.lines.forEach((l, i) => {
+    if (photos[i]) markPhotoUsed(ctx, l.photo!.trim(), args.intake.trim(), lineIds[i]!)
+  })
+  return view
 }
 
 // ---- edit and remove ----------------------------------------------------------------------------------------------
@@ -295,8 +300,8 @@ export async function updateIntakeLine(
   args: { intake: string; line: string; values?: Record<string, string>; amount?: string; price?: string; url?: string; photo?: string; replacePhoto?: boolean },
 ) {
   const path = args.photo?.trim()
-  const uploaded = path ? { ...(await attachPhoto(ctx, path, args.intake.trim(), args.line.trim())), replace: args.replacePhoto ?? false } : null
-  return editDraft(ctx, args.intake, (draft, header, s) => {
+  const uploaded = path ? { ...(await attachPhoto(ctx, path)), replace: args.replacePhoto ?? false } : null
+  const view = await editDraft(ctx, args.intake, (draft, header, s) => {
     const old = findLine(draft, args.line)
     const newItem = draft.newItems.find((n) => n.id === old.itemId) ?? null
     const axes = axesOf(s, newItem, old.itemId)
@@ -329,6 +334,8 @@ export async function updateIntakeLine(
     }
     return { draft: withLine(draft, line, built.newItem, built.newTags), header }
   })
+  if (path && uploaded) markPhotoUsed(ctx, path, args.intake.trim(), args.line.trim())
+  return view
 }
 
 export async function removeIntakeLine(ctx: ToolContext, args: { intake: string; line: string }) {

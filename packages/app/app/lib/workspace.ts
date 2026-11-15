@@ -25,10 +25,7 @@ import {
   type SnapshotPatch,
   type SourceReceipt,
 } from '@antresol/core'
-import { createCloudinaryStore } from '@antresol/files-cloudinary'
-import { createImgbbStore } from '@antresol/files-imgbb'
-import { createImgurStore } from '@antresol/files-imgur'
-import { createUploadcareStore } from '@antresol/files-uploadcare'
+import { createFileStore } from '@antresol/kit'
 import { APP_SCHEMA_VERSION } from '@antresol/storage-postgres'
 import { markRaw, reactive } from 'vue'
 import { buildBackup, type BackupFile } from './backup'
@@ -200,22 +197,7 @@ function bucketsOf(c: Command): string[] {
 export function defaultFileStore(config: SourceConfig, fetchImpl?: typeof fetch): FileStore | null {
   if (config.kind === 'dev-pglite') return createDeviceFileStore()
   if (config.kind !== 'neon') return null
-  const opts = fetchImpl ? { fetch: fetchImpl } : {}
-  if (config.photoStore === 'cloudinary') {
-    const cloudName = config.cloudinaryCloudName?.trim()
-    const uploadPreset = config.cloudinaryUploadPreset?.trim()
-    return cloudName && uploadPreset ? createCloudinaryStore({ cloudName, uploadPreset, ...opts }) : null
-  }
-  if (config.photoStore === 'imgbb') {
-    const apiKey = config.imgbbApiKey?.trim()
-    return apiKey ? createImgbbStore({ apiKey, ...opts }) : null
-  }
-  if (config.photoStore === 'imgur') {
-    const clientId = config.imgurClientId?.trim()
-    return clientId ? createImgurStore({ clientId, ...opts }) : null
-  }
-  const key = config.uploadcarePublicKey?.trim()
-  return key ? createUploadcareStore({ publicKey: key, cdnBase: config.uploadcareCdnBase ?? undefined, ...opts }) : null
+  return createFileStore(config, fetchImpl)
 }
 
 export function createWorkspace(deps: WorkspaceDeps): Workspace {

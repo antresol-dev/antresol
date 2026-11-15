@@ -16,6 +16,7 @@
     "@antresol/files-imgbb": "workspace:*",
     "@antresol/files-imgur": "workspace:*",
     "@antresol/files-uploadcare": "workspace:*",
+    "@antresol/kit": "workspace:*",
     "@antresol/storage-postgres": "workspace:*",
     "@lucide/vue": "^1.70.0",
     "@neondatabase/serverless": "^1.2.0",

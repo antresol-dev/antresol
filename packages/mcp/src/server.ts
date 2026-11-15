@@ -3,13 +3,14 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
 import type { ToolContext } from './context'
 import { jsonResult, secretsOf, toToolResult } from './errors'
+import { intakeFromPhotosPrompt } from './prompts'
 import * as drafts from './tools/drafts'
 import * as read from './tools/read'
 
 export const ACTOR_FALLBACK = 'AI · MCP'
 export const SERVER_NAME = 'antresol'
 export const SERVER_INSTRUCTIONS =
-  'Antresol is a home inventory. These tools only read it and prepare intake drafts (receipts of purchased items); nothing is added to the stock until the person reviews and commits the intake in the Antresol app. Start with get_overview to learn the inventories, folders, attributes and units. Search before proposing a new item.'
+  'Antresol is a home inventory. These tools only read it and prepare intake drafts (receipts of purchased items); nothing is added to the stock until the person reviews and commits the intake in the Antresol app. Start with get_overview to learn the inventories, folders, attributes and units. Search before proposing a new item, and prefer topping up an existing item or adding a value to it over a new item. Do not guess: put doubts in the chat, not in the draft. The person commits the intake in the app.'
 
 /** A tool's handler as the SDK calls it: the result as JSON text, an error as `isError` text without secrets. */
 export function handler<A>(ctx: ToolContext, run: (ctx: ToolContext, args: A) => Promise<unknown>): (args: A) => Promise<CallToolResult> {
@@ -223,6 +224,21 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
   )
 }
 
+export function registerPrompts(server: McpServer): void {
+  server.registerPrompt(
+    'intake_from_photos',
+    {
+      title: 'Intake from photos',
+      description: 'Turn photos of purchased items into one intake draft, to be reviewed and committed in the Antresol app.',
+      argsSchema: {
+        folder: z.string().optional().describe('Folder with the photos; the one from get_overview by default.'),
+        intake: z.string().optional().describe('Id of an existing intake draft to add the lines to instead of creating a new one.'),
+      },
+    },
+    (args) => ({ messages: [{ role: 'user', content: { type: 'text', text: intakeFromPhotosPrompt(args) } }] }),
+  )
+}
+
 /**
  * The server with its tools. Sets `ctx.actor`: the connected client's name after `initialize`, as "<name> · MCP"
  * ("AI · MCP" without a client name).
@@ -235,5 +251,6 @@ export function createServer(ctx: ToolContext): McpServer {
   }
   registerReadTools(server, ctx)
   registerDraftTools(server, ctx)
+  registerPrompts(server)
   return server
 }

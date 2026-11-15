@@ -91,4 +91,18 @@ describe('protocol', () => {
       expect(result.content[0].text, name).toContain('Settings → Connect AI')
     }
   })
+
+  it('offers the intake_from_photos prompt', async () => {
+    const f = await makeContext()
+    const client = await connect(f.ctx)
+    const prompts = (await client.listPrompts()).prompts
+    expect(prompts.map((p) => p.name)).toContain('intake_from_photos')
+    const got = await client.getPrompt({ name: 'intake_from_photos', arguments: { folder: '/x' } })
+    expect(got.messages).toHaveLength(1)
+    expect(got.messages[0]!.role).toBe('user')
+    const text = (got.messages[0]!.content as { text: string }).text
+    for (const word of ['/x', 'get_overview', 'list_photos', 'view_photos', 'search', 'add_intake_lines']) expect(text).toContain(word)
+    const appended = await client.getPrompt({ name: 'intake_from_photos', arguments: { intake: 'abc' } })
+    expect((appended.messages[0]!.content as { text: string }).text).toContain('abc')
+  })
 })

@@ -497,6 +497,7 @@
       "edit": "Edit",
       "remove": "Remove",
       "share": "Share",
+      "connectAi": "Connect AI",
       "exportBackup": "Export backup",
       "exporting": "Exporting…",
       "exportHint": "Neon's free plan keeps only a few hours of history. Keep a copy of your data on this device.",
@@ -601,6 +602,15 @@
     "clear": "Clear photo cache",
     "cleared": "Photo cache cleared",
     "failed": "Could not clear the photo cache"
+  },
+  "connectAi": {
+    "title": "Connect AI",
+    "intro": "Lets an AI assistant on this computer (Claude Desktop, Claude Code and other MCP apps) read this source and prepare intake drafts. You review and commit them here.",
+    "copy": "Copy connection key",
+    "copied": "Copied",
+    "copyFailed": "Could not copy",
+    "warning": "The key gives full access to this source. Paste it only into the assistant's settings — never into a chat.",
+    "setup": "Download and setup"
   },
   "pairing": {
     "receive": "Receive from another device",

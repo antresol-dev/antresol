@@ -49,6 +49,13 @@ const shareOpen = computed({
     if (!open) sharing.value = null
   },
 })
+const connectingAi = ref<SourceConfig | null>(null)
+const connectAiOpen = computed({
+  get: () => connectingAi.value !== null,
+  set: (open) => {
+    if (!open) connectingAi.value = null
+  },
+})
 const receiveOpen = ref(false)
 const canReceive = canPair()
 
@@ -114,6 +121,9 @@ async function confirmRemove(): Promise<void> {
               <Button v-if="s.config.kind === 'neon'" variant="ghost" :class="[sourceAction, 'text-accent-ink']" @click="sharing = s.config">
                 {{ $t('settings.sources.share') }}
               </Button>
+              <Button v-if="s.config.kind === 'neon'" variant="ghost" :class="[sourceAction, 'text-accent-ink']" @click="connectingAi = s.config">
+                {{ $t('settings.sources.connectAi') }}
+              </Button>
               <Button variant="ghost" :class="[sourceAction, 'text-destructive']" @click="removing = s.config">
                 {{ $t('settings.sources.remove') }}
               </Button>
@@ -133,6 +143,7 @@ async function confirmRemove(): Promise<void> {
           {{ $t('pairing.receive') }}
         </Button>
         <ConnectionShareSheet v-model:open="shareOpen" :source="sharing" />
+        <ConnectAiSheet v-model:open="connectAiOpen" :source="connectingAi" />
         <ReceiveSourceSheet v-if="canReceive" v-model:open="receiveOpen" />
       </section>
 

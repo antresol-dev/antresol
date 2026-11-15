@@ -125,15 +125,20 @@ async function keyFrom(code: string, salt: Uint8Array): Promise<CryptoKey> {
   )
 }
 
-/** The settings as JSON; empty ones are left out to keep the QR code small. */
-function payload(source: SourceConfig | SharedConnection): string {
-  const out: Record<string, unknown> = { name: source.name, connectionString: source.connectionString }
+/** A source's connection settings: no id, no creation time; empty optional values are left out. */
+export function connectionSettingsOf(source: SourceConfig | SharedConnection): SharedConnection {
+  const out: SharedConnection = { name: source.name, connectionString: source.connectionString }
   if (source.photoStore) out.photoStore = source.photoStore
   for (const key of OPTIONAL) {
     const value = source[key]
     if (typeof value === 'string' && value !== '') out[key] = value
   }
-  return JSON.stringify(out)
+  return out
+}
+
+/** The settings as JSON, to keep the QR code small. */
+function payload(source: SourceConfig | SharedConnection): string {
+  return JSON.stringify(connectionSettingsOf(source))
 }
 
 /** The decrypted JSON → the connection; null for anything the form would refuse. */

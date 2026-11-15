@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import decodeJpeg, { init as initJpegDecoder } from '@jsquash/jpeg/decode.js'
 import encodeJpeg, { init as initJpegEncoder } from '@jsquash/jpeg/encode.js'
 import decodePng, { init as initPngDecoder } from '@jsquash/png/decode.js'
@@ -9,6 +10,9 @@ import decodeWebp, { init as initWebpDecoder } from '@jsquash/webp/decode.js'
 import encodeWebp, { init as initWebpEncoder } from '@jsquash/webp/encode.js'
 import decodeHeic from 'heic-decode'
 import { ToolError } from './errors'
+
+/** Set to true by the bundle build (vite.config.ts); undefined when run from the sources. */
+declare const __ANTRESOL_BUNDLED__: boolean | undefined
 
 /** Longest side of a photo sent to the photo store (the same as the app). */
 export const STORE_MAX_SIDE = 2048
@@ -23,11 +27,14 @@ export interface Pixels {
   data: Uint8ClampedArray<ArrayBuffer>
 }
 
-/** Where the codecs' .wasm files are: `<dir>/<file name>` when ANTRESOL_WASM_DIR is set (a bundled server copies them
- *  next to itself), else inside the installed package. The ONLY place that knows where they live. */
+/** Where the codecs' .wasm files are: `<dir>/<file name>` when ANTRESOL_WASM_DIR is set, next to the file itself in the
+ *  bundled server (the build copies them there), else inside the installed package. The ONLY place that knows where
+ *  they live. */
 function wasmPath(pkg: string, relative: string): string {
   const dir = process.env.ANTRESOL_WASM_DIR
   if (dir) return path.join(dir, path.basename(relative))
+  if (typeof __ANTRESOL_BUNDLED__ !== 'undefined' && __ANTRESOL_BUNDLED__)
+    return path.join(fileURLToPath(new URL('.', import.meta.url)), path.basename(relative))
   const root = path.dirname(createRequire(import.meta.url).resolve(`${pkg}/package.json`))
   return path.join(root, relative)
 }

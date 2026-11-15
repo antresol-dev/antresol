@@ -33,6 +33,10 @@ Photos are stored in [Uploadcare](https://uploadcare.com/). Setup for each sourc
 
 Custom CNAME CDN domains are not supported: only `ucarecdn.com` and `*.ucarecd.net` addresses are accepted, and photos on any other domain would not display.
 
+## AI assistant (MCP)
+
+A local MCP server lets an AI assistant (Claude Desktop, Claude Code, Cursor and others) search your inventory and prepare intake drafts from receipts and photos. It never commits anything: you review and commit in the app. Setup: [packages/mcp/README.md](packages/mcp/README.md).
+
 ## Develop
 
 Use pnpm. Plain npm fails in the repo root because `devEngines` pins Node.

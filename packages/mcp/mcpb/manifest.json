@@ -1,0 +1,42 @@
+{
+  "manifest_version": "0.3",
+  "name": "antresol",
+  "display_name": "Antresol",
+  "version": "0.1.0",
+  "description": "Lets an AI assistant read your Antresol home inventory and prepare intake drafts from receipts and photos.",
+  "long_description": "Reads your Antresol inventory (items, folders, intakes) and fills intake drafts from receipts and photos. It never commits anything: you review and commit every intake in the Antresol app.",
+  "author": { "name": "Antresol" },
+  "homepage": "https://antresol-dev.github.io/antresol/",
+  "repository": { "type": "git", "url": "https://github.com/antresol-dev/antresol.git" },
+  "icon": "icon.png",
+  "server": {
+    "type": "node",
+    "entry_point": "server/server.mjs",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/server.mjs"],
+      "env": {
+        "ANTRESOL_CONNECTION": "${user_config.connection_key}",
+        "ANTRESOL_PHOTOS_DIR": "${user_config.photos_dir}"
+      }
+    }
+  },
+  "user_config": {
+    "connection_key": {
+      "type": "string",
+      "title": "Antresol connection key",
+      "description": "Settings → Connect AI in the Antresol app.",
+      "sensitive": true,
+      "required": true
+    },
+    "photos_dir": {
+      "type": "directory",
+      "title": "Photos folder",
+      "description": "Where photos of receipts and items are looked for. Leave empty for Pictures/Antresol in your home folder.",
+      "required": false
+    }
+  },
+  "compatibility": {
+    "runtimes": { "node": ">=20" }
+  }
+}

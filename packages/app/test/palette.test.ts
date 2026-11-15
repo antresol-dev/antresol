@@ -7,7 +7,9 @@ import {
   highlightParts,
   matchFolders,
   paletteActions,
+  ITEM_LIMIT,
   paletteResults,
+  searchAcross,
   pastedShare,
   snapshotSearch,
   stepSelection,
@@ -308,5 +310,120 @@ describe('palette', () => {
       const g = paletteResults(snap, snapshotSearch(snap), { ...ctx, query }, () => '')
       expect(g.some((x) => x.key === 'nearest')).toBe(false)
     }
+  })
+})
+
+describe('palette across inventories', () => {
+  let box3: Id
+  let zinc: Id
+  let ele: InventorySnapshot
+  let work: InventorySnapshot
+  const labelOf = (a: PaletteAction): string => (a.kind === 'addItem' ? `Add item “${a.name}”` : a.kind)
+
+  async function createItem(inv: Id, name: string, folderId: Id | null): Promise<Id> {
+    const id = newId()
+    await storage.apply(
+      { type: 'item.create', id, inventoryId: inv, folderId, name, description: null, unitKey: 'pcs', tagIds: [], initialReceipt: null },
+      actor,
+    )
+    return id
+  }
+
+  beforeAll(async () => {
+    box3 = newId()
+    await storage.apply({ type: 'folder.create', id: box3, inventoryId: workshop.inventoryId, parentId: null, name: 'Box 3', description: null }, actor)
+    zinc = newId()
+    await storage.apply({ type: 'folder.create', id: zinc, inventoryId: workshop.inventoryId, parentId: null, name: 'Zinc rack', description: null }, actor)
+    await createItem(workshop.inventoryId, 'Hammer set', box3)
+    await createItem(workshop.inventoryId, 'Hammer root', null)
+    await createItem(electronics.inventoryId, 'Hammer toy', null)
+    for (let i = 1; i <= 25; i++) await createItem(workshop.inventoryId, `Bolt ${i}`, null)
+    for (let i = 1; i <= 3; i++) await createItem(electronics.inventoryId, `Bolt e${i}`, null)
+    ele = await storage.loadInventory(electronics.inventoryId)
+    work = await storage.loadInventory(workshop.inventoryId)
+  })
+
+  const entryOf = (ref: InventoryRef): InventoryEntry => inventories.find((e) => e.ref.inventoryId === ref.inventoryId)!
+  const ctxFor = (query: string, others: PaletteContext['others'], current = electronics): PaletteContext => ({
+    query,
+    folder: null,
+    inventories,
+    current,
+    sections: ['settings'],
+    canWrite: true,
+    others,
+  })
+  const itemsOf = (groups: PaletteGroup[]) => groups.find((g) => g.key === 'items')?.rows ?? []
+
+  it('searches nothing else while the chip is off', () => {
+    const off = paletteResults(ele, createSearch(ele), ctxFor('hammer', null), labelOf)
+    const unset = paletteResults(ele, createSearch(ele), { ...ctxFor('hammer', null), others: undefined }, labelOf)
+    expect(off).toEqual(unset)
+    expect(itemsOf(off).every((r) => r.kind === 'item' && r.inventory === null)).toBe(true)
+  })
+
+  it('lists the current inventory first, then the others with their name and path', () => {
+    const groups = paletteResults(ele, createSearch(ele), ctxFor('hammer', [{ entry: entryOf(workshop), snapshot: work }]), labelOf)
+    const rows = itemsOf(groups)
+    const own = rows.filter((r) => r.kind === 'item' && r.inventory === null)
+    const foreign = rows.filter((r) => r.kind === 'item' && r.inventory !== null)
+    expect(rows.slice(0, own.length)).toEqual(own)
+    expect(own.length).toBeGreaterThan(0)
+    const hammer = foreign.find((r) => r.kind === 'item' && r.hit.name === 'Hammer set')!
+    expect(hammer).toMatchObject({ inventory: { ref: workshop, name: 'Workshop' }, hit: { path: 'Workshop · Box 3' } })
+    expect(foreign.find((r) => r.kind === 'item' && r.hit.name === 'Hammer root')).toMatchObject({ hit: { path: 'Workshop' } })
+    const boxes = paletteResults(ele, createSearch(ele), ctxFor('zinc', [{ entry: entryOf(workshop), snapshot: work }]), labelOf)
+    expect(boxes.find((g) => g.key === 'folders')!.rows.find((r) => r.kind === 'folder' && r.inventory !== null)).toMatchObject({
+      kind: 'folder',
+      key: `folder:demo:${workshop.inventoryId}:${zinc}`,
+      inventory: { name: 'Workshop' },
+      hit: { name: 'Zinc rack', path: 'Workshop' },
+    })
+  })
+
+  it('keeps ITEM_LIMIT in all and never displaces the current inventory', () => {
+    const others = [{ entry: entryOf(workshop), snapshot: work }]
+    const mixed = itemsOf(paletteResults(ele, createSearch(ele), ctxFor('bolt', others), labelOf))
+    expect(mixed).toHaveLength(ITEM_LIMIT)
+    expect(mixed.slice(0, 3).every((r) => r.kind === 'item' && r.inventory === null)).toBe(true)
+    expect(mixed.slice(3).every((r) => r.kind === 'item' && r.inventory?.name === 'Workshop')).toBe(true)
+    const ownFull = itemsOf(paletteResults(work, createSearch(work), ctxFor('bolt', [{ entry: entryOf(electronics), snapshot: ele }], workshop), labelOf))
+    expect(ownFull).toHaveLength(ITEM_LIMIT)
+    expect(ownFull.every((r) => r.kind === 'item' && r.inventory === null)).toBe(true)
+  })
+
+  it('skips archived inventories silently and counts those without a copy', () => {
+    const archived: InventoryEntry = {
+      ...entryOf(workshop),
+      inventory: { ...entryOf(workshop).inventory, archivedAt: '2026-11-01T00:00:00Z' },
+    }
+    const arch = paletteResults(ele, createSearch(ele), ctxFor('hammer', [{ entry: archived, snapshot: work }]), labelOf)
+    expect(itemsOf(arch).every((r) => r.kind === 'item' && r.inventory === null)).toBe(true)
+    expect(arch.find((g) => g.key === 'items')!.skipped).toBeUndefined()
+    const noCopy = paletteResults(ele, createSearch(ele), ctxFor('hammer', [{ entry: entryOf(workshop), snapshot: null }, { entry: archived, snapshot: null }]), labelOf)
+    expect(noCopy.find((g) => g.key === 'items')!.skipped).toBe(1)
+  })
+
+  it('keys rows of equal ids in two sources apart', () => {
+    const other: InventoryEntry = { ...entryOf(electronics), ref: { sourceId: 'second', inventoryId: electronics.inventoryId } }
+    const groups = paletteResults(ele, createSearch(ele), ctxFor('bolt e1', [{ entry: other, snapshot: ele }]), labelOf)
+    const keys = itemsOf(groups).map((r) => r.key)
+    const own = keys.filter((k) => !k.startsWith('item:second:'))
+    expect(own.length).toBeGreaterThan(0)
+    expect(keys).toHaveLength(own.length * 2)
+    expect(new Set(keys).size).toBe(keys.length)
+  })
+
+  it('offers actions of the current inventory only', () => {
+    const withOthers = paletteResults(ele, createSearch(ele), ctxFor('zzz', [{ entry: entryOf(workshop), snapshot: work }]), labelOf)
+    const without = paletteResults(ele, createSearch(ele), ctxFor('zzz', null), labelOf)
+    expect(withOthers).toEqual(without)
+  })
+
+  it('searchAcross is pure and reusable', () => {
+    const r = searchAcross([{ entry: entryOf(workshop), snapshot: work }], 'bolt', 4)
+    expect(r.items).toHaveLength(4)
+    expect(r.skipped).toBe(0)
+    expect(searchAcross([{ entry: entryOf(workshop), snapshot: null }], 'bolt', 4)).toEqual({ items: [], folders: [], skipped: 1 })
   })
 })

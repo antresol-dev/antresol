@@ -12,6 +12,7 @@ import {
   type DraftLine,
   type DraftLinePhoto,
   type DraftNewItem,
+  type DraftNewTag,
   type Id,
   type IntakeDraftContent,
   type InventorySnapshot,
@@ -80,6 +81,9 @@ const defaults = ref<{ folderId: Id | null; unitKey: string; urlPrefix: string |
 const priceOpen = ref(false)
 const photoOpen = ref(false)
 const attributesOpen = ref(false)
+const tagsOpen = ref(false)
+/** New tags this form made: created by the commit, not now (the source's revision stays as it is). */
+const addedTags = ref<DraftNewTag[]>([])
 const pickingFolder = ref(false)
 const replacing = ref(false)
 const editingAxis = ref<Id | null>(null)
@@ -121,6 +125,8 @@ function startNew(from: typeof defaults.value): void {
   priceOpen.value = false
   photoOpen.value = false
   attributesOpen.value = false
+  tagsOpen.value = false
+  addedTags.value = []
   pickingFolder.value = false
   replacing.value = false
   editingAxis.value = null
@@ -377,6 +383,36 @@ const attributesSummary = computed(() =>
     .join(' · '),
 )
 
+// ---- Tags of a new item ----
+/** The new tags of the draft and this form's own, by id: what the picker offers next to the inventory's tags. */
+const draftTags = computed<DraftNewTag[]>(() => {
+  const list = [...(props.content.newTags ?? [])]
+  for (const t of addedTags.value) if (!list.some((x) => x.id === t.id)) list.push(t)
+  return list
+})
+const tagIds = computed({
+  get: () => newItem.value?.tagIds ?? [],
+  set: (list: Id[]) => {
+    if (newItem.value) newItem.value = { ...newItem.value, tagIds: list }
+  },
+})
+function addTag(name: string): void {
+  const typed = name.trim()
+  if (typed === '' || !newItem.value) return
+  const same = draftTags.value.find((t) => t.name.toLowerCase() === typed.toLowerCase())
+  const tag = same ?? { id: newId(), name: typed }
+  if (!same) addedTags.value = [...addedTags.value, tag]
+  if (!tagIds.value.includes(tag.id)) tagIds.value = [...tagIds.value, tag.id]
+}
+const tagsSummary = computed(() =>
+  tagIds.value
+    .flatMap((id) => {
+      const name = s.value.tags.find((x) => x.id === id)?.name ?? draftTags.value.find((x) => x.id === id)?.name
+      return name ? [name] : []
+    })
+    .join(', '),
+)
+
 // ---- Price & link, photo ----
 const currencySymbol = computed(() => {
   const code = s.value.inventory.currency
@@ -446,6 +482,7 @@ async function save(next: boolean): Promise<void> {
       url: url.value,
       urlPrefix: urlPrefix.value,
       photo: photo.value,
+      newTags: draftTags.value,
     },
     s.value,
     props.content,
@@ -458,13 +495,13 @@ async function save(next: boolean): Promise<void> {
   }
   saving.value = true
   try {
-    const applied = await props.edit((c) => withLine(c, built.line, built.newItem))
+    const applied = await props.edit((c) => withLine(c, built.line, built.newItem, built.newTags))
     if (!applied) return
     if (!next) {
       open.value = false
       return
     }
-    const content = withLine(props.content, built.line, built.newItem)
+    const content = withLine(props.content, built.line, built.newItem, built.newTags)
     startNew(nextLineDefaults(built.line, content, s.value))
     focusSoon('#intake-line-query')
   } finally {
@@ -704,6 +741,17 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-2.5 
             </button>
             <div v-if="attributesOpen" class="py-3">
               <IntakeNewItemAttributes v-model="attributes" :snapshot="s" :similar="similarItem" :disabled="disabled" @update:error="attributeError = $event" />
+            </div>
+
+            <button type="button" :class="summaryRow" :aria-expanded="tagsOpen" :disabled="disabled" @click="tagsOpen = !tagsOpen">
+              <span class="shrink-0 text-[13px] font-semibold">{{ $t('intakes.line.tags') }}</span>
+              <span class="min-w-0 grow truncate text-right text-[13px]" :class="tagsSummary ? 'text-foreground' : 'text-muted-foreground'">
+                {{ tagsSummary || $t('intakes.line.add') }}
+              </span>
+              <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-150 motion-reduce:transition-none" :class="tagsOpen ? 'rotate-180' : ''" aria-hidden="true" />
+            </button>
+            <div v-if="tagsOpen" class="py-3">
+              <TagPicker v-model="tagIds" :snapshot="s" :extra-tags="draftTags" :locked="disabled" @create="addTag" />
             </div>
           </template>
 

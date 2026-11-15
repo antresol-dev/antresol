@@ -14,6 +14,7 @@ import {
   type DraftLine,
   type DraftLinePhoto,
   type DraftNewItem,
+  type DraftNewTag,
   type Id,
   type IntakeDraftContent,
   type InventorySnapshot,
@@ -298,8 +299,10 @@ export interface LineForm {
   urlPrefix: string | null
   /** `replace`: the person chose "Replace photo"; kept only while the variant the line goes to has a photo. */
   photo: DraftLinePhoto | null
+  /** The new tags the form added or shows (of the draft); only those the new item uses are kept. */
+  newTags: DraftNewTag[]
 }
-export type BuiltLine = { line: DraftLine; newItem: DraftNewItem | null } | { errorKey: string; params?: Record<string, string> }
+export type BuiltLine = { line: DraftLine; newItem: DraftNewItem | null; newTags: DraftNewTag[] } | { errorKey: string; params?: Record<string, string> }
 
 /** The sheet's fields as a draft line (and its new item), values as the axes store them; or what to fix. A line needs an
  *  amount and a value on every axis, and its link must be an http(s) address; a new item needs a name that is not too
@@ -363,17 +366,20 @@ export function buildDraftLine(form: LineForm, s: InventorySnapshot, draft: Inta
   return {
     line: { id: form.lineId, itemId: form.itemId, axisValues, quantity, totalPrice, sourceUrl, photo, ids: form.ids },
     newItem,
+    newTags: newItem ? form.newTags.filter((t) => newItem.tagIds?.includes(t.id)) : [],
   }
 }
 
 /** The draft with the line put in (in its place when it is there already) and its new item put in or updated; new
  *  items no line references any more are dropped. */
-export function withLine(draft: IntakeDraftContent, line: DraftLine, newItem: DraftNewItem | null): IntakeDraftContent {
+export function withLine(draft: IntakeDraftContent, line: DraftLine, newItem: DraftNewItem | null, newTags: DraftNewTag[] = []): IntakeDraftContent {
   const replace = <T extends { id: Id }>(list: T[], x: T): T[] =>
     list.some((y) => y.id === x.id) ? list.map((y) => (y.id === x.id ? x : y)) : [...list, x]
+  const tags = newTags.reduce((list, t) => replace(list, t), draft.newTags ?? [])
   return pruneNewItems({
     newItems: newItem ? replace(draft.newItems, newItem) : draft.newItems,
     lines: replace(draft.lines, line),
+    ...(tags.length > 0 || draft.newTags ? { newTags: tags } : {}),
   })
 }
 
@@ -381,26 +387,28 @@ export function withLine(draft: IntakeDraftContent, line: DraftLine, newItem: Dr
 export function withoutLine(
   draft: IntakeDraftContent,
   lineId: Id,
-): { content: IntakeDraftContent; removed: { line: DraftLine; index: number; newItem: DraftNewItem | null } | null } {
+): { content: IntakeDraftContent; removed: { line: DraftLine; index: number; newItem: DraftNewItem | null; newTags: DraftNewTag[] } | null } {
   const index = draft.lines.findIndex((l) => l.id === lineId)
   if (index < 0) return { content: draft, removed: null }
   const line = draft.lines[index]!
   const content = pruneNewItems({ ...draft, lines: draft.lines.filter((l) => l.id !== lineId) })
   const newItem = draft.newItems.find((n) => n.id === line.itemId && !content.newItems.some((m) => m.id === n.id)) ?? null
-  return { content, removed: { line, index, newItem } }
+  const newTags = (draft.newTags ?? []).filter((t) => !(content.newTags ?? []).some((u) => u.id === t.id))
+  return { content, removed: { line, index, newItem, newTags } }
 }
 
 /** Undo of withoutLine: the line back in its place, with its new item. */
 export function restoreLine(
   draft: IntakeDraftContent,
-  removed: { line: DraftLine; index: number; newItem: DraftNewItem | null },
+  removed: { line: DraftLine; index: number; newItem: DraftNewItem | null; newTags: DraftNewTag[] },
 ): IntakeDraftContent {
   if (draft.lines.some((l) => l.id === removed.line.id)) return draft
   const lines = [...draft.lines]
   lines.splice(Math.min(removed.index, lines.length), 0, removed.line)
   const newItems =
     removed.newItem && !draft.newItems.some((n) => n.id === removed.newItem!.id) ? [...draft.newItems, removed.newItem] : draft.newItems
-  return { newItems, lines }
+  const newTags = [...(draft.newTags ?? []), ...removed.newTags.filter((t) => !(draft.newTags ?? []).some((u) => u.id === t.id))]
+  return { ...draft, newItems, lines, ...(newTags.length > 0 || draft.newTags ? { newTags } : {}) }
 }
 
 /** Minor units as the price field shows them, in integers only: 1234 USD -> "12.34", 50 JPY -> "50". */

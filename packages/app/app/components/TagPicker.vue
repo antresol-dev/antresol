@@ -7,12 +7,28 @@ import { tagMatches } from '~/lib/tags'
 
 // A filter field over the inventory's tags as checkboxes. A tag typed in the field that doesn't exist yet can be created
 // on the spot (the parent writes it) and comes back checked.
-const props = defineProps<{ snapshot: InventorySnapshot; busy?: boolean; locked?: boolean }>()
+const props = defineProps<{
+  snapshot: InventorySnapshot
+  busy?: boolean
+  locked?: boolean
+  /** Tags that are not in the snapshot yet (a draft's new tags): shown and searched like the others. */
+  extraTags?: { id: Id; name: string }[]
+}>()
 const selected = defineModel<Id[]>({ required: true })
 const emit = defineEmits<{ create: [name: string] }>()
 
 const query = ref('')
-const matches = computed(() => tagMatches(props.snapshot, query.value))
+const matches = computed(() => {
+  const base = tagMatches(props.snapshot, query.value)
+  const extra = props.extraTags ?? []
+  if (extra.length === 0) return base
+  const q = query.value.trim().toLowerCase()
+  const own = extra.filter((t) => t.name.toLowerCase().includes(q))
+  return {
+    tags: [...base.tags, ...own].sort((a, b) => a.name.localeCompare(b.name, 'en')),
+    canCreate: base.canCreate && !extra.some((t) => t.name.toLowerCase() === q),
+  }
+})
 
 function toggle(id: Id, on: boolean): void {
   selected.value = on ? [...selected.value.filter((x) => x !== id), id] : selected.value.filter((x) => x !== id)

@@ -270,6 +270,7 @@ describe('buildDraftLine', () => {
     url: 'https://lcsc.com/product-detail/C25819.html',
     urlPrefix: null,
     photo: null,
+    newTags: [],
     ...over,
   })
 
@@ -315,6 +316,53 @@ describe('buildDraftLine', () => {
     if ('errorKey' in built) throw new Error(built.errorKey)
     expect(built.newItem).toMatchObject({ name: 'Resistor 1 W', attributes: [{ value: '1' }, { value: null, axis: true }] })
     expect(built.line).toMatchObject({ itemId: n.id, axisValues: [{ attributeId: resistance, value: '4700' }], sourceUrl: null })
+  })
+})
+
+describe('tags of new items', () => {
+  const form = (over: Partial<LineForm> = {}): LineForm => ({
+    lineId: newId(),
+    ids: ids(),
+    itemId: resistor,
+    newItem: null,
+    axisValues: [],
+    amount: '5',
+    price: '',
+    url: '',
+    urlPrefix: null,
+    photo: null,
+    newTags: [],
+    ...over,
+  })
+  const kit = { id: newId(), name: 'Kit A' }
+  const existingTag = newId()
+
+  it('buildDraftLine keeps newItem.tagIds as they are, and the new tags that item uses', () => {
+    const n = newItem({ tagIds: [existingTag, kit.id] })
+    const stray = { id: newId(), name: 'Stray' }
+    const built = buildDraftLine(form({ itemId: n.id, newItem: n, newTags: [kit, stray] }), snap, emptyIntakeDraft())
+    expect(built).toMatchObject({ newItem: { tagIds: [existingTag, kit.id] }, newTags: [kit] })
+  })
+
+  it('withLine puts new tags in draft.newTags, once', () => {
+    const n = newItem({ tagIds: [kit.id] })
+    const l = line({ itemId: n.id })
+    let draft = withLine(emptyIntakeDraft(), l, n, [kit])
+    expect(draft.newTags).toEqual([kit])
+    draft = withLine(draft, { ...l, quantity: '2' }, n, [kit])
+    expect(draft.newTags).toEqual([kit])
+    // The tag taken off the item goes.
+    draft = withLine(draft, l, { ...n, tagIds: [] }, [])
+    expect(draft.newTags).toEqual([])
+  })
+
+  it('withoutLine takes the new tag of the last line of its item away; restoreLine brings it back', () => {
+    const n = newItem({ tagIds: [kit.id] })
+    const l = line({ itemId: n.id })
+    const draft = withLine(emptyIntakeDraft(), l, n, [kit])
+    const { content, removed } = withoutLine(draft, l.id)
+    expect(content.newTags ?? []).toEqual([])
+    expect(restoreLine(content, removed!)).toEqual(draft)
   })
 })
 

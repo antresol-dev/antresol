@@ -198,7 +198,10 @@ const SHAPES_HEADER: Shape = { shop: nullable(str), orderNumber: nullable(str), 
 const DRAFT_NEW_ITEM: Shape = {
   id: uuid, name: str, folderId: nullable(uuid), unitKey: str,
   attributes: (v) => records(v, { attributeId: uuid, value: nullable(str), axis: bool }) !== null,
+  /** Absent in drafts saved before tags; stays absent (see `intakeRecord`). */
+  tagIds: (v) => v === undefined || listOf(uuid)(v),
 }
+const DRAFT_NEW_TAG: Shape = { id: uuid, name: str }
 /** A draft line's photo: the stored file as a photo has it (renditions, size and delete handle absent from drafts saved
  *  before schema 5's photos) and `replace`. Rebuilt by `draftPhoto`. */
 const DRAFT_PHOTO: Shape = {
@@ -287,8 +290,14 @@ function intakeRecord(value: unknown): Intake | null {
     const raw = row.draft as unknown as Record<string, unknown>
     const newItems = records<NonNullable<Intake['draft']>['newItems'][number]>(raw.newItems, DRAFT_NEW_ITEM)
     const lines = records<NonNullable<Intake['draft']>['lines'][number]>(raw.lines, DRAFT_LINE)
-    if (newItems === null || lines === null) return null
-    draft = { newItems, lines: lines.map((l) => (l.photo ? { ...l, photo: draftPhoto(l.photo) } : l)) }
+    const newTags = raw.newTags === undefined ? undefined : records<{ id: string; name: string }>(raw.newTags, DRAFT_NEW_TAG)
+    if (newItems === null || lines === null || newTags === null) return null
+    for (const n of newItems) if (n.tagIds === undefined) delete n.tagIds
+    draft = {
+      ...(newTags ? { newTags } : {}),
+      newItems,
+      lines: lines.map((l) => (l.photo ? { ...l, photo: draftPhoto(l.photo) } : l)),
+    }
   }
   let lines: Intake['lines'] = null
   if (row.lines !== null) {

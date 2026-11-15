@@ -284,6 +284,20 @@ describe('parseBackup: intakes', () => {
     expect(parseBackup(file)).toEqual(file)
   })
 
+  it('keeps the tags of a draft (new tags and tag ids of its new items); a draft without them stays without', async () => {
+    const file = JSON.parse(JSON.stringify(await intakesBackup())) as {
+      inventories: { intakes: { draft: { newTags?: Rec[]; newItems: Rec[] } | null }[] }[]
+    }
+    const draft = file.inventories[0]!.intakes.find((i) => i.draft)!.draft!
+    expect(parseBackup(JSON.parse(JSON.stringify(file)))).toStrictEqual(file)
+    const [kit, existing] = [crypto.randomUUID(), crypto.randomUUID()]
+    draft.newTags = [{ id: kit, name: 'Kit A' }]
+    draft.newItems[0]!.tagIds = [existing, kit]
+    expect(parseBackup(JSON.parse(JSON.stringify(file)))).toStrictEqual(file)
+    draft.newItems[0]!.tagIds = ['not-a-uuid']
+    expect(parseBackup(JSON.parse(JSON.stringify(file)))).toEqual({ error: 'format' })
+  })
+
   it('reads a file whose committed intake names an item deleted permanently since: the lines keep their names', async () => {
     const backup = await intakesBackup({ deleteCommitted: true })
     const file = JSON.parse(JSON.stringify(backup)) as BackupFile

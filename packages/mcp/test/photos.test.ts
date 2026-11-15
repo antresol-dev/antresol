@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { copyFile, mkdir, mkdtemp, readFile, utimes, writeFile } from 'node:fs/promises'
+import { chmod, copyFile, mkdir, mkdtemp, readFile, utimes, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { newId, type FileStore } from '@antresol/core'
@@ -11,7 +11,7 @@ import type { ToolContext } from '../src/context'
 import { ToolError } from '../src/errors'
 import { createPhotoState } from '../src/photo-state'
 import { createServer } from '../src/server'
-import { attachPhoto, listPhotos, markPhotoUsed, viewPhotos } from '../src/tools/photos'
+import { attachPhoto, listPhotos, markPhotosUsed, viewPhotos } from '../src/tools/photos'
 import * as drafts from '../src/tools/drafts'
 import * as read from '../src/tools/read'
 import { makeContext, TEST_ACTOR } from './fixture'
@@ -73,7 +73,7 @@ describe('attachPhoto', () => {
     const first = await attachPhoto(ctx, 'a.png')
     const second = await attachPhoto(ctx, path.join(photosDir, 'copy.png'))
     const third = await attachPhoto(ctx, 'a.png')
-    markPhotoUsed(ctx, 'a.png', 'intake-1', 'line-1')
+    markPhotosUsed(ctx, [{ file: 'a.png', intakeId: 'intake-1', lineId: 'line-1' }])
     expect(uploads).toHaveLength(1)
     expect(uploads[0]).toMatchObject({ name: 'photo.webp', type: 'image/webp' })
     expect(first).toEqual({ provider: 'fake', fileId: 'f1', url: 'https://img.example/1', urls: null, deleteHandle: 'h1', width: 64, height: 48, replace: false })
@@ -209,6 +209,20 @@ describe('photo in draft lines', () => {
     await drafts.addIntakeLines(ctx, { intake: id, lines: [{ item: f.ids.esp32, amount: '1', photo: 'a.png' }] })
     expect(uploads).toHaveLength(1)
     expect((await listPhotos(ctx, { onlyNew: true })).photos).toEqual([])
+  })
+
+  it('a state file that cannot be written does not turn a saved draft into an error', async () => {
+    const { ctx, id, f, stateDir } = await draftSetup(true)
+    await attachPhoto(ctx, 'a.png') // uploaded and remembered while the folder is still writable
+    await chmod(stateDir, 0o500)
+    try {
+      const v = (await drafts.addIntakeLines(ctx, { intake: id, lines: [{ item: f.ids.esp32, amount: '1', photo: 'a.png' }] })) as any
+      expect(v.lines).toHaveLength(1)
+      expect(v.warning).toMatch(/saved/)
+      expect(((await read.getIntake(ctx, { intake: id })) as any).lines).toHaveLength(1)
+    } finally {
+      await chmod(stateDir, 0o700)
+    }
   })
 
   it('replacePhoto sets replace; update sets, keeps and removes (empty) the photo', async () => {

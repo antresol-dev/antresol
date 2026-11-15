@@ -115,20 +115,22 @@ describe('images', () => {
       expect(isRed(mirror, 29, 3)).toBe(true)
     })
 
-    it('every orientation 2-8 moves the top-left pixel of a 2x1 picture where the EXIF table says', () => {
-      const p = { width: 2, height: 1, data: Uint8ClampedArray.from([255, 0, 0, 255, 0, 0, 255, 255]) }
-      const redAt = (o: number) => {
+    it('every orientation 2-8 gives its own picture for a 3x2 grid, as the EXIF table says', () => {
+      // Pixels 1..6 (value in the red channel): row 0 is 1 2 3, row 1 is 4 5 6.
+      const p = { width: 3, height: 2, data: new Uint8ClampedArray([1, 2, 3, 4, 5, 6].flatMap((v) => [v, 0, 0, 255])) }
+      const grid = (o: number) => {
         const r = applyOrientation(p, o)
-        const i = [...Array(r.width * r.height).keys()].find((k) => r.data[k * 4] === 255)!
-        return [i % r.width, Math.floor(i / r.width), r.width, r.height]
+        const rows: number[][] = []
+        for (let y = 0; y < r.height; y++) rows.push([...Array(r.width).keys()].map((x) => r.data[(y * r.width + x) * 4]!))
+        return rows
       }
-      expect(redAt(2)).toEqual([1, 0, 2, 1])
-      expect(redAt(3)).toEqual([1, 0, 2, 1])
-      expect(redAt(4)).toEqual([0, 0, 2, 1])
-      expect(redAt(5)).toEqual([0, 0, 1, 2])
-      expect(redAt(6)).toEqual([0, 0, 1, 2])
-      expect(redAt(7)).toEqual([0, 1, 1, 2])
-      expect(redAt(8)).toEqual([0, 1, 1, 2])
+      expect(grid(2)).toEqual([[3, 2, 1], [6, 5, 4]])
+      expect(grid(3)).toEqual([[6, 5, 4], [3, 2, 1]])
+      expect(grid(4)).toEqual([[4, 5, 6], [1, 2, 3]])
+      expect(grid(5)).toEqual([[1, 4], [2, 5], [3, 6]])
+      expect(grid(6)).toEqual([[4, 1], [5, 2], [6, 3]])
+      expect(grid(7)).toEqual([[6, 3], [5, 2], [4, 1]])
+      expect(grid(8)).toEqual([[3, 6], [2, 5], [1, 4]])
     })
   })
 })

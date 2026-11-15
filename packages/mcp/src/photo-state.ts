@@ -10,8 +10,8 @@ export interface PhotoState {
   get(sha256: string): StoredUpload | null
   /** Remembers an upload so the same content is never uploaded again. Does not mark anything as used. */
   put(sha256: string, upload: StoredUpload): void
-  /** The file path now belongs to a saved draft line (shown as `usedIn` by list_photos). */
-  markUsed(filePath: string, line: { intakeId: Id; lineId: Id }): void
+  /** These file paths now belong to saved draft lines (shown as `usedIn` by list_photos); one write for all. Throws when the file cannot be written. */
+  markUsed(entries: { path: string; intakeId: Id; lineId: Id }[]): void
   /** File path -> the line it was last attached to. */
   usedPaths(): Map<string, { intakeId: Id; lineId: Id }>
 }
@@ -46,8 +46,11 @@ export function createPhotoState(stateDir: string): PhotoState {
       state = { ...state, uploads: { ...state.uploads, [sha256]: upload } }
       save()
     },
-    markUsed(filePath, line) {
-      state = { ...state, used: { ...state.used, [filePath]: line } }
+    markUsed(entries) {
+      if (entries.length === 0) return
+      const used = { ...state.used }
+      for (const e of entries) used[e.path] = { intakeId: e.intakeId, lineId: e.lineId }
+      state = { ...state, used }
       save()
     },
     usedPaths: () => new Map(Object.entries(state.used)),

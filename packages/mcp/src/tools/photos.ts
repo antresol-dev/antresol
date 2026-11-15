@@ -4,7 +4,7 @@ import path from 'node:path'
 import { FileError, type DraftLinePhoto, type Id } from '@antresol/core'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import type { ToolContext } from '../context'
-import { ToolError, secretsOf, toToolResult } from '../errors'
+import { ToolError, scrub, secretsOf, toToolResult } from '../errors'
 import { forModel, forStore } from '../images'
 import { createPhotoState, type PhotoState, type StoredUpload } from '../photo-state'
 
@@ -158,7 +158,15 @@ export async function attachPhoto(ctx: ToolContext, file: string): Promise<Draft
   }
 }
 
-/** The picture now belongs to a saved draft line: list_photos shows it as used. */
-export function markPhotoUsed(ctx: ToolContext, file: string, intakeId: Id, lineId: Id): void {
-  photoState(ctx).markUsed(resolvePhotoPath(ctx, file), { intakeId, lineId })
+/**
+ * The pictures now belong to saved draft lines: list_photos shows them as used. Advisory: the draft is already saved, so a
+ * failure to write the state is returned as a warning text, never thrown (a retry would add the lines twice).
+ */
+export function markPhotosUsed(ctx: ToolContext, entries: { file: string; intakeId: Id; lineId: Id }[]): string | null {
+  try {
+    photoState(ctx).markUsed(entries.map((e) => ({ path: resolvePhotoPath(ctx, e.file), intakeId: e.intakeId, lineId: e.lineId })))
+    return null
+  } catch (e) {
+    return `The lines were saved, but list_photos may not show their pictures as used (${scrub(e instanceof Error ? e.message : String(e), secretsOf(ctx.config))}).`
+  }
 }

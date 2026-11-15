@@ -20,7 +20,7 @@ import { editDraft, locateIntake, viewOf } from '../draft-edit'
 import { ToolError } from '../errors'
 import { messageFor } from '../messages'
 import { folderPath } from '../shape'
-import { attachPhoto, markPhotoUsed } from './photos'
+import { attachPhoto, markPhotosUsed } from './photos'
 
 export interface NewItemArgs {
   ref: string
@@ -281,10 +281,11 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
     return { draft: next, header }
   })
   // Only a saved line makes its picture "used".
-  args.lines.forEach((l, i) => {
-    if (photos[i]) markPhotoUsed(ctx, l.photo!.trim(), args.intake.trim(), lineIds[i]!)
-  })
-  return view
+  const warning = markPhotosUsed(
+    ctx,
+    args.lines.flatMap((l, i) => (photos[i] ? [{ file: l.photo!.trim(), intakeId: args.intake.trim(), lineId: lineIds[i]! }] : [])),
+  )
+  return warning ? { ...view, warning } : view
 }
 
 // ---- edit and remove ----------------------------------------------------------------------------------------------
@@ -334,8 +335,8 @@ export async function updateIntakeLine(
     }
     return { draft: withLine(draft, line, built.newItem, built.newTags), header }
   })
-  if (path && uploaded) markPhotoUsed(ctx, path, args.intake.trim(), args.line.trim())
-  return view
+  const warning = path && uploaded ? markPhotosUsed(ctx, [{ file: path, intakeId: args.intake.trim(), lineId: args.line.trim() }]) : null
+  return warning ? { ...view, warning } : view
 }
 
 export async function removeIntakeLine(ctx: ToolContext, args: { intake: string; line: string }) {

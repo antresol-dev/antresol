@@ -1,4 +1,5 @@
 import {
+  isColorHex,
   isDeleteHandle,
   isIconName,
   isPhotoSide,
@@ -143,6 +144,7 @@ const uuid: Check = (v) => typeof v === 'string' && UUID.test(v)
 const time: Check = (v) => typeof v === 'string' && !Number.isNaN(Date.parse(v))
 const int: Check = (v) => Number.isSafeInteger(v)
 const iconName: Check = (v) => typeof v === 'string' && isIconName(v)
+const colorHex: Check = (v) => typeof v === 'string' && isColorHex(v)
 const bool: Check = (v) => typeof v === 'boolean'
 const quantity: Check = (v) => typeof v === 'string' && parseQuantity(v) === v
 const nullable =
@@ -222,11 +224,11 @@ const SHAPES = {
   inventory: { id: uuid, name: str, description: nullable(str), currency: str, ...AUDIT, ...ARCHIVE },
   folder: { id: uuid, inventoryId: uuid, parentId: nullable(uuid), name: str, description: nullable(str), icon: nullable(iconName), ...AUDIT, ...ARCHIVE },
   item: {
-    id: uuid, inventoryId: uuid, folderId: nullable(uuid), name: str, description: nullable(str), icon: nullable(iconName), unitKey: str,
+    id: uuid, inventoryId: uuid, folderId: nullable(uuid), name: str, description: nullable(str), icon: nullable(iconName), color: nullable(colorHex), unitKey: str,
     tagIds: listOf(uuid), ...AUDIT, ...ARCHIVE,
   },
   variant: { id: uuid, itemId: uuid, description: nullable(str), position: int, ...AUDIT, ...ARCHIVE },
-  tag: { id: uuid, inventoryId: uuid, name: str, ...AUDIT },
+  tag: { id: uuid, inventoryId: uuid, name: str, color: nullable(colorHex), ...AUDIT },
   attribute: {
     id: uuid, inventoryId: uuid, name: str, kind: oneOf('text', 'enum', 'number'), options: listOf(str), unit: str,
     siPrefixes: bool, pinned: bool, ...AUDIT,
@@ -265,6 +267,8 @@ const PHOTO_DEFAULTS = { urls: null, width: null, height: null, deleteHandle: nu
 /** `icon` of folders and items: schema 7 (migration 0004), absent from older files. The file format stays version 1: the
  *  field is additive and read with a default, as photo renditions were. */
 const ICON_DEFAULTS = { icon: null }
+/** `color` of items and tags: schema 8 (migration 0005), absent from older files; the file format stays version 1. */
+const COLOR_DEFAULTS = { color: null }
 /** `intakeId`: schema 6 (intakes), absent from older files. */
 const MOVEMENT_DEFAULTS = { intakeId: null }
 
@@ -310,9 +314,9 @@ function inventoryExport(value: unknown): InventoryExport | null {
   const snapshot = {
     inventory: record(s.inventory, SHAPES.inventory),
     folders: records(s.folders, SHAPES.folder, ICON_DEFAULTS),
-    items: records(s.items, SHAPES.item, ICON_DEFAULTS),
+    items: records(s.items, SHAPES.item, { ...ICON_DEFAULTS, ...COLOR_DEFAULTS }),
     variants: records(s.variants, SHAPES.variant),
-    tags: records(s.tags, SHAPES.tag),
+    tags: records(s.tags, SHAPES.tag, COLOR_DEFAULTS),
     attributes: records(s.attributes, SHAPES.attribute, ATTRIBUTE_DEFAULTS),
     units: records(s.units, SHAPES.unit),
     itemAttributes: records(s.itemAttributes, SHAPES.itemAttribute),

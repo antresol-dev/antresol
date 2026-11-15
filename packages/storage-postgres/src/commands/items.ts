@@ -164,8 +164,8 @@ export function itemStatements(c: ItemCommand, actor: Actor): Statement[] {
         : sql``
       return [
         sql`with ins as (
-              insert into items (id, inventory_id, folder_id, name, description, icon, unit_key, created_by, updated_by)
-              values (${c.id}, ${c.inventoryId}, ${c.folderId}, ${c.name}, ${c.description}, ${c.icon ?? null}, ${c.unitKey}, ${by}, ${by})
+              insert into items (id, inventory_id, folder_id, name, description, icon, color, unit_key, created_by, updated_by)
+              values (${c.id}, ${c.inventoryId}, ${c.folderId}, ${c.name}, ${c.description}, ${c.icon ?? null}, ${c.color ?? null}, ${c.unitKey}, ${by}, ${by})
               on conflict (id) do nothing
               returning id
             )${receipt}
@@ -180,6 +180,7 @@ export function itemStatements(c: ItemCommand, actor: Actor): Statement[] {
               name: c.name,
               description: c.description,
               icon: c.icon,
+              color: c.color,
               folder_id: c.folderId,
               unit_key: c.unitKey,
               updated_by: by,

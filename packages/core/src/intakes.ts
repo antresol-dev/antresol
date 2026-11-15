@@ -349,6 +349,7 @@ export function snapshotAfterIntake(s: InventorySnapshot, c: IntakeCommit): Inve
           name: n.name,
           description: null,
           icon: null,
+          color: null,
           unitKey: n.unitKey,
           tagIds: [],
           ...NO_AUDIT,

@@ -18,7 +18,7 @@ export function folder(id: string, name: string, parentId: string | null = null,
 }
 
 export function item(id: string, name: string, folderId: string | null = null, over: Partial<Item> = {}): Item {
-  return { id, inventoryId: 'inv', folderId, name, description: null, icon: null, unitKey: 'pcs', tagIds: [], ...audit, ...live, ...over }
+  return { id, inventoryId: 'inv', folderId, name, description: null, icon: null, color: null, unitKey: 'pcs', tagIds: [], ...audit, ...live, ...over }
 }
 
 export function variant(id: string, itemId: string, over: Partial<Variant> = {}): Variant {

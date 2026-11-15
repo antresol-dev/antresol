@@ -5,7 +5,7 @@ type DictionaryCommand = Extract<
   Command,
   {
     type:
-      | 'tag.create' | 'tag.rename' | 'tag.delete'
+      | 'tag.create' | 'tag.rename' | 'tag.update' | 'tag.delete'
       | 'attribute.create' | 'attribute.update' | 'attribute.delete'
       | 'unit.create' | 'unit.update' | 'unit.delete'
   }
@@ -16,13 +16,17 @@ export function dictionaryStatements(c: DictionaryCommand, actor: Actor): Statem
   switch (c.type) {
     case 'tag.create':
       return [
-        sql`insert into tags (id, inventory_id, name, created_by, updated_by)
-            values (${c.id}, ${c.inventoryId}, ${c.name}, ${by}, ${by})
+        sql`insert into tags (id, inventory_id, name, color, created_by, updated_by)
+            values (${c.id}, ${c.inventoryId}, ${c.name}, ${c.color ?? null}, ${by}, ${by})
             on conflict (id) do nothing`,
       ]
     case 'tag.rename':
       return [
         sql`update tags set ${updateSet({ name: c.name, updated_by: by })}, updated_at = now() where id = ${c.id}`,
+      ]
+    case 'tag.update':
+      return [
+        sql`update tags set ${updateSet({ name: c.name, color: c.color, updated_by: by })}, updated_at = now() where id = ${c.id}`,
       ]
     case 'tag.delete':
       return [sql`delete from tags where id = ${c.id}`]

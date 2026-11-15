@@ -3,6 +3,7 @@ import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
 import type { ToolContext } from './context'
 import { jsonResult, secretsOf, toToolResult } from './errors'
+import * as drafts from './tools/drafts'
 import * as photos from './tools/photos'
 import * as read from './tools/read'
 
@@ -129,6 +130,125 @@ export function registerPhotoTools(server: McpServer, ctx: ToolContext): void {
   )
 }
 
+const WRITE = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } as const
+const intakeId = z.string().describe('Intake id, from list_intakes or create_intake.')
+
+export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
+  server.registerTool(
+    'create_intake',
+    {
+      description:
+        'Start an intake draft: one purchase or batch of receipts. Nothing reaches the stock until the person commits it in the app. Look through list_intakes first: continue an existing draft of the same order instead of making a second.',
+      inputSchema: {
+        inventory,
+        shop: z.string().optional(),
+        orderNumber: z.string().optional(),
+        purchasedOn: z.string().optional().describe('YYYY-MM-DD; today by default.'),
+        note: z.string().optional(),
+      },
+      annotations: WRITE,
+    },
+    handler(ctx, drafts.createIntake),
+  )
+  server.registerTool(
+    'update_intake_header',
+    {
+      description: 'Change the shop, order number, date or note of an intake (drafts and committed ones). Only what is passed changes; an empty text clears a field.',
+      inputSchema: {
+        intake: intakeId,
+        shop: z.string().optional(),
+        orderNumber: z.string().optional(),
+        purchasedOn: z.string().optional().describe('YYYY-MM-DD.'),
+        note: z.string().optional(),
+      },
+      annotations: { ...WRITE, idempotentHint: true },
+    },
+    handler(ctx, drafts.updateIntakeHeader),
+  )
+  server.registerTool(
+    'add_intake_lines',
+    {
+      description:
+        'Add receipt lines to an intake draft, all or none: if any line is wrong nothing is saved and every problem is listed. Search first (search) and top up what already exists: add a value ("4k7") to an existing item before creating a new item. A line is an item (id from search, or the id or ref of a new item), its values for the item\'s variant attributes (by attribute name or id), an amount and optionally the price paid for the whole line and a link. Write amounts, values and prices as a person would: "10", "4k7", "2.5 m", "35.50". To bring something that is not in the inventory, describe it in newItems (ref, name, folder, unit, attributes, tags) and point lines at its ref; an attribute with axis: true makes each line give its own value. Unknown tag names become new tags.',
+      inputSchema: {
+        intake: intakeId,
+        newItems: z
+          .array(
+            z.object({
+              ref: z.string().describe('A short name for this call; lines use it as "item".'),
+              name: z.string(),
+              folder: z.string().optional().describe('Folder id or path like "Passives/Resistors"; root when left out.'),
+              unit: z.string().optional().describe('Unit key or symbol, "pcs" by default.'),
+              attributes: z
+                .array(z.object({ attribute: z.string().describe('Attribute id or name.'), value: z.string().optional(), axis: z.boolean().optional() }))
+                .optional(),
+              tags: z.array(z.string()).optional().describe('Tag ids or names.'),
+            }),
+          )
+          .optional(),
+        lines: z.array(
+          z.object({
+            item: z.string().describe('Item id, id of a new item of the intake, or a ref from newItems.'),
+            values: z.record(z.string(), z.string()).optional().describe('Variant attribute (name or id) -> value text, like {"Resistance": "4k7"}.'),
+            amount: z.string().describe('How much is received, like "10" or "2.5 m".'),
+            price: z.string().optional().describe('Total price of the line, like "35.50".'),
+            url: z.string().optional().describe('Link to the product, https://...'),
+            photo: z.string().optional(),
+            replacePhoto: z.boolean().optional(),
+          }),
+        ),
+      },
+      annotations: WRITE,
+    },
+    handler(ctx, drafts.addIntakeLines),
+  )
+  server.registerTool(
+    'update_intake_line',
+    {
+      description: 'Change one line of an intake draft: only what is passed changes. An empty price or url clears it.',
+      inputSchema: {
+        intake: intakeId,
+        line: z.string().describe('Line id, from get_intake.'),
+        values: z.record(z.string(), z.string()).optional(),
+        amount: z.string().optional(),
+        price: z.string().optional(),
+        url: z.string().optional(),
+        photo: z.string().optional().describe('An empty text removes the line\'s photo.'),
+        replacePhoto: z.boolean().optional(),
+      },
+      annotations: { ...WRITE, idempotentHint: true },
+    },
+    handler(ctx, drafts.updateIntakeLine),
+  )
+  server.registerTool(
+    'remove_intake_line',
+    {
+      description: 'Remove a line from an intake draft; a new item that no line uses any more goes with it.',
+      inputSchema: { intake: intakeId, line: z.string().describe('Line id, from get_intake.') },
+      annotations: { ...WRITE, destructiveHint: true, idempotentHint: true },
+    },
+    handler(ctx, drafts.removeIntakeLine),
+  )
+  server.registerTool(
+    'update_new_item',
+    {
+      description:
+        'Change an item the draft will create (its name, folder, unit, attributes or tags). Only what is passed changes; attributes and tags replace the lists. Not for items already in stock.',
+      inputSchema: {
+        intake: intakeId,
+        item: z.string().describe('Id of the new item, from get_intake.'),
+        name: z.string().optional(),
+        folder: z.string().optional(),
+        unit: z.string().optional(),
+        attributes: z.array(z.object({ attribute: z.string(), value: z.string().optional(), axis: z.boolean().optional() })).optional(),
+        tags: z.array(z.string()).optional(),
+      },
+      annotations: { ...WRITE, idempotentHint: true },
+    },
+    handler(ctx, drafts.updateNewItem),
+  )
+}
+
 /**
  * The server with its tools. Sets `ctx.actor`: the connected client's name after `initialize`, as "<name> · MCP"
  * ("AI · MCP" without a client name).
@@ -141,5 +261,6 @@ export function createServer(ctx: ToolContext): McpServer {
   }
   registerReadTools(server, ctx)
   registerPhotoTools(server, ctx)
+  registerDraftTools(server, ctx)
   return server
 }

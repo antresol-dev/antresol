@@ -170,6 +170,7 @@ export function affectedReads(c: Command): AffectedReads | null {
     case 'tag.create':
       return reads({ inventory: id(c.inventoryId), tables: ['tags'] })
     case 'tag.rename':
+    case 'tag.update':
       return reads({ inventory: sql`(select inventory_id from tags where id = ${c.id}::uuid)`, tables: ['tags'] })
     case 'attribute.create':
       return reads({ inventory: id(c.inventoryId), tables: ['attributes'] })

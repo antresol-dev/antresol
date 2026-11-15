@@ -259,6 +259,7 @@ const GENERATORS: Record<Command['type'], Generator> = {
       id: p.one(ids(s.items)),
       name: p.maybe(() => p.one(NAMES)),
       description: p.maybe(() => p.one(DESCRIPTIONS)),
+      color: p.maybe(() => p.oneOrNull(['#4F46E5', '#0D9488', '#DC2626'])),
       folderId: p.maybe(() => p.oneOrNull(ids(s.folders))),
       unitKey: p.maybe(() => unitKey(s, p)),
       tagIds: p.maybe(() => p.some(ids(s.tags))),
@@ -402,6 +403,16 @@ const GENERATORS: Record<Command['type'], Generator> = {
     weight: 2,
     ready: has('tags'),
     build: (s, p) => ({ type: 'tag.rename', id: p.one(ids(s.tags)), name: p.one(NAMES) }),
+  },
+  'tag.update': {
+    weight: 2,
+    ready: has('tags'),
+    build: (s, p) => ({
+      type: 'tag.update',
+      id: p.one(ids(s.tags)),
+      name: p.maybe(() => p.one(NAMES)),
+      color: p.maybe(() => p.oneOrNull(['#4F46E5', '#0D9488', '#DC2626'])),
+    }),
   },
   'tag.delete': { weight: 1, ready: has('tags'), build: (s, p) => ({ type: 'tag.delete', id: p.one(ids(s.tags)) }) },
   'attribute.create': {

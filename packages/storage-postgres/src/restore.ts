@@ -136,7 +136,7 @@ export const RESTORE_TABLES: readonly RestoreTable[] = [
     key: ['id'],
     columns: [id('id'), id('inventory_id'), id('parent_id'), text('name'), text('description'), text('icon'), ...AUDIT, ...ARCHIVE],
   },
-  { name: 'tags', key: ['id'], columns: [id('id'), id('inventory_id'), text('name'), ...AUDIT] },
+  { name: 'tags', key: ['id'], columns: [id('id'), id('inventory_id'), text('name'), text('color'), ...AUDIT] },
   {
     name: 'attributes',
     key: ['id'],
@@ -154,7 +154,7 @@ export const RESTORE_TABLES: readonly RestoreTable[] = [
     name: 'items',
     key: ['id'],
     columns: [
-      id('id'), id('inventory_id'), id('folder_id'), text('name'), text('description'), text('icon'),
+      id('id'), id('inventory_id'), id('folder_id'), text('name'), text('description'), text('icon'), text('color'),
       { name: 'unit_key', type: 'text', ref: 'unitKey' }, ...AUDIT, ...ARCHIVE,
     ],
   },
@@ -345,10 +345,10 @@ function segmentsOf(entry: InventoryExport): Segment[] {
   const rows: [string, Raw[][]][] = [
     ['inventories', [[inv, s.inventory.name, s.inventory.description, s.inventory.currency, ...audit(s.inventory), ...archive(s.inventory)]]],
     ['folders', parentsFirst(s.folders).map((f) => [f.id, inv, f.parentId, f.name, f.description, f.icon ?? null, ...audit(f), ...archive(f)])],
-    ['tags', s.tags.map((t) => [t.id, inv, t.name, ...audit(t)])],
+    ['tags', s.tags.map((t) => [t.id, inv, t.name, t.color ?? null, ...audit(t)])],
     ['attributes', s.attributes.map((a) => [a.id, inv, a.name, a.kind, a.options, a.unit, a.siPrefixes, a.pinned, ...audit(a)])],
     ['custom_units', s.units.map((u) => [u.id, inv, u.name, u.symbol, u.prefixPowers, ...audit(u)])],
-    ['items', s.items.map((i) => [i.id, inv, i.folderId, i.name, i.description, i.icon ?? null, i.unitKey, ...audit(i), ...archive(i)])],
+    ['items', s.items.map((i) => [i.id, inv, i.folderId, i.name, i.description, i.icon ?? null, i.color ?? null, i.unitKey, ...audit(i), ...archive(i)])],
     ['item_tags', s.items.flatMap((i) => [...new Set(i.tagIds)].map((t) => [i.id, t]))],
     ['variants', s.variants.map((v) => [v.id, v.itemId, v.description, v.position, ...audit(v), ...archive(v)])],
     ['item_attributes', s.itemAttributes.map((r) => [r.itemId, r.attributeId, r.value, r.axisPosition])],

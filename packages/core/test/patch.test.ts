@@ -91,7 +91,7 @@ describe('patchSnapshot', () => {
 
   it('replaces a small table only when the patch carries it', () => {
     const s = base()
-    const tag: Tag = { id: 't', inventoryId: 'inv', name: 'T', createdAt: 't', updatedAt: 't', createdBy: 'u', updatedBy: 'u' }
+    const tag: Tag = { id: 't', inventoryId: 'inv', name: 'T', color: null, createdAt: 't', updatedAt: 't', createdBy: 'u', updatedBy: 'u' }
     const same = patchSnapshot(s, emptyPatch())
     expect(same.tags).toBe(s.tags)
     expect(same.folders).toBe(s.folders)

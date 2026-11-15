@@ -201,6 +201,30 @@ describe('restore', () => {
     expect(iconsOf(snap)).toEqual([])
   })
 
+  it('keeps the colours of items and tags in both modes, and a backup without the field restores with none', async () => {
+    const source = await makeStorage()
+    const inv = await seedRich(source)
+    const backup = await exported(source)
+    const colorsOf = (snap: { items: { color: string | null }[]; tags: { color: string | null }[] }) =>
+      [...snap.items, ...snap.tags].map((r) => r.color).filter((c) => c !== null).sort()
+    expect(colorsOf(backup.inventories[0]!.snapshot)).toEqual(['#0D9488', '#4F46E5'])
+
+    const same = await makeStorage()
+    await same.restore(backup, 'same-ids', newId())
+    expect(colorsOf(await same.loadInventory(inv))).toEqual(['#0D9488', '#4F46E5'])
+    const copy = await source.restore(backup, 'new-ids', newId())
+    expect(colorsOf(await source.loadInventory(copy.inventoryIds[0]!))).toEqual(['#0D9488', '#4F46E5'])
+
+    // A file of schema 7 and older: the rows have no `color` at all.
+    const old = JSON.parse(JSON.stringify(backup)) as { inventories: { snapshot: { items: Record<string, unknown>[]; tags: Record<string, unknown>[] } }[] }
+    for (const e of old.inventories) for (const r of [...e.snapshot.items, ...e.snapshot.tags]) delete r.color
+    const target = await makeStorage()
+    await target.restore(old as unknown as typeof backup, 'same-ids', newId())
+    const snap = await target.loadInventory(inv)
+    expect(snap.items.length + snap.tags.length).toBeGreaterThan(0)
+    expect(colorsOf(snap)).toEqual([])
+  })
+
   it('new-ids: restored next to the original, a second copy whose ids are UUID v5 of the old ones in the run', async () => {
     const exec = await makeExecutor()
     const storage = await openOn(exec)

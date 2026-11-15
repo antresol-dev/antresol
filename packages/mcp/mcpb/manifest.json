@@ -33,6 +33,7 @@
       "type": "directory",
       "title": "Photos folder",
       "description": "Where photos of receipts and items are looked for. Leave empty for Pictures/Antresol in your home folder.",
+      "default": "",
       "required": false
     }
   },

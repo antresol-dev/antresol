@@ -41,19 +41,22 @@ export function scrub(text: string, secrets: readonly string[]): string {
 /** What must never reach a tool result or the log: the connection string, its password and the photo store keys. */
 export function secretsOf(config: ServerConfig): string[] {
   const c = config.connection
-  if (!c) return []
-  const secrets = [c.connectionString, c.uploadcarePublicKey, c.cloudinaryUploadPreset, c.imgurClientId, c.imgbbApiKey]
+  if (!c) return config.connectionKey ? [config.connectionKey] : []
+  const secrets: (string | null | undefined)[] = [config.connectionKey ?? undefined, c.connectionString, c.uploadcarePublicKey, c.cloudinaryUploadPreset, c.imgurClientId, c.imgbbApiKey]
   try {
     const url = new URL(c.connectionString)
     secrets.push(url.password, decodeURIComponent(url.password), url.username)
   } catch {
     // not a URL: the whole string is hidden anyway
   }
-  return secrets.filter((s): s is string => typeof s === 'string' && s.trim().length >= 4)
+  return secrets.flatMap((s) => (typeof s === 'string' && s.trim().length >= 4 ? [s.trim()] : []))
 }
 
-function messageOf(e: unknown): string {
+const WRITE_UNAVAILABLE = 'The database did not answer — the change may have been saved. Check get_intake before retrying.'
+
+function messageOf(e: unknown, write: boolean): string {
   if (e instanceof ToolError) return e.message
+  if (write && e instanceof StorageError && e.code === 'unavailable') return WRITE_UNAVAILABLE
   if (e instanceof StorageError) return e.message === e.code ? STORAGE_TEXT[e.code] : `${STORAGE_TEXT[e.code]} (${e.message})`
   if (e instanceof FileError) return e.message === e.code ? FILE_TEXT[e.code] : `${FILE_TEXT[e.code]} (${e.message})`
   if (e instanceof Error) return `Unexpected error: ${e.message}`
@@ -61,8 +64,8 @@ function messageOf(e: unknown): string {
 }
 
 /** An error as a tool result: `isError`, text without secrets. */
-export function toToolResult(e: unknown, secrets: string[]): CallToolResult {
-  return { isError: true, content: [{ type: 'text', text: scrub(messageOf(e), secrets) }] }
+export function toToolResult(e: unknown, secrets: string[], options: { write?: boolean } = {}): CallToolResult {
+  return { isError: true, content: [{ type: 'text', text: scrub(messageOf(e, options.write ?? false), secrets) }] }
 }
 
 /** A result as a tool answers it: JSON without indentation. */

@@ -52,3 +52,33 @@ describe('defaultPhotosDir', () => {
     expect(defaultPhotosDir('linux', {}, '/home/a')).toBe('/home/a/Pictures/Antresol')
   })
 })
+
+describe('unexpanded host placeholders', () => {
+  it('treats ${user_config.photos_dir} as an unset photos folder', () => {
+    expect(readConfig({ ANTRESOL_PHOTOS_DIR: '${user_config.photos_dir}' }, 'linux', '/home/a').photosDir).toBe('/home/a/Pictures/Antresol')
+  })
+  it('treats ${user_config.connection_key} as a missing key', () => {
+    const c = readConfig({ ANTRESOL_CONNECTION: '${user_config.connection_key}' }, 'linux', '/home/a')
+    expect(c.connectionProblem).toBe('missing')
+    expect(c.connectionKey).toBeNull()
+  })
+  it('the manifest gives photos_dir an empty default', async () => {
+    const manifest = JSON.parse(await (await import('node:fs/promises')).readFile(path.join(__dirname, '../mcpb/manifest.json'), 'utf8'))
+    expect(manifest.user_config.photos_dir.default).toBe('')
+  })
+})
+
+describe('secretsOf', () => {
+  it('holds the raw key text and trimmed secrets', async () => {
+    const { secretsOf } = await import('../src/errors')
+    const key = encodeConnectionKey({ name: 'Home', connectionString: 'postgresql://u:hunter2@h/db', imgbbApiKey: '  abcd1234  ' })
+    const secrets = secretsOf(readConfig({ ANTRESOL_CONNECTION: ` ${key} ` }, 'linux', '/home/a'))
+    expect(secrets).toContain(key)
+    expect(secrets).toContain('abcd1234')
+    expect(secrets).toContain('hunter2')
+  })
+  it('hides a key that does not decode', async () => {
+    const { secretsOf } = await import('../src/errors')
+    expect(secretsOf(readConfig({ ANTRESOL_CONNECTION: 'garbage-key-text' }, 'linux', '/home/a'))).toEqual(['garbage-key-text'])
+  })
+})

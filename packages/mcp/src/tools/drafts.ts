@@ -16,7 +16,7 @@ import {
 } from '@antresol/core'
 import { buildDraftLine, unitChoices, withLine } from '@antresol/kit'
 import { requireStorage, requireSource, resolveInventory, type ToolContext } from '../context'
-import { editDraft, locateIntake, viewOf } from '../draft-edit'
+import { checkEditable, editDraft, locateIntake, viewOf } from '../draft-edit'
 import { ToolError } from '../errors'
 import { messageFor } from '../messages'
 import { folderPath } from '../shape'
@@ -205,6 +205,7 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
   // Uploads come first and the ids are fixed here: editDraft may run its callback twice, and neither may upload again.
   const lineIds = args.lines.map(() => newId())
   const photos: (DraftLinePhoto | null)[] = []
+  if (args.lines.some((l) => l.photo?.trim())) await checkEditable(ctx, args.intake)
   for (const [i, l] of args.lines.entries()) {
     const path = l.photo?.trim()
     if (!path) {
@@ -301,6 +302,7 @@ export async function updateIntakeLine(
   args: { intake: string; line: string; values?: Record<string, string>; amount?: string; price?: string; url?: string; photo?: string; replacePhoto?: boolean },
 ) {
   const path = args.photo?.trim()
+  if (path) await checkEditable(ctx, args.intake)
   const uploaded = path ? { ...(await attachPhoto(ctx, path)), replace: args.replacePhoto ?? false } : null
   const view = await editDraft(ctx, args.intake, (draft, header, s) => {
     const old = findLine(draft, args.line)

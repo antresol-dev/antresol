@@ -1,7 +1,7 @@
 import type { Actor, FileStore, Inventory, InventorySnapshot, InventoryStorage } from '@antresol/core'
 import type { ServerConfig } from './config'
 import { ToolError } from './errors'
-import type { Source } from './source'
+import { createSource, type Source } from './source'
 
 export interface ToolContext {
   /** Null while there is no database: no key, a bad key, or `openError`. */
@@ -12,8 +12,44 @@ export interface ToolContext {
   actor: () => Actor
   files: FileStore | null
   now: () => Date
-  /** Why the database could not be opened (key present, open failed): every tool answers with it. */
+  /** Why the database could not be opened (key present, open failed): every tool answers with it until a retry succeeds. */
   openError?: unknown
+  /** Opens the database; present when there is a valid key. `ensureOpen` retries it while there is no source. */
+  openStorage?: () => Promise<InventoryStorage>
+  /** When the last open was tried (ms, from `now`), and the one in progress. */
+  lastOpenAt?: number
+  opening?: Promise<void>
+}
+
+/** Within this time after a failed open another call does not try again. */
+export const OPEN_RETRY_MS = 5000
+
+/**
+ * Opens the database when there is a key but no source yet (the server may start offline or while the database wakes
+ * up), at most once per OPEN_RETRY_MS; concurrent calls share one attempt. Never throws: a failure stays in `openError`
+ * for the message. A missing or invalid key is permanent and is not retried.
+ */
+export async function ensureOpen(ctx: ToolContext): Promise<void> {
+  if (ctx.source || !ctx.openStorage) return
+  if (ctx.opening) return ctx.opening
+  const at = ctx.now().getTime()
+  if (ctx.lastOpenAt !== undefined && at - ctx.lastOpenAt < OPEN_RETRY_MS) return
+  ctx.lastOpenAt = at
+  const open = ctx.openStorage
+  const attempt = (async () => {
+    try {
+      const storage = await open()
+      ctx.storage = storage
+      ctx.source = createSource(storage)
+      ctx.openError = undefined
+    } catch (e) {
+      ctx.openError = e
+    }
+  })().finally(() => {
+    ctx.opening = undefined
+  })
+  ctx.opening = attempt
+  return attempt
 }
 
 const NO_KEY =

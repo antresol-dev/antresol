@@ -19,7 +19,7 @@ export async function locateIntake(ctx: ToolContext, intakeId: Id): Promise<Loca
   requireStorage(ctx)
   if (source.readOnly) throw new ToolError(READ_ONLY)
   const id = intakeId.trim()
-  source.refresh()
+  source.refreshIntakes()
   for (const inventory of await source.inventories()) {
     const intake = (await source.intakes(inventory.id)).find((i) => i.id === id)
     if (!intake) continue
@@ -29,10 +29,16 @@ export async function locateIntake(ctx: ToolContext, intakeId: Id): Promise<Loca
   throw new ToolError(`No intake with id "${id}". Find ids with list_intakes.`)
 }
 
+/** Refusals that need no upload: no connection, read-only, archived, unknown or committed. Run before a photo goes to the public store. */
+export async function checkEditable(ctx: ToolContext, intakeId: Id): Promise<void> {
+  const { intake } = await locateIntake(ctx, intakeId)
+  if (intake.status !== 'draft' || intake.draft === null) throw new ToolError(COMMITTED)
+}
+
 /** The intake as the tools show it, from a fresh read. */
 export async function viewOf(ctx: ToolContext, inventoryId: Id, intakeId: Id): Promise<IntakeView> {
   const source = requireSource(ctx)
-  source.refresh()
+  source.refreshIntakes()
   const intake = (await source.intakes(inventoryId)).find((i) => i.id === intakeId)
   if (!intake) throw new ToolError('The intake is gone: it may have been deleted in the app.')
   return intakeView(await source.snapshot(inventoryId), intake)

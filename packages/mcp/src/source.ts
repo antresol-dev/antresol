@@ -7,6 +7,8 @@ export interface Source {
   intakes(inventoryId: Id): Promise<Intake[]>
   /** Forget everything: the next read goes to the database. Called after a write. */
   refresh(): void
+  /** Forget only the intake lists (drafts change without touching `rev`): snapshots stay under the normal revision check. */
+  refreshIntakes(): void
   readonly readOnly: boolean
 }
 
@@ -97,6 +99,11 @@ export function createSource(storage: InventoryStorage, options: SourceOptions =
         if (gen === generation) intakeLists.set(inventoryId, entry)
         return entry.value
       })
+    },
+    refreshIntakes() {
+      generation++
+      intakeLists = new Map()
+      for (const key of [...pending.keys()]) if (key.startsWith('intakes:')) pending.delete(key)
     },
     refresh() {
       generation++

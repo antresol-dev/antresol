@@ -1,8 +1,9 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
-import type { ToolContext } from './context'
+import { ensureOpen, type ToolContext } from './context'
 import { jsonResult, secretsOf, toToolResult } from './errors'
+import pkg from '../package.json'
 import { intakeFromPhotosPrompt } from './prompts'
 import * as drafts from './tools/drafts'
 import * as photos from './tools/photos'
@@ -14,15 +15,22 @@ export const SERVER_INSTRUCTIONS =
   'Antresol is a home inventory. These tools only read it and prepare intake drafts (receipts of purchased items); nothing is added to the stock until the person reviews and commits the intake in the Antresol app. Start with get_overview to learn the inventories, folders, attributes and units. Search before proposing a new item, and prefer topping up an existing item or adding a value to it over a new item. Do not guess: put doubts in the chat, not in the draft. The person commits the intake in the app.'
 
 /** A tool's handler as the SDK calls it: the result as JSON text, an error as `isError` text without secrets. */
-export function handler<A>(ctx: ToolContext, run: (ctx: ToolContext, args: A) => Promise<unknown>): (args: A) => Promise<CallToolResult> {
+export function handler<A>(
+  ctx: ToolContext,
+  run: (ctx: ToolContext, args: A) => Promise<unknown>,
+  options: { write?: boolean } = {},
+): (args: A) => Promise<CallToolResult> {
   return async (args) => {
     try {
+      await ensureOpen(ctx)
       return jsonResult(await run(ctx, args))
     } catch (e) {
-      return toToolResult(e, secretsOf(ctx.config))
+      return toToolResult(e, secretsOf(ctx.config), options)
     }
   }
 }
+
+const writer = <A>(ctx: ToolContext, run: (ctx: ToolContext, args: A) => Promise<unknown>) => handler(ctx, run, { write: true })
 
 const READ_ONLY = { readOnlyHint: true, openWorldHint: false } as const
 const inventory = z.string().optional().describe('Inventory id or name; may be left out when there is only one inventory.')
@@ -149,7 +157,7 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
       },
       annotations: WRITE,
     },
-    handler(ctx, drafts.createIntake),
+    writer(ctx, drafts.createIntake),
   )
   server.registerTool(
     'update_intake_header',
@@ -164,7 +172,7 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
       },
       annotations: { ...WRITE, idempotentHint: true },
     },
-    handler(ctx, drafts.updateIntakeHeader),
+    writer(ctx, drafts.updateIntakeHeader),
   )
   server.registerTool(
     'add_intake_lines',
@@ -201,7 +209,7 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
       },
       annotations: WRITE,
     },
-    handler(ctx, drafts.addIntakeLines),
+    writer(ctx, drafts.addIntakeLines),
   )
   server.registerTool(
     'update_intake_line',
@@ -219,7 +227,7 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
       },
       annotations: { ...WRITE, idempotentHint: true },
     },
-    handler(ctx, drafts.updateIntakeLine),
+    writer(ctx, drafts.updateIntakeLine),
   )
   server.registerTool(
     'remove_intake_line',
@@ -228,7 +236,7 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
       inputSchema: { intake: intakeId, line: z.string().describe('Line id, from get_intake.') },
       annotations: { ...WRITE, destructiveHint: true, idempotentHint: true },
     },
-    handler(ctx, drafts.removeIntakeLine),
+    writer(ctx, drafts.removeIntakeLine),
   )
   server.registerTool(
     'update_new_item',
@@ -246,7 +254,7 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
       },
       annotations: { ...WRITE, idempotentHint: true },
     },
-    handler(ctx, drafts.updateNewItem),
+    writer(ctx, drafts.updateNewItem),
   )
 }
 
@@ -270,7 +278,7 @@ export function registerPrompts(server: McpServer): void {
  * ("AI · MCP" without a client name).
  */
 export function createServer(ctx: ToolContext): McpServer {
-  const server = new McpServer({ name: SERVER_NAME, version: '0.1.0' }, { instructions: SERVER_INSTRUCTIONS })
+  const server = new McpServer({ name: SERVER_NAME, version: pkg.version }, { instructions: SERVER_INSTRUCTIONS })
   ctx.actor = () => {
     const name = server.server.getClientVersion()?.name?.trim()
     return { device: name ? `${name} · MCP` : ACTOR_FALLBACK }

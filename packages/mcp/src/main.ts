@@ -1,37 +1,27 @@
 import os from 'node:os'
 import { openPostgresStorage, createNeonHttpExecutor } from '@antresol/storage-postgres'
-import type { InventoryStorage } from '@antresol/core'
 import { createFileStore } from '@antresol/kit'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { readConfig } from './config'
-import type { ToolContext } from './context'
+import { ensureOpen, type ToolContext } from './context'
 import { scrub, secretsOf } from './errors'
 import { ACTOR_FALLBACK, createServer } from './server'
-import { createSource, type Source } from './source'
+
+const openStorage = (connectionString: string) => async () => (await openPostgresStorage(createNeonHttpExecutor(connectionString))).storage
 
 async function main(): Promise<void> {
   const config = readConfig(process.env, process.platform, os.homedir())
-  let storage: InventoryStorage | null = null
-  let source: Source | null = null
-  let openError: unknown
-  if (config.connection) {
-    try {
-      storage = (await openPostgresStorage(createNeonHttpExecutor(config.connection.connectionString))).storage
-      source = createSource(storage)
-    } catch (e) {
-      // The process stays up: every tool answers with this error.
-      openError = e
-    }
-  }
   const ctx: ToolContext = {
-    source,
-    storage,
+    source: null,
+    storage: null,
     config,
     actor: () => ({ device: ACTOR_FALLBACK }),
     files: config.connection ? createFileStore(config.connection) : null,
     now: () => new Date(),
-    openError,
+    openStorage: config.connection ? openStorage(config.connection.connectionString) : undefined,
   }
+  // A failed open is not fatal: the process stays up and later calls retry it (see ensureOpen).
+  await ensureOpen(ctx)
   await createServer(ctx).connect(new StdioServerTransport())
 }
 

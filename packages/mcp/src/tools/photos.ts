@@ -111,6 +111,15 @@ export async function viewPhotos(ctx: ToolContext, args: { paths: string[] }): P
   }
 }
 
+/** What an upload is remembered under: the photo store (provider plus a short hash of its settings, never the keys in
+ *  clear) and the content, so another store or source never reuses this store's URL. */
+export function uploadKey(ctx: ToolContext, sha: string): string {
+  const c = ctx.config.connection
+  const settings = c ? [c.photoStore, c.uploadcarePublicKey, c.uploadcareCdnBase, c.cloudinaryCloudName, c.cloudinaryUploadPreset, c.imgurClientId, c.imgbbApiKey] : []
+  const store = createHash('sha256').update(JSON.stringify([ctx.files?.provider ?? null, ...settings])).digest('hex').slice(0, 12)
+  return `${ctx.files?.provider ?? 'none'}:${store}:${sha}`
+}
+
 // Uploads in progress by content: parallel calls for the same picture share one upload.
 const inFlight = new Map<string, Promise<StoredUpload>>()
 
@@ -124,9 +133,10 @@ export async function attachPhoto(ctx: ToolContext, file: string): Promise<Draft
   const { full, bytes } = await readPhoto(ctx, file)
   const state = photoState(ctx)
   const sha = createHash('sha256').update(bytes).digest('hex')
-  let upload = state.get(sha)
+  const stateKey = uploadKey(ctx, sha)
+  let upload = state.get(stateKey)
   if (!upload) {
-    const key = `${ctx.config.stateDir}\0${sha}`
+    const key = `${ctx.config.stateDir}\0${stateKey}`
     let pending = inFlight.get(key)
     if (!pending) {
       pending = (async () => {
@@ -139,7 +149,7 @@ export async function attachPhoto(ctx: ToolContext, file: string): Promise<Draft
           throw new ToolError(`the photo store did not take ${path.basename(full)}: ${e instanceof Error ? e.message : String(e)}`)
         }
         const made = { ...stored, width: prepared.width, height: prepared.height }
-        state.put(sha, made)
+        state.put(stateKey, made)
         return made
       })().finally(() => inFlight.delete(key))
       inFlight.set(key, pending)

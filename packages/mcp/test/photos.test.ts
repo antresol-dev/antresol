@@ -11,7 +11,7 @@ import type { ToolContext } from '../src/context'
 import { ToolError } from '../src/errors'
 import { createPhotoState } from '../src/photo-state'
 import { createServer } from '../src/server'
-import { attachPhoto, listPhotos, markPhotosUsed, viewPhotos } from '../src/tools/photos'
+import { attachPhoto, listPhotos, markPhotosUsed, uploadKey, viewPhotos } from '../src/tools/photos'
 import * as drafts from '../src/tools/drafts'
 import * as read from '../src/tools/read'
 import { makeContext, TEST_ACTOR } from './fixture'
@@ -89,7 +89,7 @@ describe('attachPhoto', () => {
     const reopened = createPhotoState(stateDir)
     expect(reopened.usedPaths().get(path.join(photosDir, 'a.png'))).toEqual({ intakeId: 'intake-1', lineId: 'line-1' })
     const sha = createHash('sha256').update(await readFile(path.join(FIXTURES, 'gradient.png'))).digest('hex')
-    expect(reopened.get(sha)).toMatchObject({ fileId: 'f1', width: 64 })
+    expect(reopened.get(uploadKey(ctx, sha))).toMatchObject({ fileId: 'f1', width: 64 })
   })
 
   it('parallel calls for the same content share one upload', async () => {

@@ -20,7 +20,9 @@ const emit = defineEmits<{ create: [name: string] }>()
 const query = ref('')
 const matches = computed(() => {
   const base = tagMatches(props.snapshot, query.value)
-  const extra = props.extraTags ?? []
+  // A draft tag named like a tag that is now in the snapshot (created meanwhile) is the same tag: shown once.
+  const known = new Set(props.snapshot.tags.map((t) => t.name.trim().toLowerCase()))
+  const extra = (props.extraTags ?? []).filter((t) => !known.has(t.name.trim().toLowerCase()))
   if (extra.length === 0) return base
   const q = query.value.trim().toLowerCase()
   const own = extra.filter((t) => t.name.toLowerCase().includes(q))

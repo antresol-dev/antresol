@@ -36,7 +36,7 @@ async function copy(): Promise<void> {
     <div class="grid gap-3.5 pt-2">
       <p class="text-sm text-subtle-foreground">{{ $t('connectAi.intro') }}</p>
       <Button type="button" class="h-11 rounded-field" data-primary @click="copy">{{ $t('connectAi.copy') }}</Button>
-      <p class="text-sm text-subtle-foreground">{{ $t('connectAi.warning') }}</p>
+      <p class="text-sm font-semibold text-foreground">{{ $t('connectAi.warning') }}</p>
       <a
         href="https://github.com/antresol-dev/antresol/releases/latest"
         target="_blank"
@@ -44,6 +44,14 @@ async function copy(): Promise<void> {
         class="inline-flex min-h-11 items-center rounded-chip text-sm font-semibold text-accent-ink underline-offset-4 hover:underline"
       >
         {{ $t('connectAi.setup') }}
+      </a>
+      <a
+        href="https://github.com/antresol-dev/antresol/blob/master/packages/mcp/README.md"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-flex min-h-11 items-center rounded-chip text-sm font-semibold text-accent-ink underline-offset-4 hover:underline"
+      >
+        {{ $t('connectAi.guide') }}
       </a>
     </div>
   </AppSheet>

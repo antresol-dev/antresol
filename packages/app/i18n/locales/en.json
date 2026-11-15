@@ -611,7 +611,8 @@
     "copied": "Copied",
     "copyFailed": "Could not copy",
     "warning": "The key gives full access to this source. Paste it only into the assistant's settings — never into a chat.",
-    "setup": "Download and setup"
+    "setup": "Download",
+    "guide": "Setup guide"
   },
   "pairing": {
     "receive": "Receive from another device",

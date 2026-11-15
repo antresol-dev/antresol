@@ -106,7 +106,7 @@ async function confirmRemove(): Promise<void> {
               <SourceStatusBadge :status="s.status" />
             </div>
             <p v-if="s.reason" class="break-words text-sm text-destructive">{{ $t(`errors.probe.${s.reason}`) }}</p>
-            <div class="-mx-2 flex">
+            <div class="-mx-2 flex flex-wrap gap-y-1">
               <Button v-if="s.config.kind === 'neon'" as-child variant="ghost" :class="[sourceAction, 'text-accent-ink']">
                 <NuxtLink :to="`/settings/sources/${s.config.id}`">{{ $t('settings.sources.edit') }}</NuxtLink>
               </Button>

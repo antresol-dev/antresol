@@ -199,7 +199,7 @@ const revOf = async (exec: PgExecutor): Promise<string | null> => metaValue(exec
 /** The write statements of a command as an app of schema 7 or older sent them: folder.create and item.create name no
  *  `icon` (frozen in fixtures/schema6-icon-writes.ts), tag.create no `color` (fixtures/schema7-color-writes.ts), every
  *  other command is unchanged since schema 3. */
-function statementsAsSchema6(c: Command): Statement[] {
+function statementsOfOldApp(c: Command): Statement[] {
   const n = normalizeCommand(c)
   if (n.type === 'folder.create') return [schema6.folderCreate(n, TEST_ACTOR)]
   if (n.type === 'item.create') return schema6.itemCreate(n, TEST_ACTOR)
@@ -210,7 +210,7 @@ function statementsAsSchema6(c: Command): Statement[] {
 /** Writes the commands as an app of schema 3 does, without the reads back (those name the new columns): the write
  *  statements of every command without `pinned` are the ones schema 3 sent. */
 async function writeAsSchema3(exec: PgExecutor, commands: Command[]): Promise<void> {
-  for (const c of commands) await exec.batch([LOCK_REV, ...statementsAsSchema6(c), REV_BUMP])
+  for (const c of commands) await exec.batch([LOCK_REV, ...statementsOfOldApp(c), REV_BUMP])
 }
 
 /** An inventory with a folder, a tag, a custom unit, attributes (shared and an axis), items with variants, a photo and

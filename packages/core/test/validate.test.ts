@@ -98,6 +98,11 @@ describe('validateCommand', () => {
     }
   })
 
+  it('a colour that is not a string is refused, even one that stringifies to a hex', () => {
+    expect(code({ type: 'item.update', id: 'i1', color: ['#4F46E5'] as unknown as string })).toBe('invalid_option')
+    expect(code({ type: 'tag.update', id: 't1', color: 5 as unknown as string })).toBe('invalid_option')
+  })
+
   it('normalizeCommand upper-cases a colour', () => {
     expect((normalizeCommand({ type: 'item.update', id: 'i1', color: '#4f46e5' }) as { color: string }).color).toBe('#4F46E5')
     expect((normalizeCommand({ type: 'tag.create', id: 'x', inventoryId: 'inv', name: 'n', color: '#abcdef' }) as { color: string }).color).toBe('#ABCDEF')

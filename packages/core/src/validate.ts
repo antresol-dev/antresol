@@ -154,8 +154,8 @@ function checkIcon(icon: unknown) {
   if (icon != null && (typeof icon !== 'string' || !isIconName(icon))) fail('invalid_option')
 }
 
-function checkColor(color: string | null | undefined) {
-  if (color != null && !isColorHex(color)) fail('invalid_option')
+function checkColor(color: unknown) {
+  if (color != null && (typeof color !== 'string' || !isColorHex(color))) fail('invalid_option')
 }
 
 /** numeric(20,6) holds absolute values below 10^14. */

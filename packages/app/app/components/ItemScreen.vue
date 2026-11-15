@@ -9,7 +9,6 @@ import { lastCounted } from '~/lib/counted'
 import { errorMessageKey } from '~/lib/errors'
 import { bucketDescription, itemView } from '~/lib/item-view'
 import { archiveNow } from '~/lib/undo'
-import { shopLinks } from '~/lib/share'
 import type { StockMode } from '~/lib/stock-forms'
 import { pinnedValues } from '~/lib/views'
 
@@ -192,9 +191,13 @@ async function removeAttribute(): Promise<void> {
   }
 }
 
-// The values shown in lists ("Show in lists") at the top of the card, and shop searches by the name (spec 4.10, 4.11).
+// The values shown in lists ("Show in lists") (spec 4.10).
 const pinned = computed(() => (snapshot.value && view.value ? pinnedValues(snapshot.value, props.itemId) : []))
-const shops = computed(() => (view.value ? shopLinks(view.value.item.name) : []))
+const folderIcon = computed(() => {
+  const folderId = view.value?.item.folderId
+  return folderId && snapshot.value ? (snapshot.value.folders.find((f) => f.id === folderId)?.icon ?? null) : null
+})
+const hasAbout = computed(() => !!view.value && (!!view.value.item.description || view.value.tags.length > 0))
 
 const highlight = computed(() => (view.value?.hasVariants ? props.variantId : null))
 const linkClass =
@@ -206,30 +209,25 @@ const linkClass =
     <template v-if="view" #actions="{ compact }">
       <ItemActions :item-id="itemId" :compact="compact" />
     </template>
+    <!-- One clipped line: the header is sticky and must not grow; what does not fit is hidden. -->
+    <template v-if="pinned.length > 0" #below-title>
+      <ul class="mt-1 flex min-w-0 flex-nowrap gap-1.5 overflow-hidden" :aria-label="$t('list.pinned')">
+        <li v-for="(value, i) in pinned" :key="i" class="min-w-0 shrink-0 truncate rounded-chip bg-chip px-2 py-0.5 text-xs font-semibold text-subtle-foreground last:shrink">
+          {{ value }}
+        </li>
+      </ul>
+    </template>
   </ScreenHeader>
   <ScreenBody>
     <template v-if="view && snapshot">
       <StockSheet :view="view" :target="stockTarget" @close="stockTarget = null" />
-      <ul v-if="pinned.length > 0" class="-mt-1 flex min-w-0 flex-wrap gap-1.5" :aria-label="$t('list.pinned')">
-        <li v-for="(value, i) in pinned" :key="i" class="max-w-full truncate rounded-chip bg-chip px-2 py-0.5 text-[13px] font-semibold text-subtle-foreground">
-          {{ value }}
-        </li>
-      </ul>
-      <ItemGallery :item-id="itemId" :photos="view.photos" />
-      <div v-if="view.item.description || view.tags.length > 0" class="grid min-w-0 gap-2.5">
-        <p v-if="view.item.description" class="text-[15px] whitespace-pre-line text-muted-foreground wrap-anywhere">
-          {{ view.item.description }}
-        </p>
-        <ul v-if="view.tags.length > 0" class="flex min-w-0 flex-wrap gap-1.5" :aria-label="$t('item.tags')">
-          <li
-            v-for="tag in view.tags"
-            :key="tag.id"
-            class="tag-chip max-w-full truncate px-2.5 py-1 text-[13px] font-semibold"
-          >
-            {{ tag.name }}
-          </li>
-        </ul>
-      </div>
+      <!-- Without photos the description and tags sit beside the 64 px photo tile (design system F1). -->
+      <ItemGallery :item-id="itemId" :photos="view.photos" :icon="view.item.icon" :folder-icon="folderIcon">
+        <template v-if="hasAbout && view.photos.length === 0" #beside>
+          <ItemAbout :description="view.item.description" :tags="view.tags" />
+        </template>
+      </ItemGallery>
+      <ItemAbout v-if="hasAbout && view.photos.length > 0" :description="view.item.description" :tags="view.tags" />
       <StockCard
         :total="view.total"
         :unit="view.unit"
@@ -255,7 +253,7 @@ const linkClass =
         @archive="askArchive"
       />
       </div>
-      <Button variant="outline" class="h-11 justify-self-start px-4.5 btn-label" :disabled="locked" @click="addOpen = true">
+      <Button variant="outline" class="h-11 justify-self-start px-4 btn-label" :disabled="locked" @click="addOpen = true">
         <Plus class="size-5" aria-hidden="true" />
         {{ $t('variantsForm.open') }}
       </Button>
@@ -323,12 +321,8 @@ const linkClass =
       />
       <AttributeValueSheet :view="view" :open="attributeOpen" :attribute-id="attributeId" @close="attributeOpen = false" />
       <VariantValuesSheet :view="view" :variant-id="valuesId" @close="valuesId = null" />
-      <nav class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-0.5" :aria-label="$t('shops.title')">
-        <span class="text-sm font-semibold text-subtle-foreground">{{ $t('shops.title') }}</span>
-        <a v-for="shop in shops" :key="shop.name" :href="shop.url" target="_blank" rel="noopener noreferrer" :class="linkClass">
-          {{ shop.name }}
-        </a>
-      </nav>
+      <!-- "Find in shops" is hidden (owner, 2026-11-14): a fixed list of electronics shops is wrong for other kinds of
+           items and other countries. shopLinks (lib/share.ts) stays for the per-inventory shops in the backlog. -->
       <JournalList :item-id="itemId" />
     </template>
     <EmptyState v-else-if="snapshot || blocker?.kind === 'gone'" :text="$t('empty.itemGone')">
@@ -345,8 +339,8 @@ const linkClass =
     >
       <NuxtLink :to="fixTo" :class="linkClass">{{ $t('status.fix') }}</NuxtLink>
     </EmptyState>
-    <div v-else class="grid grid-cols-1 gap-3.5" aria-hidden="true">
-      <Skeleton class="h-[104px] rounded-card" />
+    <div v-else class="grid grid-cols-1 gap-4" aria-hidden="true">
+      <Skeleton class="h-26 rounded-card" />
       <Skeleton class="h-40 rounded-card" />
     </div>
   </ScreenBody>

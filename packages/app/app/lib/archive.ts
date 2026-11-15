@@ -1,4 +1,4 @@
-import { variantLabel, type Id, type InventorySnapshot } from '@antresol/core'
+import { variantDisplayLabel, type Id, type InventorySnapshot } from '@antresol/core'
 
 export interface ArchiveEntry {
   archiveId: Id
@@ -85,7 +85,7 @@ export function archiveEntries(s: InventorySnapshot): ArchiveEntry[] {
       archiveId: v.archiveId,
       target: 'variant',
       id: v.id,
-      name: variantLabel(s, v),
+      name: variantDisplayLabel(s, v),
       itemName: item?.name ?? null,
       path: pathOf(item?.folderId ?? null),
       archivedAt: v.archivedAt,

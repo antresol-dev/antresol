@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Archive, Boxes, ChevronRight, Folder, FolderInput, FolderPlus, Pencil, Plus } from '@lucide/vue'
 import { treeAriaCurrent } from '~/lib/shell'
-import { rowClickAction, type TreeRow } from '~/lib/tree-state'
+import { longPressExpands, rowClickAction, type TreeRow } from '~/lib/tree-state'
 import { piecesLabel } from '~/lib/views'
 import type RowMenu from './RowMenu.vue'
 
@@ -41,8 +41,8 @@ const panel = computed(() => props.variant === 'panel')
 const to = computed(() => (props.root ? '/' : `/folder/${props.row.id}`))
 // Drawer rows are touch targets: 44 px tall with a 44 px chevron; the guide line runs under the parent's chevron.
 // Radii follow the row's 14: the chevron sits at its edge in the drawer (14) and 4 px in on the panel (10).
-const chevronSize = computed(() => (panel.value ? 'size-[18px] rounded-chip' : 'size-11 rounded-field'))
-const actionSize = computed(() => (panel.value ? 'size-[22px] rounded-chip' : 'size-8 rounded-chip'))
+const chevronSize = computed(() => (panel.value ? 'size-5 rounded-chip' : 'size-11 rounded-field'))
+const actionSize = computed(() => (panel.value ? 'size-6 rounded-chip' : 'size-8 rounded-chip'))
 
 const locked = computed(() => !!state.readOnly || state.saving)
 const actions = computed(() => [
@@ -58,9 +58,13 @@ function select(key: string): void {
   else if (key === 'rename' || key === 'move' || key === 'archive') open({ kind: key, folderId })
 }
 
-// A long press on a folder row (in the drawer, or the panel on a touch screen) opens the row menu as a sheet.
+// A long press on a folder row (in the drawer, or the panel on a touch screen) opens the row menu as a sheet, and
+// also opens a closed folder that has children.
 const menu = useTemplateRef<InstanceType<typeof RowMenu>>('rowMenu')
-const press = useLongPress(() => menu.value?.openSheet())
+const press = useLongPress(() => {
+  if (longPressExpands(props.row.hasChildren, props.row.open)) emit('toggle', props.row.id)
+  menu.value?.openSheet()
+})
 // Object syntax on a component: `clickCapture` becomes onClickCapture, a capture-phase click listener on the <a>.
 const pressHandlers = computed(() =>
   props.root
@@ -82,9 +86,9 @@ const pressHandlers = computed(() =>
          flat: a translucent tint under the pointer. -->
     <div
       :class="[
-        'group relative flex items-center gap-1.5 rounded-field text-sm font-semibold transition-colors duration-150',
+        'group relative flex items-center gap-1.5 rounded-field text-sm font-semibold transition-colors duration-(--dur-fast)',
         // Clear space from the highlight's edge and its rounded corners: 10 px on the 32 px panel rows, 12 px in the drawer.
-        panel ? 'h-8 pr-2.5 pl-2.5' : 'min-h-11 pr-3',
+        panel ? 'h-8 px-3' : 'min-h-11 pr-3',
         row.current ? 'row-selected' : 'text-icon hover:bg-(--ghost-hover) hover:text-foreground',
       ]"
     >
@@ -100,7 +104,7 @@ const pressHandlers = computed(() =>
         @click="emit('toggle', row.id)"
       >
         <ChevronRight
-          :class="['size-3.5 motion-safe:transition-transform motion-safe:duration-150', row.open ? 'rotate-90' : '']"
+          :class="['size-4 motion-safe:transition-transform motion-safe:duration-(--dur-fast)', row.open ? 'rotate-90' : '']"
           aria-hidden="true"
         />
       </button>
@@ -132,14 +136,14 @@ const pressHandlers = computed(() =>
             :disabled="locked"
             @click="open({ kind: 'create', parentId: row.id })"
           >
-            <Plus class="size-3.5" aria-hidden="true" />
+            <Plus class="size-4" aria-hidden="true" />
           </button>
           <RowMenu ref="rowMenu" :class="actionSize" :label="row.name" :actions="actions" @select="select" />
         </span>
       </template>
       <span
         v-if="row.pieces !== null"
-        class="shrink-0 text-xs font-bold text-subtle-foreground tabular-nums"
+        class="shrink-0 text-xs font-semibold text-subtle-foreground tabular-nums"
       >
         {{ piecesLabel(row.pieces) }}
       </span>
@@ -148,7 +152,7 @@ const pressHandlers = computed(() =>
       v-if="row.open"
       :class="[
         'flex flex-col gap-0.5',
-        indents ? ['border-l border-tree-line pl-1', panel ? 'ml-3' : 'ml-[21px]'] : '',
+        indents ? ['border-l border-tree-line pl-1', panel ? 'ml-3' : 'ml-5'] : '',
       ]"
     >
       <FolderTreeNode

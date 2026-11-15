@@ -63,7 +63,7 @@ async function create(): Promise<void> {
       </template>
     </ScreenHeader>
     <ScreenBody>
-      <div v-if="loading || (snapshot === null && state.current !== null && !failureKey)" class="grid grid-cols-1 gap-3.5" aria-hidden="true">
+      <div v-if="loading || (snapshot === null && state.current !== null && !failureKey)" class="grid grid-cols-1 gap-4" aria-hidden="true">
         <Skeleton class="h-11 rounded-field" />
         <Skeleton class="h-40 rounded-card" />
       </div>
@@ -83,7 +83,7 @@ async function create(): Promise<void> {
             class="h-11 pl-9"
           />
         </div>
-        <p v-if="offlineList" class="text-[13px] text-muted-foreground">{{ $t('intakes.offlineList') }}</p>
+        <p v-if="offlineList" class="text-sm text-muted-foreground">{{ $t('intakes.offlineList') }}</p>
         <EmptyState v-if="noMatch" :text="$t('intakes.noMatch')" />
         <IntakeList v-else :rows="rows" />
       </template>

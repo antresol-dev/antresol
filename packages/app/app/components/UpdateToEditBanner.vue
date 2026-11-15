@@ -7,6 +7,6 @@ const { state } = useWorkspace()
 <template>
   <div v-if="state.readOnly === 'schema_newer'" role="status" class="mt-1 rounded-field bg-chip px-3 py-2">
     <p class="text-sm font-semibold text-foreground">{{ $t('updateBanner.title') }}</p>
-    <p class="text-[13px] text-muted-foreground">{{ $t('updateBanner.text') }}</p>
+    <p class="text-sm text-muted-foreground">{{ $t('updateBanner.text') }}</p>
   </div>
 </template>

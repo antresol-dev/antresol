@@ -104,12 +104,12 @@ async function save(): Promise<void> {
 
 <template>
   <AppSheet v-model:open="open" :title="$t('variantValues.title')" :summary="summary" :locked="saving">
-    <div class="mt-3.5 grid gap-3.5">
+    <div class="mt-4 grid gap-4">
       <p v-if="axes.length === 0" class="text-sm text-muted-foreground">{{ $t('variantValues.empty') }}</p>
       <div v-else class="overflow-x-auto">
         <table class="w-full border-separate border-spacing-x-2 border-spacing-y-1.5 text-sm">
           <thead>
-            <tr class="text-left text-[13px] text-subtle-foreground">
+            <tr class="text-left text-xs text-subtle-foreground">
               <th v-for="a in axes" :key="a.attributeId" scope="col" class="min-w-32 font-semibold">{{ a.name }}</th>
             </tr>
           </thead>
@@ -135,7 +135,7 @@ async function save(): Promise<void> {
           </tbody>
         </table>
       </div>
-      <ul v-if="clashes.length > 0" role="alert" class="grid gap-1.5 text-sm text-destructive">
+      <ul v-if="clashes.length > 0" role="alert" class="grid gap-2 text-sm text-destructive">
         <li v-for="c in clashes" :key="c.row.id" class="flex flex-wrap items-center justify-between gap-2">
           {{ $t(c.clash.archived ? 'variantValues.inArchive' : 'variantValues.exists', { label: c.row.label }) }}
           <Button

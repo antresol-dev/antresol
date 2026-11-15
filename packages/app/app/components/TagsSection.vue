@@ -40,6 +40,13 @@ const sheetOpen = (kinds: Target['kind'][]) =>
 const formOpen = sheetOpen(['create', 'rename'])
 const deleteOpen = sheetOpen(['delete'])
 
+const usage = shallowRef<{ kind: 'tag'; id: string; name: string } | null>(null)
+const usageOpen = ref(false)
+function showUsage(tag: Tag): void {
+  usage.value = { kind: 'tag', id: tag.id, name: tag.name }
+  usageOpen.value = true
+}
+
 const actions = [
   { key: 'rename', label: 'dictionaries.rename', icon: Pencil },
   { key: 'delete', label: 'dictionaries.delete', icon: Trash2, destructive: true },
@@ -89,7 +96,7 @@ async function remove(): Promise<void> {
 <template>
   <section class="grid min-w-0 gap-2" aria-labelledby="dictionaries-tags">
     <div class="flex min-h-11 items-center justify-between gap-2">
-      <h2 id="dictionaries-tags" class="text-[17px] font-bold tracking-[-0.01em] text-foreground">{{ $t('dictionaries.tags') }}</h2>
+      <h2 id="dictionaries-tags" class="text-base font-semibold tracking-[-0.01em] text-foreground">{{ $t('dictionaries.tags') }}</h2>
       <!-- Thinner than the default raised button (R(3,7), 40 px): it must not outweigh the section's heading. -->
       <Button variant="ghost" class="raised-sm h-10" :disabled="locked" @click="open({ kind: 'create' })">
         <Plus class="size-4" aria-hidden="true" />
@@ -100,10 +107,12 @@ async function remove(): Promise<void> {
       <li
         v-for="row in rows"
         :key="row.tag.id"
-        class="relative flex min-h-[54px] items-center gap-3 px-3.5 py-1.5 not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-3.5 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
+        class="relative flex min-h-14 items-center gap-3 pr-3 not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
       >
-        <span class="min-w-0 grow truncate text-[15px] font-bold">{{ row.tag.name }}</span>
-        <span class="shrink-0 text-[13px] text-muted-foreground">{{ $t('dictionaries.itemCount', row.itemCount) }}</span>
+        <button type="button" class="flex min-h-14 min-w-0 grow items-center gap-3 py-1.5 pl-3 text-left" @click="showUsage(row.tag)">
+          <span class="min-w-0 grow truncate text-base font-semibold">{{ row.tag.name }}</span>
+          <span class="shrink-0 text-sm text-muted-foreground">{{ $t('dictionaries.itemCount', row.itemCount) }}</span>
+        </button>
         <RowMenu
           class="size-11"
           :label="row.tag.name"
@@ -114,13 +123,14 @@ async function remove(): Promise<void> {
     </ul>
     <p v-else class="text-sm text-muted-foreground">{{ $t('dictionaries.noTags') }}</p>
 
+    <UsedBySheet v-model:open="usageOpen" :target="usage" />
     <AppSheet
       v-model:open="formOpen"
       :title="$t(shown?.kind === 'rename' ? 'dictionaries.renameTitle' : 'dictionaries.addTitle')"
       :locked="busy"
       initial-focus="#tag-name"
     >
-      <form class="grid gap-3.5" novalidate @submit.prevent="submit">
+      <form class="grid gap-4" novalidate @submit.prevent="submit">
         <div class="grid gap-1.5">
           <Label for="tag-name">{{ $t('form.name') }}</Label>
           <Input

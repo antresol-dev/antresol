@@ -10,7 +10,9 @@
     "settings": "Settings",
     "menu": "Menu",
     "back": "Back",
-    "forward": "Forward"
+    "forward": "Forward",
+    "up": "Up to {name}",
+    "more": "More actions"
   },
   "intakes": {
     "title": "Intakes",
@@ -165,7 +167,7 @@
     "title": "Update to keep editing",
     "text": "A newer Antresol updated this source. Changes are off until this app updates."
   },
-  "tree": { "expand": "Expand {name}", "collapse": "Collapse {name}", "resize": "Resize the folder tree" },
+  "tree": { "expand": "Expand {name}", "collapse": "Collapse {name}", "resize": "Resize the folder tree", "collapseAll": "Collapse all", "expandAll": "Expand all" },
   "search": {
     "label": "Search",
     "field": "Search {name}",
@@ -288,6 +290,20 @@
     "balance": "→ {amount}"
   },
   "form": { "name": "Name", "description": "Description", "optional": "Optional" },
+  "iconPicker": {
+    "title": "Icon",
+    "search": "Search icons",
+    "none": "No icon",
+    "empty": "No icons match.",
+    "loading": "Loading icons",
+    "field": "Icon",
+    "noneValue": "None",
+    "choose": "Choose icon",
+    "tileTitle": "Photo or icon",
+    "photo": "Photo",
+    "icon": "Icon",
+    "remove": "Remove icon"
+  },
   "stockForm": {
     "title": { "receive": "Receive", "use": "Use", "set": "Count", "transfer": "Move stock" },
     "submit": { "receive": "Receive", "use": "Use", "set": "Save count", "transfer": "Move" },
@@ -350,6 +366,7 @@
     "progress": "{n} / {total}",
     "noStore": "Set up a photo store in this source’s settings to attach photos",
     "noStoreLink": "Open source settings",
+    "emptyHint": "No photo yet. Add one to spot this item at a glance.",
     "viewer": "Photos",
     "counter": "{n} / {total}",
     "previous": "Previous photo",
@@ -805,6 +822,9 @@
     "attributes": "Attributes",
     "units": "Units",
     "itemCount": "{count} item | {count} items",
+    "usedByTitle": "Used by {count} item | Used by {count} items",
+    "usedByArchived": "+{count} in the archive | +{count} in the archive",
+    "usedByEmpty": "Not used by any item yet",
     "noTags": "No tags yet.",
     "noAttributes": "No attributes yet.",
     "edit": "Edit",

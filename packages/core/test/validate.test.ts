@@ -67,6 +67,22 @@ describe('validateCommand', () => {
     expect(code({ type: 'folder.update', id: 'F', name: ' ' })).toBe('name_required')
   })
 
+  it('icons: null or a lowercase name of 1 to 40 letters, digits and hyphens', () => {
+    for (const icon of [null, 'microchip', 'package-2', 'a', 'x'.repeat(40)]) {
+      expect(code(newItem({ icon }))).toBeNull()
+      expect(code({ type: 'item.update', id: 'i1', icon })).toBeNull()
+      expect(code({ type: 'folder.update', id: 'F', icon })).toBeNull()
+      expect(code({ type: 'folder.create', id: U('8'), inventoryId: 'inv', parentId: null, name: 'N', description: null, icon })).toBeNull()
+    }
+    for (const icon of ['', 'Microchip', 'chip_2', 'chip 2', 'x'.repeat(41), 'чип', '../x', 5, true] as unknown as string[]) {
+      expect(code(newItem({ icon }))).toBe('invalid_option')
+      expect(code({ type: 'item.update', id: 'i1', icon })).toBe('invalid_option')
+      expect(code({ type: 'folder.update', id: 'F', icon })).toBe('invalid_option')
+      expect(code({ type: 'folder.create', id: U('8'), inventoryId: 'inv', parentId: null, name: 'N', description: null, icon })).toBe('invalid_option')
+    }
+    expect(code(newItem())).toBeNull()
+  })
+
   it('normalizeCommand trims names, symbols, options, units; empty description is null', () => {
     const n = normalizeCommand(newItem({ name: '  TL072 ', description: '  ' })) as Extract<Command, { type: 'item.create' }>
     expect(n.name).toBe('TL072')

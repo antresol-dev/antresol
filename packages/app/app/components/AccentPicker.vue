@@ -53,7 +53,7 @@ async function choose(value: unknown): Promise<void> {
       v-else
       :model-value="appearance.accent.value ?? DEFAULT"
       aria-labelledby="accent-label"
-      class="flex flex-wrap items-center gap-2.5"
+      class="flex flex-wrap items-center gap-3"
       @update:model-value="choose"
     >
       <RadioGroupItem

@@ -9,7 +9,7 @@ import {
   formatAttributeValue,
   itemAxes,
   resolveUnit,
-  variantLabel,
+  variantDisplayLabel,
   type Folder,
   type Id,
   type InventorySnapshot,
@@ -30,6 +30,8 @@ export interface Crumb {
 export interface FolderRow {
   id: Id
   name: string
+  /** The folder's icon name; null when none. */
+  icon: string | null
   /** Pieces in stock over the active subtree (items counted in pcs only); null when no such item is in it. */
   pieces: Quantity | null
 }
@@ -45,6 +47,12 @@ export interface ListBucket {
 export interface ItemRow {
   id: Id
   name: string
+  /** The name of the item's folder (its thumbnail's letters); null in the inventory root. */
+  folderName: string | null
+  /** The item's own icon name; null when none. */
+  icon: string | null
+  /** The icon name of the item's folder (the default for its items); null when none or in the root. */
+  folderIcon: string | null
   description: string | null
   variantCount: number
   number: string
@@ -135,7 +143,7 @@ function buildIndex(s: InventorySnapshot): Index {
   const activeVariantCount = new Map<Id, number>()
   const itemVariants = new Map<Id, Variant[]>()
   for (const v of s.variants) {
-    variants.set(v.id, { name: variantLabel(s, v), archived: v.archivedAt !== null })
+    variants.set(v.id, { name: variantDisplayLabel(s, v), archived: v.archivedAt !== null })
     if (v.archivedAt === null) {
       activeVariantCount.set(v.itemId, (activeVariantCount.get(v.itemId) ?? 0) + 1)
       push(itemVariants, v.itemId, v)
@@ -293,11 +301,17 @@ function listBuckets(s: InventorySnapshot, ix: Index, item: Item): { buckets: Li
   return { buckets: all.slice(0, LIST_BUCKETS), moreBuckets: Math.max(0, all.length - LIST_BUCKETS) }
 }
 
+const folderIconOf = (ix: Index, item: Item): string | null => (item.folderId === null ? null : (ix.folders.get(item.folderId)?.icon ?? null))
+const folderNameOf = (ix: Index, item: Item): string | null => (item.folderId === null ? null : (ix.folders.get(item.folderId)?.name ?? null))
+
 function itemRow(s: InventorySnapshot, ix: Index, item: Item): ItemRow {
   const quantity = itemQuantity(ix, item.id)
   return {
     id: item.id,
     name: item.name,
+    folderName: folderNameOf(ix, item),
+    icon: item.icon ?? null,
+    folderIcon: folderIconOf(ix, item),
     description: item.description,
     variantCount: ix.activeVariantCount.get(item.id) ?? 0,
     ...suffixAmount(quantity, unitOf(s, item)),
@@ -327,6 +341,7 @@ export function folderView(s: InventorySnapshot, folderId: Id | null): FolderVie
     folders: (ix.childFolders.get(folderId) ?? []).map((f) => ({
       id: f.id,
       name: f.name,
+      icon: f.icon ?? null,
       pieces: ix.subtreePieces.get(f.id) ?? null,
     })),
     items: (ix.folderItems.get(folderId) ?? []).map((i) => itemRow(s, ix, i)),
@@ -348,6 +363,12 @@ export interface SearchRow {
   unit: string
   outOfStock: boolean
   path: string
+  /** The name of the item's folder (its thumbnail's letters); null in the inventory root. */
+  folderName: string | null
+  /** The item's own icon name; null when none. */
+  icon: string | null
+  /** The icon name of the item's folder (the default for its items); null when none or in the root. */
+  folderIcon: string | null
   /** The matched variant's photo, else the item's cover. */
   cover: PhotoRef | null
   /** The item's pinned values (as ItemRow.pinned). */
@@ -377,6 +398,9 @@ export function searchRows(s: InventorySnapshot, hits: SearchHit[]): SearchRow[]
       ...amount(s, item, quantity),
       amount: formatAmount(quantity, unitOf(s, item)),
       outOfStock: isEmpty(quantity),
+      folderName: folderNameOf(ix, item),
+      icon: item.icon ?? null,
+      folderIcon: folderIconOf(ix, item),
       path: item.folderId === null ? '' : pathOf(ix, item.folderId).map((f) => f.name).join(' / '),
       cover: (variant && hit.variantId !== null ? ix.variantCovers.get(hit.variantId) : undefined) ?? ix.covers.get(item.id) ?? null,
       pinned: ix.pinned.get(item.id) ?? [],
@@ -475,4 +499,65 @@ export function folderChoices(s: InventorySnapshot, selected: Id | null): MoveTa
   }
   walk(null, 1)
   return out
+}
+
+export type UsageTarget = { kind: 'tag' | 'attribute' | 'unit'; id: string }
+export interface UsedByRow {
+  id: Id
+  name: string
+  /** The name of the item's folder (its thumbnail's letters); null in the inventory root. */
+  folderName: string | null
+  /** The item's own icon name; null when none. */
+  icon: string | null
+  /** The icon name of the item's folder (the default for its items); null when none or in the root. */
+  folderIcon: string | null
+  /** Folder names from the root, " / "-joined; '' in the inventory root. */
+  path: string
+  cover: PhotoRef | null
+}
+
+/** Whether the item uses the target: a tag on it, its unit key, or an attribute row on it (an axis or a value, even an
+ *  empty one: the same rule as the dictionary's counts). */
+function usesTarget(item: InventorySnapshot['items'][number], target: UsageTarget, attributeItems: Set<Id>): boolean {
+  return target.kind === 'tag' ? item.tagIds.includes(target.id) : target.kind === 'unit' ? item.unitKey === target.id : attributeItems.has(item.id)
+}
+
+function attributeItemIds(s: InventorySnapshot, target: UsageTarget): Set<Id> {
+  const ids = new Set<Id>()
+  if (target.kind === 'attribute') for (const a of s.itemAttributes) if (a.attributeId === target.id) ids.add(a.itemId)
+  return ids
+}
+
+/** Active items that use a tag, an attribute (an attribute row on the item: a value, even an empty one, or an axis) or a
+ *  unit (a unit key: a built-in's or a custom unit's `custom:<id>`), by name. Archived items and those under an archived
+ *  folder are left out (see usedByArchivedCount). */
+export function usedBy(s: InventorySnapshot, target: UsageTarget): UsedByRow[] {
+  const ix = snapshotIndex(s)
+  const used = attributeItemIds(s, target)
+  const rows: UsedByRow[] = []
+  for (const item of s.items) {
+    if (item.archivedAt !== null) continue
+    const path = item.folderId === null ? [] : pathOf(ix, item.folderId)
+    if (item.folderId !== null && path.length === 0) continue
+    if (!usesTarget(item, target, used)) continue
+    rows.push({
+      id: item.id,
+      name: item.name,
+      folderName: folderNameOf(ix, item),
+      icon: item.icon ?? null,
+      folderIcon: folderIconOf(ix, item),
+      path: path.map((f) => f.name).join(' / '),
+      cover: ix.covers.get(item.id) ?? null,
+    })
+  }
+  return rows.sort(byName)
+}
+
+/** How many items use the target but are not in usedBy's list (archived, or under an archived folder): the rest of the
+ *  dictionary row's count. */
+export function usedByArchivedCount(s: InventorySnapshot, target: UsageTarget): number {
+  const used = attributeItemIds(s, target)
+  let all = 0
+  for (const item of s.items) if (usesTarget(item, target, used)) all++
+  return all - usedBy(s, target).length
 }

@@ -207,15 +207,15 @@ const retryErrorKey = computed(() =>
       </template>
     </ScreenHeader>
     <ScreenBody>
-      <div v-if="committedElsewhere" class="grid gap-2 rounded-field border border-warning px-3.5 py-3 text-sm" role="alert">
-        <p class="flex items-center gap-2 font-bold"><TriangleAlert class="size-4 shrink-0 text-warning" aria-hidden="true" />{{ $t('intakes.screen.committedTitle') }}</p>
+      <div v-if="committedElsewhere" class="grid gap-2 rounded-field border border-warning px-3 py-3 text-sm" role="alert">
+        <p class="flex items-center gap-2 font-semibold"><TriangleAlert class="size-4 shrink-0 text-warning" aria-hidden="true" />{{ $t('intakes.screen.committedTitle') }}</p>
         <p class="text-muted-foreground">{{ $t('intakes.screen.committedText') }}</p>
         <div>
           <Button variant="outline" class="h-11" :disabled="resolving" @click="resolve('takeTheirs')">{{ $t('intakes.screen.discard') }}</Button>
         </div>
       </div>
-      <div v-else-if="changedElsewhere" class="grid gap-2 rounded-field border border-warning px-3.5 py-3 text-sm" role="alert">
-        <p class="flex items-center gap-2 font-bold"><TriangleAlert class="size-4 shrink-0 text-warning" aria-hidden="true" />{{ $t('intakes.screen.changedTitle') }}</p>
+      <div v-else-if="changedElsewhere" class="grid gap-2 rounded-field border border-warning px-3 py-3 text-sm" role="alert">
+        <p class="flex items-center gap-2 font-semibold"><TriangleAlert class="size-4 shrink-0 text-warning" aria-hidden="true" />{{ $t('intakes.screen.changedTitle') }}</p>
         <p class="text-muted-foreground">{{ $t('intakes.screen.changedText') }}</p>
         <div class="flex flex-wrap gap-2">
           <Button variant="outline" class="h-11" :disabled="resolving || state.readOnly === 'schema_newer'" @click="resolve('keepMine')">{{ $t('intakes.screen.keepMine') }}</Button>
@@ -225,24 +225,24 @@ const retryErrorKey = computed(() =>
 
       <button
         type="button"
-        class="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-field px-3.5 text-left text-[13px] text-muted-foreground transition-colors duration-150 hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none"
+        class="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-field px-3 text-left text-sm text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none"
         :disabled="readOnly"
         @click="editingHeader = true"
       >
         <span class="min-w-0 grow wrap-anywhere">
           {{ headerLine }}<template v-if="local.header.note"> · {{ local.header.note }}</template>
         </span>
-        <Pencil class="size-3.5 shrink-0 text-icon" aria-hidden="true" />
+        <Pencil class="size-4 shrink-0 text-icon" aria-hidden="true" />
       </button>
 
       <section class="grid min-w-0 grid-cols-1 gap-2">
-        <h2 class="section-label px-1 text-[13px]">{{ $t('intakes.lines', lineCount) }}</h2>
+        <h2 class="section-label px-1 text-xs">{{ $t('intakes.lines', lineCount) }}</h2>
         <EmptyState v-if="lineCount === 0" :text="$t('intakes.screen.noLines')" />
         <ul v-else class="surface-list">
           <li
             v-for="line in content.lines"
             :key="line.id"
-            class="relative not-first:before:absolute not-first:before:top-0 not-first:before:right-3.5 not-first:before:left-3.5 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
+            class="relative not-first:before:absolute not-first:before:top-0 not-first:before:right-3 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
           >
             <IntakeLineRow
               :line="line"

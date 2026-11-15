@@ -74,7 +74,7 @@ defineExpose({
         :key="a.key"
         :disabled="a.disabled"
         :variant="a.destructive ? 'destructive' : 'default'"
-        class="min-h-11 gap-2.5 px-2.5 font-semibold"
+        class="min-h-11 gap-3 px-3 font-semibold"
         @select="emit('select', a.key)"
       >
         <component :is="a.icon" class="size-4" aria-hidden="true" />
@@ -91,13 +91,13 @@ defineExpose({
           :disabled="a.disabled"
           :class="[
             // A row tile (14); its icon square 4 px in stays concentric (10).
-            'pressable flex min-h-11 w-full items-center gap-3 px-1 py-1 text-left text-[15px] font-bold disabled:pointer-events-none disabled:opacity-50',
+            'pressable flex min-h-11 w-full items-center gap-3 px-1 py-1 text-left text-base font-semibold disabled:pointer-events-none disabled:opacity-50',
             a.destructive ? 'text-destructive' : '',
           ]"
           @click="choose(a.key)"
         >
           <span class="grid size-9 shrink-0 place-items-center rounded-icon bg-chip">
-            <component :is="a.icon" class="size-[18px]" aria-hidden="true" />
+            <component :is="a.icon" class="size-5" aria-hidden="true" />
           </span>
           <span class="min-w-0 truncate">{{ a.label }}</span>
         </button>

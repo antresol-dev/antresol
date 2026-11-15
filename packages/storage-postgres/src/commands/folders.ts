@@ -7,14 +7,14 @@ export function folderStatements(c: FolderCommand, actor: Actor): Statement[] {
   switch (c.type) {
     case 'folder.create':
       return [
-        sql`insert into folders (id, inventory_id, parent_id, name, description, created_by, updated_by)
-            values (${c.id}, ${c.inventoryId}, ${c.parentId}, ${c.name}, ${c.description}, ${actor.device}, ${actor.device})
+        sql`insert into folders (id, inventory_id, parent_id, name, description, icon, created_by, updated_by)
+            values (${c.id}, ${c.inventoryId}, ${c.parentId}, ${c.name}, ${c.description}, ${c.icon ?? null}, ${actor.device}, ${actor.device})
             on conflict (id) do nothing`,
       ]
     case 'folder.update':
       return [
         sql`update folders
-            set ${updateSet({ name: c.name, description: c.description, updated_by: actor.device })}, updated_at = now()
+            set ${updateSet({ name: c.name, description: c.description, icon: c.icon, updated_by: actor.device })}, updated_at = now()
             where id = ${c.id}`,
       ]
     case 'folder.move':

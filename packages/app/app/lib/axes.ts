@@ -1,4 +1,4 @@
-import { addAxisPreview, duplicateOf, formatAttributeValue, formatNumberValue, parseNumberValue, variantLabel, type AttributeKind, type AxisRemoval, type Command, type Id, type InventorySnapshot } from '@antresol/core'
+import { addAxisPreview, duplicateOf, formatAttributeValue, formatNumberValue, parseNumberValue, variantDisplayLabel, type AttributeKind, type AxisRemoval, type Command, type Id, type InventorySnapshot } from '@antresol/core'
 import { parseNameList } from './lists'
 
 /** The unit of a number attribute is at most this many characters (the same limit as core's). */
@@ -71,7 +71,7 @@ export function axisRemovalNotice(s: InventorySnapshot, preview: AxisRemoval): A
     return {
       kind: 'blocked',
       messageKey: `errors.domain.${preview.blocked}`,
-      groups: preview.blocked === 'duplicate_variant' ? preview.collisions.map((g) => g.map((v) => variantLabel(s, v)).join(', ')) : [],
+      groups: preview.blocked === 'duplicate_variant' ? preview.collisions.map((g) => g.map((v) => variantDisplayLabel(s, v)).join(', ')) : [],
     }
   }
   if (preview.removedValues.length === 0) return { kind: 'none' }
@@ -81,7 +81,7 @@ export function axisRemovalNotice(s: InventorySnapshot, preview: AxisRemoval): A
     sharedValue: preview.sharedValue,
     values: preview.removedValues.map((r) => {
       const v = byId.get(r.variantId)
-      return { variantId: r.variantId, label: v ? variantLabel(s, v) : '', value: r.value }
+      return { variantId: r.variantId, label: v ? variantDisplayLabel(s, v) : '', value: r.value }
     }),
   }
 }

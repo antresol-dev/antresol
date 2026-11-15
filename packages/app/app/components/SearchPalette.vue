@@ -260,7 +260,7 @@ function onTouchEnd(event: TouchEvent): void {
 
 // A match is a square chip inside the text; keys are chips (radius scale, spec 4.2).
 const markClass = 'rounded-none bg-chip text-foreground'
-const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-subtle-foreground'
+const kbdClass = 'rounded-chip bg-chip px-1.5 text-xs font-semibold text-subtle-foreground'
 </script>
 
 <template>
@@ -291,17 +291,17 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
           :class="
             desktop
               ? 'flex shrink-0 items-center border-b border-divider px-4 py-1.5'
-              : 'flex shrink-0 items-center gap-1.5 pt-1 pr-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pl-2.5'
+              : 'flex shrink-0 items-center gap-1.5 pt-1 pr-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pl-3'
           "
         >
           <div
             :class="[
-              'flex min-w-0 flex-1 items-center gap-2.5',
+              'flex min-w-0 flex-1 items-center gap-3',
               // A plain field on the phone: colour belongs to the accent button only.
-              desktop ? 'min-h-11' : 'h-[50px] rounded-field border border-input bg-field pr-0.5 pl-3.5',
+              desktop ? 'min-h-11' : 'h-14 rounded-field border border-input bg-field pr-0.5 pl-3',
             ]"
           >
-            <Search class="size-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />
+            <Search class="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <input
               ref="input"
               v-model="query"
@@ -333,7 +333,7 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
             </button>
             <span
               v-if="desktop && inventoryName"
-              class="max-w-44 shrink-0 truncate rounded-full bg-accent-soft px-2 py-0.5 text-xs font-bold text-accent-soft-foreground"
+              class="max-w-44 shrink-0 truncate rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent-soft-foreground"
             >
               {{ inventoryName }}
             </span>
@@ -341,7 +341,7 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
           <button
             v-if="!desktop"
             type="button"
-            class="pressable h-11 shrink-0 px-2 font-bold text-accent-ink"
+            class="pressable h-11 shrink-0 px-2 font-semibold text-accent-ink"
             @click="paletteOpen = false"
           >
             {{ $t('ui.cancel') }}
@@ -353,7 +353,7 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
           ref="scroller"
           :class="
             desktop
-              ? 'min-h-0 max-h-[380px] overflow-y-auto overscroll-contain p-1.5'
+              ? 'min-h-0 max-h-[380px] overflow-y-auto overscroll-contain p-2'
               : 'flex min-h-0 flex-1 flex-col-reverse overflow-y-auto overscroll-contain p-2'
           "
         >
@@ -367,7 +367,7 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
             >
               <div
                 :id="`${listId}-${group.key}`"
-                class="px-2.5 pt-2 pb-1 text-[11px] font-extrabold tracking-[0.05em] text-muted-foreground uppercase"
+                class="px-3 pt-2 pb-1 text-xs font-semibold tracking-[0.05em] text-muted-foreground uppercase"
               >
                 {{ groupLabels[group.key] }}
               </div>
@@ -380,7 +380,7 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
                 :class="[
                   // The selected option is a selected row (spec 4.1): accent gradient, text and icons in its ink.
                   // min-w-0 and the one-column grids above: a long name truncates instead of widening the list past its edge.
-                  'flex min-h-11 min-w-0 cursor-pointer items-center gap-2.5 rounded-field px-3.5 select-none',
+                  'flex min-h-11 min-w-0 cursor-pointer items-center gap-3 rounded-field px-3 select-none',
                   desktop ? 'py-1.5' : 'py-2',
                   row.key === selected?.key ? 'row-selected' : '',
                 ]"
@@ -389,10 +389,10 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
                 @click="run(row)"
               >
                 <template v-if="row.kind === 'item'">
-                  <ItemThumb :name="row.hit.name" :cover="row.hit.cover" class="size-8 rounded-icon text-xs" />
+                  <ItemThumb :id="row.hit.itemId" :folder-name="row.hit.folderName" :icon="row.hit.icon" :folder-icon="row.hit.folderIcon" :cover="row.hit.cover" class="size-9 rounded-thumb text-xs" />
                   <span class="flex min-w-0 flex-1 flex-col">
                     <span class="flex min-w-0 items-center gap-1.5">
-                      <span class="min-w-[min(7.5rem,100%)] truncate text-sm font-bold" :class="row.hit.outOfStock && 'text-dimmed-foreground'">
+                      <span class="min-w-[min(7.5rem,100%)] truncate text-sm font-semibold" :class="row.hit.outOfStock && 'text-dimmed-foreground'">
                         <template v-for="(p, i) in row.name" :key="i"><mark v-if="p.match" :class="markClass">{{ p.text }}</mark><template v-else>{{ p.text }}</template></template>
                         <span v-if="row.variant" class="font-semibold text-muted-foreground">
                           · <template v-for="(p, i) in row.variant" :key="i"><mark v-if="p.match" :class="markClass">{{ p.text }}</mark><template v-else>{{ p.text }}</template></template>
@@ -401,14 +401,17 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
                       <span
                         v-for="(value, i) in row.hit.pinned"
                         :key="`pin${i}`"
-                        class="max-w-28 min-w-0 shrink truncate rounded-chip bg-chip px-1.5 py-px text-[11px] font-semibold text-subtle-foreground"
+                        class="max-w-28 min-w-0 shrink truncate rounded-chip bg-chip px-1.5 py-px text-xs font-semibold text-subtle-foreground"
                       >{{ value }}</span>
                     </span>
                     <span v-if="row.hit.path" class="truncate text-xs font-semibold text-muted-foreground">{{ row.hit.path }}</span>
                   </span>
-                  <span class="shrink-0 text-sm font-extrabold tabular-nums" :class="row.hit.outOfStock && 'text-muted-foreground'">
-                    {{ row.hit.number }}
-                    <span class="text-xs font-semibold text-muted-foreground">{{ row.hit.unit }}</span>
+                  <span class="min-w-18 shrink-0 text-right">
+                    <StockStatus v-if="row.hit.outOfStock" />
+                    <span v-else class="text-sm font-semibold tabular-nums">
+                      {{ row.hit.number }}
+                      <span class="text-xs font-semibold text-muted-foreground">{{ row.hit.unit }}</span>
+                    </span>
                   </span>
                 </template>
                 <template v-else-if="row.kind === 'nearest'">
@@ -419,7 +422,7 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
                         <span v-if="i === 1 && row.suggestion.below" aria-hidden="true"> · </span>
                         <button
                           type="button"
-                          class="font-extrabold tabular-nums underline-offset-4 hover:underline"
+                          class="font-semibold tabular-nums underline-offset-4 hover:underline"
                           :aria-label="$t('search.openNearest', { value: e.value })"
                           @click.stop="openNearest(e)"
                         >
@@ -432,14 +435,14 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
                 <template v-else-if="row.kind === 'folder'">
                   <span
                     :class="[
-                      'grid size-8 shrink-0 place-items-center rounded-icon text-accent-soft-foreground',
+                      'grid size-9 shrink-0 place-items-center rounded-thumb text-accent-soft-foreground',
                       row.key === selected?.key ? 'bg-(--selected-pill)' : 'bg-accent-soft',
                     ]"
                   >
                     <Folder class="size-4" aria-hidden="true" />
                   </span>
                   <span class="flex min-w-0 flex-1 flex-col">
-                    <span class="truncate text-sm font-bold">
+                    <span class="truncate text-sm font-semibold">
                       <template v-for="(p, i) in row.name" :key="i"><mark v-if="p.match" :class="markClass">{{ p.text }}</mark><template v-else>{{ p.text }}</template></template>
                     </span>
                     <span v-if="row.hit.path" class="truncate text-xs font-semibold text-muted-foreground">{{ row.hit.path }}</span>
@@ -448,13 +451,13 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
                 <template v-else>
                   <span
                     :class="[
-                      'grid size-8 shrink-0 place-items-center rounded-icon text-icon',
+                      'grid size-9 shrink-0 place-items-center rounded-thumb text-icon',
                       row.key === selected?.key ? 'bg-(--selected-pill)' : 'bg-chip',
                     ]"
                   >
                     <component :is="actionIcon(row.action)" class="size-4" aria-hidden="true" />
                   </span>
-                  <span class="min-w-0 flex-1 truncate text-sm font-bold">{{ row.label }}</span>
+                  <span class="min-w-0 flex-1 truncate text-sm font-semibold">{{ row.label }}</span>
                 </template>
               </div>
             </div>
@@ -467,7 +470,7 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
         <div
           v-if="desktop"
           aria-hidden="true"
-          class="flex shrink-0 gap-3.5 border-t border-divider px-3.5 py-2 text-xs font-semibold text-muted-foreground"
+          class="flex shrink-0 gap-4 border-t border-divider px-3 py-2 text-xs font-semibold text-muted-foreground"
         >
           <span><kbd :class="kbdClass">{{ $t('search.key.move') }}</kbd> {{ $t('search.hint.move') }}</span>
           <span><kbd :class="kbdClass">{{ $t('search.key.open') }}</kbd> {{ $t('search.hint.open') }}</span>

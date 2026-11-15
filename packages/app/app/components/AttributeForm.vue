@@ -105,8 +105,8 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <form class="grid gap-3.5" novalidate @submit.prevent="submit">
-    <div class="grid gap-1.5">
+  <form class="grid gap-4" novalidate @submit.prevent="submit">
+    <div class="grid gap-2">
       <Label for="attribute-name">{{ $t('form.name') }}</Label>
       <Input
         id="attribute-name"
@@ -117,7 +117,7 @@ async function submit(): Promise<void> {
         class="h-11"
       />
     </div>
-    <div class="grid gap-1.5">
+    <div class="grid gap-2">
       <Label id="attribute-kind-label">{{ $t('attributeForm.type') }}</Label>
       <RadioGroup
         v-model="kind"
@@ -128,30 +128,30 @@ async function submit(): Promise<void> {
         <label
           v-for="k in ['text', 'enum', 'number'] as const"
           :key="k"
-          class="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-chip px-3 text-sm transition-colors duration-150 hover:bg-hover"
+          class="flex min-h-11 cursor-pointer items-center gap-3 rounded-chip px-3 text-sm transition-colors duration-(--dur-fast) hover:bg-hover"
         >
           <RadioGroupItem :value="k" />
           {{ $t(k === 'text' ? 'attributeForm.text' : k === 'enum' ? 'attributeForm.list' : 'attributeForm.number') }}
         </label>
       </RadioGroup>
     </div>
-    <div v-if="kind === 'enum'" class="grid gap-1.5">
+    <div v-if="kind === 'enum'" class="grid gap-2">
       <Label for="attribute-options">{{ $t('attributeForm.options') }}</Label>
       <Textarea id="attribute-options" v-model="options" rows="3" autocomplete="off" />
-      <p class="text-[13px] text-subtle-foreground">{{ $t('attributeForm.hint') }}</p>
+      <p class="text-sm text-subtle-foreground">{{ $t('attributeForm.hint') }}</p>
     </div>
     <template v-if="kind === 'number'">
-      <div class="grid gap-1.5">
+      <div class="grid gap-2">
         <Label for="attribute-unit">{{ $t('attributeForm.unit') }}</Label>
         <Input id="attribute-unit" v-model="unit" autocomplete="off" :maxlength="MAX_UNIT_LENGTH" class="h-11" />
-        <p class="text-[13px] text-subtle-foreground">{{ $t('attributeForm.unitHint') }}</p>
+        <p class="text-sm text-subtle-foreground">{{ $t('attributeForm.unitHint') }}</p>
       </div>
       <div class="grid gap-1">
         <label class="field-text flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm font-semibold">
           {{ $t('attributeForm.siPrefixes') }}
           <Switch v-model="siPrefixes" />
         </label>
-        <p v-if="example" class="field-text text-[13px] text-subtle-foreground">{{ $t('attributeForm.siExample', { example }) }}</p>
+        <p v-if="example" class="field-text text-sm text-subtle-foreground">{{ $t('attributeForm.siExample', { example }) }}</p>
       </div>
     </template>
     <div class="grid gap-1">
@@ -159,7 +159,7 @@ async function submit(): Promise<void> {
         {{ $t('attributeForm.showInLists') }}
         <Switch v-model="pinned" :disabled="pinnedFull" aria-describedby="attribute-pinned-hint" />
       </label>
-      <p id="attribute-pinned-hint" class="field-text text-[13px] text-subtle-foreground">
+      <p id="attribute-pinned-hint" class="field-text text-sm text-subtle-foreground">
         {{ $t(pinnedFull ? 'attributeForm.pinnedFull' : 'attributeForm.showInListsHint') }}
       </p>
     </div>

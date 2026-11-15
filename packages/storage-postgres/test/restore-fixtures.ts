@@ -29,7 +29,7 @@ export async function seedRich(storage: InventoryStorage, name = 'Workshop'): Pr
   const [v1, v2, v3] = [newId(), newId(), newId()]
   await run({ type: 'inventory.create', id: inv, name, description: 'Garage', currency: 'EUR' })
   await run({ type: 'folder.create', id: a, inventoryId: inv, parentId: null, name: 'A', description: null })
-  await run({ type: 'folder.create', id: b, inventoryId: inv, parentId: a, name: 'B, "inner" {x} \\ ü', description: 'NULL' })
+  await run({ type: 'folder.create', id: b, inventoryId: inv, parentId: a, name: 'B, "inner" {x} \\ ü', description: 'NULL', icon: 'package-open' })
   await run({ type: 'folder.create', id: c, inventoryId: inv, parentId: b, name: 'C', description: null })
   await run({ type: 'folder.create', id: d, inventoryId: inv, parentId: null, name: 'D', description: null })
   await run({ type: 'tag.create', id: t1, inventoryId: inv, name: 'smd' })
@@ -40,7 +40,7 @@ export async function seedRich(storage: InventoryStorage, name = 'Workshop'): Pr
   await run({ type: 'attribute.update', id: ohm, pinned: true })
   await run({ type: 'unit.create', id: unit, inventoryId: inv, name: 'Metre', symbol: 'm', prefixPowers: [-3, 3] })
   await run({
-    type: 'item.create', id: resistor, inventoryId: inv, folderId: c, name: 'Resistor', description: '0.25 W\nline two', unitKey: 'pcs',
+    type: 'item.create', id: resistor, inventoryId: inv, folderId: c, name: 'Resistor', description: '0.25 W\nline two', icon: 'microchip', unitKey: 'pcs',
     tagIds: [t1, t2], initialReceipt: null,
   })
   await run({ type: 'item.setAttribute', itemId: resistor, attributeId: text, value: '0603' })

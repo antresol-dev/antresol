@@ -1,7 +1,7 @@
 import { mix, rgba, rot } from './color'
 import { accentOf, K, MOCKUP_DEFAULTS, S, finish } from './derive'
 import { stack } from './fonts'
-import type { StyleBuild } from './types'
+import type { StyleBuild, ThumbTones } from './types'
 
 /*
  * S7 Y2K: iridescent pastels, frosted bubbles, chrome and aqua gel buttons (the owner's board S7). The mock-up's `y2k`
@@ -28,6 +28,9 @@ import type { StyleBuild } from './types'
  *    They lie over the dark scrim, not the wallpaper: 0.62 white over it is grey, and muted text, accent ink and danger
  *    on it read 2.9–3.7:1.
  *
+ * Plan 12: the wallpaper's grid and stars carry an alpha scale (--y2k-grid) that y2k.css lowers 30 % from 1024 px; row
+ * thumbnails take six pastels round the accent's hue.
+ *
  * App surfaces set here: `sheet` (above) and `smallR` 22px (not the flat controls' 999px: the same capsules and
  * circles up to 44 px, but a tall element stays a rounded box); y2k.css caps the markup's field radius likewise.
  */
@@ -37,9 +40,12 @@ export const build: StyleBuild = (mode, accent) => {
   const exo = stack('Exo 2')
   const fg = dark ? '#EEF0FF' : '#1B1A3A'
   const muted = dark ? '#B4B8E0' : '#4E4B78'
+  // The wallpaper's grid (light) and stars (dark): white whose alpha y2k.css scales with --y2k-grid (1 by default;
+  // quieter on wide screens, where the pattern covers far more of the view).
+  const gridWhite = (alpha: number) => 'rgb(255 255 255 / calc(' + alpha + ' * var(--y2k-grid, 1)))'
   const page = dark
-    ? 'radial-gradient(rgba(255,255,255,0.55) 0.8px, transparent 1.2px) 0 0 / 38px 38px, radial-gradient(70% 50% at 20% 0%, ' + rgba(AL, 0.45) + ', transparent 60%), radial-gradient(70% 50% at 90% 60%, ' + rgba(rot(AL, 70, 0.8, 0.55), 0.35) + ', transparent 60%), #0B0D26'
-    : 'repeating-linear-gradient(0deg, rgba(255,255,255,0.4) 0 1px, transparent 1px 28px), repeating-linear-gradient(90deg, rgba(255,255,255,0.4) 0 1px, transparent 1px 28px), linear-gradient(135deg, #BAE6FD, #E9D5FF 50%, #FDE0F0)'
+    ? 'radial-gradient(' + gridWhite(0.55) + ' 0.8px, transparent 1.2px) 0 0 / 38px 38px, radial-gradient(70% 50% at 20% 0%, ' + rgba(AL, 0.45) + ', transparent 60%), radial-gradient(70% 50% at 90% 60%, ' + rgba(rot(AL, 70, 0.8, 0.55), 0.35) + ', transparent 60%), #0B0D26'
+    : 'repeating-linear-gradient(0deg, ' + gridWhite(0.4) + ' 0 1px, transparent 1px 28px), repeating-linear-gradient(90deg, ' + gridWhite(0.4) + ' 0 1px, transparent 1px 28px), linear-gradient(135deg, #BAE6FD, #E9D5FF 50%, #FDE0F0)'
   const frost = dark ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.62)'
   const gloss = dark ? 'linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0) 35%)' : 'linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0) 35%)'
   const edge = dark
@@ -132,6 +138,11 @@ export const build: StyleBuild = (mode, accent) => {
       popItemR: '14px',
       pop: dark ? 'rgba(20,22,60,0.72)' : 'rgba(255,255,255,0.72)',
       popBlur: 'blur(14px) saturate(160%)',
+      // contrast: dark, the selected radio (and checkbox, switch, progress) is --primary: the accent was 2.2-2.9:1 on the dark
+      // glass. Dark takes the accent lightened 45 % toward white with the dark ink for its check mark (the gel button keeps
+      // its paint); light keeps the accent.
+      primary: dark ? mix(AL, '#ffffff', 0.45) : AL,
+      primaryFg: dark ? '#0B0D26' : '#FFFFFF',
       popSh: dark
         ? 'inset 0 0 0 1px rgba(255,255,255,0.18), 0 12px 30px -8px rgba(0,0,0,0.6), 0 0 24px -6px ' + rgba(A, 0.6)
         : 'inset 0 0 0 1px rgba(255,255,255,0.95), 0 12px 30px -8px rgba(90,80,180,0.45)',
@@ -143,6 +154,8 @@ export const build: StyleBuild = (mode, accent) => {
       popDiv: dark ? 'rgba(255,255,255,0.1)' : 'rgba(120,110,200,0.18)',
       tr: 'background-color 160ms ease, box-shadow 160ms ease, color 160ms ease, transform 260ms cubic-bezier(0.34,1.56,0.64,1)',
       sheet: gloss + ', ' + (dark ? frost : 'rgba(255,255,255,0.85)'),
+      // Row thumbnails (plan 12): the gallery's pastels all the way round the accent's hue, 60° apart, with the body text.
+      thumbTones: [0, 60, 120, 180, 240, 300].map((deg) => ({ bg: pastel(deg), fg })) as ThumbTones,
       // Chips, row "⋯" buttons, folder icons and list thumbnails (none taller than 44 px) stay capsules and circles as
       // with the mock-up's 999px; a two-line tooltip or a skeleton block becomes a rounded box instead of a pill.
       smallR: '22px',

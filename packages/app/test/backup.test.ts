@@ -226,6 +226,42 @@ describe('parseBackup', () => {
   })
 })
 
+describe('parseBackup: icons', () => {
+  it('keeps the icons of folders and items, and refuses a name of the wrong form', async () => {
+    const { file } = await demoBackup()
+    const marked = JSON.parse(JSON.stringify(file)) as {
+      inventories: { snapshot: { folders: Rec[]; items: Rec[] } }[]
+    }
+    const snap = marked.inventories.map((e) => e.snapshot).find((x) => x.folders.length > 0 && x.items.length > 0)!
+    snap.folders[0]!.icon = 'package-open'
+    snap.items[0]!.icon = 'microchip'
+    const parsed = parseBackup(marked) as BackupFile
+    const kept = parsed.inventories.map((e) => e.snapshot).find((x) => x.folders.some((f) => f.icon !== null))!
+    expect(kept.folders[0]!.icon).toBe('package-open')
+    expect(kept.items[0]!.icon).toBe('microchip')
+    snap.items[0]!.icon = 'Not An Icon'
+    expect(parseBackup(marked)).toMatchObject({ error: 'format' })
+    snap.items[0]!.icon = 5
+    expect(parseBackup(marked)).toMatchObject({ error: 'format' })
+  })
+
+  it('reads a file of schema 6 without icons: every folder and item has none', async () => {
+    const { file } = await demoBackup()
+    const old = JSON.parse(JSON.stringify(file)) as {
+      app: { schemaVersion: number }
+      inventories: { snapshot: { folders: Rec[]; items: Rec[] } }[]
+    }
+    old.app.schemaVersion = 6
+    for (const { snapshot } of old.inventories) {
+      for (const r of [...snapshot.folders, ...snapshot.items]) delete r.icon
+    }
+    const parsed = parseBackup(old) as BackupFile
+    const rows = parsed.inventories.flatMap((e) => [...e.snapshot.folders, ...e.snapshot.items])
+    expect(rows.length).toBeGreaterThan(0)
+    expect(rows.every((r) => r.icon === null)).toBe(true)
+  })
+})
+
 describe('parseBackup: intakes', () => {
   /** The intakes file as an older schema wrote it: no intakes, movements without an intake, and (schema 4) photos
    *  without renditions, size and delete handle. */

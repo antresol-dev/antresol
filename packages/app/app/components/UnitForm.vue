@@ -82,8 +82,8 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <form class="grid gap-3.5" novalidate @submit.prevent="submit">
-    <div class="grid gap-1.5">
+  <form class="grid gap-4" novalidate @submit.prevent="submit">
+    <div class="grid gap-2">
       <Label for="unit-name">{{ $t('form.name') }}</Label>
       <Input
         id="unit-name"
@@ -94,17 +94,17 @@ async function submit(): Promise<void> {
         class="h-11"
       />
     </div>
-    <div class="grid gap-1.5">
+    <div class="grid gap-2">
       <Label for="unit-symbol">{{ $t('unitForm.symbol') }}</Label>
       <Input id="unit-symbol" v-model="symbol" autocomplete="off" class="h-11" />
     </div>
-    <fieldset class="grid gap-1.5">
+    <fieldset class="grid gap-2">
       <legend class="mb-1.5 text-sm font-medium">{{ $t('unitForm.prefixes') }}</legend>
       <div class="grid max-h-56 grid-cols-2 gap-0.5 overflow-y-auto rounded-field border border-input bg-field p-1">
         <label
           v-for="p in prefixes"
           :key="p.power"
-          class="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-chip px-3 text-sm transition-colors duration-150 hover:bg-hover"
+          class="flex min-h-11 cursor-pointer items-center gap-3 rounded-chip px-3 text-sm transition-colors duration-(--dur-fast) hover:bg-hover"
         >
           <Checkbox :model-value="powers.includes(p.power)" @update:model-value="toggle(p.power, $event === true)" />
           {{ prefixNote(p.power) }}

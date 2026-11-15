@@ -9,6 +9,7 @@ import { pricePreview, unitChoices } from '~/lib/amounts'
 import { errorMessageKey } from '~/lib/errors'
 import { clearDraft, linkNeedsAmount, saveDraft, type QuickAddDraft } from '~/lib/quick-add-draft'
 import { buildQuickAdd, existingMatches, type MatchRow } from '~/lib/quick-add'
+import { stepOnEnter } from '~/lib/sheet-keys'
 import { isUnknownOutcome } from '~/lib/unconfirmed'
 import { folderChoices, pathOf, snapshotIndex } from '~/lib/views'
 
@@ -170,18 +171,18 @@ async function send(command: ItemCreate): Promise<void> {
 </script>
 
 <template>
-  <form class="grid gap-3.5" novalidate @submit.prevent="submit">
-    <fieldset :disabled="unconfirmed" class="grid min-w-0 gap-3.5">
-      <div class="grid gap-1.5">
+  <form class="grid gap-4" novalidate @submit.prevent="submit" @keydown.enter="stepOnEnter($event, $event.currentTarget as HTMLFormElement)">
+    <fieldset :disabled="unconfirmed" class="grid min-w-0 gap-4">
+      <div class="grid gap-2">
         <Label for="quick-add-name">{{ $t('form.name') }}</Label>
         <Input id="quick-add-name" v-model="name" autocomplete="off" class="h-11" />
         <section v-if="matches.length > 0" class="grid gap-1" aria-labelledby="quick-add-existing">
           <h3 id="quick-add-existing" class="pt-1 text-xs font-semibold text-subtle-foreground">{{ $t('quickAdd.existing') }}</h3>
           <ul class="grid gap-0.5">
-            <li v-for="m in matches" :key="`${m.itemId}:${m.variantId ?? ''}`" class="flex min-h-11 items-center gap-2.5 rounded-field px-1">
-              <ItemThumb :name="m.name" :cover="m.cover" class="size-8 rounded-icon text-xs" />
+            <li v-for="m in matches" :key="`${m.itemId}:${m.variantId ?? ''}`" class="flex min-h-11 items-center gap-3 rounded-field px-1">
+              <ItemThumb :id="m.itemId" :folder-name="m.folderName" :icon="m.icon" :folder-icon="m.folderIcon" :cover="m.cover" class="size-9 rounded-thumb text-xs" />
               <span class="flex min-w-0 flex-1 flex-col">
-                <span class="truncate text-sm font-bold">
+                <span class="truncate text-sm font-semibold">
                   {{ m.name }}<span v-if="m.variantName" class="font-semibold text-muted-foreground"> · {{ m.variantName }}</span>
                 </span>
                 <span class="truncate text-xs text-muted-foreground">{{ matchLine(m) }}</span>
@@ -194,23 +195,23 @@ async function send(command: ItemCreate): Promise<void> {
         </section>
       </div>
 
-      <div class="grid gap-1.5">
+      <div class="grid gap-2">
         <Label for="quick-add-folder">{{ $t('quickAdd.folder') }}</Label>
         <button
           id="quick-add-folder"
           type="button"
           :aria-expanded="picking"
-          class="flex h-11 w-full min-w-0 items-center gap-2 rounded-field border border-input bg-field px-3 text-left text-sm transition-colors duration-150 hover:bg-hover"
+          class="flex h-11 w-full min-w-0 items-center gap-2 rounded-field border border-input bg-field px-3 text-left text-sm transition-colors duration-(--dur-fast) hover:bg-hover"
           @click="picking = !picking"
         >
           <RootMark />
           <span class="min-w-0 flex-1 truncate">{{ folderPath }}</span>
-          <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-150 motion-reduce:transition-none" :class="picking ? 'rotate-180' : ''" aria-hidden="true" />
+          <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-(--dur-fast) motion-reduce:transition-none" :class="picking ? 'rotate-180' : ''" aria-hidden="true" />
         </button>
         <FolderPickerList v-if="picking" :choices="choices" :aria-label="$t('quickAdd.chooseFolder')" @select="pick" />
       </div>
 
-      <div class="grid gap-1.5">
+      <div class="grid gap-2">
         <Label for="quick-add-amount">
           {{ $t('quickAdd.amount') }}
           <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
@@ -218,7 +219,7 @@ async function send(command: ItemCreate): Promise<void> {
         <AmountField id="quick-add-amount" v-model="amount" v-model:unit-key="unitKey" :units="units" />
       </div>
 
-      <div class="grid gap-1.5">
+      <div class="grid gap-2">
         <Label for="quick-add-price">
           {{ $t('quickAdd.price') }}
           <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
@@ -243,7 +244,7 @@ async function send(command: ItemCreate): Promise<void> {
         <p id="quick-add-price-hint" class="text-xs text-subtle-foreground">{{ $t('quickAdd.priceHint') }}</p>
       </div>
 
-      <div class="grid gap-1.5">
+      <div class="grid gap-2">
         <Label for="quick-add-url">
           {{ $t('quickAdd.url') }}
           <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
@@ -252,13 +253,13 @@ async function send(command: ItemCreate): Promise<void> {
         <p v-if="linkHint" id="quick-add-url-hint" class="text-xs text-subtle-foreground">{{ $t('quickAdd.linkNeedsAmount') }}</p>
       </div>
 
-      <div v-if="canPhoto" class="grid gap-1.5">
+      <div v-if="canPhoto" class="grid gap-2">
         <p class="field-text text-sm font-medium leading-none">
           {{ $t('quickAdd.photo') }}
           <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
         </p>
         <div v-if="preview" class="flex items-center gap-3">
-          <img :src="preview" alt="" class="size-[42px] shrink-0 rounded-thumb object-cover" >
+          <img :src="preview" alt="" class="size-9 shrink-0 rounded-thumb object-cover" >
           <span class="min-w-0 flex-1 truncate text-sm text-muted-foreground">{{ photo?.name }}</span>
           <Button type="button" variant="ghost" size="icon" class="size-11 shrink-0" :aria-label="$t('quickAdd.removePhoto')" :disabled="busy" @click="photo = null">
             <X class="size-4" aria-hidden="true" />

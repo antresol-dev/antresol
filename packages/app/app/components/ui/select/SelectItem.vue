@@ -29,7 +29,7 @@ const forwardedProps = useForwardProps(delegatedProps)
       )
     "
   >
-    <span class="absolute right-3 flex size-3.5 items-center justify-center">
+    <span class="absolute right-3 flex size-4 items-center justify-center">
       <SelectItemIndicator>
         <slot name="indicator-icon">
           <Check class="size-4" />

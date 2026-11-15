@@ -18,6 +18,8 @@ const { state } = workspace
 const existing = props.mode === 'rename' ? props.folder : null
 const name = ref(existing?.name ?? '')
 const description = ref(existing?.description ?? '')
+const icon = ref<string | null>(existing?.icon ?? null)
+const pickingIcon = ref(false)
 // New folder: where it goes, the current folder to begin with (or the root). The same list-picker as in "Add item".
 const parentId = ref<Id | null>(props.parentId)
 const picking = ref(false)
@@ -38,11 +40,11 @@ const busy = defineModel<boolean>('busy', { default: false })
 const errorKey = ref<string | null>(null)
 
 // Rename sends only what differs from the folder as it was opened: a stale form must not revert another device's edit.
-const baseline = captureBaseline({ name: existing?.name ?? '', description: existing?.description ?? null })
+const baseline = captureBaseline({ name: existing?.name ?? '', description: existing?.description ?? null, icon: existing?.icon ?? null })
 const changes = computed(() =>
   changedFields(
     baseline,
-    { name: name.value.trim(), description: description.value.trim() || null },
+    { name: name.value.trim(), description: description.value.trim() || null, icon: icon.value },
   ),
 )
 const canSubmit = computed(
@@ -67,6 +69,7 @@ async function submit(): Promise<void> {
         parentId: parentId.value,
         name: name.value.trim(),
         description: description.value.trim() || null,
+        icon: icon.value,
       })
     } else if (existing) {
       await workspace.apply({
@@ -85,8 +88,8 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <form class="grid gap-3.5" novalidate @submit.prevent="submit">
-    <div class="grid gap-1.5">
+  <form class="grid gap-4" novalidate @submit.prevent="submit">
+    <div class="grid gap-2">
       <Label for="folder-name">{{ $t('form.name') }}</Label>
       <Input
         id="folder-name"
@@ -97,28 +100,29 @@ async function submit(): Promise<void> {
         class="h-11"
       />
     </div>
-    <div v-if="mode === 'create'" class="grid gap-1.5">
+    <div v-if="mode === 'create'" class="grid gap-2">
       <Label for="folder-parent">{{ $t('folderForm.parent') }}</Label>
       <button
         id="folder-parent"
         type="button"
         :aria-expanded="picking"
-        class="flex h-11 w-full min-w-0 items-center gap-2 rounded-field border border-input bg-field px-3 text-left text-sm transition-colors duration-150 hover:bg-hover"
+        class="flex h-11 w-full min-w-0 items-center gap-2 rounded-field border border-input bg-field px-3 text-left text-sm transition-colors duration-(--dur-fast) hover:bg-hover"
         @click="picking = !picking"
       >
         <RootMark />
         <span class="min-w-0 flex-1 truncate">{{ parentPath }}</span>
-        <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-150 motion-reduce:transition-none" :class="picking ? 'rotate-180' : ''" aria-hidden="true" />
+        <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-(--dur-fast) motion-reduce:transition-none" :class="picking ? 'rotate-180' : ''" aria-hidden="true" />
       </button>
       <FolderPickerList v-if="picking" :choices="choices" :aria-label="$t('folderForm.chooseParent')" @select="pick" />
     </div>
-    <div class="grid gap-1.5">
+    <div class="grid gap-2">
       <Label for="folder-description">
         {{ $t('form.description') }}
         <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
       </Label>
       <Input id="folder-description" v-model="description" autocomplete="off" class="h-11" />
     </div>
+    <IconField v-model:picking="pickingIcon" :icon="icon" :disabled="busy || !!state.readOnly" @pick="icon = $event" />
     <p id="folder-form-error" role="alert" class="field-text text-sm text-destructive">
       <template v-if="errorKey">{{ $t(errorKey) }}</template>
     </p>

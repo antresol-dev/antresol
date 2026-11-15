@@ -57,12 +57,12 @@ async function makeQr(): Promise<void> {
 
 <template>
   <AppSheet v-model:open="open" :title="$t('pairing.shareTitle')" :summary="shown?.name" initial-focus="#pairing-code">
-    <div class="grid gap-3.5 pt-2">
+    <div class="grid gap-4 pt-2">
       <p v-if="!supported" role="alert" class="text-sm text-destructive">{{ $t('pairing.insecure') }}</p>
       <template v-else-if="!svg">
         <p class="text-sm text-subtle-foreground">{{ $t('pairing.shareStep1') }}</p>
-        <form class="grid gap-3.5" novalidate @submit.prevent="makeQr">
-          <div class="grid gap-1.5">
+        <form class="grid gap-4" novalidate @submit.prevent="makeQr">
+          <div class="grid gap-2">
             <Label for="pairing-code">{{ $t('pairing.codeField') }}</Label>
             <Input
               id="pairing-code"

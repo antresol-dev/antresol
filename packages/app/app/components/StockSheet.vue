@@ -158,14 +158,14 @@ function settle(outcome: SendOutcome): void {
     initial-focus="#stock-amount"
     :locked="busy"
   >
-    <form :key="openings" class="mt-3.5 grid gap-3.5" novalidate @submit.prevent="submit" @focusin="focusin">
-      <fieldset :disabled="unconfirmed" class="grid min-w-0 gap-3.5">
-        <div class="grid gap-1.5">
+    <form :key="openings" class="mt-4 grid gap-4" novalidate @submit.prevent="submit" @focusin="focusin">
+      <fieldset :disabled="unconfirmed" class="grid min-w-0 gap-4">
+        <div class="grid gap-2">
           <Label for="stock-amount">{{ $t(mode === 'set' ? 'stockForm.actual' : 'stockForm.amount') }}</Label>
           <AmountField id="stock-amount" v-model="amount" :unit-key="unitKey" :units="units" :invalid="errorKey === 'stockForm.invalidAmount'" />
         </div>
 
-        <div v-if="mode === 'transfer'" class="grid gap-1.5">
+        <div v-if="mode === 'transfer'" class="grid gap-2">
           <span id="stock-to-label" class="field-text text-sm leading-none font-medium">{{ $t('stockForm.moveTo') }}</span>
           <RadioGroup
             v-model="toKey"
@@ -175,7 +175,7 @@ function settle(outcome: SendOutcome): void {
             <label
               v-for="d in destinations"
               :key="d.key"
-              class="flex min-h-11 cursor-pointer items-center gap-2.5 rounded-chip px-3 text-sm transition-colors duration-150 hover:bg-hover"
+              class="flex min-h-11 cursor-pointer items-center gap-3 rounded-chip px-3 text-sm transition-colors duration-(--dur-fast) hover:bg-hover"
             >
               <RadioGroupItem :value="d.key" />
               <span class="min-w-0 flex-1 truncate">{{ d.name || $t('item.noVariant') }}</span>
@@ -184,7 +184,7 @@ function settle(outcome: SendOutcome): void {
         </div>
 
         <template v-if="mode === 'receive'">
-          <div class="grid gap-1.5">
+          <div class="grid gap-2">
             <Label for="stock-price">
               {{ $t('stockForm.price') }}
               <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
@@ -206,7 +206,7 @@ function settle(outcome: SendOutcome): void {
             </div>
             <ExpressionHint :preview="pricePreviewOf" />
           </div>
-          <div class="grid gap-1.5">
+          <div class="grid gap-2">
             <Label for="stock-url">
               {{ $t('stockForm.url') }}
               <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
@@ -215,7 +215,7 @@ function settle(outcome: SendOutcome): void {
           </div>
         </template>
 
-        <div v-if="mode !== 'transfer'" class="grid gap-1.5">
+        <div v-if="mode !== 'transfer'" class="grid gap-2">
           <Label for="stock-note">
             {{ $t('stockForm.note') }}
             <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>

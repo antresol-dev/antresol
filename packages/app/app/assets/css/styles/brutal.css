@@ -13,6 +13,10 @@
  *     text in both themes (its h.fg / p.fg), and so is what is inside it; the open row menu's "⋯" likewise.
  *  4. The tree's rows under the pointer use the row hover (rowHover: the mock-up's pale yellow in light, a dark yellow
  *     in dark, where those rows keep their light text) rather than the flat controls' pale yellow.
+ *  5. The photo thumbnails (`.photo-thumb`) take the Memphis colours in turn (nth-child), the cover stays neutral.
+ *
+ * Controls nested in a card or the selected row draw a 1.5 px line (--brutal-ring), so no more than two levels of the
+ * 2 px line meet (F8).
  */
 
 [data-style='brutal']:root {
@@ -27,7 +31,8 @@
   --brutal-ink: var(--st-card-fg);
   --brutal-ink-muted: var(--st-card-muted);
   --brutal-paper: var(--st-pill-sel-bg);
-  --brutal-ring: inset 0 0 0 2px var(--brutal-ink);
+  /* Controls nested in a card or the selected row: 1.5 px (F8), so no more than two levels of the 2 px line meet. */
+  --brutal-ring: inset 0 0 0 1.5px var(--brutal-ink);
   --ghost-hover: var(--st-row-hover);
 }
 
@@ -76,6 +81,8 @@
   --foreground: var(--brutal-ink);
   --icon: var(--brutal-ink);
   --accent-ink: var(--brutal-ink);
+  --primary: var(--brutal-ink);
+  --primary-foreground: var(--brutal-paper);
   --muted-foreground: var(--brutal-ink-muted);
   --subtle-foreground: var(--brutal-ink-muted);
   --dimmed-foreground: var(--brutal-ink-muted);
@@ -113,6 +120,10 @@
   background-color: var(--st-pill-sel-bg);
   background-image: none;
   box-shadow: var(--st-pill-sel-sh);
+}
+/* Its seam in ink too: the dark theme's cream seam all but vanished on the white pill. */
+[data-style='brutal'] :is(.raised-card, .row-selected) .pill > .pill-step + .pill-step {
+  border-left-color: var(--brutal-ink);
 }
 [data-style='brutal'] .raised-card .pill-step {
   --n-bg: var(--st-step-sel-n-bg);

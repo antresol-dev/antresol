@@ -14,11 +14,11 @@ const live = { archivedAt: null, archiveId: null }
 export const ARCHIVED = { archivedAt: '2026-02-01T00:00:00Z', archiveId: 'arch' }
 
 export function folder(id: string, name: string, parentId: string | null = null, over: Partial<Folder> = {}): Folder {
-  return { id, inventoryId: 'inv', parentId, name, description: null, ...audit, ...live, ...over }
+  return { id, inventoryId: 'inv', parentId, name, description: null, icon: null, ...audit, ...live, ...over }
 }
 
 export function item(id: string, name: string, folderId: string | null = null, over: Partial<Item> = {}): Item {
-  return { id, inventoryId: 'inv', folderId, name, description: null, unitKey: 'pcs', tagIds: [], ...audit, ...live, ...over }
+  return { id, inventoryId: 'inv', folderId, name, description: null, icon: null, unitKey: 'pcs', tagIds: [], ...audit, ...live, ...over }
 }
 
 export function variant(id: string, itemId: string, over: Partial<Variant> = {}): Variant {

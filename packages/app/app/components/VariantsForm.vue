@@ -147,9 +147,9 @@ async function restore(archiveId: Id): Promise<void> {
 </script>
 
 <template>
-  <form v-if="axes.length === 0" class="mt-3.5 grid gap-3.5" novalidate @submit.prevent="addAxis">
+  <form v-if="axes.length === 0" class="mt-4 grid gap-4" novalidate @submit.prevent="addAxis">
     <p class="text-sm text-muted-foreground">{{ $t('variantsForm.rule') }}</p>
-    <div v-if="!showCreate" class="grid gap-1.5">
+    <div v-if="!showCreate" class="grid gap-2">
       <Label for="variants-axis">{{ $t('variantsForm.axis') }}</Label>
       <Select v-model="picked" :disabled="busy">
         <SelectTrigger id="variants-axis" class="h-11 w-full">
@@ -164,11 +164,11 @@ async function restore(archiveId: Id): Promise<void> {
       </Button>
     </div>
     <template v-else>
-      <div class="grid gap-1.5">
+      <div class="grid gap-2">
         <Label for="variants-axis-name">{{ $t('form.name') }}</Label>
         <Input id="variants-axis-name" v-model="newName" autocomplete="off" class="h-11" />
       </div>
-      <div class="grid gap-1.5">
+      <div class="grid gap-2">
         <Label id="variants-axis-kind">{{ $t('attributeForm.type') }}</Label>
         <RadioGroup
           v-model="newKind"
@@ -178,20 +178,20 @@ async function restore(archiveId: Id): Promise<void> {
           <label
             v-for="k in kinds"
             :key="k"
-            class="flex min-h-11 cursor-pointer items-center gap-2 rounded-chip px-3 text-sm transition-colors duration-150 hover:bg-hover"
+            class="flex min-h-11 cursor-pointer items-center gap-2 rounded-chip px-3 text-sm transition-colors duration-(--dur-fast) hover:bg-hover"
           >
             <RadioGroupItem :value="k" />
             {{ $t(kindLabel[k]) }}
           </label>
         </RadioGroup>
       </div>
-      <div v-if="newKind === 'enum'" class="grid gap-1.5">
+      <div v-if="newKind === 'enum'" class="grid gap-2">
         <Label for="variants-axis-options">{{ $t('attributeForm.options') }}</Label>
         <Textarea id="variants-axis-options" v-model="newOptions" rows="3" autocomplete="off" />
-        <p class="text-[13px] text-subtle-foreground">{{ $t('attributeForm.hint') }}</p>
+        <p class="text-sm text-subtle-foreground">{{ $t('attributeForm.hint') }}</p>
       </div>
       <template v-if="newKind === 'number'">
-        <div class="grid gap-1.5">
+        <div class="grid gap-2">
           <Label for="variants-axis-unit">
             {{ $t('variantsForm.unit') }}
             <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
@@ -215,8 +215,8 @@ async function restore(archiveId: Id): Promise<void> {
     </Button>
   </form>
 
-  <form v-else class="mt-3.5 grid gap-3.5" novalidate @submit.prevent="submit">
-    <div class="grid gap-1.5">
+  <form v-else class="mt-4 grid gap-4" novalidate @submit.prevent="submit">
+    <div class="grid gap-2">
       <Label for="variants-names">{{ $t('variantsForm.names') }}</Label>
       <Textarea
         id="variants-names"
@@ -230,7 +230,7 @@ async function restore(archiveId: Id): Promise<void> {
         :aria-invalid="hasError || errorKey ? true : undefined"
         aria-describedby="variants-hint variants-preview variants-error"
       />
-      <p id="variants-hint" class="text-[13px] text-subtle-foreground">
+      <p id="variants-hint" class="text-sm text-subtle-foreground">
         {{ axes.length > 1 ? $t('variantsForm.hintMany', { axes: axes.map((a) => a.name).join('; ') }) : $t('variantsForm.hintOne', { axis: axes[0]?.name ?? '' }) }}
       </p>
     </div>
@@ -244,8 +244,8 @@ async function restore(archiveId: Id): Promise<void> {
         <span class="min-w-0 truncate" :class="l.error || l.duplicate || l.repeat ? 'text-muted-foreground' : 'font-semibold'">
           {{ l.label ?? l.raw }}<template v-if="l.quantityLabel"> — {{ l.quantityLabel }}</template>
         </span>
-        <span v-if="l.error" class="text-[13px] text-destructive">{{ $t(l.error) }}</span>
-        <span v-else-if="l.duplicate" class="flex items-center gap-2 text-[13px] text-subtle-foreground">
+        <span v-if="l.error" class="text-sm text-destructive">{{ $t(l.error) }}</span>
+        <span v-else-if="l.duplicate" class="flex items-center gap-2 text-sm text-subtle-foreground">
           {{ $t(l.duplicate.archived ? 'variantsForm.inArchive' : 'variantsForm.exists') }}
           <Button
             v-if="l.duplicate.archived && l.duplicate.archiveId"
@@ -259,7 +259,7 @@ async function restore(archiveId: Id): Promise<void> {
             {{ $t('variantsForm.restore') }}
           </Button>
         </span>
-        <span v-else-if="l.repeat" class="text-[13px] text-subtle-foreground">{{ $t('variantsForm.repeat') }}</span>
+        <span v-else-if="l.repeat" class="text-sm text-subtle-foreground">{{ $t('variantsForm.repeat') }}</span>
       </li>
     </ul>
     <p id="variants-error" role="alert" class="field-text text-sm text-destructive">

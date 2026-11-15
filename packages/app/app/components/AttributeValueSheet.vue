@@ -87,8 +87,8 @@ async function save(): Promise<void> {
     :title="adding ? $t('attributeSheet.addTitle') : $t('attributeSheet.editTitle', { name: attribute?.name ?? '' })"
     :locked="locked"
   >
-    <div class="mt-3.5 grid gap-3.5">
-      <div v-if="adding" class="grid gap-1.5">
+    <div class="mt-4 grid gap-4">
+      <div v-if="adding" class="grid gap-2">
         <Label for="attribute-choice">{{ $t('attributeSheet.attribute') }}</Label>
         <Select v-model="choice" :disabled="locked">
           <SelectTrigger id="attribute-choice" class="h-11 w-full">
@@ -102,7 +102,7 @@ async function save(): Promise<void> {
       </div>
       <AttributeForm v-if="creating" v-model:busy="formBusy" :attribute="null" @done="created" />
       <template v-else-if="attribute">
-        <div class="grid gap-1.5">
+        <div class="grid gap-2">
           <Label for="attribute-value">{{ $t('attributeSheet.value') }}</Label>
           <AttributeValueField
             id="attribute-value"

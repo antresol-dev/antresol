@@ -56,7 +56,7 @@ describe('theme-color from the style header', () => {
   // Literals, so the expectation is not the implementation's own formula (solidOf of the header over the page).
   it.each([
     ['base', 'light', '#FFFFFF'],
-    ['base', 'dark', '#1A1C21'],
+    ['base', 'dark', '#1E2026'],
     // A translucent header (Liquid's: 35 % white in light, 35 % of #14161E in dark) is flattened over the page colour; by
     // hand, 0.35 × header + 0.65 × the wallpaper's base (#DDE2EE light, #171D2B dark).
     ['liquid', 'light', '#E9ECF4'],

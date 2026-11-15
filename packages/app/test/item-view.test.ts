@@ -186,8 +186,8 @@ describe('itemView', () => {
     await run({ type: 'tag.create', id: audio, inventoryId, name: 'audio' })
     await run({ type: 'item.update', id: item.id, tagIds: [smd, audio] })
     expect(itemView(s, item.id)!.tags).toEqual([
-      { id: audio, name: 'audio' },
-      { id: smd, name: 'smd' },
+      { id: audio, name: 'audio', color: null },
+      { id: smd, name: 'smd', color: null },
     ])
     expect(itemView(s, ne555)!.tags).toEqual([])
   })

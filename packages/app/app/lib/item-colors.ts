@@ -32,3 +32,8 @@ export function itemColor(item: { id: string; color: string | null }): string {
 export function colorVars(hex: string): { '--c-light': string; '--c-dark': string } {
   return { '--c-light': hex, '--c-dark': darkShade(hex) }
 }
+
+/** The swatches a colour picker offers: the palette, plus the current colour when it is not one of them (MCP wrote it). */
+export function swatchChoices(current: string | null): string[] {
+  return current === null || PALETTE.includes(current) ? [...PALETTE] : [...PALETTE, current]
+}

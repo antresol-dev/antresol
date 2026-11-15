@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { errorMessageKey } from '~/lib/errors'
+import { colorVars } from '~/lib/item-colors'
 
 defineProps<{ rows: { tag: Tag; itemCount: number }[] }>()
 
@@ -19,6 +20,7 @@ const target = shallowRef<Target | null>(null)
 // The last target stays while a sheet animates out.
 const shown = shallowRef<Target | null>(null)
 const name = ref('')
+const color = ref<string | null>(null)
 const busy = ref(false)
 const errorKey = ref<string | null>(null)
 const locked = computed(() => !!state.readOnly || state.saving || busy.value)
@@ -28,6 +30,7 @@ function open(next: Target): void {
   renew()
   shown.value = next
   name.value = next.kind === 'rename' ? next.tag.name : ''
+  color.value = next.kind === 'rename' ? next.tag.color : null
   errorKey.value = null
 }
 const sheetOpen = (kinds: Target['kind'][]) =>
@@ -74,11 +77,21 @@ async function submit(): Promise<void> {
   const cur = target.value
   const snapshot = state.snapshot
   if (locked.value || !snapshot || !cur || cur.kind === 'delete') return
-  const ok = await write(
-    cur.kind === 'create'
-      ? { type: 'tag.create', id: ids.tagId, inventoryId: snapshot.inventory.id, name: name.value.trim() }
-      : { type: 'tag.rename', id: cur.tag.id, name: name.value.trim() },
-  )
+  let command: Parameters<typeof workspace.apply>[0]
+  if (cur.kind === 'create') {
+    command = { type: 'tag.create', id: ids.tagId, inventoryId: snapshot.inventory.id, name: name.value.trim(), ...(color.value ? { color: color.value } : {}) }
+  } else {
+    // One command with only what changed, so a stale sheet does not revert another device's edit.
+    const changes: { name?: string; color?: string | null } = {}
+    if (name.value.trim() !== cur.tag.name) changes.name = name.value.trim()
+    if (color.value !== cur.tag.color) changes.color = color.value
+    if (Object.keys(changes).length === 0) {
+      target.value = null
+      return
+    }
+    command = { type: 'tag.update', id: cur.tag.id, ...changes }
+  }
+  const ok = await write(command)
   if (ok) {
     target.value = null
     renew()
@@ -110,6 +123,7 @@ async function remove(): Promise<void> {
         class="relative flex min-h-14 items-center gap-3 pr-3 not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
       >
         <button type="button" class="flex min-h-14 min-w-0 grow items-center gap-3 py-1.5 pl-3 text-left" @click="showUsage(row.tag)">
+          <span v-if="row.tag.color" class="colored size-2 shrink-0 rounded-full bg-(--c)" :style="colorVars(row.tag.color)" aria-hidden="true" />
           <span class="min-w-0 grow truncate text-base font-semibold">{{ row.tag.name }}</span>
           <span class="shrink-0 text-sm text-muted-foreground">{{ $t('dictionaries.itemCount', row.itemCount) }}</span>
         </button>
@@ -142,6 +156,7 @@ async function remove(): Promise<void> {
             class="h-11"
           />
         </div>
+        <ColorSwatches v-model="color" :auto="null" :label="$t('colors.label')" :disabled="busy" />
         <p id="tag-form-error" role="alert" class="field-text text-sm text-destructive">
           <template v-if="errorKey && formOpen">{{ $t(errorKey) }}</template>
         </p>

@@ -6,14 +6,19 @@ on:
     tags: ['mcp-v*']
   workflow_dispatch:
 
-permissions:
-  contents: write
+permissions: {}
 
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       # pnpm version comes from "packageManager" in package.json.
       - uses: pnpm/action-setup@v6
@@ -27,27 +32,49 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Tag matches the package version
+        id: version
         run: |
           version=$(node -p "require('./packages/mcp/package.json').version")
           if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${GITHUB_REF_NAME}" != "mcp-v${version}" ]; then
             echo "Tag ${GITHUB_REF_NAME} does not match packages/mcp/package.json version ${version} (expected mcp-v${version})" >&2
             exit 1
           fi
-          echo "VERSION=${version}" >> "$GITHUB_ENV"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
 
       # No secrets here: the Neon suite skips itself without ANTRESOL_NEON_TEST_URL.
       - run: pnpm test
-      - run: pnpm --filter @antresol/mcp build
-      # A manual run stops here, after checking that everything builds and packs; only a tag publishes.
+      # Builds the server too, then packs. A manual run stops after the upload; only a tag publishes.
       - run: pnpm --filter @antresol/mcp run pack:mcpb
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mcp-release
+          path: |
+            packages/mcp/dist/antresol.mcpb
+            packages/mcp/dist/antresol-mcp-node.zip
+          if-no-files-found: error
+
+  release:
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: mcp-release
+          path: release
+
       - name: Create the release
-        if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.build.outputs.version }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" \
-            packages/mcp/dist/antresol.mcpb \
-            packages/mcp/dist/antresol-mcp-node.zip \
+          # The artifact keeps the paths below its common ancestor; find the files wherever they landed.
+          mcpb=$(find release -name antresol.mcpb)
+          zip=$(find release -name antresol-mcp-node.zip)
+          gh release create "${GITHUB_REF_NAME}" "$mcpb" "$zip" \
             --title "Antresol MCP ${VERSION}" \
-            --notes "Antresol MCP server ${VERSION}. antresol.mcpb is for Claude Desktop (open it and paste your connection key). antresol-mcp-node.zip holds server.mjs and its codec files for other MCP apps: unzip it anywhere and run it with node 20 or newer. Setup: packages/mcp/README.md."
+            --notes "Antresol MCP server ${VERSION}. antresol.mcpb is for Claude Desktop (open it and paste your connection key). antresol-mcp-node.zip holds server.mjs and its codec files for other MCP apps: unzip it anywhere and run it with node 20 or newer. Setup guide: https://github.com/antresol-dev/antresol/blob/master/packages/mcp/README.md"

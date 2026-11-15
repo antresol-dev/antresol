@@ -22,12 +22,16 @@ Open `antresol.mcpb` (double-click it, or drag it into Claude Desktop). Paste th
 ### Claude Code
 
 ```sh
-claude mcp add antresol --env ANTRESOL_CONNECTION=<key> -- node /path/to/unzipped/server.mjs
+claude mcp add antresol --scope user --env ANTRESOL_CONNECTION=<key> -- node /path/to/unzipped/server.mjs
 ```
+
+`--scope user` makes the server available in every project and keeps the key in your own Claude Code configuration (never use `--scope project`: it writes the key into `.mcp.json`, a file you might commit). A key typed on the command line also lands in your shell history. To avoid that, run the command with a placeholder and put the real key into the configuration file (`~/.claude.json`) by hand, or start the command with a space where your shell does not record such lines (bash with `HISTCONTROL=ignorespace`, zsh with `HIST_IGNORE_SPACE`).
 
 ### Other apps
 
 Not tested by us. Each one starts the same command, `node /path/to/unzipped/server.mjs`, with the key in the environment variable `ANTRESOL_CONNECTION`.
+
+On Windows write paths in these JSON snippets with `/` (`C:/Users/you/antresol/server.mjs`) or doubled backslashes (`C:\\Users\\you\\antresol\\server.mjs`).
 
 Cursor, in `~/.cursor/mcp.json`:
 
@@ -43,16 +47,17 @@ Cursor, in `~/.cursor/mcp.json`:
 }
 ```
 
-VS Code, in `.vscode/mcp.json` or the user settings (`MCP: Open User Configuration`):
+VS Code: use the user configuration (`MCP: Open User Configuration`), not a `.vscode/mcp.json` in a project, which is easy to commit by accident. Better still, let VS Code ask for the key and keep it out of the file:
 
 ```json
 {
+  "inputs": [{ "type": "promptString", "id": "antresol-key", "description": "Antresol connection key", "password": true }],
   "servers": {
     "antresol": {
       "type": "stdio",
       "command": "node",
       "args": ["/path/to/unzipped/server.mjs"],
-      "env": { "ANTRESOL_CONNECTION": "<key>" }
+      "env": { "ANTRESOL_CONNECTION": "${input:antresol-key}" }
     }
   }
 }

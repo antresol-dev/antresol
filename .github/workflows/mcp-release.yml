@@ -1,0 +1,53 @@
+name: MCP release
+
+# Only a tag mcp-v<version> (matching packages/mcp/package.json) or a manual run. Never an ordinary push.
+on:
+  push:
+    tags: ['mcp-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # pnpm version comes from "packageManager" in package.json.
+      - uses: pnpm/action-setup@v6
+
+      # Same Node major as devEngines in package.json.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Tag matches the package version
+        run: |
+          version=$(node -p "require('./packages/mcp/package.json').version")
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${GITHUB_REF_NAME}" != "mcp-v${version}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match packages/mcp/package.json version ${version} (expected mcp-v${version})" >&2
+            exit 1
+          fi
+          echo "VERSION=${version}" >> "$GITHUB_ENV"
+
+      # No secrets here: the Neon suite skips itself without ANTRESOL_NEON_TEST_URL.
+      - run: pnpm test
+      - run: pnpm --filter @antresol/mcp build
+      # A manual run stops here, after checking that everything builds and packs; only a tag publishes.
+      - run: pnpm --filter @antresol/mcp run pack:mcpb
+
+      - name: Create the release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            packages/mcp/dist/antresol.mcpb \
+            packages/mcp/dist/antresol-mcp-node.zip \
+            --title "Antresol MCP ${VERSION}" \
+            --notes "Antresol MCP server ${VERSION}. antresol.mcpb is for Claude Desktop (open it and paste your connection key). antresol-mcp-node.zip holds server.mjs and its codec files for other MCP apps: unzip it anywhere and run it with node 20 or newer. Setup: packages/mcp/README.md."

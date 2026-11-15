@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "vite build",
+    "pack:mcpb": "node scripts/pack.mjs"
   },
   "dependencies": {
     "@antresol/core": "workspace:*",
@@ -19,6 +21,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@anthropic-ai/mcpb": "2.1.2",
     "@electric-sql/pglite": "^0.5.15",
     "@types/node": "^24.19.2"
   }

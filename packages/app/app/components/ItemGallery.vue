@@ -6,7 +6,7 @@ import { iconFrom } from '~/lib/item-icons'
 import { toast } from 'vue-sonner'
 import { errorMessageKey } from '~/lib/errors'
 
-const props = defineProps<{ itemId: string; photos: Photo[]; icon?: string | null; folderIcon?: string | null }>()
+const props = defineProps<{ itemId: string; photos: Photo[]; icon?: string | null; folderIcon?: string | null; color?: string | null }>()
 defineSlots<{
   /** Without photos: what stands beside the 64 px photo tile (the item's description and tags). */
   beside?: () => unknown
@@ -209,6 +209,7 @@ const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thu
         :icon="icon"
         :folder-icon="folderIcon"
         :cover="null"
+        :color="color ?? null"
         :class="[tile, 'photo-thumb']"
       />
       <button
@@ -219,7 +220,7 @@ const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thu
         :disabled="busy"
         @click="shownIcon ? (tileOpen = true) : (addOpen = true)"
       >
-        <ItemThumb v-if="shownIcon" :id="itemId" :folder-name="null" :icon="icon" :folder-icon="folderIcon" :cover="null" class="size-full" />
+        <ItemThumb v-if="shownIcon" :id="itemId" :folder-name="null" :icon="icon" :folder-icon="folderIcon" :cover="null" :color="color ?? null" class="size-full" />
         <ImagePlus v-else class="size-6" aria-hidden="true" />
       </button>
       <div class="min-w-0 flex-1 self-center">

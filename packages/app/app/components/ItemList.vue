@@ -67,7 +67,7 @@ const rows = computed(() =>
           @contextmenu="press.onContextmenu"
           @click.capture="press.onClickCapture"
         >
-          <ItemThumb :id="item.id" :folder-name="item.folderName" :icon="item.icon" :folder-icon="item.folderIcon" :cover="item.cover" class="size-9 rounded-thumb text-sm" />
+          <ItemThumb :id="item.id" :folder-name="item.folderName" :icon="item.icon" :folder-icon="item.folderIcon" :cover="item.cover" :color="item.color" class="size-9 rounded-thumb text-sm" />
           <span class="flex min-w-0 grow flex-col gap-0.5">
             <span class="flex min-w-0 items-center gap-1.5">
               <span class="min-w-[min(7.5rem,100%)] truncate text-base font-semibold" :class="item.outOfStock && 'text-dimmed-foreground'">{{ item.name }}</span>

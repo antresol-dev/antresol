@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { useMediaQuery } from '@vueuse/core'
+import { useLocalStorage, useMediaQuery } from '@vueuse/core'
 import { Archive, ArrowLeftRight, Folder, FolderPlus, PackageOpen, Plus, Search, SlidersHorizontal, Tags, X } from '@lucide/vue'
 import { DialogContent, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui'
 import type { Component } from 'vue'
 import { toast } from 'vue-sonner'
 import { DialogOverlay } from '@/components/ui/dialog'
 import { errorMessageKey } from '~/lib/errors'
-import { bottomUp, paletteResults, pastedShare, snapshotSearch, stepSelection, type PaletteAction, type PaletteRow } from '~/lib/palette'
+import { bottomUp, paletteResults, pastedShare, snapshotSearch, stepSelection, type PaletteAction, type PaletteOther, type PaletteRow, type RowInventory } from '~/lib/palette'
 import { currentInventoryName, NAV_SECTIONS, treeCurrent } from '~/lib/shell'
 import { swipeDownCloses } from '~/lib/swipe'
+import type { InventoryRef } from '~/lib/types'
 import { pathOf, snapshotIndex } from '~/lib/views'
 
 type GoSection = Extract<PaletteAction, { kind: 'go' }>['section']
@@ -45,6 +46,28 @@ const scroller = ref<HTMLElement | null>(null)
 const query = ref('')
 const text = computed(() => query.value.trim())
 const inventoryName = computed(() => currentInventoryName(state))
+
+// "All inventories": items and folders of the other inventories whose copy is saved on this device. Remembered.
+const allInventories = useLocalStorage('antresol.palette.allInventories', false)
+const others = ref<PaletteOther[]>([])
+const sameInventory = (a: InventoryRef, b: InventoryRef | null): boolean => !!b && a.sourceId === b.sourceId && a.inventoryId === b.inventoryId
+let loadingOthers = 0
+async function loadOthers(): Promise<void> {
+  const token = ++loadingOthers
+  const list = state.inventories.filter((e) => e.inventory.archivedAt === null && !sameInventory(e.ref, state.current))
+  const loaded = await Promise.all(
+    list.map(async (entry) => ({ entry, snapshot: await workspace.cachedSnapshot(entry.ref).catch(() => null) })),
+  )
+  if (token === loadingOthers) others.value = loaded
+}
+watch(
+  [paletteOpen, allInventories, () => state.inventories, () => state.current],
+  () => {
+    if (paletteOpen.value && allInventories.value) void loadOthers()
+  },
+  { immediate: true },
+)
+const skipped = computed(() => (allInventories.value && text.value ? others.value.filter((o) => !o.snapshot).length : 0))
 
 // Built once per snapshot object (snapshots are replaced whole), on the first search; shared with quick add.
 const search = computed(() => (state.snapshot ? snapshotSearch(state.snapshot) : null))
@@ -91,6 +114,7 @@ const groups = computed(() =>
       current: state.current,
       sections: SECTIONS,
       canWrite: !state.readOnly,
+      others: allInventories.value ? others.value : null,
     },
     labelOf,
   ),
@@ -193,11 +217,27 @@ async function run(row: PaletteRow): Promise<void> {
     await openNearest((below ?? above)!)
   } else if (row.kind === 'item') {
     const { itemId, variantId } = row.hit
-    void router.push({ path: `/item/${itemId}`, query: variantId ? { variant: variantId } : {} })
+    await openIn(row.inventory, { path: `/item/${itemId}`, query: variantId ? { variant: variantId } : {} })
   } else if (row.kind === 'folder') {
-    void router.push(`/folder/${row.hit.id}`)
+    await openIn(row.inventory, `/folder/${row.hit.id}`)
   } else {
     await act(row.action)
+  }
+}
+
+// A row of another inventory: as the switcher does, selectInventory sets the current inventory before its first await,
+// so the route pushed next is stamped with it; the screen shows the cached copy at once.
+async function openIn(inventory: RowInventory | null, to: Parameters<typeof router.push>[0]): Promise<void> {
+  if (!inventory) {
+    void router.push(to)
+    return
+  }
+  const selecting = workspace.selectInventory(inventory.ref)
+  void router.push(to)
+  try {
+    await selecting
+  } catch (e) {
+    toast.error(t(errorMessageKey(e)))
   }
 }
 
@@ -260,6 +300,10 @@ function onTouchEnd(event: TouchEvent): void {
 
 // A match is a square chip inside the text; keys are chips (radius scale, spec 4.2).
 const markClass = 'rounded-none bg-chip text-foreground'
+const chipClass = computed(() => [
+  'pressable shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold',
+  allInventories.value ? 'bg-accent-soft text-accent-soft-foreground' : 'bg-chip text-subtle-foreground',
+])
 const kbdClass = 'rounded-chip bg-chip px-1.5 text-xs font-semibold text-subtle-foreground'
 </script>
 
@@ -331,6 +375,15 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-xs font-semibold text-subtle-
             >
               <X class="size-4" aria-hidden="true" />
             </button>
+            <button
+              v-if="desktop"
+              type="button"
+              :aria-pressed="allInventories"
+              :class="chipClass"
+              @click="allInventories = !allInventories"
+            >
+              {{ $t('search.allInventories') }}
+            </button>
             <span
               v-if="desktop && inventoryName"
               class="max-w-44 shrink-0 truncate rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent-soft-foreground"
@@ -338,6 +391,15 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-xs font-semibold text-subtle-
               {{ inventoryName }}
             </span>
           </div>
+          <button
+            v-if="!desktop"
+            type="button"
+            :aria-pressed="allInventories"
+            :class="[chipClass, 'min-h-11 min-w-11']"
+            @click="allInventories = !allInventories"
+          >
+            {{ $t('search.allInventories') }}
+          </button>
           <button
             v-if="!desktop"
             type="button"
@@ -357,6 +419,10 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-xs font-semibold text-subtle-
               : 'flex min-h-0 flex-1 flex-col-reverse overflow-y-auto overscroll-contain p-2'
           "
         >
+          <!-- On the phone the scroller is reversed: first in the DOM is the bottom, so the note sits under the results. -->
+          <p v-if="!desktop && skipped > 0" class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground">
+            {{ $t('search.notOnDevice', skipped) }}
+          </p>
           <div v-if="shownRows.length > 0" :id="listId" role="listbox" :aria-label="$t('search.results')" class="grid min-w-0 grid-cols-1 gap-0.5">
             <div
               v-for="group in shown"
@@ -464,6 +530,9 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-xs font-semibold text-subtle-
           </div>
           <p v-else class="px-3 py-6 text-center text-sm font-semibold text-muted-foreground">
             {{ $t('search.nothing', { q: text }) }}
+          </p>
+          <p v-if="desktop && skipped > 0" class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground">
+            {{ $t('search.notOnDevice', skipped) }}
           </p>
         </div>
 

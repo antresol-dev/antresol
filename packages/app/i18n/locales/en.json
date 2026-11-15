@@ -170,6 +170,8 @@
   "tree": { "expand": "Expand {name}", "collapse": "Collapse {name}", "resize": "Resize the folder tree", "collapseAll": "Collapse all", "expandAll": "Expand all" },
   "search": {
     "label": "Search",
+    "allInventories": "All inventories",
+    "notOnDevice": "{count} inventory isn’t on this device yet — open it once to search it | {count} inventories aren’t on this device yet — open them once to search them",
     "field": "Search {name}",
     "clear": "Clear",
     "results": "Search results",

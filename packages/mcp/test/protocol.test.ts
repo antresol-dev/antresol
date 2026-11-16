@@ -26,6 +26,24 @@ describe('protocol', () => {
     expect(client.getInstructions()).toMatch(/get_overview/)
   })
 
+  it('lists the draft entity tools', async () => {
+    const f = await makeContext()
+    const client = await connect(f.ctx)
+    const tools = (await client.listTools()).tools
+    const names = tools.map((t) => t.name)
+    expect(names).toEqual(
+      expect.arrayContaining(['create_folder', 'update_folder', 'remove_folder', 'create_attribute', 'update_attribute', 'remove_attribute', 'remove_new_item', 'update_new_item', 'add_intake_lines']),
+    )
+    const add = tools.find((t) => t.name === 'add_intake_lines')!
+    const item = (add.inputSchema.properties as any).newItems.items.properties
+    expect(Object.keys(item)).toEqual(expect.arrayContaining(['description', 'photo', 'withoutLines']))
+    expect((add.inputSchema as any).required).not.toContain('lines')
+    const attr = tools.find((t) => t.name === 'create_attribute')!
+    expect((attr.inputSchema.properties as any).kind.enum).toEqual(['number', 'list', 'text'])
+    const result = (await client.callTool({ name: 'create_folder', arguments: { intake: 'nope', name: 'x' } })) as any
+    expect(result.isError).toBe(true)
+  })
+
   it('answers get_overview with JSON text', async () => {
     const f = await makeContext()
     const client = await connect(f.ctx)
@@ -101,7 +119,7 @@ describe('protocol', () => {
     expect(got.messages).toHaveLength(1)
     expect(got.messages[0]!.role).toBe('user')
     const text = (got.messages[0]!.content as { text: string }).text
-    for (const word of ['/x', 'get_overview', 'list_photos', 'view_photos', 'search', 'add_intake_lines', 'onlyNew: true', '`photo`', 'keep showing as new']) expect(text).toContain(word)
+    for (const word of ['/x', 'get_overview', 'list_photos', 'view_photos', 'search', 'add_intake_lines', 'onlyNew: true', '`photo`', 'never carries a photo', 'keep showing as new', 'create_folder', 'create_attribute', 'One photo']) expect(text).toContain(word)
     const appended = await client.getPrompt({ name: 'intake_from_photos', arguments: { intake: 'abc' } })
     expect((appended.messages[0]!.content as { text: string }).text).toContain('abc')
   })

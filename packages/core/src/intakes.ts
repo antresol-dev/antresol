@@ -1,7 +1,25 @@
 import type { Command, PhotoFile } from './commands'
 import type { Id } from './ids'
-import { isSourceUrl, MAX_NAME_LENGTH } from './limits'
-import type { Attribute, InventorySnapshot, Item, ItemAttribute, Tag, Variant, VariantAttributeValue } from './model'
+import {
+  draftAttributeProblems,
+  draftFolderProblems,
+  foldersParentsFirst,
+  goodName,
+  intakeAttributes,
+  sameName,
+} from './intake-entities'
+import { isSourceUrl } from './limits'
+import type {
+  Attribute,
+  AttributeKind,
+  Folder,
+  InventorySnapshot,
+  Item,
+  ItemAttribute,
+  Tag,
+  Variant,
+  VariantAttributeValue,
+} from './model'
 import { parseNumberValue } from './numbers'
 import type { Quantity } from './quantity'
 import { folderArchived, itemArchived } from './tree'
@@ -25,16 +43,43 @@ export interface DraftNewTag {
   id: Id
   name: string
 }
-/** An item a line of the draft creates; lines reference it by `id`. It lives while a line references it. */
+/** A folder the draft creates (spec 2026-11-16 intake entities §3). New items and other draft folders reference it by
+ *  `id`. It lives until removed from the draft. */
+export interface DraftNewFolder {
+  id: Id
+  name: string
+  /** An existing folder, a DraftNewFolder.id of this draft, or null for the root. */
+  parentId: Id | null
+}
+/** An attribute the draft creates; new items use it by `id` as an existing one. It lives until removed from the draft. */
+export interface DraftNewAttribute {
+  id: Id
+  name: string
+  kind: AttributeKind
+  /** Number kind only; ignored for the others. */
+  unit: string
+  siPrefixes: boolean
+  /** List kind: the options, in order. */
+  options: string[]
+}
+/** An item the draft creates; lines reference it by `id`. It lives until removed from the draft: a new item without
+ *  lines is created with no stock. */
 export interface DraftNewItem {
   id: Id
   name: string
+  /** An existing folder, a DraftNewFolder.id of this draft, or null for the root. */
   folderId: Id | null
   unitKey: string
-  /** Axes in axis order; an axis has value null. */
+  /** Axes in axis order; an axis has value null. Existing attributes or DraftNewAttribute.id of this draft. */
   attributes: { attributeId: Id; value: string | null; axis: boolean }[]
   /** Existing tags and/or DraftNewTag.id of this draft; absent in drafts saved before tags existed. */
   tagIds?: Id[]
+  /** Absent in drafts saved before item descriptions. */
+  description?: string | null
+  /** The item photo (goes to the item's gallery on commit); absent in older drafts. */
+  photo?: PhotoFile | null
+  /** Minted with the item; the id of its photo in the gallery, reused on every commit attempt. */
+  photoId?: Id
 }
 /** The stored file (renditions, size and delete handle as the upload gave them; absent in drafts saved before they
  *  existed) and whether it replaces the variant's photo. */
@@ -57,6 +102,10 @@ export interface DraftLine {
   ids: { movementId: Id; variantId: Id; photoId: Id }
 }
 export interface IntakeDraftContent {
+  /** Absent in drafts saved before draft folders existed. */
+  newFolders?: DraftNewFolder[]
+  /** Absent in drafts saved before draft attributes existed. */
+  newAttributes?: DraftNewAttribute[]
   /** Absent in drafts saved before tags existed. */
   newTags?: DraftNewTag[]
   newItems: DraftNewItem[]
@@ -77,6 +126,14 @@ export interface CommittedLine {
   totalPrice: number | null
   sourceUrl: string | null
 }
+/** What a commit created, with names at commit time (spec §7): shown next to the lines of a committed intake. */
+export interface IntakeCreated {
+  folders: { id: Id; name: string; parentId: Id | null }[]
+  attributes: { id: Id; name: string }[]
+  /** Only the tags the commit made; a draft tag that went to an existing one is not here. */
+  tags: { id: Id; name: string }[]
+  items: { id: Id; name: string; folderId: Id | null }[]
+}
 export interface Intake {
   id: Id
   inventoryId: Id
@@ -86,6 +143,8 @@ export interface Intake {
   draft: IntakeDraftContent | null
   /** Null while a draft. */
   lines: CommittedLine[] | null
+  /** Null while a draft, and on intakes committed before the record existed. */
+  created: IntakeCreated | null
   /** Changes on every write of this row. */
   draftRev: string
   createdAt: string
@@ -98,13 +157,30 @@ export interface Intake {
 export type LineResolution =
   /** An existing bucket; an archived variant comes back from the archive. */
   | { kind: 'add'; itemId: Id; variantId: Id | null; unarchive: boolean }
-  /** A new variant of an existing item; `sharedWith`: the earlier line that creates the same variant. */
+  /** A new variant of an existing item. `sharedWith` is always null now that one line creates one variant (a second
+   *  line asking for it is a duplicate_line); kept for readers of the older shape. */
   | { kind: 'newValue'; itemId: Id; variantId: Id; sharedWith: Id | null }
   /** An item of draft.newItems; its variant (when it has axes) as for newValue. */
   | { kind: 'newItem'; itemId: Id; variantId: Id | null }
-  | { kind: 'problem'; code: 'item_archived' | 'missing_axis_value' | 'invalid_value' | 'unknown_item' | 'invalid_link' }
+  /** `duplicate_line`: a second line creating the same new variant, or a second line of a new item without axes. */
+  | {
+      kind: 'problem'
+      code: 'item_archived' | 'missing_axis_value' | 'invalid_value' | 'unknown_item' | 'invalid_link' | 'duplicate_line'
+    }
+/** What keeps a draft folder, attribute or new item from being created. `duplicate_name`: an existing (or earlier draft)
+ *  folder or attribute with the name; `parent_gone`: the parent folder (of a folder or item) is archived or gone;
+ *  `cycle`: a draft folder is its own ancestor; `invalid_value`: a bad name, kind, unit, tag, attribute or value. */
+export type EntityProblem = { code: 'duplicate_name'; existingId: Id } | { code: 'parent_gone' } | { code: 'cycle' } | { code: 'invalid_value' }
+export interface ResolvedEntity {
+  kind: 'folder' | 'attribute' | 'item'
+  id: Id
+  problem: EntityProblem | null
+}
 export interface ResolvedIntake {
   lines: { lineId: Id; resolution: LineResolution }[]
+  /** Draft folders, then draft attributes, then new items, each in draft order. */
+  entities: ResolvedEntity[]
+  /** No line or entity has a problem, and the draft does something (has lines or creates something). */
   ok: boolean
 }
 
@@ -115,15 +191,12 @@ export function emptyIntakeDraft(): IntakeDraftContent {
   return { newItems: [], lines: [] }
 }
 
-/** Drops the new items no line references, and the new tags no remaining new item references. */
+/** Drops the new tags no new item references. New items (with or without lines), draft folders and draft attributes
+ *  live until removed explicitly. */
 export function pruneNewItems(draft: IntakeDraftContent): IntakeDraftContent {
-  const used = new Set(draft.lines.map((l) => l.itemId))
-  const newItems = draft.newItems.filter((n) => used.has(n.id))
-  const tagged = new Set(newItems.flatMap((n) => n.tagIds ?? []))
-  return { ...draft, newItems, ...(draft.newTags ? { newTags: draft.newTags.filter((t) => tagged.has(t.id)) } : {}) }
+  const tagged = new Set(draft.newItems.flatMap((n) => n.tagIds ?? []))
+  return { ...draft, ...(draft.newTags ? { newTags: draft.newTags.filter((t) => tagged.has(t.id)) } : {}) }
 }
-
-const sameName = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
 
 /** Where each tag id a new item may name ends up: an existing tag id stays; a new tag of the draft goes to the existing
  *  tag with the same name (trim, no case) or to the first new tag with that name. Ids of no tag are absent. */
@@ -168,19 +241,42 @@ function lineValues(line: DraftLine, axes: readonly Attribute[]): Map<Id, string
   return values
 }
 
-/** The axes of a new item of the draft, in order; or what keeps it from being created: its folder archived (or gone,
- *  which needs an archive first), an empty or too long name, a unit gone, a tag that is neither in the copy nor a new tag
- *  of the draft (or a new tag with a bad name), an attribute gone, a shared value that does not fit. */
-function newItemAxes(n: DraftNewItem, s: InventorySnapshot, tags: ReadonlyMap<Id, Id>, badTags: ReadonlySet<Id>): Attribute[] | Problem {
-  if (n.folderId !== null && (!s.folders.some((f) => f.id === n.folderId) || folderArchived(s, n.folderId))) {
+/** What a new item may reference: the attributes (the copy's and the draft's), the draft's folders, where each tag id
+ *  goes and the draft tags with a bad name. */
+interface NewItemContext {
+  attributes: ReadonlyMap<Id, Attribute>
+  draftFolders: ReadonlySet<Id>
+  tags: ReadonlyMap<Id, Id>
+  badTags: ReadonlySet<Id>
+}
+
+function newItemContext(draft: IntakeDraftContent, s: InventorySnapshot): NewItemContext {
+  return {
+    attributes: intakeAttributes(draft, s),
+    draftFolders: new Set((draft.newFolders ?? []).map((f) => f.id)),
+    tags: tagTargets(draft, s),
+    badTags: new Set((draft.newTags ?? []).filter((t) => !goodName(t.name)).map((t) => t.id)),
+  }
+}
+
+/** The axes of a new item of the draft, in order; or what keeps it from being created: its folder archived or gone
+ *  (item_archived; a draft folder is fine), an empty or too long name, a unit gone, a tag that is neither in the copy
+ *  nor a new tag of the draft (or a new tag with a bad name), an attribute gone, a shared value that does not fit, a
+ *  photo without its id. */
+function newItemAxes(n: DraftNewItem, s: InventorySnapshot, ctx: NewItemContext): Attribute[] | Problem {
+  if (
+    n.folderId !== null &&
+    !ctx.draftFolders.has(n.folderId) &&
+    (!s.folders.some((f) => f.id === n.folderId) || folderArchived(s, n.folderId))
+  ) {
     return 'item_archived'
   }
-  const name = n.name.trim()
-  if (name === '' || name.length > MAX_NAME_LENGTH || !resolveUnit(n.unitKey, s.units)) return 'invalid_value'
-  if ((n.tagIds ?? []).some((id) => !tags.has(id) || badTags.has(id))) return 'invalid_value'
+  if (!goodName(n.name) || !resolveUnit(n.unitKey, s.units)) return 'invalid_value'
+  if ((n.tagIds ?? []).some((id) => !ctx.tags.has(id) || ctx.badTags.has(id))) return 'invalid_value'
+  if (n.photo && !n.photoId) return 'invalid_value'
   const axes: Attribute[] = []
   for (const x of n.attributes) {
-    const a = s.attributes.find((y) => y.id === x.attributeId)
+    const a = ctx.attributes.get(x.attributeId)
     if (!a) return 'invalid_value'
     if (x.axis) axes.push(a)
     else if (x.value !== null && x.value.trim() !== '' && canonicalValue(a, x.value) === null) return 'invalid_value'
@@ -196,25 +292,32 @@ function variantKey(itemId: Id, axes: readonly Attribute[], values: ReadonlyMap<
 
 /**
  * What each line of the draft does against this copy of the inventory (spec §6–7): adds to a bucket that exists (an
- * archived variant is unarchived), creates a variant of an existing item, or goes to an item the draft creates. The
- * first line asking for a new variant mints it; later lines with the same item and values share it. `ok` is false when
- * any line has a problem: nothing may be committed then.
+ * archived variant is unarchived), creates a variant of an existing item, or goes to an item the draft creates. One
+ * line creates one variant: a later line with the same item and values is a duplicate_line, as is a second line of a
+ * new item without axes (top-ups of existing buckets may repeat). Each draft folder, draft attribute and new item is
+ * checked too (`entities`), lines or not. `ok` is false when any line or entity has a problem, or when the draft does
+ * nothing (no lines and nothing to create): nothing may be committed then.
  */
 export function resolveIntake(draft: IntakeDraftContent, s: InventorySnapshot): ResolvedIntake {
   const newItems = new Map(draft.newItems.map((n) => [n.id, n] as const))
-  const creators = new Map<string, { lineId: Id; variantId: Id }>()
-  const tags = tagTargets(draft, s)
-  const badTags = new Set((draft.newTags ?? []).filter((t) => t.name.trim() === '' || t.name.trim().length > MAX_NAME_LENGTH).map((t) => t.id))
+  const ctx = newItemContext(draft, s)
+  const checked = new Map(draft.newItems.map((n) => [n.id, newItemAxes(n, s, ctx)] as const))
+  const created = new Set<string>()
+  const plainLines = new Set<Id>()
 
   const resolve = (line: DraftLine): LineResolution => {
     const problem = (code: Problem): LineResolution => ({ kind: 'problem', code })
     const draftItem = newItems.get(line.itemId)
     let axes: readonly Attribute[]
     if (draftItem) {
-      const found = newItemAxes(draftItem, s, tags, badTags)
+      const found = checked.get(draftItem.id)!
       if (typeof found === 'string') return problem(found)
       axes = found
-      if (axes.length === 0) return { kind: 'newItem', itemId: line.itemId, variantId: null }
+      if (axes.length === 0) {
+        if (plainLines.has(draftItem.id)) return problem('duplicate_line')
+        plainLines.add(draftItem.id)
+        return { kind: 'newItem', itemId: line.itemId, variantId: null }
+      }
     } else {
       const existing = s.items.find((i) => i.id === line.itemId)
       if (!existing) return problem('unknown_item')
@@ -229,12 +332,12 @@ export function resolveIntake(draft: IntakeDraftContent, s: InventorySnapshot): 
       if (same) return { kind: 'add', itemId: line.itemId, variantId: same.id, unarchive: same.archivedAt !== null }
     }
     const key = variantKey(line.itemId, axes, values)
-    const creator = creators.get(key)
-    if (!creator) creators.set(key, { lineId: line.id, variantId: line.ids.variantId })
-    const variantId = creator?.variantId ?? line.ids.variantId
+    if (created.has(key)) return problem('duplicate_line')
+    created.add(key)
+    const variantId = line.ids.variantId
     return draftItem
       ? { kind: 'newItem', itemId: line.itemId, variantId }
-      : { kind: 'newValue', itemId: line.itemId, variantId, sharedWith: creator?.lineId ?? null }
+      : { kind: 'newValue', itemId: line.itemId, variantId, sharedWith: null }
   }
 
   // A link the commit would refuse marks the line, once its item and values resolve (an item problem is told first).
@@ -244,25 +347,59 @@ export function resolveIntake(draft: IntakeDraftContent, s: InventorySnapshot): 
     return { kind: 'problem', code: 'invalid_link' }
   }
   const lines = draft.lines.map((line) => ({ lineId: line.id, resolution: withLink(line) }))
-  return { lines, ok: lines.every((l) => l.resolution.kind !== 'problem') }
+  const itemProblem = (found: Attribute[] | Problem): EntityProblem | null =>
+    typeof found !== 'string' ? null : found === 'item_archived' ? { code: 'parent_gone' } : { code: 'invalid_value' }
+  const entities: ResolvedEntity[] = [
+    ...draftFolderProblems(draft, s).map((e) => ({ kind: 'folder' as const, ...e })),
+    ...draftAttributeProblems(draft, s).map((e) => ({ kind: 'attribute' as const, ...e })),
+    ...draft.newItems.map((n) => ({ kind: 'item' as const, id: n.id, problem: itemProblem(checked.get(n.id)!) })),
+  ]
+  const ok =
+    lines.every((l) => l.resolution.kind !== 'problem') &&
+    entities.every((e) => e.problem === null) &&
+    lines.length + entities.length > 0
+  return { lines, entities, ok }
+}
+
+/** The stored file of a photo, the fields an older draft lacks as null. */
+function fileOf(p: PhotoFile): Required<PhotoFile> {
+  const { provider, fileId, url, urls = null, width = null, height = null, deleteHandle = null } = p
+  return { provider, fileId, url, urls, width, height, deleteHandle }
 }
 
 /**
- * The intake.commit command for a draft resolved against `s` (resolveIntake on the same copy). New items no line
- * references are left out. A line's photo goes to the item's gallery when the line has no variant; a variant gets it
- * when the variant is new or has no photo yet, and replaces the variant's photo only when the line asks to; a variant
- * gets at most one photo, from the first line that gives it one. Throws when the draft has problem lines.
+ * The intake.commit command for a draft resolved against `s` (resolveIntake on the same copy): the draft folders
+ * (parents first) and attributes, the new tags some new item references, every new item (lines or not) with its photo
+ * and description. A line's photo goes to the item's gallery when the line has no variant (unless it is the new item's
+ * own photo); a variant gets it when the variant is new or has no photo yet, and replaces the variant's photo only when
+ * the line asks to; a variant gets at most one photo, from the first line that gives it one. Throws when the draft has
+ * problems.
  */
 export function buildIntakeCommit(intake: Intake, resolved: ResolvedIntake, s: InventorySnapshot, baseRev: string): Command {
-  if (!resolved.ok) throw new Error('buildIntakeCommit: the draft has lines with problems')
+  if (!resolved.ok) throw new Error('buildIntakeCommit: the draft has problems')
   if (intake.draft === null) throw new Error('buildIntakeCommit: the intake is committed already')
   const draft = pruneNewItems(intake.draft)
   const resolutions = new Map(resolved.lines.map((l) => [l.lineId, l.resolution] as const))
-  const attributes = new Map(s.attributes.map((a) => [a.id, a] as const))
+  const attributes = intakeAttributes(draft, s)
   const draftItems = new Map(draft.newItems.map((n) => [n.id, n] as const))
   const targets = tagTargets(draft, s)
-  const created = new Set([...targets.values()].filter((id) => !s.tags.some((t) => t.id === id)))
-  const newTags = (draft.newTags ?? []).filter((t) => targets.get(t.id) === t.id && created.has(t.id)).map((t) => ({ id: t.id, name: t.name }))
+  const createdTags = new Set([...targets.values()].filter((id) => !s.tags.some((t) => t.id === id)))
+  const newTags = (draft.newTags ?? [])
+    .filter((t) => targets.get(t.id) === t.id && createdTags.has(t.id))
+    .map((t) => ({ id: t.id, name: t.name }))
+  const newFolders: IntakeCommit['newFolders'] = foldersParentsFirst(draft.newFolders ?? []).map((f) => ({
+    id: f.id,
+    parentId: f.parentId,
+    name: f.name,
+  }))
+  const newAttributes: IntakeCommit['newAttributes'] = (draft.newAttributes ?? []).map((a) => ({
+    id: a.id,
+    name: a.name,
+    kind: a.kind,
+    options: a.options,
+    unit: a.unit,
+    siPrefixes: a.siPrefixes,
+  }))
 
   const newItems: IntakeCommit['newItems'] = draft.newItems.map((n) => {
     let position = 0
@@ -270,6 +407,7 @@ export function buildIntakeCommit(intake: Intake, resolved: ResolvedIntake, s: I
       id: n.id,
       folderId: n.folderId,
       name: n.name,
+      description: n.description ?? null,
       unitKey: n.unitKey,
       tagIds: [...new Set((n.tagIds ?? []).map((id) => targets.get(id)!))],
       attributes: n.attributes.map((x) => {
@@ -290,6 +428,9 @@ export function buildIntakeCommit(intake: Intake, resolved: ResolvedIntake, s: I
   const unarchive = new Set<Id>()
   const receipts: IntakeCommit['receipts'] = []
   const photos: IntakeCommit['photos'] = []
+  for (const n of draft.newItems) {
+    if (n.photo && n.photoId) photos.push({ id: n.photoId, itemId: n.id, variantId: null, replaces: undefined, ...fileOf(n.photo) })
+  }
   const photographed = new Set<Id>()
   for (const line of draft.lines) {
     const resolution = resolutions.get(line.id)
@@ -312,11 +453,13 @@ export function buildIntakeCommit(intake: Intake, resolved: ResolvedIntake, s: I
       sourceUrl: line.sourceUrl,
     })
     if (line.photo) {
-      const { provider, fileId, url, urls = null, width = null, height = null, deleteHandle = null } = line.photo
-      const file = { provider, fileId, url, urls, width, height, deleteHandle }
+      const file = fileOf(line.photo)
       const add = (replaces: Id | undefined) => photos.push({ id: line.ids.photoId, itemId, variantId, replaces, ...file })
-      if (variantId === null) add(undefined)
-      else if (!photographed.has(variantId)) {
+      const own = draftItems.get(itemId)?.photo
+      const isItemPhoto = !!own && own.provider === file.provider && own.fileId === file.fileId
+      if (variantId === null) {
+        if (!isItemPhoto) add(undefined)
+      } else if (!photographed.has(variantId)) {
         const current = s.photos.find((p) => p.variantId === variantId)
         if (!current || line.photo.replace) {
           add(current?.id)
@@ -333,6 +476,8 @@ export function buildIntakeCommit(intake: Intake, resolved: ResolvedIntake, s: I
     baseRev,
     baseDraftRev: intake.draftRev,
     header: intake.header,
+    newFolders,
+    newAttributes,
     newTags,
     newItems,
     newVariants,
@@ -340,6 +485,12 @@ export function buildIntakeCommit(intake: Intake, resolved: ResolvedIntake, s: I
     receipts,
     photos,
     lines: [],
+    created: {
+      folders: newFolders.map((f) => ({ id: f.id, name: f.name.trim(), parentId: f.parentId })),
+      attributes: newAttributes.map((a) => ({ id: a.id, name: a.name.trim() })),
+      tags: newTags.map((t) => ({ id: t.id, name: t.name.trim() })),
+      items: newItems.map((n) => ({ id: n.id, name: n.name.trim(), folderId: n.folderId })),
+    },
   }
   const after = snapshotAfterIntake(s, command)
   command.lines = made.map(({ line, resolution }) => {
@@ -365,11 +516,14 @@ export function buildIntakeCommit(intake: Intake, resolved: ResolvedIntake, s: I
 const NO_AUDIT = { createdAt: '', updatedAt: '', createdBy: '', updatedBy: '' }
 
 /**
- * The copy's tags, items and variants as the commit leaves them: its new tags, its new items with their tags and attributes, its new variants with
- * their values, its unarchived variants active. Rows the copy holds already (a retried commit) are not added again.
- * Photos and stock stay as they are. New rows carry empty audit fields.
+ * The copy as the commit leaves it: its new folders and attributes, its new tags, its new items with their
+ * description, tags and attributes (no icon or colour), its new variants with their values, its unarchived variants
+ * active. Rows the copy holds already (a retried commit) are not added again. Photos and stock stay as they are. New
+ * rows carry empty audit fields.
  */
 export function snapshotAfterIntake(s: InventorySnapshot, c: IntakeCommit): InventorySnapshot {
+  const knownFolders = new Set(s.folders.map((f) => f.id))
+  const knownAttributes = new Set(s.attributes.map((a) => a.id))
   const knownTags = new Set(s.tags.map((t) => t.id))
   const knownItems = new Set(s.items.map((i) => i.id))
   const knownVariants = new Set(s.variants.map((v) => v.id))
@@ -379,6 +533,30 @@ export function snapshotAfterIntake(s: InventorySnapshot, c: IntakeCommit): Inve
   const unarchive = new Set(c.unarchiveVariants)
   return {
     ...s,
+    folders: [
+      ...s.folders,
+      ...c.newFolders
+        .filter((f) => !knownFolders.has(f.id))
+        .map(
+          (f): Folder => ({
+            id: f.id,
+            inventoryId: c.inventoryId,
+            parentId: f.parentId,
+            name: f.name,
+            description: null,
+            icon: null,
+            ...NO_AUDIT,
+            archivedAt: null,
+            archiveId: null,
+          }),
+        ),
+    ],
+    attributes: [
+      ...s.attributes,
+      ...c.newAttributes
+        .filter((a) => !knownAttributes.has(a.id))
+        .map((a): Attribute => ({ ...a, inventoryId: c.inventoryId, pinned: false, ...NO_AUDIT })),
+    ],
     tags: [...s.tags, ...tags.map((t): Tag => ({ id: t.id, inventoryId: c.inventoryId, name: t.name, color: null, ...NO_AUDIT }))],
     items: [
       ...s.items,
@@ -388,7 +566,7 @@ export function snapshotAfterIntake(s: InventorySnapshot, c: IntakeCommit): Inve
           inventoryId: c.inventoryId,
           folderId: n.folderId,
           name: n.name,
-          description: null,
+          description: n.description,
           icon: null,
           color: null,
           unitKey: n.unitKey,

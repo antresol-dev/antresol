@@ -769,10 +769,12 @@ describe('intake.commit', () => {
     baseRev: 'rev',
     baseDraftRev: 'draft-rev',
     header: { shop: 'LCSC', orderNumber: null, purchasedOn: '2026-11-12', note: null },
+    newFolders: [],
+    newAttributes: [],
     newTags: [],
     newItems: [
       {
-        id: 'NEW', folderId: null, name: 'Resistor 0.6 W', unitKey: 'pcs', tagIds: [],
+        id: 'NEW', folderId: null, name: 'Resistor 0.6 W', description: null, unitKey: 'pcs', tagIds: [],
         attributes: [
           { attributeId: 'res', value: null, axisPosition: 0 },
           { attributeId: 'pkg', value: 'THT', axisPosition: null },
@@ -784,9 +786,99 @@ describe('intake.commit', () => {
     receipts: [receipt('NEW', 'n1', '1'), receipt('R', 'r1k', '2')],
     photos: [],
     lines: [],
+    created: { folders: [], attributes: [], tags: [], items: [] },
     ...over,
   })
   const ec = (c: Command, s = electronics()) => validateCommand(normalizeCommand(c), s)?.code ?? null
+
+  describe('draft folders and attributes', () => {
+    const withPassives = () => ({ ...electronics(), folders: [folder('PAS', 'Passives'), folder('AF', 'Old parts', null, ARCH)] })
+    const nf = (id: string, name: string, parentId: string | null) => ({ id, name, parentId })
+    const inductance = { id: 'IND', name: 'Inductance', kind: 'number' as const, options: [], unit: 'H', siPrefixes: true }
+    const base = () => commit() as IntakeCommit
+    /** NEW sits in folder B and gets a shared Inductance. */
+    const nested = (newFolders: IntakeCommit['newFolders'], over: Partial<IntakeCommit> = {}) =>
+      commit({
+        newFolders,
+        newAttributes: [inductance],
+        newItems: [{ ...base().newItems[0]!, folderId: 'B', attributes: [...base().newItems[0]!.attributes, { attributeId: 'IND', value: '0.0000047', axisPosition: null }] }],
+        ...over,
+      })
+
+    it('nested new folders, parents first, and a new attribute pass', () => {
+      expect(ec(nested([nf('A', 'Inductors', 'PAS'), nf('B', 'Shielded', 'A')]), withPassives())).toBeNull()
+    })
+
+    it('a parent listed after its child, or below it, is refused', () => {
+      expect(ec(nested([nf('B', 'Shielded', 'A'), nf('A', 'Inductors', 'PAS')]), withPassives())).toBe('invalid_option')
+      expect(ec(nested([nf('A', 'Inductors', 'B'), nf('B', 'Shielded', 'A')]), withPassives())).toBe('invalid_option')
+      expect(ec(nested([nf('B', 'Shielded', 'B')]), withPassives())).toBe('invalid_option')
+    })
+
+    it('a new folder under a folder gone or archived is refused', () => {
+      expect(ec(nested([nf('B', 'Shielded', 'GONE')]), withPassives())).toBe('not_found')
+      expect(ec(nested([nf('B', 'Shielded', 'AF')]), withPassives())).toBe('archived')
+    })
+
+    it('a new folder named as a folder under the same parent is a duplicate', () => {
+      expect(ec(nested([nf('B', ' passives ', null)]), withPassives())).toBe('duplicate_name')
+      expect(ec(nested([nf('A', 'Inductors', 'PAS'), nf('B', 'INDUCTORS', 'PAS')]), withPassives())).toBe('duplicate_name')
+      expect(ec(nested([nf('A', 'Inductors', 'PAS'), nf('B', 'Inductors', 'A')]), withPassives())).toBeNull()
+      // An archived folder with the name does not count.
+      expect(ec(nested([nf('B', 'Old parts', null)]), withPassives())).toBeNull()
+      expect(ec(nested([nf('B', ' ', null)]), withPassives())).toBe('name_required')
+    })
+
+    it('a new attribute named as any attribute is a duplicate; its kind is checked', () => {
+      const attrs = (newAttributes: IntakeCommit['newAttributes']) => nested([nf('B', 'Shielded', null)], { newAttributes })
+      expect(ec(attrs([{ ...inductance, name: 'resistance' }]))).toBe('duplicate_name')
+      expect(ec(attrs([inductance, { ...inductance, id: 'IND2', name: ' INDUCTANCE ' }]))).toBe('duplicate_name')
+      expect(ec(attrs([inductance, inductance]))).toBe('invalid_option')
+      expect(ec(attrs([{ ...inductance, kind: 'colour' as never }]))).toBe('invalid_option')
+      // A shared value on the new attribute follows its kind.
+      const n = nested([nf('B', 'Shielded', null)]) as IntakeCommit
+      const attributes = [...base().newItems[0]!.attributes, { attributeId: 'IND', value: '4.7u', axisPosition: null }]
+      expect(ec({ ...n, newItems: [{ ...n.newItems[0]!, attributes }] })).toBe('invalid_number')
+    })
+
+    it('a retry against a copy that already holds the folders and attributes passes', () => {
+      const s = withPassives()
+      const landed = {
+        ...s,
+        folders: [...s.folders, folder('A', 'Inductors', 'PAS'), folder('B', 'Shielded', 'A')],
+        attributes: [...s.attributes, attribute('IND', 'Inductance', 'number', { unit: 'H', siPrefixes: true })],
+      }
+      expect(ec(nested([nf('A', 'Inductors', 'PAS'), nf('B', 'Shielded', 'A')]), landed)).toBeNull()
+    })
+
+    it('created names only what the command makes', () => {
+      const folders = [nf('A', 'Inductors', 'PAS'), nf('B', 'Shielded', 'A')]
+      const created = (over: Partial<IntakeCommit['created']>) => ({ folders: [], attributes: [], tags: [], items: [], ...over })
+      expect(ec(nested(folders, { created: created({ folders, attributes: [{ id: 'IND', name: 'Inductance' }], items: [{ id: 'NEW', name: 'R', folderId: 'B' }] }) }), withPassives())).toBeNull()
+      expect(ec(nested(folders, { created: created({ folders: [nf('PAS', 'Passives', null)] }) }), withPassives())).toBe('invalid_option')
+      expect(ec(nested(folders, { created: created({ items: [{ id: 'R', name: 'Resistor', folderId: null }] }) }), withPassives())).toBe('invalid_option')
+    })
+
+    it('normalizeCommand reads a command without the new parts as creating none of them', () => {
+      const { newFolders: _f, newAttributes: _a, created: _c, ...old } = base()
+      const n = normalizeCommand({ ...old, newItems: old.newItems.map(({ description: _d, ...rest }) => rest) } as never) as IntakeCommit
+      expect(n.newFolders).toEqual([])
+      expect(n.newAttributes).toEqual([])
+      expect(n.newItems[0]!.description).toBeNull()
+      expect(n.created).toEqual({ folders: [], attributes: [], tags: [], items: [] })
+      expect(validateCommand(n, electronics())).toBeNull()
+    })
+
+    it('normalizeCommand trims new folders and attributes; a non-number attribute has no unit', () => {
+      const n = normalizeCommand(
+        nested([nf('B', ' Shielded ', null)], {
+          newAttributes: [inductance, { id: 'K', name: ' Kind ', kind: 'enum', options: [' a ', 'b'], unit: 'x', siPrefixes: true }],
+        }),
+      ) as IntakeCommit
+      expect(n.newFolders).toEqual([nf('B', 'Shielded', null)])
+      expect(n.newAttributes[1]).toEqual({ id: 'K', name: 'Kind', kind: 'enum', options: ['a', 'b'], unit: '', siPrefixes: false })
+    })
+  })
 
   it('a variant on an item of newItems passes', () => {
     expect(ec(commit())).toBeNull()

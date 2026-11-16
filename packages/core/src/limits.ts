@@ -4,6 +4,9 @@
 /** The longest name of an item, folder, tag, attribute, unit or inventory, trimmed. */
 export const MAX_NAME_LENGTH = 200
 
+/** The longest unit of a number attribute, trimmed. */
+export const MAX_ATTRIBUTE_UNIT_LENGTH = 16
+
 /** The name of an item's or folder's icon: lowercase words with hyphens. The set of names lives in the app. */
 export function isIconName(name: string): boolean {
   return /^[a-z0-9-]{1,40}$/.test(name)

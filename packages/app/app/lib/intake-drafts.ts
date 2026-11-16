@@ -170,6 +170,7 @@ export function createIntakeDraftSync(deps: {
       header: copy.header,
       draft: null,
       lines: null,
+      created: null,
       draftRev: '',
       createdAt: '',
       createdBy: '',

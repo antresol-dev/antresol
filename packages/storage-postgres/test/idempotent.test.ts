@@ -235,7 +235,7 @@ describe('replaying a command with client ids is a no-op', () => {
         newItems: [{ id: made, name: 'Fuse', folderId: null, unitKey: 'pcs', attributes: [] }],
         lines: [line(item, 'S', { photo }), line(item, 'M'), line(made, null)],
       },
-      lines: null, draftRev: newId(), createdAt: '', createdBy: '', updatedAt: '', updatedBy: '', committedAt: null,
+      lines: null, created: null, draftRev: newId(), createdAt: '', createdBy: '', updatedAt: '', updatedBy: '', committedAt: null,
     }
     const { snapshot, rev } = await storage.loadInventoryWithRev(inv)
     await twice(storage, buildIntakeCommit(intake, resolveIntake(intake.draft!, snapshot), snapshot, rev))

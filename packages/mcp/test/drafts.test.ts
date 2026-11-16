@@ -206,6 +206,8 @@ describe('refusals', () => {
         baseRev: (await f.storage.listInventories()).rev,
         baseDraftRev: intake.draftRev,
         header: intake.header,
+        newFolders: [],
+        newAttributes: [],
         newTags: [],
         newItems: [],
         newVariants: [],
@@ -215,6 +217,7 @@ describe('refusals', () => {
         lines: [
           { lineId: line.id, kind: 'add', itemId: f.ids.esp32, variantId: null, movementId: line.ids.movementId, itemName: 'ESP32 DevKit', variantLabel: null, quantity: '1', unitKey: 'pcs', totalPrice: null, sourceUrl: null },
         ],
+        created: { folders: [], attributes: [], tags: [], items: [] },
       },
       TEST_ACTOR,
     )

@@ -66,11 +66,11 @@ function idsIn(rows: Map<string, string[]>, columns: { table: string; column: st
   return ids
 }
 
-/** Old ids that still occur anywhere in the text of an added row's jsonb columns (intakes.draft, intakes.lines). */
+/** Old ids that still occur anywhere in the text of an added row's jsonb columns (intakes.draft, lines, created). */
 function oldIdsInJson(rows: string[], oldIds: Set<string>): string[] {
   const text = rows.map((json) => {
     const row = JSON.parse(json) as Record<string, unknown>
-    return JSON.stringify([row.draft, row.lines])
+    return JSON.stringify([row.draft, row.lines, row.created])
   }).join('\n')
   return [...oldIds].filter((id) => text.includes(id))
 }
@@ -485,6 +485,46 @@ describe('restore', () => {
       }
     }
     expect(JSON.stringify(renameIntakeIds(intakes.find((i) => i.draft)!, m))).toContain('custom:m:')
+  })
+
+  it('renameIntakeIds renames draft folders and attributes, item photo ids and the created record; a draft without them stays without', () => {
+    const m = (id: Id) => `m:${id}`
+    const base = { id: 'i', inventoryId: 'v', status: 'draft', header: { shop: null, orderNumber: null, purchasedOn: '2026-11-13', note: null },
+      lines: null, created: null, draftRev: 'r', createdAt: '', createdBy: '', updatedAt: '', updatedBy: '', committedAt: null } as const
+    const item = { id: 'n1', name: 'X', folderId: 'f2', unitKey: 'pcs', attributes: [{ attributeId: 'a1', value: '5', axis: false }], photoId: 'p1' }
+    const draft = renameIntakeIds({
+      ...base,
+      draft: {
+        newFolders: [{ id: 'f2', name: 'Box', parentId: 'f1' }, { id: 'f1', name: 'Shelf', parentId: null }, { id: 'f3', name: 'Z', parentId: 'old' }],
+        newAttributes: [{ id: 'a1', name: 'V', kind: 'number', unit: 'V', siPrefixes: false, options: [] }],
+        newItems: [item],
+        lines: [{ id: 'l1', itemId: 'n1', axisValues: [{ attributeId: 'a1', value: '1' }], quantity: '1' as Quantity, totalPrice: null, sourceUrl: null, photo: null,
+          ids: { movementId: 'mv', variantId: 'va', photoId: 'ph' } }],
+      },
+    }, m).draft!
+    expect(draft.newFolders).toEqual([
+      { id: 'm:f2', name: 'Box', parentId: 'm:f1' }, { id: 'm:f1', name: 'Shelf', parentId: null }, { id: 'm:f3', name: 'Z', parentId: 'm:old' },
+    ])
+    expect(draft.newAttributes![0]!.id).toBe('m:a1')
+    expect(draft.newItems[0]).toMatchObject({ id: 'm:n1', folderId: 'm:f2', photoId: 'm:p1', attributes: [{ attributeId: 'm:a1' }] })
+    expect(draft.lines[0]!.axisValues[0]!.attributeId).toBe('m:a1')
+
+    const committed = renameIntakeIds({
+      ...base, status: 'committed', draft: null, lines: [],
+      created: {
+        folders: [{ id: 'f1', name: 'Shelf', parentId: null }, { id: 'f2', name: 'Box', parentId: 'f1' }],
+        attributes: [{ id: 'a1', name: 'V' }], tags: [{ id: 't1', name: 'Kit' }], items: [{ id: 'n1', name: 'X', folderId: 'f2' }],
+      },
+    }, m).created
+    expect(committed).toEqual({
+      folders: [{ id: 'm:f1', name: 'Shelf', parentId: null }, { id: 'm:f2', name: 'Box', parentId: 'm:f1' }],
+      attributes: [{ id: 'm:a1', name: 'V' }], tags: [{ id: 'm:t1', name: 'Kit' }], items: [{ id: 'm:n1', name: 'X', folderId: 'm:f2' }],
+    })
+
+    const plain = renameIntakeIds({ ...base, draft: { newItems: [{ ...item, photoId: undefined }], lines: [] } }, m)
+    expect(plain.draft).not.toHaveProperty('newFolders')
+    expect(plain.draft).not.toHaveProperty('newAttributes')
+    expect(plain.created).toBeNull()
   })
 
   it('renameIntakeIds renames new tags and their references; a draft without them stays without', async () => {

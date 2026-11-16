@@ -285,6 +285,8 @@ export const intakes = pgTable(
     note: text('note'),
     draft: jsonb('draft'),
     lines: jsonb('lines'),
+    /** What the commit created (folders, attributes, tags, items; names at commit time); null while a draft and on older intakes. */
+    created: jsonb('created'),
     draftRev: uuid('draft_rev').notNull(),
     ...audit(),
     committedAt: timestamp('committed_at', { withTimezone: true }),

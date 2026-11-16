@@ -5,21 +5,36 @@ import {
   newId,
   pruneNewItems,
   type Attribute,
+  type AttributeKind,
   type DraftLine,
   type DraftLinePhoto,
+  type DraftNewAttribute,
+  type DraftNewFolder,
   type DraftNewItem,
   type DraftNewTag,
   type Id,
   type IntakeDraftContent,
   type IntakeHeader,
+  type PhotoFile,
   type InventorySnapshot,
 } from '@antresol/core'
-import { buildDraftLine, unitChoices, withLine } from '@antresol/kit'
+import {
+  buildDraftLine,
+  unitChoices,
+  withLine,
+  withNewAttribute,
+  withNewFolder,
+  withNewItem,
+  withoutNewAttribute,
+  withoutNewFolder,
+  withoutNewItem,
+  type DraftError,
+} from '@antresol/kit'
 import { requireStorage, requireSource, resolveInventory, type ToolContext } from '../context'
 import { checkEditable, editDraft, locateIntake, viewOf } from '../draft-edit'
 import { ToolError } from '../errors'
 import { messageFor } from '../messages'
-import { folderPath } from '../shape'
+import { draftAttributes, draftFolderPath, folderPath } from '../shape'
 import { attachPhoto, markPhotosUsed } from './photos'
 
 export interface NewItemArgs {
@@ -32,6 +47,11 @@ export interface NewItemArgs {
   attributes?: { attribute: string; value?: string; axis?: boolean }[]
   /** Tag ids or names; an unknown name is a new tag. */
   tags?: string[]
+  description?: string
+  /** A picture path from list_photos: the item's own photo. */
+  photo?: string
+  /** The item is made with no line (and no stock). */
+  withoutLines?: boolean
 }
 export interface LineArgs {
   /** An item id, the id of a new item of the draft, or the `ref` of a new item of this call. */
@@ -100,16 +120,24 @@ export async function updateIntakeHeader(
 
 // ---- resolving what was typed -------------------------------------------------------------------------------------
 
-/** Folder by id or path ("Passives/Resistors", no case); empty is the root. */
-function resolveFolder(s: InventorySnapshot, text: string | undefined): Id | null {
+/** Every folder a path can name: the stock's active folders and the draft's own, with their paths. */
+function folderChoices(s: InventorySnapshot, draft: IntakeDraftContent): { id: Id; path: string }[] {
+  const existing = s.folders.map((f) => ({ id: f.id, path: folderPath(s, f.id) })).filter((f) => f.path !== '')
+  const own = (draft.newFolders ?? []).map((f) => ({ id: f.id, path: draftFolderPath(s, draft, f.id) }))
+  return [...existing, ...own]
+}
+
+/** Folder by id or path ("Passives/Resistors", no case), also one this draft creates; empty is the root. */
+function resolveFolder(s: InventorySnapshot, draft: IntakeDraftContent, text: string | undefined): Id | null {
   const wanted = text?.trim() ?? ''
   if (wanted === '') return null
-  const byId = s.folders.find((f) => f.id === wanted && folderPath(s, f.id) !== '')
+  const choices = folderChoices(s, draft)
+  const byId = choices.find((f) => f.id === wanted)
   if (byId) return byId.id
   const key = wanted.replace(/\s*\/\s*/g, '/').toLowerCase()
-  const hits = s.folders.filter((f) => folderPath(s, f.id).toLowerCase() === key)
-  if (hits.length === 1) return hits[0]!.id
-  throw new ToolError(`No folder "${wanted}". Use an id or a path from get_overview.`)
+  const hits = choices.filter((f) => f.path.toLowerCase() === key)
+  if (hits.length >= 1) return hits[0]!.id
+  throw new ToolError(`No folder "${wanted}". Use an id or a path from get_overview or from the new folders of get_intake.`)
 }
 
 /** Unit by key, symbol or name; 'pcs' by default. */
@@ -123,19 +151,19 @@ function resolveUnitKey(s: InventorySnapshot, text: string | undefined): string 
   return hit.key
 }
 
-function resolveAttribute(s: InventorySnapshot, text: string): Attribute {
+function resolveAttribute(attrs: Attribute[], text: string): Attribute {
   const wanted = text.trim()
-  const hit = s.attributes.find((a) => a.id === wanted) ?? s.attributes.find((a) => same(a.name, wanted))
-  if (!hit) throw new ToolError(`No attribute "${wanted}". Attributes: ${s.attributes.map((a) => a.name).join(', ') || 'none'}.`)
+  const hit = attrs.find((a) => a.id === wanted) ?? attrs.find((a) => same(a.name, wanted))
+  if (!hit) throw new ToolError(`No attribute "${wanted}". Attributes: ${attrs.map((a) => a.name).join(', ') || 'none'}.`)
   return hit
 }
 
-function resolveAttributes(s: InventorySnapshot, list: NonNullable<NewItemArgs['attributes']>): DraftNewItem['attributes'] {
+function resolveAttributes(attrs: Attribute[], list: NonNullable<NewItemArgs['attributes']>): DraftNewItem['attributes'] {
   const seen = new Set<Id>()
   const shared: DraftNewItem['attributes'] = []
   const axes: DraftNewItem['attributes'] = []
   for (const x of list) {
-    const a = resolveAttribute(s, x.attribute)
+    const a = resolveAttribute(attrs, x.attribute)
     if (seen.has(a.id)) throw new ToolError(`Attribute "${a.name}" is listed twice.`)
     seen.add(a.id)
     if (x.axis) axes.push({ attributeId: a.id, value: null, axis: true })
@@ -163,18 +191,18 @@ function resolveTags(s: InventorySnapshot, tags: DraftNewTag[], wanted: string[]
 const describe = (key: string, params?: Record<string, string>) => messageFor(key, params)
 
 /** The axes (attribute ids) of an item, existing or new. */
-function axesOf(s: InventorySnapshot, newItem: DraftNewItem | null, itemId: Id): Attribute[] {
+function axesOf(s: InventorySnapshot, attrs: Attribute[], newItem: DraftNewItem | null, itemId: Id): Attribute[] {
   if (!newItem) return itemAxes(s, itemId)
-  return newItem.attributes.flatMap((x) => (x.axis ? s.attributes.filter((a) => a.id === x.attributeId) : []))
+  return newItem.attributes.flatMap((x) => (x.axis ? attrs.filter((a) => a.id === x.attributeId) : []))
 }
 
 /** Typed `values` (attribute id or name -> text) as axis values; a key that is not an axis of the item is refused. */
-function resolveValues(s: InventorySnapshot, axes: Attribute[], values: Record<string, string> | undefined): { attributeId: Id; value: string }[] {
+function resolveValues(attrs: Attribute[], axes: Attribute[], values: Record<string, string> | undefined): { attributeId: Id; value: string }[] {
   const out: { attributeId: Id; value: string }[] = []
   for (const [key, value] of Object.entries(values ?? {})) {
     const a = axes.find((x) => x.id === key.trim() || same(x.name, key))
     if (!a) {
-      const known = s.attributes.some((x) => x.id === key.trim() || same(x.name, key))
+      const known = attrs.some((x) => x.id === key.trim() || same(x.name, key))
       throw new ToolError(
         known
           ? `"${key}" is not a variant attribute of this item${axes.length ? ` (its variant attributes: ${axes.map((x) => x.name).join(', ')})` : ' (it has none)'}.`
@@ -198,53 +226,93 @@ function collect(errors: string[], label: string, step: () => void): void {
   }
 }
 
+/** A kit refusal as text. `alreadyCreated` names the other line by its number and id; a duplicate name names the one that exists. */
+function refusal(key: string, params: Record<string, string> | undefined, s: InventorySnapshot, draft: IntakeDraftContent): string {
+  const text = describe(key, params)
+  if (key === 'intakes.line.alreadyCreated' && params?.line) {
+    const n = draft.lines.findIndex((l) => l.id === params.line)
+    return `${text} That is ${n >= 0 ? `line ${n + 1} (id ${params.line})` : `line ${params.line}`}.`
+  }
+  if (key === 'intakes.folder.duplicate' && params?.id) {
+    const path = folderChoices(s, draft).find((f) => f.id === params.id)?.path
+    return `${text} It is ${path ? `"${path}" ` : ''}(id ${params.id}); use it, or pick another name.`
+  }
+  if (key === 'intakes.attribute.duplicate' && params?.id) {
+    const name = draftAttributes(s, draft).find((a) => a.id === params.id)?.name
+    return `${text} It is ${name ? `"${name}" ` : ''}(id ${params.id}); use it, or pick another name.`
+  }
+  return text
+}
+const failed = (r: IntakeDraftContent | DraftError, s: InventorySnapshot, draft: IntakeDraftContent): IntakeDraftContent => {
+  if ('errorKey' in r) throw new ToolError(refusal(r.errorKey, r.params, s, draft))
+  return r
+}
+
 // ---- add ----------------------------------------------------------------------------------------------------------
 
-export async function addIntakeLines(ctx: ToolContext, args: { intake: string; newItems?: NewItemArgs[]; lines: LineArgs[] }) {
-  if (!args.lines || args.lines.length === 0) throw new ToolError('Pass at least one line.')
+export async function addIntakeLines(ctx: ToolContext, args: { intake: string; newItems?: NewItemArgs[]; lines?: LineArgs[] }) {
+  const lines = args.lines ?? []
+  const newItems = args.newItems ?? []
+  if (lines.length === 0 && !newItems.some((n) => n.withoutLines)) throw new ToolError('Pass at least one line, or a new item with withoutLines: true.')
   // Uploads come first and the ids are fixed here: editDraft may run its callback twice, and neither may upload again.
-  const lineIds = args.lines.map(() => newId())
+  const lineIds = lines.map(() => newId())
+  const itemIds = newItems.map(() => newId())
   const photos: (DraftLinePhoto | null)[] = []
-  if (args.lines.some((l) => l.photo?.trim())) await checkEditable(ctx, args.intake)
-  for (const [i, l] of args.lines.entries()) {
-    const path = l.photo?.trim()
-    if (!path) {
-      photos.push(null)
-      continue
-    }
+  const itemPhotos: (PhotoFile | null)[] = []
+  if (lines.some((l) => l.photo?.trim()) || newItems.some((n) => n.photo?.trim())) await checkEditable(ctx, args.intake)
+  const upload = async (label: string, path: string | undefined): Promise<DraftLinePhoto | null> => {
+    const file = path?.trim()
+    if (!file) return null
     try {
-      const photo = await attachPhoto(ctx, path)
-      photos.push({ ...photo, replace: l.replacePhoto ?? false })
+      return await attachPhoto(ctx, file)
     } catch (e) {
-      if (e instanceof ToolError) throw new ToolError(`line ${i + 1}: ${e.message}`)
+      if (e instanceof ToolError) throw new ToolError(`${label}: ${e.message}`)
       throw e
     }
   }
+  for (const [i, n] of newItems.entries()) {
+    const p = await upload(`new item ${i + 1}`, n.photo)
+    itemPhotos.push(p ? { provider: p.provider, fileId: p.fileId, url: p.url, urls: p.urls, deleteHandle: p.deleteHandle, width: p.width, height: p.height } : null)
+  }
+  for (const [i, l] of lines.entries()) {
+    const p = await upload(`line ${i + 1}`, l.photo)
+    photos.push(p ? { ...p, replace: l.replacePhoto ?? false } : null)
+  }
   const view = await editDraft(ctx, args.intake, (draft, header, s) => {
     const errors: string[] = []
+    const attrs = draftAttributes(s, draft)
     const tags: DraftNewTag[] = [...(draft.newTags ?? [])]
-    const fresh = new Map<string, DraftNewItem>()
-    ;(args.newItems ?? []).forEach((n, i) => {
+    const fresh = new Map<string, { item: DraftNewItem; withoutLines: boolean; index: number }>()
+    newItems.forEach((n, i) => {
       collect(errors, `new item ${i + 1}`, () => {
         const ref = n.ref?.trim()
         if (!ref) throw new ToolError('"ref" is required: the name lines use to point at this new item.')
         if (fresh.has(ref)) throw new ToolError(`ref "${ref}" is used twice.`)
+        const photo = itemPhotos[i] ?? null
         fresh.set(ref, {
-          id: newId(),
-          name: n.name ?? '',
-          folderId: resolveFolder(s, n.folder),
-          unitKey: resolveUnitKey(s, n.unit),
-          attributes: resolveAttributes(s, n.attributes ?? []),
-          tagIds: resolveTags(s, tags, n.tags ?? []),
+          index: i,
+          withoutLines: n.withoutLines === true,
+          item: {
+            id: itemIds[i]!,
+            name: n.name ?? '',
+            folderId: resolveFolder(s, draft, n.folder),
+            unitKey: resolveUnitKey(s, n.unit),
+            attributes: resolveAttributes(attrs, n.attributes ?? []),
+            tagIds: resolveTags(s, tags, n.tags ?? []),
+            description: field(n.description),
+            ...(photo ? { photo, photoId: itemIds[i]! } : {}),
+          },
         })
       })
     })
 
     let next = draft
-    args.lines.forEach((l, i) => {
+    const used = new Set<string>()
+    lines.forEach((l, i) => {
       collect(errors, `line ${i + 1}`, () => {
         const ref = l.item?.trim() ?? ''
-        const made = fresh.get(ref)
+        const made = fresh.get(ref)?.item
+        if (made) used.add(ref)
         const inDraft = made ? undefined : draft.newItems.find((n) => n.id === ref)
         const newItem = made ?? inDraft ?? null
         const existing = newItem ? undefined : s.items.find((x) => x.id === ref)
@@ -253,7 +321,7 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
           if (itemArchived(s, existing)) throw new ToolError(`"${existing.name}" is archived.`)
         }
         const itemId = newItem?.id ?? existing!.id
-        const axisValues = resolveValues(s, axesOf(s, newItem, itemId), l.values)
+        const axisValues = resolveValues(attrs, axesOf(s, attrs, newItem, itemId), l.values)
         const built = buildDraftLine(
           {
             lineId: lineIds[i]!,
@@ -271,21 +339,25 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
           s,
           next,
         )
-        if ('errorKey' in built) throw new ToolError(describe(built.errorKey, built.params))
+        if ('errorKey' in built) throw new ToolError(refusal(built.errorKey, built.params, s, next))
         next = withLine(next, built.line, built.newItem, built.newTags)
       })
     })
     if (errors.length > 0) throw problems(errors)
-    // A new item that no line points at was not asked for.
-    const unused = [...fresh.entries()].filter(([, n]) => !next.newItems.some((m) => m.id === n.id)).map(([ref]) => `new item "${ref}": no line uses it.`)
+    // A new item lives on its own; one that no line uses and that was not asked for without lines is a slip.
+    const unused: string[] = []
+    for (const [ref, f] of fresh) {
+      if (!used.has(ref) && !f.withoutLines) unused.push(`new item "${ref}": no line uses it (pass withoutLines: true to make it with no stock).`)
+      else if (!next.newItems.some((n) => n.id === f.item.id)) next = withNewItem(next, f.item)
+    }
     if (unused.length > 0) throw problems(unused)
     return { draft: next, header }
   })
-  // Only a saved line makes its picture "used".
-  const warning = markPhotosUsed(
-    ctx,
-    args.lines.flatMap((l, i) => (photos[i] ? [{ file: l.photo!.trim(), intakeId: args.intake.trim(), lineId: lineIds[i]! }] : [])),
-  )
+  // Only a saved line or item makes its picture "used".
+  const warning = markPhotosUsed(ctx, [
+    ...lines.flatMap((l, i) => (photos[i] ? [{ file: l.photo!.trim(), intakeId: args.intake.trim(), lineId: lineIds[i]! }] : [])),
+    ...newItems.flatMap((n, i) => (itemPhotos[i] ? [{ file: n.photo!.trim(), intakeId: args.intake.trim(), lineId: itemIds[i]! }] : [])),
+  ])
   return warning ? { ...view, warning } : view
 }
 
@@ -307,8 +379,9 @@ export async function updateIntakeLine(
   const view = await editDraft(ctx, args.intake, (draft, header, s) => {
     const old = findLine(draft, args.line)
     const newItem = draft.newItems.find((n) => n.id === old.itemId) ?? null
-    const axes = axesOf(s, newItem, old.itemId)
-    const typed = resolveValues(s, axes, args.values)
+    const attrs = draftAttributes(s, draft)
+    const axes = axesOf(s, attrs, newItem, old.itemId)
+    const typed = resolveValues(attrs, axes, args.values)
     const axisValues = [...old.axisValues.filter((v) => !typed.some((t) => t.attributeId === v.attributeId)), ...typed]
     // What is not changed is kept as it is, not read again: a link or a unit that no longer fits does not block an edit of the amount.
     const built = buildDraftLine(
@@ -328,7 +401,7 @@ export async function updateIntakeLine(
       s,
       draft,
     )
-    if ('errorKey' in built) throw new ToolError(`line: ${describe(built.errorKey, built.params)}`)
+    if ('errorKey' in built) throw new ToolError(`line: ${refusal(built.errorKey, built.params, s, draft)}`)
     const line: DraftLine = {
       ...built.line,
       quantity: args.amount === undefined ? old.quantity : built.line.quantity,
@@ -344,27 +417,52 @@ export async function updateIntakeLine(
 export async function removeIntakeLine(ctx: ToolContext, args: { intake: string; line: string }) {
   return editDraft(ctx, args.intake, (draft, header) => {
     const line = findLine(draft, args.line)
-    // Removing the last line of a new item takes the item, and its new tags, with it.
+    // The new item stays (it lives on its own); only a new tag that nothing uses any more goes.
     return { draft: pruneNewItems({ ...draft, lines: draft.lines.filter((l) => l.id !== line.id) }), header }
   })
 }
 
+function findNewItem(draft: IntakeDraftContent, text: string): DraftNewItem {
+  const old = draft.newItems.find((n) => n.id === text.trim())
+  if (!old) throw new ToolError(`No new item "${text}" in this intake. New item ids are in get_intake; an item that is already in stock is not changed here.`)
+  return old
+}
+
 export async function updateNewItem(
   ctx: ToolContext,
-  args: { intake: string; item: string; name?: string; folder?: string; unit?: string; attributes?: NonNullable<NewItemArgs['attributes']>; tags?: string[] },
+  args: {
+    intake: string
+    item: string
+    name?: string
+    description?: string
+    folder?: string
+    unit?: string
+    attributes?: NonNullable<NewItemArgs['attributes']>
+    tags?: string[]
+    /** A picture path from list_photos; an empty text removes the item's photo. */
+    photo?: string
+  },
 ) {
-  return editDraft(ctx, args.intake, (draft, header, s) => {
+  const path = args.photo?.trim()
+  if (path) await checkEditable(ctx, args.intake)
+  const up = path ? await attachPhoto(ctx, path) : null
+  const photo: PhotoFile | null = up ? { provider: up.provider, fileId: up.fileId, url: up.url, urls: up.urls, deleteHandle: up.deleteHandle, width: up.width, height: up.height } : null
+  const photoId = newId()
+  const view = await editDraft(ctx, args.intake, (draft, header, s) => {
     const id = args.item.trim()
-    const old = draft.newItems.find((n) => n.id === id)
-    if (!old) throw new ToolError(`No new item "${args.item}" in this intake. New item ids are in get_intake; an item that is already in stock is not changed here.`)
+    const old = findNewItem(draft, id)
+    const attrs = draftAttributes(s, draft)
     const tags: DraftNewTag[] = [...(draft.newTags ?? [])]
+    const { photo: oldPhoto, photoId: oldPhotoId, ...rest } = old
     const item: DraftNewItem = {
-      ...old,
+      ...rest,
       name: args.name === undefined ? old.name : args.name,
-      folderId: args.folder === undefined ? old.folderId : resolveFolder(s, args.folder),
+      description: args.description === undefined ? old.description : field(args.description),
+      folderId: args.folder === undefined ? old.folderId : resolveFolder(s, draft, args.folder),
       unitKey: args.unit === undefined ? old.unitKey : resolveUnitKey(s, args.unit),
-      attributes: args.attributes === undefined ? old.attributes : resolveAttributes(s, args.attributes),
+      attributes: args.attributes === undefined ? old.attributes : resolveAttributes(attrs, args.attributes),
       tagIds: args.tags === undefined ? old.tagIds : resolveTags(s, tags, args.tags),
+      ...(photo ? { photo, photoId } : args.photo === undefined && oldPhoto ? { photo: oldPhoto, ...(oldPhotoId ? { photoId: oldPhotoId } : {}) } : {}),
     }
     const axisIds = new Set(item.attributes.filter((x) => x.axis).map((x) => x.attributeId))
     // Every line of the item is checked again against the changed item (a new variant attribute needs a value on each).
@@ -389,11 +487,114 @@ export async function updateNewItem(
         s,
         draft,
       )
-      if ('errorKey' in built) errors.push(`line ${i + 1}: ${describe(built.errorKey, built.params)}`)
+      if ('errorKey' in built) errors.push(`line ${i + 1}: ${refusal(built.errorKey, built.params, s, draft)}`)
       else lines = lines.map((l) => (l.id === old.id ? { ...old, axisValues: built.line.axisValues } : l))
     })
     if (errors.length > 0) throw problems(errors)
-    const nextItem = draft.newItems.map((n) => (n.id === id ? { ...item, name: item.name.trim() } : n))
-    return { draft: pruneNewItems({ ...(tags.length > 0 || draft.newTags ? { newTags: tags } : {}), newItems: nextItem, lines }), header }
+    const withItem = withNewItem({ ...draft, ...(tags.length > 0 || draft.newTags ? { newTags: tags } : {}), lines }, item)
+    return { draft: pruneNewItems(withItem), header }
+  })
+  const warning = path && photo ? markPhotosUsed(ctx, [{ file: path, intakeId: args.intake.trim(), lineId: args.item.trim() }]) : null
+  return warning ? { ...view, warning } : view
+}
+
+export async function removeNewItem(ctx: ToolContext, args: { intake: string; item: string }) {
+  return editDraft(ctx, args.intake, (draft, header) => {
+    const old = findNewItem(draft, args.item)
+    return { draft: withoutNewItem(draft, old.id).content, header }
+  })
+}
+
+// ---- draft folders and attributes ---------------------------------------------------------------------------------
+
+function findNewFolder(s: InventorySnapshot, draft: IntakeDraftContent, text: string): DraftNewFolder {
+  const wanted = text.trim()
+  const key = wanted.replace(/\s*\/\s*/g, '/').toLowerCase()
+  const own = draft.newFolders ?? []
+  const hit = own.find((f) => f.id === wanted) ?? own.find((f) => draftFolderPath(s, draft, f.id).toLowerCase() === key)
+  if (!hit) throw new ToolError(`No new folder "${text}" in this intake: folders already in stock are not changed here. New folders are in get_intake.`)
+  return hit
+}
+
+export async function createFolder(ctx: ToolContext, args: { intake: string; name: string; parent?: string }) {
+  const id = newId()
+  return editDraft(ctx, args.intake, (draft, header, s) => {
+    const parentId = resolveFolder(s, draft, args.parent)
+    return { draft: failed(withNewFolder(draft, s, { id, name: args.name ?? '', parentId }), s, draft), header }
+  })
+}
+
+export async function updateFolder(ctx: ToolContext, args: { intake: string; folder: string; name?: string; parent?: string }) {
+  return editDraft(ctx, args.intake, (draft, header, s) => {
+    const old = findNewFolder(s, draft, args.folder)
+    const next: DraftNewFolder = {
+      ...old,
+      name: args.name === undefined ? old.name : args.name,
+      parentId: args.parent === undefined ? old.parentId : resolveFolder(s, draft, args.parent),
+    }
+    return { draft: failed(withNewFolder(draft, s, next), s, draft), header }
+  })
+}
+
+export async function removeFolder(ctx: ToolContext, args: { intake: string; folder: string }) {
+  return editDraft(ctx, args.intake, (draft, header, s) => {
+    const old = findNewFolder(s, draft, args.folder)
+    return { draft: failed(withoutNewFolder(draft, old.id), s, draft), header }
+  })
+}
+
+export interface AttributeArgs {
+  name: string
+  kind: 'number' | 'list' | 'text'
+  unit?: string
+  siPrefixes?: boolean
+  options?: string[]
+}
+const KIND: Record<AttributeArgs['kind'], AttributeKind> = { number: 'number', list: 'enum', text: 'text' }
+
+function attributeOf(id: Id, a: AttributeArgs): DraftNewAttribute {
+  const kind = KIND[a.kind]
+  if (!kind) throw new ToolError(`Attribute kind "${String(a.kind)}" is not one of number, list, text.`)
+  return {
+    id,
+    name: a.name ?? '',
+    kind,
+    unit: kind === 'number' ? (a.unit ?? '').trim() : '',
+    siPrefixes: kind === 'number' && a.siPrefixes === true,
+    options: kind === 'enum' ? (a.options ?? []).map((o) => o.trim()).filter((o) => o !== '') : [],
+  }
+}
+
+function findNewAttribute(draft: IntakeDraftContent, text: string): DraftNewAttribute {
+  const wanted = text.trim()
+  const own = draft.newAttributes ?? []
+  const hit = own.find((a) => a.id === wanted) ?? own.find((a) => same(a.name, wanted))
+  if (!hit) throw new ToolError(`No new attribute "${text}" in this intake: attributes already in stock are not changed here. New attributes are in get_intake.`)
+  return hit
+}
+
+export async function createAttribute(ctx: ToolContext, args: AttributeArgs & { intake: string }) {
+  const id = newId()
+  return editDraft(ctx, args.intake, (draft, header, s) => ({ draft: failed(withNewAttribute(draft, s, attributeOf(id, args)), s, draft), header }))
+}
+
+export async function updateAttribute(ctx: ToolContext, args: Partial<AttributeArgs> & { intake: string; attribute: string }) {
+  return editDraft(ctx, args.intake, (draft, header, s) => {
+    const old = findNewAttribute(draft, args.attribute)
+    const merged: AttributeArgs = {
+      name: args.name ?? old.name,
+      kind: args.kind ?? (old.kind === 'enum' ? 'list' : old.kind),
+      unit: args.unit ?? old.unit,
+      siPrefixes: args.siPrefixes ?? old.siPrefixes,
+      options: args.options ?? old.options,
+    }
+    return { draft: failed(withNewAttribute(draft, s, attributeOf(old.id, merged)), s, draft), header }
+  })
+}
+
+export async function removeAttribute(ctx: ToolContext, args: { intake: string; attribute: string }) {
+  return editDraft(ctx, args.intake, (draft, header, s) => {
+    const old = findNewAttribute(draft, args.attribute)
+    return { draft: failed(withoutNewAttribute(draft, old.id), s, draft), header }
   })
 }

@@ -12,7 +12,7 @@ import * as read from './tools/read'
 export const ACTOR_FALLBACK = 'AI · MCP'
 export const SERVER_NAME = 'antresol'
 export const SERVER_INSTRUCTIONS =
-  'Antresol is a home inventory. These tools only read it and prepare intake drafts (receipts of purchased items); nothing is added to the stock until the person reviews and commits the intake in the Antresol app. Start with get_overview to learn the inventories, folders, attributes and units. Search before proposing a new item, and prefer topping up an existing item or adding a value to it over a new item. Do not guess: put doubts in the chat, not in the draft. The person commits the intake in the app.'
+  'Antresol is a home inventory. These tools only read it and prepare intake drafts (receipts of purchased items, with the folders, attributes and items they need); nothing is added to the stock until the person reviews and commits the intake in the Antresol app. Start with get_overview to learn the inventories, folders, attributes and units. Search before proposing a new item, and prefer topping up an existing item or adding a value to it over a new item. Do not guess: put doubts in the chat, not in the draft. The person commits the intake in the app.'
 
 /** A tool's handler as the SDK calls it: the result as JSON text, an error as `isError` text without secrets. */
 export function handler<A>(
@@ -97,7 +97,7 @@ export function registerReadTools(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
     'get_intake',
     {
-      description: 'One intake in full: header, items it would create (with "looks like" warnings), and lines with their problems.',
+      description: 'One intake in full: header, folders, attributes and items it would create (with "looks like" warnings and problems), and lines with their problems.',
       inputSchema: { intake: z.string().describe('Intake id, from list_intakes.') },
       annotations: READ_ONLY,
     },
@@ -178,7 +178,7 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
     'add_intake_lines',
     {
       description:
-        'Add receipt lines to an intake draft, all or none: if any line is wrong nothing is saved and every problem is listed. Search first (search) and top up what already exists: add a value ("4k7") to an existing item before creating a new item. A line is an item (id from search, or the id or ref of a new item), its values for the item\'s variant attributes (by attribute name or id), an amount and optionally the price paid for the whole line and a link. Write amounts, values and prices as a person would: "10", "4k7", "2.5 m", "35.50". To bring something that is not in the inventory, describe it in newItems (ref, name, folder, unit, attributes, tags) and point lines at its ref; an attribute with axis: true makes each line give its own value. Unknown tag names become new tags. A line may carry a photo (path from list_photos); pictures are uploaded before anything is saved.',
+        'Add receipt lines to an intake draft, all or none: if any line is wrong nothing is saved and every problem is listed. Search first (search) and top up what already exists: add a value ("4k7") to an existing item before creating a new item. A line is an item (id from search, or the id or ref of a new item), its values for the item\'s variant attributes (by attribute name or id), an amount and optionally the price paid for the whole line and a link. Write amounts, values and prices as a person would: "10", "4k7", "2.5 m", "35.50". To bring something that is not in the inventory, describe it in newItems (ref, name, folder, unit, attributes, tags) and point lines at its ref; an attribute with axis: true makes each line give its own value. Unknown tag names become new tags. Folders and attributes the items need that are not in stock yet are made first with create_folder and create_attribute (the draft\'s own folders and attributes can then be named in folder paths and attribute names). A new item may carry a description and its own photo (path from list_photos). A line may carry a photo only when it makes a new item or a new variant, not when it tops up stock that exists; a second line that makes the same new variant is refused (edit the first line). Pictures are uploaded before anything is saved.',
       inputSchema: {
         intake: intakeId,
         newItems: z
@@ -192,10 +192,14 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
                 .array(z.object({ attribute: z.string().describe('Attribute id or name.'), value: z.string().optional(), axis: z.boolean().optional() }))
                 .optional(),
               tags: z.array(z.string()).optional().describe('Tag ids or names.'),
+              description: z.string().optional().describe('A line or two about the item.'),
+              photo: z.string().optional().describe('The item\'s own picture: a path from list_photos. One per new item; it goes to the item\'s card.'),
+              withoutLines: z.boolean().optional().describe('true: make the item with no line, so with no stock yet.'),
             }),
           )
           .optional(),
-        lines: z.array(
+        lines: z
+          .array(
           z.object({
             item: z.string().describe('Item id, id of a new item of the intake, or a ref from newItems.'),
             values: z.record(z.string(), z.string()).optional().describe('Variant attribute (name or id) -> value text, like {"Resistance": "4k7"}.'),
@@ -205,7 +209,9 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
             photo: z.string().optional().describe('A picture to attach to the line: a path from list_photos (absolute or relative to the photos folder). It is uploaded once to the photo store, whatever line it is used on.'),
             replacePhoto: z.boolean().optional().describe('Replace the photo the variant already has in stock with this one; otherwise the variant keeps its photo.'),
           }),
-        ),
+          )
+          .optional()
+          .describe('May be left out when every new item has withoutLines: true.'),
       },
       annotations: WRITE,
     },
@@ -232,7 +238,7 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
     'remove_intake_line',
     {
-      description: 'Remove a line from an intake draft; a new item that no line uses any more goes with it.',
+      description: 'Remove a line from an intake draft. A new item the line belonged to stays (use remove_new_item to drop it).',
       inputSchema: { intake: intakeId, line: z.string().describe('Line id, from get_intake.') },
       annotations: { ...WRITE, destructiveHint: true, idempotentHint: true },
     },
@@ -242,19 +248,110 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
     'update_new_item',
     {
       description:
-        'Change an item the draft will create (its name, folder, unit, attributes or tags). Only what is passed changes; attributes and tags replace the lists. Not for items already in stock.',
+        'Change an item the draft will create (its name, description, photo, folder, unit, attributes or tags). Only what is passed changes; attributes and tags replace the lists; an empty photo removes the picture. Not for items already in stock.',
       inputSchema: {
         intake: intakeId,
         item: z.string().describe('Id of the new item, from get_intake.'),
         name: z.string().optional(),
-        folder: z.string().optional(),
+        description: z.string().optional().describe('An empty text clears it.'),
+        folder: z.string().optional().describe('Folder id or path, also a new folder of the draft.'),
         unit: z.string().optional(),
         attributes: z.array(z.object({ attribute: z.string(), value: z.string().optional(), axis: z.boolean().optional() })).optional(),
         tags: z.array(z.string()).optional(),
+        photo: z.string().optional().describe('A picture path from list_photos (uploaded once); an empty text removes the item\'s photo.'),
       },
       annotations: { ...WRITE, idempotentHint: true },
     },
     writer(ctx, drafts.updateNewItem),
+  )
+  server.registerTool(
+    'remove_new_item',
+    {
+      description: 'Remove an item the draft would create, together with its lines. Not for items already in stock.',
+      inputSchema: { intake: intakeId, item: z.string().describe('Id of the new item, from get_intake.') },
+      annotations: { ...WRITE, destructiveHint: true, idempotentHint: true },
+    },
+    writer(ctx, drafts.removeNewItem),
+  )
+  server.registerTool(
+    'create_folder',
+    {
+      description:
+        'Add a folder to an intake draft; it is made when the person commits. Check get_overview and search first: use a folder that already fits. A name the parent already has is refused and the existing folder is named. Items then use it by path in "folder".',
+      inputSchema: {
+        intake: intakeId,
+        name: z.string(),
+        parent: z.string().optional().describe('Parent folder: id or path, in stock or a new folder of this draft; the root when left out.'),
+      },
+      annotations: WRITE,
+    },
+    writer(ctx, drafts.createFolder),
+  )
+  server.registerTool(
+    'update_folder',
+    {
+      description: 'Rename or move a folder the draft will create (not a folder already in stock). Only what is passed changes; an empty parent moves it to the root.',
+      inputSchema: {
+        intake: intakeId,
+        folder: z.string().describe('The new folder: id or path, from get_intake.'),
+        name: z.string().optional(),
+        parent: z.string().optional().describe('Id or path of the new parent; empty for the root.'),
+      },
+      annotations: { ...WRITE, idempotentHint: true },
+    },
+    writer(ctx, drafts.updateFolder),
+  )
+  server.registerTool(
+    'remove_folder',
+    {
+      description: 'Remove a folder the draft will create. Refused while a new folder or new item is in it.',
+      inputSchema: { intake: intakeId, folder: z.string().describe('The new folder: id or path, from get_intake.') },
+      annotations: { ...WRITE, destructiveHint: true, idempotentHint: true },
+    },
+    writer(ctx, drafts.removeFolder),
+  )
+  server.registerTool(
+    'create_attribute',
+    {
+      description:
+        'Add an attribute to an intake draft; it is made when the person commits. Check get_overview first: use an attribute that already fits. A name that is taken is refused and the existing attribute is named. New items use it by name (as a shared value or a variant attribute).',
+      inputSchema: {
+        intake: intakeId,
+        name: z.string(),
+        kind: z.enum(['number', 'list', 'text']),
+        unit: z.string().optional().describe('number: the unit symbol, like "Ω" or "V".'),
+        siPrefixes: z.boolean().optional().describe('number: values may take k, M, µ, ... prefixes.'),
+        options: z.array(z.string()).optional().describe('list: the choices, in order.'),
+      },
+      annotations: WRITE,
+    },
+    writer(ctx, drafts.createAttribute),
+  )
+  server.registerTool(
+    'update_attribute',
+    {
+      description: 'Change an attribute the draft will create (not one already in stock). Only what is passed changes.',
+      inputSchema: {
+        intake: intakeId,
+        attribute: z.string().describe('The new attribute: id or name, from get_intake.'),
+        name: z.string().optional(),
+        kind: z.enum(['number', 'list', 'text']).optional(),
+        unit: z.string().optional(),
+        siPrefixes: z.boolean().optional(),
+        options: z.array(z.string()).optional(),
+      },
+      annotations: { ...WRITE, idempotentHint: true },
+    },
+    writer(ctx, drafts.updateAttribute),
+  )
+  server.registerTool(
+    'remove_attribute',
+    {
+      description: 'Remove an attribute the draft will create. Refused while a new item uses it.',
+      inputSchema: { intake: intakeId, attribute: z.string().describe('The new attribute: id or name, from get_intake.') },
+      annotations: { ...WRITE, destructiveHint: true, idempotentHint: true },
+    },
+    writer(ctx, drafts.removeAttribute),
   )
 }
 

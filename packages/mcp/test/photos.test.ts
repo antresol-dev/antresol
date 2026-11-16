@@ -178,11 +178,11 @@ describe('photo in draft lines', () => {
     let v = (await drafts.addIntakeLines(ctx, {
       intake: id,
       lines: [
-        { item: f.ids.esp32, amount: '1', photo: 'a.png' },
-        { item: f.ids.esp32, amount: '2', photo: 'a.png' },
+        { item: f.ids.resistor, values: { Resistance: '1k' }, amount: '1', photo: 'a.png' },
+        { item: f.ids.resistor, values: { Resistance: '2k' }, amount: '2', photo: 'a.png' },
       ],
     })) as any
-    v = (await drafts.addIntakeLines(ctx, { intake: id, lines: [{ item: f.ids.esp32, amount: '3', photo: 'a.png' }] })) as any
+    v = (await drafts.addIntakeLines(ctx, { intake: id, lines: [{ item: f.ids.resistor, values: { Resistance: '3k' }, amount: '3', photo: 'a.png' }] })) as any
     expect(uploads).toHaveLength(1)
     expect(v.lines.map((l: any) => l.photo?.url)).toEqual(Array(3).fill('https://img.example/1'))
     expect(v.lines[0].photo.replace).toBe(false)
@@ -196,8 +196,8 @@ describe('photo in draft lines', () => {
       .addIntakeLines(ctx, {
         intake: id,
         lines: [
-          { item: f.ids.esp32, amount: '1', photo: 'a.png' },
-          { item: f.ids.esp32, amount: '' },
+          { item: f.ids.resistor, values: { Resistance: '1k' }, amount: '1', photo: 'a.png' },
+          { item: f.ids.resistor, values: { Resistance: '2k' }, amount: '' },
         ],
       })
       .catch((e: unknown) => e)
@@ -206,7 +206,7 @@ describe('photo in draft lines', () => {
     const missingLine = await drafts.updateIntakeLine(ctx, { intake: id, line: 'nope', photo: 'a.png' }).catch((e: unknown) => e)
     expect(missingLine).toBeInstanceOf(ToolError)
     expect((await listPhotos(ctx, { onlyNew: true })).photos).toHaveLength(1)
-    await drafts.addIntakeLines(ctx, { intake: id, lines: [{ item: f.ids.esp32, amount: '1', photo: 'a.png' }] })
+    await drafts.addIntakeLines(ctx, { intake: id, lines: [{ item: f.ids.resistor, values: { Resistance: '1k' }, amount: '1', photo: 'a.png' }] })
     expect(uploads).toHaveLength(1)
     expect((await listPhotos(ctx, { onlyNew: true })).photos).toEqual([])
   })
@@ -216,7 +216,7 @@ describe('photo in draft lines', () => {
     await attachPhoto(ctx, 'a.png') // uploaded and remembered while the folder is still writable
     await chmod(stateDir, 0o500)
     try {
-      const v = (await drafts.addIntakeLines(ctx, { intake: id, lines: [{ item: f.ids.esp32, amount: '1', photo: 'a.png' }] })) as any
+      const v = (await drafts.addIntakeLines(ctx, { intake: id, lines: [{ item: f.ids.resistor, values: { Resistance: '1k' }, amount: '1', photo: 'a.png' }] })) as any
       expect(v.lines).toHaveLength(1)
       expect(v.warning).toMatch(/saved/)
       expect(((await read.getIntake(ctx, { intake: id })) as any).lines).toHaveLength(1)
@@ -225,29 +225,28 @@ describe('photo in draft lines', () => {
     }
   })
 
-  it('replacePhoto sets replace; update sets, keeps and removes (empty) the photo', async () => {
+  it('a new variant keeps no "replace"; update sets, keeps and removes (empty) the photo; a top-up takes none', async () => {
     const { ctx, id, f, uploads } = await draftSetup(true)
-    let v = (await drafts.addIntakeLines(ctx, { intake: id, lines: [{ item: f.ids.resistor, values: { Resistance: '4k7' }, amount: '1' }] })) as any
+    let v = (await drafts.addIntakeLines(ctx, { intake: id, lines: [{ item: f.ids.resistor, values: { Resistance: '33k' }, amount: '1' }] })) as any
     const line = v.lines[0].id as string
     expect(v.lines[0].photo).toBeNull()
-    // The variant has no photo in stock: "replace" has nothing to replace and is dropped.
+    // The variant is new: "replace" has nothing to replace and is dropped.
     v = (await drafts.updateIntakeLine(ctx, { intake: id, line, photo: 'a.png', replacePhoto: true })) as any
     expect(v.lines[0].photo).toMatchObject({ url: 'https://img.example/1', replace: false })
-    await f.apply({ type: 'photo.add', id: newId(), itemId: f.ids.resistor, variantId: f.ids.v4k7, provider: 'x', fileId: 'x', url: 'https://x/1' })
-    ctx.source!.refresh()
-    v = (await drafts.updateIntakeLine(ctx, { intake: id, line, photo: 'a.png', replacePhoto: true })) as any
-    expect(v.lines[0].photo).toMatchObject({ url: 'https://img.example/1', replace: true })
     v = (await drafts.updateIntakeLine(ctx, { intake: id, line, amount: '4' })) as any
     expect(v.lines[0].photo).toMatchObject({ url: 'https://img.example/1' })
     v = (await drafts.updateIntakeLine(ctx, { intake: id, line, photo: '' })) as any
     expect(v.lines[0].photo).toBeNull()
     expect(uploads).toHaveLength(1)
     expect((await read.getIntake(ctx, { intake: id }) as any).lines[0].photo).toBeNull()
+    v = (await drafts.addIntakeLines(ctx, { intake: id, lines: [{ item: f.ids.resistor, values: { Resistance: '4k7' }, amount: '1' }] })) as any
+    const top = v.lines[1].id as string
+    await expect(drafts.updateIntakeLine(ctx, { intake: id, line: top, photo: 'a.png' })).rejects.toThrow(/takes no photo/)
   })
 
   it('without a photo store a line with a photo is refused and lines without photos still save', async () => {
     const { ctx, id, f } = await draftSetup(false)
-    const error = await drafts.addIntakeLines(ctx, { intake: id, lines: [{ item: f.ids.esp32, amount: '1', photo: 'a.png' }] }).catch((e: unknown) => e)
+    const error = await drafts.addIntakeLines(ctx, { intake: id, lines: [{ item: f.ids.resistor, values: { Resistance: '1k' }, amount: '1', photo: 'a.png' }] }).catch((e: unknown) => e)
     expect(error).toBeInstanceOf(ToolError)
     expect((error as Error).message).toContain('no photo store')
     expect(((await read.getIntake(ctx, { intake: id })) as any).lines).toHaveLength(0)

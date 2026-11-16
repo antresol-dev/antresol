@@ -1,5 +1,9 @@
-import { newId, type Id, type Intake, type InventoryStorage } from '@antresol/core'
+import { copyFile, mkdir, mkdtemp } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
+import { newId, type FileStore, type Id, type Intake, type InventoryStorage } from '@antresol/core'
 import { describe, expect, it } from 'vitest'
+import { readConfig } from '../src/config'
 import { ToolError } from '../src/errors'
 import * as drafts from '../src/tools/drafts'
 import * as read from '../src/tools/read'
@@ -67,10 +71,11 @@ describe('addIntakeLines', () => {
     expect(raw.newItems[0]!.tagIds).toContain(f.ids.smd)
     expect(raw.newItems[0]!.tagIds).toContain(raw.newTags![0]!.id)
     expect(raw.lines[0]!.totalPrice).toBe(3550)
-    // a later line adds to the new item by its id
-    const v2 = (await drafts.addIntakeLines(f.ctx, { intake: id, lines: [{ item: raw.newItems[0]!.id, amount: '2' }] })) as any
-    expect(v2.lines).toHaveLength(2)
-    expect(v2.newItems).toHaveLength(1)
+    // a new item without variant attributes is created by one line; a second one is refused and names the first
+    const again = await drafts.addIntakeLines(f.ctx, { intake: id, lines: [{ item: raw.newItems[0]!.id, amount: '2' }] }).catch((e: unknown) => e)
+    expect(again).toBeInstanceOf(ToolError)
+    expect((again as Error).message).toMatch(/already creates[\s\S]*line 1 \(id /)
+    expect((await get(f, id)).lines).toHaveLength(1)
   })
 
   it('new item with a variant attribute takes values per line, and looksLike points at stock', async () => {
@@ -238,7 +243,7 @@ describe('refusals', () => {
 })
 
 describe('edit and remove', () => {
-  it('updates and removes lines; the last line of a new item takes the item and its tag', async () => {
+  it('updates and removes lines; the new item and its tag stay, remove_new_item takes item and lines', async () => {
     const f = await ctxOf()
     const id = await create(f)
     let v = (await drafts.addIntakeLines(f.ctx, {
@@ -256,11 +261,18 @@ describe('edit and remove', () => {
     expect(v.lines[1]).toMatchObject({ amount: '1 pcs', url: 'https://example.com/b' })
     await expect(drafts.updateIntakeLine(f.ctx, { intake: id, line: lb.id, amount: 'x' })).rejects.toBeInstanceOf(ToolError)
     v = await drafts.removeIntakeLine(f.ctx, { intake: id, line: la.id })
+    expect(v.lines).toHaveLength(1)
+    expect(v.newItems).toHaveLength(1)
+    let raw = (await rawIntake(f, id)).draft!
+    expect(raw.newItems).toHaveLength(1)
+    expect(raw.newTags ?? []).toHaveLength(1)
+    await expect(drafts.removeIntakeLine(f.ctx, { intake: id, line: la.id })).rejects.toBeInstanceOf(ToolError)
+    v = await drafts.removeNewItem(f.ctx, { intake: id, item: raw.newItems[0]!.id })
     expect(v.newItems).toHaveLength(0)
-    const raw = (await rawIntake(f, id)).draft!
+    raw = (await rawIntake(f, id)).draft!
     expect(raw.newItems).toHaveLength(0)
     expect(raw.newTags ?? []).toHaveLength(0)
-    await expect(drafts.removeIntakeLine(f.ctx, { intake: id, line: la.id })).rejects.toBeInstanceOf(ToolError)
+    await expect(drafts.removeNewItem(f.ctx, { intake: id, item: 'nope' })).rejects.toBeInstanceOf(ToolError)
   })
 
   it('updates a new item', async () => {
@@ -277,3 +289,187 @@ describe('edit and remove', () => {
   })
 })
 
+
+describe('draft folders and attributes', () => {
+  it('makes nested folders by path, new items use them, get_intake shows them', async () => {
+    const f = await ctxOf()
+    const id = await create(f)
+    let v = (await drafts.createFolder(f.ctx, { intake: id, name: 'Tools' })) as any
+    expect(v.newFolders).toMatchObject([{ path: 'Tools', problem: null }])
+    v = (await drafts.createFolder(f.ctx, { intake: id, name: 'Drills', parent: 'tools' })) as any
+    v = (await drafts.createFolder(f.ctx, { intake: id, name: 'Bits', parent: 'Tools / Drills' })) as any
+    v = (await drafts.createFolder(f.ctx, { intake: id, name: 'Caps', parent: 'Passives' })) as any
+    expect(v.newFolders.map((x: any) => x.path)).toEqual(['Tools', 'Tools/Drills', 'Tools/Drills/Bits', 'Passives/Caps'])
+    v = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'HSS 3 mm', folder: 'Tools/Drills/Bits', description: ' sharp ' }], lines: [{ item: 'a', amount: '2' }] })) as any
+    expect(v.newItems[0]).toMatchObject({ folder: 'Tools/Drills/Bits', description: 'sharp', photo: null, problem: null })
+    expect(v.ok).toBe(true)
+    v = (await drafts.updateFolder(f.ctx, { intake: id, folder: 'Tools/Drills/Bits', name: 'Bit sets', parent: '' })) as any
+    expect(v.newFolders.map((x: any) => x.path)).toContain('Bit sets')
+    expect(v.newItems[0].folder).toBe('Bit sets')
+    await expect(drafts.updateFolder(f.ctx, { intake: id, folder: 'Passives', name: 'x' })).rejects.toBeInstanceOf(ToolError)
+  })
+
+  it('refuses a duplicate folder and attribute with the existing one named, a cycle and a non-empty removal', async () => {
+    const f = await ctxOf()
+    const id = await create(f)
+    const dupe = (await drafts.createFolder(f.ctx, { intake: id, name: 'resistors', parent: 'Passives' }).catch((e: unknown) => e)) as Error
+    expect(dupe).toBeInstanceOf(ToolError)
+    expect(dupe.message).toContain('Passives/Resistors')
+    expect(dupe.message).toContain(f.ids.resistors)
+    await drafts.createFolder(f.ctx, { intake: id, name: 'Tools' })
+    await drafts.createFolder(f.ctx, { intake: id, name: 'Drills', parent: 'Tools' })
+    const again = (await drafts.createFolder(f.ctx, { intake: id, name: 'TOOLS' }).catch((e: unknown) => e)) as Error
+    expect(again.message).toMatch(/already a folder[\s\S]*"Tools"[\s\S]*id /)
+    const cycle = await drafts.updateFolder(f.ctx, { intake: id, folder: 'Tools', parent: 'Tools/Drills' }).catch((e: unknown) => e)
+    expect((cycle as Error).message).toMatch(/inside itself/)
+    const full = await drafts.removeFolder(f.ctx, { intake: id, folder: 'Tools' }).catch((e: unknown) => e)
+    expect((full as Error).message).toMatch(/Move or remove/)
+    expect(((await drafts.removeFolder(f.ctx, { intake: id, folder: 'Tools/Drills' })) as any).newFolders).toHaveLength(1)
+    const a = (await drafts.createAttribute(f.ctx, { intake: id, name: 'resistance', kind: 'number' }).catch((e: unknown) => e)) as Error
+    expect(a).toBeInstanceOf(ToolError)
+    expect(a.message).toContain(f.ids.resistance)
+    expect(a.message).toContain('Resistance')
+  })
+
+  it('makes attributes of the three kinds; new items use them by name, also as an axis', async () => {
+    const f = await ctxOf()
+    const id = await create(f)
+    let v = (await drafts.createAttribute(f.ctx, { intake: id, name: 'Voltage', kind: 'number', unit: 'V', siPrefixes: true })) as any
+    v = (await drafts.createAttribute(f.ctx, { intake: id, name: 'Package', kind: 'list', options: ['0603', ' 0805 ', ''] })) as any
+    v = (await drafts.createAttribute(f.ctx, { intake: id, name: 'Maker', kind: 'text', unit: 'ignored' })) as any
+    expect(v.newAttributes).toMatchObject([
+      { name: 'Voltage', kind: 'number', unit: 'V', siPrefixes: true, options: [], problem: null },
+      { name: 'Package', kind: 'list', unit: null, siPrefixes: false, options: ['0603', '0805'] },
+      { name: 'Maker', kind: 'text', unit: null },
+    ])
+    v = (await drafts.addIntakeLines(f.ctx, {
+      intake: id,
+      newItems: [{ ref: 'c', name: 'Cap', attributes: [{ attribute: 'Voltage', axis: true }, { attribute: 'Package', value: '0603' }] }],
+      lines: [
+        { item: 'c', values: { Voltage: '16' }, amount: '5' },
+        { item: 'c', values: { Voltage: '25' }, amount: '5' },
+      ],
+    })) as any
+    expect(v.lines.map((l: any) => l.values)).toEqual(['16 V', '25 V'])
+    expect(v.newItems[0].attributes).toEqual([
+      { name: 'Package', value: '0603', axis: false },
+      { name: 'Voltage', value: null, axis: true },
+    ])
+    const inUse = await drafts.removeAttribute(f.ctx, { intake: id, attribute: 'Voltage' }).catch((e: unknown) => e)
+    expect((inUse as Error).message).toMatch(/uses this attribute/)
+    v = (await drafts.updateAttribute(f.ctx, { intake: id, attribute: 'Maker', name: 'Brand' })) as any
+    expect(v.newAttributes[2].name).toBe('Brand')
+    v = (await drafts.removeAttribute(f.ctx, { intake: id, attribute: 'Brand' })) as any
+    expect(v.newAttributes).toHaveLength(2)
+    await expect(drafts.updateAttribute(f.ctx, { intake: id, attribute: 'Resistance', name: 'x' })).rejects.toBeInstanceOf(ToolError)
+  })
+
+  it('a second line making the same variant of a new item names the first line; an existing item works the same', async () => {
+    const f = await ctxOf()
+    const id = await create(f)
+    await drafts.createAttribute(f.ctx, { intake: id, name: 'Inductance', kind: 'number', unit: 'H', siPrefixes: true })
+    const args = { intake: id, newItems: [{ ref: 'l', name: 'Inductor', attributes: [{ attribute: 'Inductance', axis: true }] }] }
+    await drafts.addIntakeLines(f.ctx, { ...args, lines: [{ item: 'l', values: { Inductance: '4.7 µH' }, amount: '3' }] })
+    const draft = (await rawIntake(f, id)).draft!
+    const err = (await drafts.addIntakeLines(f.ctx, { intake: id, lines: [{ item: draft.newItems[0]!.id, values: { Inductance: '4u7' }, amount: '1' }] }).catch((e: unknown) => e)) as Error
+    expect(err).toBeInstanceOf(ToolError)
+    expect(err.message).toContain(`line 1 (id ${draft.lines[0]!.id})`)
+    expect((await get(f, id)).lines).toHaveLength(1)
+    await drafts.addIntakeLines(f.ctx, { intake: id, lines: [{ item: f.ids.resistor, values: { Resistance: '47k' }, amount: '1' }] })
+    const e2 = (await drafts.addIntakeLines(f.ctx, { intake: id, lines: [{ item: f.ids.resistor, values: { Resistance: '47000' }, amount: '1' }] }).catch((e: unknown) => e)) as Error
+    expect(e2.message).toMatch(/already creates[\s\S]*line 2/)
+  })
+
+  it('refuses a draft folder with a problem in get_intake, not ok', async () => {
+    const f = await ctxOf()
+    const id = await create(f)
+    await drafts.createFolder(f.ctx, { intake: id, name: 'Tools' })
+    await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Saw', withoutLines: true, folder: 'Tools' }], lines: [] })
+    // a folder with that name appears in stock meanwhile
+    await f.apply({ type: 'folder.create', id: newId(), inventoryId: f.inventoryId, parentId: null, name: 'Tools', description: null })
+    f.ctx.source!.refresh()
+    const v = await get(f, id)
+    expect(v.newFolders[0].problem).toMatch(/already exists/)
+    expect(v.ok).toBe(false)
+  })
+})
+
+describe('items without lines', () => {
+  it('an item with no line is refused unless withoutLines; it lives on and shows in get_intake', async () => {
+    const f = await ctxOf()
+    const id = await create(f)
+    const bad = await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Saw' }], lines: [{ item: f.ids.esp32, amount: '1' }] }).catch((e: unknown) => e)
+    expect((bad as Error).message).toMatch(/no line uses it[\s\S]*withoutLines/)
+    expect((await get(f, id)).lines).toHaveLength(0)
+    const none = await drafts.addIntakeLines(f.ctx, { intake: id, lines: [] }).catch((e: unknown) => e)
+    expect(none).toBeInstanceOf(ToolError)
+    const v = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Saw', description: 'Hand saw', withoutLines: true }] })) as any
+    expect(v.lines).toHaveLength(0)
+    expect(v.newItems).toMatchObject([{ name: 'Saw', description: 'Hand saw' }])
+    expect(v.ok).toBe(true)
+    const raw = (await rawIntake(f, id)).draft!
+    // a line later still leaves it be, and removing that line keeps the item
+    const w = (await drafts.addIntakeLines(f.ctx, { intake: id, lines: [{ item: raw.newItems[0]!.id, amount: '1' }] })) as any
+    expect(w.lines).toHaveLength(1)
+    await drafts.removeIntakeLine(f.ctx, { intake: id, line: w.lines[0].id })
+    expect((await get(f, id)).newItems).toHaveLength(1)
+    const u = (await drafts.updateNewItem(f.ctx, { intake: id, item: raw.newItems[0]!.id, description: '' })) as any
+    expect(u.newItems[0].description).toBeNull()
+  })
+})
+
+describe('item photos', () => {
+  async function photoSetup() {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'antresol-itemphoto-'))
+    const photosDir = path.join(root, 'photos')
+    await mkdir(photosDir)
+    await copyFile(path.join(__dirname, 'fixtures', 'gradient.png'), path.join(photosDir, 'a.png'))
+    const uploads: string[] = []
+    const files: FileStore = {
+      provider: 'fake',
+      async upload(_blob, name) {
+        uploads.push(name)
+        return { provider: 'fake', fileId: `f${uploads.length}`, url: `https://img.example/${uploads.length}`, urls: null, deleteHandle: null }
+      },
+    }
+    const f = await ctxOf()
+    f.ctx.config = { ...readConfig({ ANTRESOL_PHOTOS_DIR: photosDir }, 'linux', root), stateDir: path.join(root, 'state') }
+    f.ctx.files = files
+    return { f, uploads, id: await create(f) }
+  }
+
+  it('a new item takes a photo with or without lines; update sets and removes it', async () => {
+    const { f, uploads, id } = await photoSetup()
+    let v = (await drafts.addIntakeLines(f.ctx, {
+      intake: id,
+      newItems: [
+        { ref: 'a', name: 'Saw', photo: 'a.png', withoutLines: true },
+        { ref: 'b', name: 'Plane', photo: 'a.png' },
+      ],
+      lines: [{ item: 'b', amount: '1' }],
+    })) as any
+    expect(uploads).toHaveLength(1)
+    expect(v.newItems.map((n: any) => n.photo)).toEqual(['https://img.example/1', 'https://img.example/1'])
+    expect(v.lines[0].photo).toBeNull()
+    const raw = (await rawIntake(f, id)).draft!
+    expect(raw.newItems.every((n) => n.photoId)).toBe(true)
+    const nid = raw.newItems[0]!.id
+    v = (await drafts.updateNewItem(f.ctx, { intake: id, item: nid, name: 'Saw 2' })) as any
+    expect(v.newItems[0].photo).toBe('https://img.example/1')
+    v = (await drafts.updateNewItem(f.ctx, { intake: id, item: nid, photo: '' })) as any
+    expect(v.newItems[0].photo).toBeNull()
+    v = (await drafts.updateNewItem(f.ctx, { intake: id, item: nid, photo: 'a.png' })) as any
+    expect(v.newItems[0].photo).toBe('https://img.example/1')
+    expect(uploads).toHaveLength(1)
+  })
+
+  it('a photo on a top-up line is refused with the app text; a new variant takes it', async () => {
+    const { f, id } = await photoSetup()
+    const bad = (await drafts.addIntakeLines(f.ctx, { intake: id, lines: [{ item: f.ids.resistor, values: { Resistance: '4k7' }, amount: '1', photo: 'a.png' }] }).catch((e: unknown) => e)) as Error
+    expect(bad).toBeInstanceOf(ToolError)
+    expect(bad.message).toMatch(/adds stock to something you already have takes no photo/)
+    expect((await get(f, id)).lines).toHaveLength(0)
+    const ok = (await drafts.addIntakeLines(f.ctx, { intake: id, lines: [{ item: f.ids.resistor, values: { Resistance: '33k' }, amount: '1', photo: 'a.png' }] })) as any
+    expect(ok.lines[0].photo.url).toBe('https://img.example/1')
+  })
+})

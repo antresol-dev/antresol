@@ -6,6 +6,7 @@ import {
   type Attribute,
   type AttributeKind,
   type CommittedLine,
+  type IntakeCreated,
   type CustomUnit,
   type Folder,
   type Intake,
@@ -220,6 +221,7 @@ export const toIntake = (r: Row): Intake => ({
   // jsonb arrives parsed (PGlite and Neon alike).
   draft: (r.draft as IntakeDraftContent | null) ?? null,
   lines: (r.lines as CommittedLine[] | null) ?? null,
+  created: (r.created as IntakeCreated | null) ?? null,
   draftRev: r.draft_rev as string,
   ...audited(r),
   committedAt: toIsoOrNull(r.committed_at),

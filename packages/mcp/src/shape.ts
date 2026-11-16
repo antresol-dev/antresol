@@ -35,13 +35,14 @@ export function amountText(s: InventorySnapshot, q: Quantity, unitKey: string): 
   return formatAmount(q, resolveUnit(unitKey, s.units) ?? BUILTIN_UNITS.pcs)
 }
 
-export type IntakeProblem = 'item_archived' | 'missing_axis_value' | 'invalid_value' | 'unknown_item' | 'invalid_link'
+export type IntakeProblem = 'item_archived' | 'missing_axis_value' | 'invalid_value' | 'unknown_item' | 'invalid_link' | 'duplicate_line'
 const PROBLEM_TEXT: Record<IntakeProblem, string> = {
   item_archived: 'the item or its folder is archived',
   missing_axis_value: 'a value is missing for a variant attribute of the item',
   invalid_value: 'a value, the unit, a tag or the name does not fit',
   unknown_item: 'the item does not exist',
   invalid_link: 'the link is not a valid web address',
+  duplicate_line: 'another line of this intake already creates this variant or item',
 }
 export const problemText = (code: IntakeProblem): string => PROBLEM_TEXT[code]
 

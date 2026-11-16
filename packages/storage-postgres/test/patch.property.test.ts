@@ -620,7 +620,7 @@ const GENERATORS: Record<Command['type'], Generator> = {
       const intake: Intake = {
         id: newId(), inventoryId: s.inventory.id, status: 'draft',
         header: { shop: p.oneOrNull(['LCSC', ' Mouser ']), orderNumber: null, purchasedOn: '2026-11-13', note: p.one(NOTES) },
-        draft, lines: null, draftRev: newId(), createdAt: '', createdBy: '', updatedAt: '', updatedBy: '', committedAt: null,
+        draft, lines: null, created: null, draftRev: newId(), createdAt: '', createdBy: '', updatedAt: '', updatedBy: '', committedAt: null,
       }
       return buildIntakeCommit(intake, resolveIntake(draft, s), s, rev)
     },

@@ -1,7 +1,7 @@
 import type { Command, PhotoFile } from './commands'
 import type { Id } from './ids'
 import { snapshotAfterIntake } from './intakes'
-import { isColorHex, isIconName, isSourceUrl, MAX_NAME_LENGTH } from './limits'
+import { isColorHex, isIconName, isSourceUrl, MAX_ATTRIBUTE_UNIT_LENGTH, MAX_NAME_LENGTH } from './limits'
 import { CURRENCIES } from './money'
 import {
   isDeleteHandle,
@@ -63,7 +63,6 @@ export class DomainError extends Error {
 /** Attributes of one inventory shown in lists ("Show in lists"). */
 export const MAX_PINNED_ATTRIBUTES = 2
 
-const MAX_UNIT = 16
 const ATTRIBUTE_KINDS: readonly AttributeKind[] = ['text', 'enum', 'number']
 
 // ---- normalization ----
@@ -119,10 +118,26 @@ export function normalizeCommand(c: Command): Command {
       purchasedOn: c.header.purchasedOn.trim(),
       note: desc(c.header.note) ?? null,
     }
+    // A command built before draft folders, attributes and the created record reads as creating none of them.
+    const older = c as Partial<Pick<IntakeCommit, 'newFolders' | 'newAttributes' | 'created'>>
+    out.newFolders = (older.newFolders ?? []).map((f) => ({ ...f, name: f.name.trim() }))
+    out.newAttributes = (older.newAttributes ?? []).map((a) => {
+      const number = a.kind === 'number'
+      return { ...a, name: a.name.trim(), options: a.options.map((o) => o.trim()), unit: number ? a.unit.trim() : '', siPrefixes: number && a.siPrefixes }
+    })
+    const named = <T extends { name: string }>(rows: T[]) => rows.map((r) => ({ ...r, name: r.name.trim() }))
+    const created = older.created ?? { folders: [], attributes: [], tags: [], items: [] }
+    out.created = {
+      folders: named(created.folders),
+      attributes: named(created.attributes),
+      tags: named(created.tags),
+      items: named(created.items),
+    }
     out.newTags = c.newTags.map((t) => ({ ...t, name: t.name.trim() }))
     out.newItems = c.newItems.map((n) => ({
       ...n,
       name: n.name.trim(),
+      description: desc(n.description) ?? null,
       tagIds: [...new Set(n.tagIds)],
       attributes: n.attributes.map((x) => ({ ...x, value: desc(x.value) ?? null })),
     }))
@@ -257,7 +272,7 @@ function checkValue(a: Attribute, value: string | null) {
   if (a.kind === 'text' && value.trim() === '') fail('invalid_option')
 }
 function checkUnit(unit: string | undefined) {
-  if (unit !== undefined && unit.trim().length > MAX_UNIT) fail('name_too_long')
+  if (unit !== undefined && unit.trim().length > MAX_ATTRIBUTE_UNIT_LENGTH) fail('name_too_long')
 }
 /** A list option that is dropped must not be a value of any item or variant, archived ones included. */
 function checkDroppedOptions(s: Snap, a: Attribute, options: string[] | undefined) {
@@ -360,6 +375,51 @@ function onceEach(ids: Id[]) {
   if (new Set(ids).size !== ids.length) fail('invalid_option')
 }
 
+/** New folders of intake.commit: as folder.create, every parent an active folder of the copy or an earlier new folder
+ *  (so no cycle), no name twice (trim, no case) among the active folders under one parent. A folder the copy holds
+ *  already is this command's own, landed before (a retry). */
+function checkIntakeFolders(s: Snap, c: IntakeCommit) {
+  onceEach(c.newFolders.map((f) => f.id))
+  c.newFolders.forEach((f, index) => {
+    if (s.folders.some((x) => x.id === f.id)) return
+    checkName(f.name)
+    if (f.parentId !== null) {
+      const at = c.newFolders.findIndex((x) => x.id === f.parentId)
+      if (at >= index) fail('invalid_option')
+      if (at < 0) activeFolder(s, f.parentId)
+    }
+    const sibling = (x: { id: Id; parentId: Id | null; name: string }) => x.id !== f.id && x.parentId === f.parentId && same(x.name, f.name)
+    if (s.folders.some((x) => sibling(x) && !folderArchived(s, x.id))) fail('duplicate_name')
+    if (c.newFolders.some(sibling)) fail('duplicate_name')
+  })
+}
+
+/** New attributes of intake.commit: as attribute.create, no name twice (trim, no case) in the inventory. An attribute
+ *  the copy holds already is this command's own (a retry). */
+function checkIntakeAttributes(s: Snap, c: IntakeCommit) {
+  onceEach(c.newAttributes.map((a) => a.id))
+  for (const a of c.newAttributes) {
+    if (s.attributes.some((x) => x.id === a.id)) continue
+    checkName(a.name)
+    if (!ATTRIBUTE_KINDS.includes(a.kind)) fail('invalid_option')
+    checkUnit(a.unit)
+    if (s.attributes.some((x) => x.id !== a.id && same(x.name, a.name))) fail('duplicate_name')
+    if (c.newAttributes.some((x) => x.id !== a.id && same(x.name, a.name))) fail('duplicate_name')
+  }
+}
+
+/** The created record names only rows of this command. */
+function checkIntakeCreated(c: IntakeCommit) {
+  const within = (named: { id: Id }[], made: { id: Id }[]) => {
+    const ids = new Set(made.map((x) => x.id))
+    if (named.some((x) => !ids.has(x.id))) fail('invalid_option')
+  }
+  within(c.created.folders, c.newFolders)
+  within(c.created.attributes, c.newAttributes)
+  within(c.created.tags, c.newTags)
+  within(c.created.items, c.newItems)
+}
+
 /** New tags of intake.commit: as tag.create. A tag the copy holds already is this command's own, landed before (a retry),
  *  no duplicate of itself. */
 function checkIntakeTags(s: Snap, c: IntakeCommit) {
@@ -445,8 +505,12 @@ function checkIntakeLines(c: IntakeCommit) {
 function checkIntakeCommit(s: Snap, c: IntakeCommit) {
   needInventory(s, c.inventoryId)
   checkDate(c.header.purchasedOn)
+  checkIntakeFolders(s, c)
+  checkIntakeAttributes(s, c)
   checkIntakeTags(s, c)
-  checkIntakeItems(s, c)
+  // New items may sit in new folders and use new attributes.
+  checkIntakeItems(snapshotAfterIntake(s, { ...c, newTags: [], newItems: [], newVariants: [], unarchiveVariants: [] }), c)
+  checkIntakeCreated(c)
 
   const withItems = snapshotAfterIntake(s, { ...c, newVariants: [], unarchiveVariants: [] })
   onceEach(c.newVariants.map((v) => v.id))

@@ -1348,7 +1348,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     const old = intakes.find((i) => i.id === id)
     const base: Intake = old ?? {
       id, inventoryId: ref.inventoryId, status: 'draft', header: { shop: null, orderNumber: null, purchasedOn: '', note: null },
-      draft: null, lines: null, draftRev: '', createdAt: at, createdBy: by, updatedAt: at, updatedBy: by, committedAt: null,
+      draft: null, lines: null, created: null, draftRev: '', createdAt: at, createdBy: by, updatedAt: at, updatedBy: by, committedAt: null,
     }
     return [{ ...write(base), updatedAt: at, updatedBy: by }, ...intakes.filter((i) => i.id !== id)]
   }
@@ -1475,6 +1475,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     header: local.header,
     draft: local.content,
     lines: null,
+    created: null,
     draftRev: local.baseDraftRev ?? '',
     createdAt: '',
     createdBy: '',

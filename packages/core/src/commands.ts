@@ -1,5 +1,5 @@
 import type { Id } from './ids'
-import type { CommittedLine, IntakeHeader } from './intakes'
+import type { CommittedLine, IntakeCreated, IntakeHeader } from './intakes'
 import type { AttributeKind, Rendition } from './model'
 import type { Quantity } from './quantity'
 
@@ -139,9 +139,10 @@ export type Command =
   | ({ type: 'photo.replace'; variantId: Id; id: Id; itemId: Id; replaces: Id | null } & PhotoFile)
   | { type: 'photo.remove'; id: Id }
   | { type: 'photo.reorder'; itemId: Id; orderedIds: Id[] }
-  /** Commits an intake draft in one write (spec 2026-11-13 intakes §7): new items before their variants, archived
-   *  variants back from the archive, photos, one `receipt` per line marked with the intake, and the intake row becomes
-   *  committed with `lines` and `header`. `baseRev`: the source revision the draft was resolved against; storage refuses
+  /** Commits an intake draft in one write (spec 2026-11-13 intakes §7, 2026-11-16 intake entities §7): new folders
+   *  (parents first), new attributes, new tags, new items before their variants, archived variants back from the
+   *  archive, photos, one `receipt` per line marked with the intake, and the intake row becomes committed with `lines`,
+   *  `header` and `created`. New folders and items carry no icon or colour. `baseRev`: the source revision the draft was resolved against; storage refuses
    *  a stale one, except that a retry of an intake already committed writes nothing. `baseDraftRev`: the draft's
    *  `draftRev` the command was built from; storage refuses it when the draft was saved since (another device's edits
    *  are never dropped silently). `axisPosition`: null for a shared attribute. `replaces`: undefined adds the photo; otherwise as photo.replace. */
@@ -152,12 +153,18 @@ export type Command =
       baseRev: string
       baseDraftRev: string
       header: IntakeHeader
+      /** Folders the commit creates, every parent before its children; `parentId` an existing folder or an earlier one
+       *  of this list. A folder the copy holds already is this command's own. */
+      newFolders: { id: Id; parentId: Id | null; name: string }[]
+      /** Attributes the commit creates (`newItems[].attributes` may name them), as attribute.create. */
+      newAttributes: { id: Id; name: string; kind: AttributeKind; options: string[]; unit: string; siPrefixes: boolean }[]
       /** Tags the commit creates (`newItems[].tagIds` may name them); a tag the copy holds already is this command's own. */
       newTags: { id: Id; name: string }[]
       newItems: {
         id: Id
         folderId: Id | null
         name: string
+        description: string | null
         unitKey: string
         tagIds: Id[]
         attributes: { attributeId: Id; value: string | null; axisPosition: number | null }[]
@@ -167,6 +174,8 @@ export type Command =
       receipts: { movementId: Id; itemId: Id; variantId: Id | null; quantity: Quantity; totalPrice: number | null; sourceUrl: string | null }[]
       photos: ({ id: Id; itemId: Id; variantId: Id | null; replaces: Id | null | undefined } & PhotoFile)[]
       lines: CommittedLine[]
+      /** The intake's record of what it created, names at commit time; ids only from this command's new rows. */
+      created: IntakeCreated
     }
   | { type: 'archive'; target: 'inventory' | 'folder' | 'item' | 'variant'; id: Id; archiveId: Id }
   | { type: 'restore'; archiveId: Id }

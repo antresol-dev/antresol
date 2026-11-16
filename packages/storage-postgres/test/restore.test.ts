@@ -490,7 +490,7 @@ describe('restore', () => {
   it('renameIntakeIds renames new tags and their references; a draft without them stays without', async () => {
     const m = (id: Id) => `m:${id}`
     const base = { id: 'i', inventoryId: 'v', status: 'draft', header: { shop: null, orderNumber: null, purchasedOn: '2026-11-13', note: null },
-      lines: null, draftRev: 'r', createdAt: '', createdBy: '', updatedAt: '', updatedBy: '', committedAt: null } as const
+      lines: null, created: null, draftRev: 'r', createdAt: '', createdBy: '', updatedAt: '', updatedBy: '', committedAt: null } as const
     const item = { id: 'n1', name: 'X', folderId: null, unitKey: 'pcs', attributes: [] }
     const tagged = renameIntakeIds({ ...base, draft: { newTags: [{ id: 't1', name: 'Kit' }], newItems: [{ ...item, tagIds: ['t1', 'old'] }], lines: [] } }, m)
     expect(tagged.draft!.newTags).toEqual([{ id: 'm:t1', name: 'Kit' }])

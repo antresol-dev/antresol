@@ -95,6 +95,7 @@ const copyRow = (id: Id, d: LocalIntakeDraft, inventoryId: Id, by: string): Inta
   header: d.header,
   draft: d.content,
   lines: null,
+  created: null,
   draftRev: d.baseDraftRev ?? '',
   createdAt: '',
   createdBy: by,

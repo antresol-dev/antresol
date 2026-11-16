@@ -136,7 +136,8 @@ function resolveFolder(s: InventorySnapshot, draft: IntakeDraftContent, text: st
   if (byId) return byId.id
   const key = wanted.replace(/\s*\/\s*/g, '/').toLowerCase()
   const hits = choices.filter((f) => f.path.toLowerCase() === key)
-  if (hits.length >= 1) return hits[0]!.id
+  if (hits.length > 1) throw new ToolError(`"${wanted}" names more than one folder (ids ${hits.map((h) => h.id).join(', ')}): pass an id.`)
+  if (hits.length === 1) return hits[0]!.id
   throw new ToolError(`No folder "${wanted}". Use an id or a path from get_overview or from the new folders of get_intake.`)
 }
 
@@ -257,28 +258,7 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
   // Uploads come first and the ids are fixed here: editDraft may run its callback twice, and neither may upload again.
   const lineIds = lines.map(() => newId())
   const itemIds = newItems.map(() => newId())
-  const photos: (DraftLinePhoto | null)[] = []
-  const itemPhotos: (PhotoFile | null)[] = []
-  if (lines.some((l) => l.photo?.trim()) || newItems.some((n) => n.photo?.trim())) await checkEditable(ctx, args.intake)
-  const upload = async (label: string, path: string | undefined): Promise<DraftLinePhoto | null> => {
-    const file = path?.trim()
-    if (!file) return null
-    try {
-      return await attachPhoto(ctx, file)
-    } catch (e) {
-      if (e instanceof ToolError) throw new ToolError(`${label}: ${e.message}`)
-      throw e
-    }
-  }
-  for (const [i, n] of newItems.entries()) {
-    const p = await upload(`new item ${i + 1}`, n.photo)
-    itemPhotos.push(p ? { provider: p.provider, fileId: p.fileId, url: p.url, urls: p.urls, deleteHandle: p.deleteHandle, width: p.width, height: p.height } : null)
-  }
-  for (const [i, l] of lines.entries()) {
-    const p = await upload(`line ${i + 1}`, l.photo)
-    photos.push(p ? { ...p, replace: l.replacePhoto ?? false } : null)
-  }
-  const view = await editDraft(ctx, args.intake, (draft, header, s) => {
+  const build = (photos: (DraftLinePhoto | null)[], itemPhotos: (PhotoFile | null)[]) => (draft: IntakeDraftContent, header: IntakeHeader, s: InventorySnapshot) => {
     const errors: string[] = []
     const attrs = draftAttributes(s, draft)
     const tags: DraftNewTag[] = [...(draft.newTags ?? [])]
@@ -352,7 +332,38 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
     }
     if (unused.length > 0) throw problems(unused)
     return { draft: next, header }
-  })
+    }
+  // Refusals that need no I/O come before any upload: the same checks, run on stand-in photos against what the database holds now.
+  if (lines.some((l) => l.photo?.trim()) || newItems.some((n) => n.photo?.trim())) {
+    const { inventory, intake } = await locateIntake(ctx, args.intake)
+    if (intake.status !== 'draft' || intake.draft === null) await checkEditable(ctx, args.intake)
+    const stand: DraftLinePhoto = { provider: 'dry', fileId: 'dry', url: 'dry', urls: null, deleteHandle: null, width: 1, height: 1, replace: false }
+    build(
+      lines.map((l) => (l.photo?.trim() ? { ...stand, replace: l.replacePhoto ?? false } : null)),
+      newItems.map((n) => (n.photo?.trim() ? stand : null)),
+    )(intake.draft!, intake.header, await requireSource(ctx).snapshot(inventory.id))
+  }
+  const photos: (DraftLinePhoto | null)[] = []
+  const itemPhotos: (PhotoFile | null)[] = []
+  const upload = async (label: string, path: string | undefined): Promise<DraftLinePhoto | null> => {
+    const file = path?.trim()
+    if (!file) return null
+    try {
+      return await attachPhoto(ctx, file)
+    } catch (e) {
+      if (e instanceof ToolError) throw new ToolError(`${label}: ${e.message}`)
+      throw e
+    }
+  }
+  for (const [i, n] of newItems.entries()) {
+    const p = await upload(`new item ${i + 1}`, n.photo)
+    itemPhotos.push(p ? { provider: p.provider, fileId: p.fileId, url: p.url, urls: p.urls, deleteHandle: p.deleteHandle, width: p.width, height: p.height } : null)
+  }
+  for (const [i, l] of lines.entries()) {
+    const p = await upload(`line ${i + 1}`, l.photo)
+    photos.push(p ? { ...p, replace: l.replacePhoto ?? false } : null)
+  }
+  const view = await editDraft(ctx, args.intake, build(photos, itemPhotos))
   // Only a saved line or item makes its picture "used".
   const warning = markPhotosUsed(ctx, [
     ...lines.flatMap((l, i) => (photos[i] ? [{ file: l.photo!.trim(), intakeId: args.intake.trim(), lineId: lineIds[i]! }] : [])),

@@ -119,7 +119,7 @@ describe('protocol', () => {
     expect(got.messages).toHaveLength(1)
     expect(got.messages[0]!.role).toBe('user')
     const text = (got.messages[0]!.content as { text: string }).text
-    for (const word of ['/x', 'get_overview', 'list_photos', 'view_photos', 'search', 'add_intake_lines', 'onlyNew: true', '`photo`', 'keep showing as new', 'create_folder', 'create_attribute', 'One photo']) expect(text).toContain(word)
+    for (const word of ['/x', 'get_overview', 'list_photos', 'view_photos', 'search', 'add_intake_lines', 'onlyNew: true', '`photo`', 'never carries a photo', 'keep showing as new', 'create_folder', 'create_attribute', 'One photo']) expect(text).toContain(word)
     const appended = await client.getPrompt({ name: 'intake_from_photos', arguments: { intake: 'abc' } })
     expect((appended.messages[0]!.content as { text: string }).text).toContain('abc')
   })

@@ -225,6 +225,26 @@ describe('photo in draft lines', () => {
     }
   })
 
+  it('refusals that need no I/O make no upload: photo on a top-up, a second creating line, an unknown item', async () => {
+    const { ctx, id, f, uploads } = await draftSetup(true)
+    const top = await drafts.addIntakeLines(ctx, { intake: id, lines: [{ item: f.ids.resistor, values: { Resistance: '4k7' }, amount: '1', photo: 'a.png' }] }).catch((e: unknown) => e)
+    expect((top as Error).message).toMatch(/takes no photo/)
+    const dup = await drafts
+      .addIntakeLines(ctx, {
+        intake: id,
+        lines: [
+          { item: f.ids.resistor, values: { Resistance: '1k' }, amount: '1' },
+          { item: f.ids.resistor, values: { Resistance: '1k' }, amount: '1', photo: 'a.png' },
+        ],
+      })
+      .catch((e: unknown) => e)
+    expect((dup as Error).message).toMatch(/already creates/)
+    const unknown = await drafts.addIntakeLines(ctx, { intake: id, lines: [{ item: 'nope', amount: '1', photo: 'a.png' }] }).catch((e: unknown) => e)
+    expect((unknown as Error).message).toMatch(/No item "nope"/)
+    expect(uploads).toHaveLength(0)
+    expect(((await read.getIntake(ctx, { intake: id })) as any).lines).toHaveLength(0)
+  })
+
   it('a new variant keeps no "replace"; update sets, keeps and removes (empty) the photo; a top-up takes none', async () => {
     const { ctx, id, f, uploads } = await draftSetup(true)
     let v = (await drafts.addIntakeLines(ctx, { intake: id, lines: [{ item: f.ids.resistor, values: { Resistance: '33k' }, amount: '1' }] })) as any

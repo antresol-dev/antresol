@@ -380,6 +380,17 @@ describe('draft folders and attributes', () => {
     expect(e2.message).toMatch(/already creates[\s\S]*line 2/)
   })
 
+  it('a path that names an existing and a draft folder is refused with both ids', async () => {
+    const f = await ctxOf()
+    const id = await create(f)
+    await drafts.createFolder(f.ctx, { intake: id, name: 'Tools' })
+    await f.apply({ type: 'folder.create', id: newId(), inventoryId: f.inventoryId, parentId: null, name: 'Tools', description: null })
+    f.ctx.source!.refresh()
+    const err = (await drafts.createFolder(f.ctx, { intake: id, name: 'Saws', parent: 'Tools' }).catch((e: unknown) => e)) as Error
+    expect(err).toBeInstanceOf(ToolError)
+    expect(err.message).toMatch(/more than one folder \(ids \S+, \S+\)/)
+  })
+
   it('refuses a draft folder with a problem in get_intake, not ok', async () => {
     const f = await ctxOf()
     const id = await create(f)

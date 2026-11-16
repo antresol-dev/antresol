@@ -38,6 +38,44 @@ const lines = computed<LineView[]>(() =>
   }),
 )
 
+// What the commit created, as it was named then; an item or folder still there links to its place now.
+interface CreatedRow {
+  key: string
+  text: string
+  to: string | null
+}
+const created = computed(() => {
+  const c = props.intake.created
+  if (!c) return []
+  const path = (id: string | null): string => {
+    const names: string[] = []
+    for (let cur = id, n = 0; cur !== null && n < 32; n++) {
+      const f = c.folders.find((x) => x.id === cur)
+      const e = f ?? props.snapshot.folders.find((x) => x.id === cur)
+      if (!e) break
+      names.unshift(e.name)
+      cur = e.parentId
+    }
+    return names.join(' / ')
+  }
+  const alive = (id: string) => ix.value.folders.has(id) && !ix.value.folders.get(id)?.archivedAt
+  const sections: { key: string; title: string; rows: CreatedRow[] }[] = [
+    { key: 'folders', title: 'intakes.created.folders', rows: c.folders.map((f) => ({ key: f.id, text: path(f.id) || f.name, to: alive(f.id) ? `/folder/${f.id}` : null })) },
+    { key: 'attributes', title: 'intakes.created.attributes', rows: c.attributes.map((a) => ({ key: a.id, text: a.name, to: null })) },
+    { key: 'tags', title: 'intakes.created.tags', rows: c.tags.map((x) => ({ key: x.id, text: x.name, to: null })) },
+    {
+      key: 'items',
+      title: 'intakes.created.items',
+      rows: c.items.map((i) => {
+        const item = ix.value.items.get(i.id)
+        const where = path(i.folderId)
+        return { key: i.id, text: where ? `${i.name} · ${where}` : i.name, to: item && !itemArchived(props.snapshot, item) ? `/item/${i.id}` : null }
+      }),
+    },
+  ]
+  return sections.filter((x) => x.rows.length > 0)
+})
+
 const label = (l: CommittedLine): string => (l.variantLabel ? `${l.itemName} · ${keepValuesTogether(l.variantLabel)}` : l.itemName)
 const meta = computed(() => {
   const i = props.intake
@@ -53,6 +91,27 @@ const meta = computed(() => {
       </p>
       <p v-if="intake.header.note" class="text-base whitespace-pre-line text-muted-foreground wrap-anywhere">{{ intake.header.note }}</p>
     </div>
+
+    <section v-if="created.length > 0" class="grid min-w-0 grid-cols-1 gap-3" :aria-label="$t('intakes.created.title')">
+      <h2 class="section-label px-1 text-xs">{{ $t('intakes.created.title') }}</h2>
+      <div v-for="sec in created" :key="sec.key" class="grid min-w-0 gap-1">
+        <h3 class="px-1 text-sm font-semibold text-muted-foreground">{{ $t(sec.title) }}</h3>
+        <ul class="surface-list">
+          <li
+            v-for="row in sec.rows"
+            :key="row.key"
+            class="relative min-w-0 px-3 py-3 text-sm wrap-anywhere not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
+          >
+            <NuxtLink
+              v-if="row.to"
+              :to="row.to"
+              class="relative rounded-chip font-semibold text-foreground underline decoration-border underline-offset-2 outline-none transition-colors duration-(--dur-fast) after:absolute after:-inset-x-1 after:-inset-y-3 after:content-[''] hover:decoration-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            >{{ row.text }}</NuxtLink>
+            <template v-else>{{ row.text }}</template>
+          </li>
+        </ul>
+      </div>
+    </section>
 
     <section class="grid min-w-0 grid-cols-1 gap-2">
       <h2 class="section-label px-1 text-xs">{{ $t('intakes.record.lines', lines.length) }}</h2>

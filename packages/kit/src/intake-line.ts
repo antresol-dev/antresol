@@ -22,6 +22,7 @@ import {
   type InventorySnapshot,
   type PhotoFile,
   type Quantity,
+  type ResolvedIntake,
 } from '@antresol/core'
 import { amountExample, parseAmountText, parseMoneyText } from './amounts'
 import { parseAttributeInput } from './attribute-values'
@@ -470,4 +471,15 @@ export function priceText(minor: number, currency: string): string {
   if (decimals === 0) return String(minor)
   const digits = String(minor).padStart(decimals + 1, '0')
   return `${digits.slice(0, -decimals)}.${digits.slice(-decimals)}`
+}
+
+/** The commit button's text key and count: "Commit · 3 lines"; with no lines, the new items ("Commit · 2 items"), then the
+ *  folders and attributes alone ("Commit · 2 new parts"). Null when there is nothing to commit (the button is off). */
+export function commitLabel(draft: IntakeDraftContent, resolved: ResolvedIntake): { key: string; count: number } | null {
+  if (draft.lines.length > 0) return { key: 'intakes.screen.commitLines', count: draft.lines.length }
+  const items = resolved.entities.filter((e) => e.kind === 'item').length
+  if (items > 0) return { key: 'intakes.screen.commitItems', count: items }
+  const parts = resolved.entities.length
+  if (parts > 0) return { key: 'intakes.screen.commitParts', count: parts }
+  return null
 }

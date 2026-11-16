@@ -521,7 +521,7 @@ async function remove(): Promise<void> {
     saving.value = false
   }
   open.value = false
-  const label = removed.newItem ? t('intakes.line.removedWithItem', { name: removed.newItem.name }) : t('intakes.line.removed')
+  const label = t('intakes.line.removed')
   toast(label, {
     duration: UNDO_MIN_MS,
     action: { label: t('undo.action'), onClick: () => void props.edit((c) => restoreLine(c, removed)) },

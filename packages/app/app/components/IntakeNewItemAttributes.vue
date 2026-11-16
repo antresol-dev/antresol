@@ -85,7 +85,7 @@ function created(id: Id): void {
     </Button>
 
     <ul v-if="rows.length > 0" class="grid gap-3">
-      <li v-for="row in rows" :key="row.attributeId" class="grid gap-1.5">
+      <li v-for="row in rows" :key="row.attributeId" class="grid gap-2">
         <div class="flex min-h-11 items-center gap-2">
           <Label :for="`intake-attr-${row.attributeId}`" class="min-w-0 flex-1 truncate">{{ row.attribute.name }}</Label>
           <label class="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
@@ -118,7 +118,7 @@ function created(id: Id): void {
     </ul>
 
     <AttributeForm v-if="creating" v-model:busy="formBusy" :attribute="null" @done="created" />
-    <div v-else class="grid gap-1.5">
+    <div v-else class="grid gap-2">
       <Select :model-value="choice" :disabled="disabled" @update:model-value="add">
         <SelectTrigger :aria-label="$t('intakes.line.addAttribute')" class="h-11 w-full">
           <SelectValue :placeholder="$t('intakes.line.addAttribute')" />

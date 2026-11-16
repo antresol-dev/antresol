@@ -744,11 +744,11 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
             </div>
 
             <button type="button" :class="summaryRow" :aria-expanded="tagsOpen" :disabled="disabled" @click="tagsOpen = !tagsOpen">
-              <span class="shrink-0 text-[13px] font-semibold">{{ $t('intakes.line.tags') }}</span>
-              <span class="min-w-0 grow truncate text-right text-[13px]" :class="tagsSummary ? 'text-foreground' : 'text-muted-foreground'">
+              <span class="shrink-0 text-sm font-semibold">{{ $t('intakes.line.tags') }}</span>
+              <span class="min-w-0 grow truncate text-right text-sm" :class="tagsSummary ? 'text-foreground' : 'text-muted-foreground'">
                 {{ tagsSummary || $t('intakes.line.add') }}
               </span>
-              <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-150 motion-reduce:transition-none" :class="tagsOpen ? 'rotate-180' : ''" aria-hidden="true" />
+              <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-(--dur-fast) motion-reduce:transition-none" :class="tagsOpen ? 'rotate-180' : ''" aria-hidden="true" />
             </button>
             <div v-if="tagsOpen" class="py-3">
               <TagPicker v-model="tagIds" :snapshot="s" :extra-tags="draftTags" :locked="disabled" @create="addTag" />

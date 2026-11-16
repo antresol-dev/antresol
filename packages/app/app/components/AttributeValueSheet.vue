@@ -58,6 +58,13 @@ watch(choice, (id, was) => {
   inputError.value = null
 })
 
+// Cancelling the new-attribute form goes back to the first existing attribute; focus returns to the select.
+async function cancelNew(): Promise<void> {
+  choice.value = choices.value[0]?.id ?? ''
+  await nextTick()
+  document.getElementById('attribute-choice')?.focus()
+}
+
 function created(id: Id): void {
   // The new attribute is in the list now (the snapshot reloaded before the form said done).
   choice.value = id
@@ -100,7 +107,15 @@ async function save(): Promise<void> {
           </SelectContent>
         </Select>
       </div>
-      <AttributeForm v-if="creating" v-model:busy="formBusy" :attribute="null" @done="created" />
+      <InlineCreate
+        v-if="creating"
+        :title="$t('attributeSheet.newTitle')"
+        :close-label="$t('attributeSheet.cancelNew')"
+        :busy="formBusy"
+        @cancel="cancelNew"
+      >
+        <AttributeForm v-model:busy="formBusy" :attribute="null" @done="created" />
+      </InlineCreate>
       <template v-else-if="attribute">
         <div class="grid gap-2">
           <Label for="attribute-value">{{ $t('attributeSheet.value') }}</Label>

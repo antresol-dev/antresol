@@ -222,6 +222,8 @@
     "variantTitle": "Attribute values: {name}",
     "attribute": "Attribute",
     "newAttribute": "New attribute…",
+    "newTitle": "New attribute",
+    "cancelNew": "Cancel new attribute",
     "value": "Value",
     "save": "Save"
   },

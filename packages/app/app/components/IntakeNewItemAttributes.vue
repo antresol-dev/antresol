@@ -65,6 +65,13 @@ function add(id: unknown): void {
   attributes.value = [...attributes.value, { attributeId: value, value: null, axis: false }]
   choice.value = ''
 }
+const addTrigger = ref<{ $el?: HTMLElement } | null>(null)
+async function cancelNew(): Promise<void> {
+  creating.value = false
+  await nextTick()
+  const el = addTrigger.value?.$el
+  el?.focus()
+}
 function created(id: Id): void {
   creating.value = false
   attributes.value = [...attributes.value, { attributeId: id, value: null, axis: false }]
@@ -117,10 +124,12 @@ function created(id: Id): void {
       </li>
     </ul>
 
-    <AttributeForm v-if="creating" v-model:busy="formBusy" :attribute="null" @done="created" />
+    <InlineCreate v-if="creating" :title="$t('attributeSheet.newTitle')" :close-label="$t('attributeSheet.cancelNew')" :busy="formBusy" @cancel="cancelNew">
+      <AttributeForm v-model:busy="formBusy" :attribute="null" @done="created" />
+    </InlineCreate>
     <div v-else class="grid gap-2">
       <Select :model-value="choice" :disabled="disabled" @update:model-value="add">
-        <SelectTrigger :aria-label="$t('intakes.line.addAttribute')" class="h-11 w-full">
+        <SelectTrigger ref="addTrigger" :aria-label="$t('intakes.line.addAttribute')" class="h-11 w-full">
           <SelectValue :placeholder="$t('intakes.line.addAttribute')" />
         </SelectTrigger>
         <SelectContent>

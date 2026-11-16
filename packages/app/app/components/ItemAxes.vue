@@ -41,6 +41,12 @@ const choices = computed(() => {
 })
 const creating = computed(() => choice.value === NEW)
 const addLocked = computed(() => busy.value || formBusy.value)
+// Cancelling the new-attribute form goes back to the first existing attribute; focus returns to the select.
+async function cancelNew(): Promise<void> {
+  choice.value = choices.value[0]?.id ?? ''
+  await nextTick()
+  document.getElementById('axis-choice')?.focus()
+}
 function openAdd(): void {
   errorKey.value = null
   choice.value = choices.value[0]?.id ?? NEW
@@ -179,7 +185,15 @@ function select(key: string): void {
             </SelectContent>
           </Select>
         </div>
-        <AttributeForm v-if="creating" v-model:busy="formBusy" :attribute="null" @done="(id) => (choice = id)" />
+        <InlineCreate
+          v-if="creating"
+          :title="$t('attributeSheet.newTitle')"
+          :close-label="$t('attributeSheet.cancelNew')"
+          :busy="formBusy"
+          @cancel="cancelNew"
+        >
+          <AttributeForm v-model:busy="formBusy" :attribute="null" @done="(id) => (choice = id)" />
+        </InlineCreate>
         <p v-else role="alert" class="field-text text-sm text-destructive">
           <template v-if="errorKey">{{ $t(errorKey) }}</template>
         </p>

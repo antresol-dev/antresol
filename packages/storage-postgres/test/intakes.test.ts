@@ -327,6 +327,78 @@ describe('intake.commit', () => {
     expect(replayed.items.find((i) => i.id === content.newItems[0]!.id)!.tagIds.sort()).toEqual([smd, kit].sort())
   })
 
+  /** A draft with a folder chain (the child listed before its parent), a number attribute, and a new item in the child
+   *  with a description, a photo and the attribute as a shared value, besides draftFor's items. */
+  async function entitiesBuilt() {
+    const w = await workshop()
+    const [shelf, box, volt, id, photoId] = [newId(), newId(), newId(), newId(), newId()]
+    const content = draftFor(w)
+    content.newFolders = [{ id: box, name: 'Box', parentId: shelf }, { id: shelf, name: 'Shelf', parentId: null }]
+    content.newAttributes = [{ id: volt, name: 'Voltage', kind: 'number', unit: 'V', siPrefixes: false, options: [] }]
+    const item = content.newItems[0]!
+    item.folderId = box
+    item.description = 'Thick film'
+    item.photoId = photoId
+    item.photo = { provider: 'uploadcare', fileId: 'item-photo', url: 'https://u.example/item-photo' }
+    item.attributes.push({ attributeId: volt, value: '50', axis: false })
+    expect((await w.storage.saveIntakeDraft({ id, inventoryId: w.inv, header: HEADER, content }, null, TEST_ACTOR)).saved).toBe(true)
+    const { snapshot, rev } = await w.storage.loadInventoryWithRev(w.inv)
+    const intake = await intakeOf(w.storage, w.inv, id)
+    const resolved = resolveIntake(intake.draft!, snapshot)
+    expect(resolved.ok).toBe(true)
+    const command = buildIntakeCommit(intake, resolved, snapshot, rev) as IntakeCommit
+    return { ...w, id, shelf, box, volt, photoId, resistor: item.id, snapshot, rev, command }
+  }
+
+  it('creates nested folders, an attribute and an item with its description and photo; records what it created; the patch equals a fresh load', async () => {
+    const w = await entitiesBuilt()
+    expect(w.command.newFolders.map((f) => f.id)).toEqual([w.shelf, w.box])
+
+    const r = await w.storage.apply(w.command, TEST_ACTOR)
+
+    const after = await w.storage.loadInventory(w.inv)
+    expect(after.folders.find((f) => f.id === w.shelf)).toMatchObject({ parentId: null, name: 'Shelf', icon: null, archivedAt: null })
+    expect(after.folders.find((f) => f.id === w.box)).toMatchObject({ parentId: w.shelf, name: 'Box', icon: null })
+    expect(after.attributes.find((a) => a.id === w.volt)).toMatchObject({ name: 'Voltage', kind: 'number', unit: 'V', siPrefixes: false, pinned: false })
+    const item = after.items.find((i) => i.id === w.resistor)!
+    expect(item).toMatchObject({ folderId: w.box, description: 'Thick film', icon: null, color: null })
+    expect(after.itemAttributes.find((x) => x.itemId === w.resistor && x.attributeId === w.volt)).toMatchObject({ value: '50', axisPosition: null })
+    expect(after.photos.find((p) => p.id === w.photoId)).toMatchObject({ itemId: w.resistor, variantId: null, fileId: 'item-photo' })
+
+    const intake = await intakeOf(w.storage, w.inv, w.id)
+    expect(intake.created).toEqual(w.command.created)
+    expect(intake.created).toMatchObject({
+      folders: [{ id: w.shelf, name: 'Shelf', parentId: null }, { id: w.box, name: 'Box', parentId: w.shelf }],
+      attributes: [{ id: w.volt, name: 'Voltage' }],
+      items: [{ id: w.resistor, name: 'Resistor', folderId: w.box }],
+    })
+    expect(normSnapshot(patchSnapshot(w.snapshot, r.patch!))).toEqual(normSnapshot(after))
+  })
+
+  it('a replay after the revision moved on creates no folder, attribute, photo or link a second time (Review Focus 4)', async () => {
+    const w = await entitiesBuilt()
+    await w.storage.apply(w.command, TEST_ACTOR)
+    await w.storage.apply({ type: 'folder.create', id: newId(), inventoryId: w.inv, parentId: null, name: 'Other', description: null }, TEST_ACTOR)
+    const before = await w.storage.loadInventory(w.inv)
+    const intake = await intakeOf(w.storage, w.inv, w.id)
+
+    await w.storage.apply(w.command, TEST_ACTOR)
+
+    const again = await w.storage.loadInventory(w.inv)
+    expect(again.folders).toEqual(before.folders)
+    expect(again.attributes).toEqual(before.attributes)
+    expect(again.photos).toEqual(before.photos)
+    expect(again.itemAttributes).toEqual(before.itemAttributes)
+    expect(normSnapshot(again)).toEqual(normSnapshot(before))
+    expect(await intakeOf(w.storage, w.inv, w.id)).toEqual(intake)
+  })
+
+  it('a committed intake with no created record (committed before it existed) reads created as null', async () => {
+    const w = await workshop()
+    const { id } = await savedAndBuilt(w)
+    expect((await intakeOf(w.storage, w.inv, id)).created).toBeNull()
+  })
+
   it('a retry after the revision moved on succeeds and adds nothing (Review Focus 1)', async () => {
     const w = await workshop()
     const { id, command } = await savedAndBuilt(w)

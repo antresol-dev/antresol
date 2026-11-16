@@ -32,6 +32,33 @@ function check(c: IntakeCommit): Statement[] {
   ]
 }
 
+/** New folders, every parent before its children (the command lists them so, and one statement inserts in `ord`
+ *  order); a folder carries no icon, as an item no icon or colour. A replay or a retry finds the ids and adds nothing. */
+function newFolders(c: IntakeCommit, by: string): Statement[] {
+  if (c.newFolders.length === 0) return []
+  return [
+    sql`insert into folders (id, inventory_id, parent_id, name, created_by, updated_by)
+        select f.id, ${c.inventoryId}::uuid, f.parent_id, f.name, ${by}, ${by}
+        from unnest(${c.newFolders.map((f) => f.id)}::uuid[], ${c.newFolders.map((f) => f.parentId)}::uuid[],
+                    ${c.newFolders.map((f) => f.name)}::text[]) with ordinality as f(id, parent_id, name, ord)
+        where ${PENDING}
+        order by f.ord
+        on conflict (id) do nothing`,
+  ]
+}
+
+/** New attributes, before the items that use them. */
+function newAttributes(c: IntakeCommit, by: string): Statement[] {
+  if (c.newAttributes.length === 0) return []
+  return c.newAttributes.map(
+    (a) => sql`insert into attributes (id, inventory_id, name, kind, options, unit, si_prefixes, created_by, updated_by)
+        select ${a.id}::uuid, ${c.inventoryId}::uuid, ${a.name}::text, ${a.kind}::text, ${a.options}::text[], ${a.unit}::text,
+               ${a.siPrefixes}::boolean, ${by}, ${by}
+        where ${PENDING}
+        on conflict (id) do nothing`,
+  )
+}
+
 /** New tags, before the items that name them. */
 function newTags(c: IntakeCommit, by: string): Statement[] {
   if (c.newTags.length === 0) return []
@@ -51,11 +78,12 @@ function newItems(c: IntakeCommit, by: string): Statement[] {
   const tags = c.newItems.flatMap((n) => [...new Set(n.tagIds)].map((tagId) => ({ itemId: n.id, tagId })))
   return [
     sql`with ins as (
-          insert into items (id, inventory_id, folder_id, name, unit_key, created_by, updated_by)
-          select n.id, ${c.inventoryId}::uuid, n.folder_id, n.name, n.unit_key, ${by}, ${by}
+          insert into items (id, inventory_id, folder_id, name, description, unit_key, created_by, updated_by)
+          select n.id, ${c.inventoryId}::uuid, n.folder_id, n.name, n.description, n.unit_key, ${by}, ${by}
           from unnest(${c.newItems.map((n) => n.id)}::uuid[], ${c.newItems.map((n) => n.folderId)}::uuid[],
-                      ${c.newItems.map((n) => n.name)}::text[], ${c.newItems.map((n) => n.unitKey)}::text[])
-               with ordinality as n(id, folder_id, name, unit_key, ord)
+                      ${c.newItems.map((n) => n.name)}::text[], ${c.newItems.map((n) => n.description)}::text[],
+                      ${c.newItems.map((n) => n.unitKey)}::text[])
+               with ordinality as n(id, folder_id, name, description, unit_key, ord)
           where ${PENDING}
           order by n.ord
           on conflict (id) do nothing
@@ -119,23 +147,24 @@ function unarchive(c: IntakeCommit, by: string): Statement[] {
  *  written committed. Before the receipts, which name it. */
 function committed(c: IntakeCommit, by: string): Statement {
   const h = c.header
-  return sql`insert into intakes (id, inventory_id, status, shop, order_number, purchased_on, note, draft, lines, draft_rev,
+  return sql`insert into intakes (id, inventory_id, status, shop, order_number, purchased_on, note, draft, lines, created, draft_rev,
                                   created_by, updated_by, committed_at)
       select ${c.intakeId}::uuid, ${c.inventoryId}::uuid, 'committed', ${h.shop}::text, ${h.orderNumber}::text,
-             ${h.purchasedOn}::text, ${h.note}::text, null, ${JSON.stringify(c.lines)}::jsonb, gen_random_uuid(),
+             ${h.purchasedOn}::text, ${h.note}::text, null, ${JSON.stringify(c.lines)}::jsonb,
+             ${JSON.stringify(c.created)}::jsonb, gen_random_uuid(),
              ${by}::text, ${by}::text, now()
       where ${PENDING}
       on conflict (id) do update
         set status = 'committed', shop = excluded.shop, order_number = excluded.order_number,
             purchased_on = excluded.purchased_on, note = excluded.note, draft = null, lines = excluded.lines,
-            draft_rev = excluded.draft_rev, updated_at = now(), updated_by = excluded.updated_by,
+            created = excluded.created, draft_rev = excluded.draft_rev, updated_at = now(), updated_by = excluded.updated_by,
             committed_at = excluded.committed_at
         where intakes.status = 'draft'`
 }
 
 /**
- * intake.commit in one batch (spec 2026-11-13 intakes §7), in order: the check (see `check`), new tags, new items with
- * their tags and attributes, new variants with their values, archived variants back, photos (as photo.add and photo.replace), the
+ * intake.commit in one batch (spec 2026-11-13 intakes §7), in order: the check (see `check`), new folders (parents first), new attributes, new tags, new items with
+ * their description, tags and attributes, new variants with their values, archived variants back, photos (as photo.add and photo.replace), the
  * intake row committed, one receipt per line marked with the intake, a new intakes revision. Every write after the check
  * waits on PENDING, and every insert is `on conflict (id) do nothing`.
  */
@@ -143,6 +172,8 @@ export function intakeStatements(c: IntakeCommit, actor: Actor): Statement[] {
   const by = actor.device
   return [
     ...check(c),
+    ...newFolders(c, by),
+    ...newAttributes(c, by),
     ...newTags(c, by),
     ...newItems(c, by),
     ...newVariants(c, by),

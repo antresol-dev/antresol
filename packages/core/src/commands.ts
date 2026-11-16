@@ -38,6 +38,8 @@ export type Command =
       description: string | null
       /** An icon name (isIconName); absent counts as none. */
       icon?: string | null
+      /** #RRGGBB (isColorHex); absent counts as none. */
+      color?: string | null
       unitKey: string
       tagIds: Id[]
       initialReceipt: { movementId: Id; quantity: Quantity; totalPrice: number | null; sourceUrl: string | null } | null
@@ -48,6 +50,7 @@ export type Command =
       name?: string
       description?: string | null
       icon?: string | null
+      color?: string | null
       folderId?: Id | null
       unitKey?: string
       tagIds?: Id[]
@@ -77,8 +80,10 @@ export type Command =
   /** Axis values of one or more variants of the item, applied at once: uniqueness is checked on the final state of all
    *  of them, so two variants may trade values. Axes only; null erases the value; a value not named stays. */
   | { type: 'variant.setValues'; itemId: Id; rows: { variantId: Id; values: { attributeId: Id; value: string | null }[] }[] }
-  | { type: 'tag.create'; id: Id; inventoryId: Id; name: string }
+  | { type: 'tag.create'; id: Id; inventoryId: Id; name: string; color?: string | null }
   | { type: 'tag.rename'; id: Id; name: string }
+  /** Name and colour in one command; tag.rename stays for older apps. */
+  | { type: 'tag.update'; id: Id; name?: string; color?: string | null }
   | { type: 'tag.delete'; id: Id }
   | {
       type: 'attribute.create'

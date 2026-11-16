@@ -18,6 +18,7 @@ import { ensureSchema, LOCK_REV, REV_BUMP } from '../src/migrator'
 import { sql } from '../src/sql'
 import { uuidV5 } from '../src/restore'
 import * as schema6 from './fixtures/schema6-icon-writes'
+import * as schema7 from './fixtures/schema7-color-writes'
 import { openPostgresStorage } from '../src/storage'
 import { attributeCreate, itemCreate, normSnapshot, RENDITION_FIELDS, sizeAxis, TEST_ACTOR, variantsCreate } from './helpers'
 import { renamed, seedRich } from './restore-fixtures'
@@ -466,11 +467,12 @@ describe.skipIf(!url)('Neon conformance', () => {
       try {
         expect(await ensureSchema(writer, 3)).toMatchObject({ state: 'ready', dbVersion: 3 })
         // Schema 3's writes: the revision lock, the command, the bump (its reads back name no new column either).
-        // An app of schema 3 names no `icon` column (frozen inserts of schema 6).
+        // An app of schema 3 names no `icon` or `color` column (frozen inserts of schemas 6 and 7).
         const asOld = (c: Command) => {
           const n = normalizeCommand(c)
           if (n.type === 'folder.create') return [schema6.folderCreate(n, TEST_ACTOR)]
           if (n.type === 'item.create') return schema6.itemCreate(n, TEST_ACTOR)
+          if (n.type === 'tag.create') return [schema7.tagCreate(n, TEST_ACTOR)]
           return toStatements(n, TEST_ACTOR)
         }
         const write = (c: Command) => writer.batch([LOCK_REV, ...asOld(c), REV_BUMP])
@@ -485,14 +487,14 @@ describe.skipIf(!url)('Neon conformance', () => {
           ensureSchema(migrator),
           ...[0, 1, 2, 3].map((i) => write(attributeCreate(inv, newId(), `A${i}`))),
         ])
-        expect(status).toEqual({ state: 'ready', dbVersion: 7, appVersion: 7, minAppSchema: 3 })
+        expect(status).toEqual({ state: 'ready', dbVersion: 8, appVersion: 8, minAppSchema: 3 })
         const prevRevs = writes.map((rows) => rows[0]?.[0]?.value)
         const revs = writes.map((rows) => rows.at(-1)?.[0]?.value)
         // All went through (no deadlock), each after a different revision: none ran beside another.
         expect(new Set(prevRevs).size).toBe(writes.length)
         expect(new Set(revs).size).toBe(writes.length)
         // The app of schema 3 still writes: min_app_schema is 3.
-        expect(await ensureSchema(writer, 3)).toEqual({ state: 'ready', dbVersion: 7, appVersion: 3, minAppSchema: 3 })
+        expect(await ensureSchema(writer, 3)).toEqual({ state: 'ready', dbVersion: 8, appVersion: 3, minAppSchema: 3 })
 
         const { storage } = await openPostgresStorage(migrator)
         const snapshot = await storage.loadInventory(inv)

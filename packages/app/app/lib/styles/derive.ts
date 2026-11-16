@@ -1,7 +1,7 @@
 import { ACCENTS, type AccentName } from '../accent'
 import { borderColor, mix, solidOf, topLevel } from './color'
 import { stack } from './fonts'
-import type { AppSurfaces, Kind, KindState, Mode, MockupTokens, StyleSource, StyleTokens, ThumbTones } from './types'
+import type { AppSurfaces, Kind, KindState, Mode, MockupTokens, StyleSource, StyleTokens } from './types'
 
 /*
  * What every style module builds with: the mock-up's helpers (its build() prelude, S, K, `base` defaults, glass(),
@@ -23,26 +23,6 @@ export function accentOf(mode: Mode, accent: AccentName): { dark: boolean; AL: s
   const AL = ACCENTS[accent].light
   const AD = ACCENTS[accent].dark
   return { dark, AL, AD, A: dark ? AD : AL, onA: dark ? '#16181D' : '#FFFFFF', ink: dark ? AD : mix(AL, '#000000', 0.18) }
-}
-
-/** The design system's six thumbnail tones (thumb-1…6 and thumb-N-foreground), light then dark. */
-export const THUMB_TONES: Record<Mode, ThumbTones> = {
-  light: [
-    { bg: '#E5EAF5', fg: '#34466F' },
-    { bg: '#F3ECE0', fg: '#6B5328' },
-    { bg: '#E3EEE7', fg: '#2F5A41' },
-    { bg: '#F3E6EA', fg: '#6E3346' },
-    { bg: '#ECE8F5', fg: '#4E3F78' },
-    { bg: '#E1EEEF', fg: '#28585C' },
-  ],
-  dark: [
-    { bg: '#273041', fg: '#AFC0E3' },
-    { bg: '#3A3328', fg: '#E3CFA6' },
-    { bg: '#24342B', fg: '#A9D3B9' },
-    { bg: '#3A2830', fg: '#E6B3C4' },
-    { bg: '#312C40', fg: '#C8BCEB' },
-    { bg: '#223638', fg: '#A4D2D4' },
-  ],
 }
 
 /** The mock-up's S(bg, img, sh, fg, tf): a control state; a falsy img, sh or tf is 'none'. */
@@ -201,7 +181,6 @@ export function deriveSurfaces(k: MockupTokens & Partial<AppSurfaces>, mode: Mod
     rowHover: k.rowHover ?? k.kinds.ghost.h.bg,
     chip: k.chip ?? k.chips[0]!,
     thumb: k.thumb ?? k.thumbs[0]!,
-    thumbTones: k.thumbTones ?? THUMB_TONES[mode],
     statusOut: k.statusOut ?? (dark ? '#6B7280' : '#B4BAC4'),
     surface,
     rail: k.rail ? opaque(k.rail) : pageColor,

@@ -28,7 +28,7 @@ function snap(): InventorySnapshot {
       item('i4', 'Wire', null, { unitKey: 'custom:u1' }),
     ],
     variants: [variant('v1', 'i1'), variant('v2', 'i1', ARCH)],
-    tags: [{ id: 't1', inventoryId: 'inv', name: 'Analog', createdAt: '', updatedAt: '', createdBy: '', updatedBy: '' }],
+    tags: [{ id: 't1', inventoryId: 'inv', name: 'Analog', color: null, createdAt: '', updatedAt: '', createdBy: '', updatedBy: '' }],
     attributes: [
       attribute('a1', 'Package', 'enum', { options: ['DIP', 'SOIC'] }),
       attribute('a2', 'Color', 'text'),
@@ -81,6 +81,48 @@ describe('validateCommand', () => {
       expect(code({ type: 'folder.create', id: U('8'), inventoryId: 'inv', parentId: null, name: 'N', description: null, icon })).toBe('invalid_option')
     }
     expect(code(newItem())).toBeNull()
+  })
+
+  it('colours: null or #RRGGBB in capitals, on items and tags', () => {
+    for (const color of [null, '#4F46E5', '#000000']) {
+      expect(code({ type: 'item.update', id: 'i1', color })).toBeNull()
+      expect(code(newItem({ color }))).toBeNull()
+      expect(code({ type: 'tag.update', id: 't1', color })).toBeNull()
+      expect(code({ type: 'tag.create', id: U('9'), inventoryId: 'inv', name: 'New', color })).toBeNull()
+    }
+    for (const color of ['red', '#4F46E', '#4F46E5FF', '#zzzzzz', '4F46E5', '']) {
+      expect(code({ type: 'item.update', id: 'i1', color })).toBe('invalid_option')
+      expect(code(newItem({ color }))).toBe('invalid_option')
+      expect(code({ type: 'tag.update', id: 't1', color })).toBe('invalid_option')
+      expect(code({ type: 'tag.create', id: U('9'), inventoryId: 'inv', name: 'New', color })).toBe('invalid_option')
+    }
+  })
+
+  it('a colour that is not a string is refused, even one that stringifies to a hex', () => {
+    expect(code({ type: 'item.update', id: 'i1', color: ['#4F46E5'] as unknown as string })).toBe('invalid_option')
+    expect(code({ type: 'tag.update', id: 't1', color: 5 as unknown as string })).toBe('invalid_option')
+  })
+
+  it('normalizeCommand upper-cases a colour', () => {
+    expect((normalizeCommand({ type: 'item.update', id: 'i1', color: '#4f46e5' }) as { color: string }).color).toBe('#4F46E5')
+    expect((normalizeCommand({ type: 'tag.create', id: 'x', inventoryId: 'inv', name: 'n', color: '#abcdef' }) as { color: string }).color).toBe('#ABCDEF')
+    expect((normalizeCommand({ type: 'tag.update', id: 't1', color: '#abcdef' }) as { color: string }).color).toBe('#ABCDEF')
+    expect((normalizeCommand({ type: 'tag.update', id: 't1', color: null }) as { color: null }).color).toBeNull()
+    expect('color' in normalizeCommand({ type: 'tag.update', id: 't1', name: 'x' })).toBe(false)
+  })
+
+  it('tag.update: unknown tag, duplicate name, colour alone', () => {
+    expect(code({ type: 'tag.update', id: 'nope', name: 'X' })).toBe('not_found')
+    const two = makeSnapshot({
+      tags: [
+        { id: 't1', inventoryId: 'inv', name: 'Analog', color: null, createdAt: '', updatedAt: '', createdBy: '', updatedBy: '' },
+        { id: 't2', inventoryId: 'inv', name: 'Digital', color: null, createdAt: '', updatedAt: '', createdBy: '', updatedBy: '' },
+      ],
+    })
+    expect(code({ type: 'tag.update', id: 't1', name: 'digital' }, two)).toBe('duplicate_name')
+    expect(code({ type: 'tag.update', id: 't1', name: 'Analog' }, two)).toBeNull()
+    expect(code({ type: 'tag.update', id: 't1', name: ' ' }, two)).toBe('name_required')
+    expect(code({ type: 'tag.update', id: 't1', color: '#4F46E5' }, two)).toBeNull()
   })
 
   it('normalizeCommand trims names, symbols, options, units; empty description is null', () => {

@@ -160,7 +160,7 @@ function addNew(): void {
                 :aria-label="$t('share.open', { name: m.variantName ? `${m.name} · ${m.variantName}` : m.name })"
                 @click="openItem(m)"
               >
-                <ItemThumb :id="m.itemId" :folder-name="m.folderName" :icon="m.icon" :folder-icon="m.folderIcon" :cover="m.cover" class="size-9 rounded-thumb text-xs" />
+                <ItemThumb :id="m.itemId" :folder-name="m.folderName" :icon="m.icon" :folder-icon="m.folderIcon" :cover="m.cover" :color="m.color" class="size-9 rounded-thumb text-xs" />
                 <span class="flex min-w-0 flex-1 flex-col">
                   <span class="truncate text-sm font-semibold" :class="m.outOfStock && 'text-dimmed-foreground'">
                     {{ m.name }}<span v-if="m.variantName" class="font-semibold text-muted-foreground"> · {{ m.variantName }}</span>

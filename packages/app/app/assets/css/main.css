@@ -467,6 +467,24 @@
     backdrop-filter: var(--st-surf-blur);
   }
 
+  /* An item's colour (lib/item-colors colorVars sets --c-light and --c-dark): --c is the shade for the theme. */
+  .colored {
+    --c: var(--c-light);
+  }
+  .dark .colored {
+    --c: var(--c-dark);
+  }
+  /* The item thumbnail: tinted backing, the colour on the letters and icon, a frame over the photo (the size does not change). */
+  .thumb-colored {
+    background: color-mix(in srgb, var(--c) 15%, var(--thumb));
+    color: var(--c);
+    outline: 1.5px solid var(--c);
+    outline-offset: -1.5px;
+  }
+  .dark .thumb-colored {
+    background: color-mix(in srgb, var(--c) 20%, var(--thumb));
+  }
+
   /* A style with several chip colours cycles them in its own CSS (:nth-child with --st-chips-1…, --st-chip-fgs-1…). */
   .tag-chip {
     border-radius: var(--st-chip-r);

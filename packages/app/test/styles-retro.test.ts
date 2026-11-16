@@ -227,12 +227,4 @@ describe('Retro atomic: plan 12', () => {
     expect(build('light', 'teal').kinds.primary.n.bg).toBe('#0F766E')
   })
 
-  it.each(MODES)('%s: row thumbnails take six palette colours with dark ink', (mode) => {
-    const t = build(mode, 'teal')
-    expect(t.thumbTones.map((x) => x.bg)).toEqual(['#E9C46A', '#E76F51', '#2A9D8F', '#9FD3C7', '#F4A58A', '#A9C6E0'])
-    for (const x of t.thumbTones) {
-      expect(x.fg).toBe('#24232B')
-      expect(contrast(x.fg, x.bg), x.bg).toBeGreaterThanOrEqual(4.5)
-    }
-  })
 })

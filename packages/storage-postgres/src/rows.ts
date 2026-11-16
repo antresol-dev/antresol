@@ -91,6 +91,7 @@ export const toItem = (r: Row): Item => ({
   name: r.name as string,
   description: (r.description as string | null) ?? null,
   icon: (r.icon as string | null) ?? null,
+  color: (r.color as string | null) ?? null,
   unitKey: r.unit_key as string,
   tagIds: (r.tag_ids as string[] | null) ?? [],
   ...audited(r),
@@ -110,6 +111,7 @@ export const toTag = (r: Row): Tag => ({
   id: r.id as string,
   inventoryId: r.inventory_id as string,
   name: r.name as string,
+  color: (r.color as string | null) ?? null,
   ...audited(r),
 })
 

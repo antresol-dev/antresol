@@ -144,15 +144,6 @@ export const build: StyleBuild = (mode) => {
 
       // App surfaces (spec §5), where the derived default does not suit Retro atomic (header comment).
       chip: mix(pageColor, dark ? '#F4ECD8' : '#2B2A33', dark ? 0.12 : 0.08),
-      // Row thumbnails (plan 12): the palette's colours with the thumbnails' dark ink, in both themes (as the gallery's).
-      thumbTones: [
-        { bg: mustard, fg: thumbInk },
-        { bg: orange, fg: thumbInk },
-        { bg: teal, fg: thumbInk },
-        { bg: '#9FD3C7', fg: thumbInk },
-        { bg: '#F4A58A', fg: thumbInk },
-        { bg: '#A9C6E0', fg: thumbInk },
-      ],
     },
     mode,
   )

@@ -281,14 +281,12 @@ describe('Neo-brutal: plan 12 (F8)', () => {
     expect(contrast(t.photoFg, t.list)).toBeGreaterThanOrEqual(4.5)
   })
 
-  it.each(MODES)('%s: text on every bright plate is ink (cards in turn, chips, gallery and row thumbnails)', (mode) => {
+  it.each(MODES)('%s: text on every bright plate is ink (cards in turn, chips and gallery)', (mode) => {
     const t = build(mode, 'blue')
-    expect(t.thumbTones.map((x) => x.bg)).toEqual(['#3DDCAA', '#FF8C42', '#FF7AB6', '#FFD23F', '#5B8CFF', '#B08CFF'])
     const plates: [string, string, string][] = [
       ...[t.card, ...t.chips].map((bg) => ['cardFg', t.cardFg, bg] as [string, string, string]),
       ...t.chips.map((bg) => ['chipFgs[0]', t.chipFgs[0]!, bg] as [string, string, string]),
       ...t.thumbs.map((bg) => ['thumbFg', t.thumbFg, bg] as [string, string, string]),
-      ...t.thumbTones.map((x) => ['thumbTone fg', x.fg, x.bg] as [string, string, string]),
     ]
     for (const [label, fg, bg] of plates) {
       expect(fg, `${label} on ${bg}`).toBe('#111111')

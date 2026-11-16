@@ -71,7 +71,7 @@ export interface ItemView {
   crumbs: Crumb[]
   unit: UnitDef
   currency: string
-  tags: { id: Id; name: string }[]
+  tags: { id: Id; name: string; color: string | null }[]
   total: { quantity: Quantity; number: string; unit: string; outOfStock: boolean; avgUnitPrice: number | null; lastUnitPrice: number | null }
   /** The no-variant bucket first when shown, then active variants by their axis values. */
   buckets: BucketRow[]
@@ -228,7 +228,7 @@ export function itemView(s: InventorySnapshot, itemId: Id): ItemView | null {
   const tags = item.tagIds
     .flatMap((id) => {
       const tag = tagsById.get(id)
-      return tag ? [{ id: tag.id, name: tag.name }] : []
+      return tag ? [{ id: tag.id, name: tag.name, color: tag.color }] : []
     })
     .sort(byName)
 

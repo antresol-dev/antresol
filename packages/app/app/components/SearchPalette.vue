@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { useMediaQuery } from '@vueuse/core'
+import { useLocalStorage, useMediaQuery } from '@vueuse/core'
 import { Archive, ArrowLeftRight, Folder, FolderPlus, PackageOpen, Plus, Search, SlidersHorizontal, Tags, X } from '@lucide/vue'
 import { DialogContent, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui'
 import type { Component } from 'vue'
 import { toast } from 'vue-sonner'
+import type { InventorySnapshot } from '@antresol/core'
 import { DialogOverlay } from '@/components/ui/dialog'
 import { errorMessageKey } from '~/lib/errors'
-import { bottomUp, paletteResults, pastedShare, snapshotSearch, stepSelection, type PaletteAction, type PaletteRow } from '~/lib/palette'
+import { bottomUp, paletteResults, pastedShare, sameRef, snapshotSearch, stepSelection, type PaletteAction, type PaletteOther, type PaletteRow, type RowInventory } from '~/lib/palette'
 import { currentInventoryName, NAV_SECTIONS, treeCurrent } from '~/lib/shell'
 import { swipeDownCloses } from '~/lib/swipe'
 import { pathOf, snapshotIndex } from '~/lib/views'
@@ -45,6 +46,56 @@ const scroller = ref<HTMLElement | null>(null)
 const query = ref('')
 const text = computed(() => query.value.trim())
 const inventoryName = computed(() => currentInventoryName(state))
+
+// "All inventories": items and folders of the other inventories whose copy is saved on this device. Remembered.
+const allInventories = useLocalStorage('antresol.palette.allInventories', false)
+const others = shallowRef<PaletteOther[]>([])
+// Snapshot objects kept between openings, by "source:inventory", with the savedAt they were read at: a copy that did not
+// change keeps its object, so the per-snapshot search and index caches (snapshotSearch, snapshotIndex) stay warm.
+const copies = new Map<string, { snapshot: InventorySnapshot; savedAt: string }>()
+let loadingOthers = 0
+async function loadOthers(): Promise<void> {
+  const token = ++loadingOthers
+  const list = state.inventories.filter((e) => e.inventory.archivedAt === null && !sameRef(e.ref, state.current))
+  const loaded = await Promise.all(
+    list.map(async (entry) => {
+      const key = `${entry.ref.sourceId}:${entry.ref.inventoryId}`
+      const read = await workspace.cachedSnapshot(entry.ref).catch(() => null)
+      if (!read) {
+        copies.delete(key)
+        return { entry, snapshot: null }
+      }
+      const kept = copies.get(key)
+      if (kept && kept.savedAt === read.savedAt) return { entry, snapshot: kept.snapshot }
+      copies.set(key, read)
+      return { entry, snapshot: read.snapshot }
+    }),
+  )
+  if (token !== loadingOthers) return
+  // Inventories gone from the list (or the current one) keep nothing.
+  const wanted = new Set(loaded.filter((o) => o.snapshot).map((o) => `${o.entry.ref.sourceId}:${o.entry.ref.inventoryId}`))
+  for (const key of copies.keys()) if (!wanted.has(key)) copies.delete(key)
+  others.value = loaded
+}
+watch(
+  [paletteOpen, allInventories, () => state.inventories, () => state.current],
+  () => {
+    if (paletteOpen.value && allInventories.value) {
+      void loadOthers()
+      return
+    }
+    // Closed: no snapshots in the list, only the objects the next opening reuses. Chip off: nothing kept.
+    loadingOthers++
+    others.value = []
+    if (!allInventories.value) copies.clear()
+    else for (const key of copies.keys()) if (!state.inventories.some((e) => `${e.ref.sourceId}:${e.ref.inventoryId}` === key)) copies.delete(key)
+  },
+  { immediate: true },
+)
+// The chip is for two or more inventories; with one, a remembered "on" searches nothing more.
+const crossing = computed(() => allInventories.value && state.inventories.length >= 2)
+const shownOthers = computed(() => others.value.filter((o) => !sameRef(o.entry.ref, state.current)))
+const skipped = computed(() => (crossing.value && text.value ? shownOthers.value.filter((o) => !o.snapshot).length : 0))
 
 // Built once per snapshot object (snapshots are replaced whole), on the first search; shared with quick add.
 const search = computed(() => (state.snapshot ? snapshotSearch(state.snapshot) : null))
@@ -91,6 +142,7 @@ const groups = computed(() =>
       current: state.current,
       sections: SECTIONS,
       canWrite: !state.readOnly,
+      others: crossing.value ? shownOthers.value : null,
     },
     labelOf,
   ),
@@ -151,6 +203,12 @@ function clear(): void {
   input.value?.focus()
 }
 
+// The chip never takes focus from the field (mousedown is prevented on it); a touch tap focuses it anyway, so the field gets it back.
+function toggleAll(): void {
+  allInventories.value = !allInventories.value
+  input.value?.focus()
+}
+
 // What had focus when the palette opened gets it back when it closes.
 let opener: HTMLElement | null = null
 watch(paletteOpen, (open) => {
@@ -193,11 +251,28 @@ async function run(row: PaletteRow): Promise<void> {
     await openNearest((below ?? above)!)
   } else if (row.kind === 'item') {
     const { itemId, variantId } = row.hit
-    void router.push({ path: `/item/${itemId}`, query: variantId ? { variant: variantId } : {} })
+    await openIn(row.inventory, { path: `/item/${itemId}`, query: variantId ? { variant: variantId } : {} })
   } else if (row.kind === 'folder') {
-    void router.push(`/folder/${row.hit.id}`)
+    await openIn(row.inventory, `/folder/${row.hit.id}`)
   } else {
     await act(row.action)
+  }
+}
+
+// A row of another inventory: as the switcher does, selectInventory sets the current inventory before its first await,
+// so the route pushed next is stamped with it; the screen shows the cached copy at once.
+async function openIn(inventory: RowInventory | null, to: Parameters<typeof router.push>[0]): Promise<void> {
+  if (!inventory) {
+    void router.push(to)
+    return
+  }
+  const selecting = workspace.selectInventory(inventory.ref)
+  // force: a copy of the same inventory from another source still gets its own history entry, stamped with it.
+  void router.push(typeof to === 'string' ? { path: to, force: true } : { ...to, force: true })
+  try {
+    await selecting
+  } catch (e) {
+    toast.error(t(errorMessageKey(e)))
   }
 }
 
@@ -260,6 +335,10 @@ function onTouchEnd(event: TouchEvent): void {
 
 // A match is a square chip inside the text; keys are chips (radius scale, spec 4.2).
 const markClass = 'rounded-none bg-chip text-foreground'
+const chipClass = computed(() => [
+  'pressable shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold',
+  allInventories.value ? 'bg-accent-soft text-accent-soft-foreground' : 'bg-chip text-subtle-foreground',
+])
 const kbdClass = 'rounded-chip bg-chip px-1.5 text-xs font-semibold text-subtle-foreground'
 </script>
 
@@ -331,6 +410,16 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-xs font-semibold text-subtle-
             >
               <X class="size-4" aria-hidden="true" />
             </button>
+            <button
+              v-if="desktop && state.inventories.length >= 2"
+              type="button"
+              :aria-pressed="allInventories"
+              :class="chipClass"
+              @mousedown.prevent
+              @click="toggleAll"
+            >
+              {{ $t('search.allInventories') }}
+            </button>
             <span
               v-if="desktop && inventoryName"
               class="max-w-44 shrink-0 truncate rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent-soft-foreground"
@@ -338,6 +427,16 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-xs font-semibold text-subtle-
               {{ inventoryName }}
             </span>
           </div>
+          <button
+            v-if="!desktop && state.inventories.length >= 2"
+            type="button"
+            :aria-pressed="allInventories"
+            :class="[chipClass, 'min-h-11 min-w-11']"
+            @mousedown.prevent
+            @click="toggleAll"
+          >
+            {{ $t('search.allInventories') }}
+          </button>
           <button
             v-if="!desktop"
             type="button"
@@ -357,6 +456,10 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-xs font-semibold text-subtle-
               : 'flex min-h-0 flex-1 flex-col-reverse overflow-y-auto overscroll-contain p-2'
           "
         >
+          <!-- On the phone the scroller is reversed: first in the DOM is the bottom, so the note sits under the results. -->
+          <p v-if="!desktop && skipped > 0" class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground">
+            {{ $t('search.notOnDevice', skipped) }}
+          </p>
           <div v-if="shownRows.length > 0" :id="listId" role="listbox" :aria-label="$t('search.results')" class="grid min-w-0 grid-cols-1 gap-0.5">
             <div
               v-for="group in shown"
@@ -389,7 +492,7 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-xs font-semibold text-subtle-
                 @click="run(row)"
               >
                 <template v-if="row.kind === 'item'">
-                  <ItemThumb :id="row.hit.itemId" :folder-name="row.hit.folderName" :icon="row.hit.icon" :folder-icon="row.hit.folderIcon" :cover="row.hit.cover" class="size-9 rounded-thumb text-xs" />
+                  <ItemThumb :id="row.hit.itemId" :folder-name="row.hit.folderName" :icon="row.hit.icon" :folder-icon="row.hit.folderIcon" :cover="row.hit.cover" :color="row.hit.color" class="size-9 rounded-thumb text-xs" />
                   <span class="flex min-w-0 flex-1 flex-col">
                     <span class="flex min-w-0 items-center gap-1.5">
                       <span class="min-w-[min(7.5rem,100%)] truncate text-sm font-semibold" :class="row.hit.outOfStock && 'text-dimmed-foreground'">
@@ -464,6 +567,9 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-xs font-semibold text-subtle-
           </div>
           <p v-else class="px-3 py-6 text-center text-sm font-semibold text-muted-foreground">
             {{ $t('search.nothing', { q: text }) }}
+          </p>
+          <p v-if="desktop && skipped > 0" class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground">
+            {{ $t('search.notOnDevice', skipped) }}
           </p>
         </div>
 

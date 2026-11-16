@@ -4,7 +4,7 @@ import { attribute, axis, folder, item, makeSnapshot, shared, stockLine, value, 
 import type { InventorySnapshot, Tag, Variant } from '../src/model'
 
 const audit = { createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z', createdBy: 'test', updatedBy: 'test' }
-const tag = (id: string, name: string): Tag => ({ id, inventoryId: 'inv', name, ...audit })
+const tag = (id: string, name: string): Tag => ({ id, inventoryId: 'inv', name, color: null, ...audit })
 
 /** Variants told apart by one text axis "Value", so the label is the value as written: [id, itemId, value, over?]. */
 function labelled(rows: [string, string, string, Partial<Variant>?][]): Partial<InventorySnapshot> {

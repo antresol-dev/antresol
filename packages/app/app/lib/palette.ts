@@ -2,7 +2,7 @@ import type { Folder, Id, InventorySnapshot, SearchHit } from '@antresol/core'
 import { nearestSuggestion, type NearestSuggestion } from './nearest'
 import { isShareLike, type ShareInput } from './share'
 import type { InventoryRef } from './types'
-import { byName, pathOf, searchRows, snapshotIndex, type SearchRow } from './views'
+import { byName, pathOf, searchRows, snapshotIndex, snapshotSearch, type SearchRow } from './views'
 import type { InventoryEntry } from './workspace'
 
 export { snapshotSearch } from './views'
@@ -109,9 +109,72 @@ export interface PaletteContext {
   current: InventoryRef | null
   sections: ('archive' | 'dictionaries' | 'intakes' | 'settings')[]
   canWrite: boolean
+  /** The other non-archived inventories with the copy saved on this device (null: none saved); null when the "All
+   *  inventories" chip is off. Only items and folders cross inventories, never actions. */
+  others?: PaletteOther[] | null
 }
 
-const sameRef = (a: InventoryRef, b: InventoryRef | null): boolean =>
+export interface PaletteOther {
+  entry: InventoryEntry
+  snapshot: InventorySnapshot | null
+}
+
+/** Where a row from another inventory lives; null on a row of the current one. */
+export interface RowInventory {
+  ref: InventoryRef
+  name: string
+}
+
+export interface AcrossItem {
+  inventory: RowInventory
+  /** Its `path` is "Inventory · Box 3" ("Inventory" at the root). */
+  hit: SearchRow
+}
+export interface AcrossFolder {
+  inventory: RowInventory
+  /** Its `path` is "Inventory · Parent" ("Inventory" at the root). */
+  hit: FolderHit
+}
+export interface AcrossResult {
+  items: AcrossItem[]
+  folders: AcrossFolder[]
+  /** Inventories that are not archived but have no copy on this device. */
+  skipped: number
+}
+
+const joinPath = (inventory: string, path: string): string => (path === '' ? inventory : `${inventory} · ${path}`)
+
+/** Items and folders matching `query` in each of `others`, in their order: at most `limit` items and `folderLimit`
+ *  folders in all. Archived inventories are not searched and not counted as skipped; one without a copy counts in
+ *  `skipped`. Each snapshot's search is cached per snapshot object (snapshotSearch). */
+export function searchAcross(others: PaletteOther[], query: string, limit: number, folderLimit = 5): AcrossResult {
+  const result: AcrossResult = { items: [], folders: [], skipped: 0 }
+  const q = query.trim()
+  for (const { entry, snapshot } of others) {
+    if (entry.inventory.archivedAt !== null) continue
+    if (!snapshot) {
+      result.skipped++
+      continue
+    }
+    if (q === '') continue
+    const inventory: RowInventory = { ref: entry.ref, name: entry.inventory.name }
+    const roomItems = limit - result.items.length
+    if (roomItems > 0) {
+      for (const hit of searchRows(snapshot, snapshotSearch(snapshot).search(q, roomItems))) {
+        result.items.push({ inventory, hit: { ...hit, path: joinPath(inventory.name, hit.path) } })
+      }
+    }
+    const roomFolders = folderLimit - result.folders.length
+    if (roomFolders > 0) {
+      for (const hit of matchFolders(snapshot, q, roomFolders)) {
+        result.folders.push({ inventory, hit: { ...hit, path: joinPath(inventory.name, hit.path) } })
+      }
+    }
+  }
+  return result
+}
+
+export const sameRef = (a: InventoryRef, b: InventoryRef | null): boolean =>
   !!b && a.sourceId === b.sourceId && a.inventoryId === b.inventoryId
 
 /** In this order: addItem (a non-empty query and canWrite), newFolder (with a folder and canWrite), switchInventory for each other inventory, go for each section.
@@ -132,15 +195,16 @@ export function paletteActions(ctx: PaletteContext, labelOf: (a: PaletteAction) 
 
 export type PaletteRow =
   | { kind: 'nearest'; key: string; suggestion: NearestSuggestion }
-  | { kind: 'item'; key: string; hit: SearchRow; name: TextPart[]; variant: TextPart[] | null }
-  | { kind: 'folder'; key: string; hit: FolderHit; name: TextPart[] }
+  | { kind: 'item'; key: string; hit: SearchRow; name: TextPart[]; variant: TextPart[] | null; inventory: RowInventory | null }
+  | { kind: 'folder'; key: string; hit: FolderHit; name: TextPart[]; inventory: RowInventory | null }
   | { kind: 'action'; key: string; action: PaletteAction; label: string }
 export interface PaletteGroup {
   key: 'nearest' | 'items' | 'folders' | 'actions'
   rows: PaletteRow[]
 }
 
-const ITEM_LIMIT = 20
+export const ITEM_LIMIT = 20
+const FOLDER_LIMIT = 5
 
 const actionKey = (a: PaletteAction): string =>
   a.kind === 'addItem'
@@ -168,11 +232,42 @@ export function paletteResults(
           hit,
           name: highlightParts(hit.name, q),
           variant: hit.variantName === null ? null : highlightParts(hit.variantName, q),
+          inventory: null,
         }))
       : []
   const folders: PaletteRow[] = s
-    ? matchFolders(s, q).map((hit) => ({ kind: 'folder', key: `folder:${hit.id}`, hit, name: highlightParts(hit.name, q) }))
+    ? matchFolders(s, q, FOLDER_LIMIT).map((hit) => ({
+        kind: 'folder',
+        key: `folder:${hit.id}`,
+        hit,
+        name: highlightParts(hit.name, q),
+        inventory: null,
+      }))
     : []
+  // The same inventory-spanning search the future advanced page uses; the current inventory's rows stay first.
+  // The current inventory is never one of `others`, even when the caller passes it in.
+  const others = ctx.others?.filter((o) => !sameRef(o.entry.ref, ctx.current)) ?? null
+  const across = others ? searchAcross(others, q, ITEM_LIMIT - items.length, FOLDER_LIMIT - folders.length) : null
+  for (const { inventory, hit } of across?.items ?? []) {
+    const { sourceId, inventoryId } = inventory.ref
+    items.push({
+      kind: 'item',
+      key: `item:${sourceId}:${inventoryId}:${hit.itemId}:${hit.variantId ?? ''}`,
+      hit,
+      name: highlightParts(hit.name, q),
+      variant: hit.variantName === null ? null : highlightParts(hit.variantName, q),
+      inventory,
+    })
+  }
+  for (const { inventory, hit } of across?.folders ?? []) {
+    folders.push({
+      kind: 'folder',
+      key: `folder:${inventory.ref.sourceId}:${inventory.ref.inventoryId}:${hit.id}`,
+      hit,
+      name: highlightParts(hit.name, q),
+      inventory,
+    })
+  }
   const actions: PaletteRow[] = paletteActions({ ...ctx, query: q }, labelOf).map((action) => ({
     kind: 'action',
     key: actionKey(action),

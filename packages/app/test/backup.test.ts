@@ -262,6 +262,45 @@ describe('parseBackup: icons', () => {
   })
 })
 
+describe('parseBackup: colours', () => {
+  it('keeps the colours of items and tags, and refuses a value of the wrong form', async () => {
+    const { file } = await demoBackup()
+    const marked = JSON.parse(JSON.stringify(file)) as {
+      inventories: { snapshot: { items: Rec[]; tags: Rec[] } }[]
+    }
+    const snap = marked.inventories.map((e) => e.snapshot).find((x) => x.items.length > 0 && x.tags.length > 0)!
+    snap.items[0]!.color = '#4F46E5'
+    snap.tags[0]!.color = '#0D9488'
+    const parsed = parseBackup(marked) as BackupFile
+    const kept = parsed.inventories.map((e) => e.snapshot).find((x) => x.items.some((i) => i.color !== null))!
+    expect(kept.items[0]!.color).toBe('#4F46E5')
+    expect(kept.tags[0]!.color).toBe('#0D9488')
+    for (const bad of ['#zzz', '#4f46e5', 'red', 5]) {
+      snap.items[0]!.color = bad
+      expect(parseBackup(marked)).toMatchObject({ error: 'format' })
+    }
+    snap.items[0]!.color = '#4F46E5'
+    snap.tags[0]!.color = '#zzz'
+    expect(parseBackup(marked)).toMatchObject({ error: 'format' })
+  })
+
+  it('reads a file of schema 7 without colours: every item and tag has none', async () => {
+    const { file } = await demoBackup()
+    const old = JSON.parse(JSON.stringify(file)) as {
+      app: { schemaVersion: number }
+      inventories: { snapshot: { items: Rec[]; tags: Rec[] } }[]
+    }
+    old.app.schemaVersion = 7
+    for (const { snapshot } of old.inventories) {
+      for (const r of [...snapshot.items, ...snapshot.tags]) delete r.color
+    }
+    const parsed = parseBackup(old) as BackupFile
+    const rows = parsed.inventories.flatMap((e) => [...e.snapshot.items, ...e.snapshot.tags])
+    expect(rows.length).toBeGreaterThan(0)
+    expect(rows.every((r) => r.color === null)).toBe(true)
+  })
+})
+
 describe('parseBackup: intakes', () => {
   /** The intakes file as an older schema wrote it: no intakes, movements without an intake, and (schema 4) photos
    *  without renditions, size and delete handle. */

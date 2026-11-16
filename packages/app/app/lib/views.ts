@@ -51,6 +51,8 @@ export interface ItemRow {
   folderName: string | null
   /** The item's own icon name; null when none. */
   icon: string | null
+  /** The item's colour (#RRGGBB); null takes the colour from the id (lib/item-colors). */
+  color: string | null
   /** The icon name of the item's folder (the default for its items); null when none or in the root. */
   folderIcon: string | null
   description: string | null
@@ -311,6 +313,7 @@ function itemRow(s: InventorySnapshot, ix: Index, item: Item): ItemRow {
     name: item.name,
     folderName: folderNameOf(ix, item),
     icon: item.icon ?? null,
+    color: item.color ?? null,
     folderIcon: folderIconOf(ix, item),
     description: item.description,
     variantCount: ix.activeVariantCount.get(item.id) ?? 0,
@@ -367,6 +370,8 @@ export interface SearchRow {
   folderName: string | null
   /** The item's own icon name; null when none. */
   icon: string | null
+  /** The item's colour (as ItemRow.color). */
+  color: string | null
   /** The icon name of the item's folder (the default for its items); null when none or in the root. */
   folderIcon: string | null
   /** The matched variant's photo, else the item's cover. */
@@ -400,6 +405,7 @@ export function searchRows(s: InventorySnapshot, hits: SearchHit[]): SearchRow[]
       outOfStock: isEmpty(quantity),
       folderName: folderNameOf(ix, item),
       icon: item.icon ?? null,
+      color: item.color ?? null,
       folderIcon: folderIconOf(ix, item),
       path: item.folderId === null ? '' : pathOf(ix, item.folderId).map((f) => f.name).join(' / '),
       cover: (variant && hit.variantId !== null ? ix.variantCovers.get(hit.variantId) : undefined) ?? ix.covers.get(item.id) ?? null,
@@ -509,6 +515,8 @@ export interface UsedByRow {
   folderName: string | null
   /** The item's own icon name; null when none. */
   icon: string | null
+  /** The item's colour (as ItemRow.color). */
+  color: string | null
   /** The icon name of the item's folder (the default for its items); null when none or in the root. */
   folderIcon: string | null
   /** Folder names from the root, " / "-joined; '' in the inventory root. */
@@ -545,6 +553,7 @@ export function usedBy(s: InventorySnapshot, target: UsageTarget): UsedByRow[] {
       name: item.name,
       folderName: folderNameOf(ix, item),
       icon: item.icon ?? null,
+      color: item.color ?? null,
       folderIcon: folderIconOf(ix, item),
       path: path.map((f) => f.name).join(' / '),
       cover: ix.covers.get(item.id) ?? null,

@@ -406,6 +406,34 @@ describe('parseBackup: intakes', () => {
     expect(parseBackup(JSON.parse(JSON.stringify(file)))).toEqual({ error: 'format' })
   })
 
+  it('reads a file of schemas 6 to 8 (no created, no draft entities): created is null, the rest is unchanged, absent fields stay absent; it restores', async () => {
+    const file = JSON.parse(JSON.stringify(await intakesBackup())) as {
+      inventories: { intakes: { created?: unknown; draft: { newFolders?: unknown; newAttributes?: unknown; newItems: Rec[] } | null }[] }[]
+    }
+    const [entry] = file.inventories
+    expect(entry!.intakes.some((i) => i.created)).toBe(true)
+    for (const i of entry!.intakes) {
+      delete i.created
+      for (const n of i.draft?.newItems ?? []) for (const k of ['description', 'photo', 'photoId']) delete n[k]
+      if (i.draft) { delete i.draft.newFolders; delete i.draft.newAttributes }
+    }
+    const parsed = parseBackup(JSON.parse(JSON.stringify(file))) as BackupFile
+    expect('error' in parsed).toBe(false)
+    const intakes = parsed.inventories[0]!.intakes
+    expect(intakes.map((i) => i.created)).toEqual(intakes.map(() => null))
+    const withoutCreated = intakes.map(({ created: _c, ...rest }) => rest)
+    expect(JSON.parse(JSON.stringify(withoutCreated))).toEqual(entry!.intakes.map(({ created: _c, ...rest }) => rest))
+    const draft = intakes.find((i) => i.draft)!.draft!
+    for (const k of ['newFolders', 'newAttributes']) expect(draft).not.toHaveProperty(k)
+    for (const n of draft.newItems) for (const k of ['description', 'photo', 'photoId']) expect(n).not.toHaveProperty(k)
+
+    const { storage } = await emptyStorage()
+    await storage.restore(parsed, 'same-ids', newId())
+    const restored = (await storage.listIntakes(parsed.inventories[0]!.snapshot.inventory.id)).intakes
+    expect(restored.map((i) => i.created)).toEqual(restored.map(() => null))
+    expect(restored.map((i) => i.id).sort()).toEqual(intakes.map((i) => i.id).sort())
+  })
+
   it('reads a file whose committed intake names an item deleted permanently since: the lines keep their names', async () => {
     const backup = await intakesBackup({ deleteCommitted: true })
     const file = JSON.parse(JSON.stringify(backup)) as BackupFile

@@ -2,6 +2,7 @@ import {
   newId,
   StorageError,
   type Id,
+  type Intake,
   type InventoryExport,
   type InventoryStorage,
   type Movement,
@@ -13,7 +14,7 @@ import { backupProblems, RESTORE_BATCH_ROWS, RESTORE_TABLES, renameIntakeIds, re
 import { LOCK_REV, REV_BUMP } from '../src/migrator'
 import { sql, type Statement } from '../src/sql'
 import { openPostgresStorage } from '../src/storage'
-import { makeExecutor, normSnapshot, RENDITION_FIELDS, TEST_ACTOR } from './helpers'
+import { makeExecutor, normSnapshot, RENDITION_FIELDS, sorted, TEST_ACTOR } from './helpers'
 import { renamed, seedRich } from './restore-fixtures'
 
 const q = (s: string) => s as Quantity
@@ -264,6 +265,18 @@ describe('restore', () => {
         expect(oldIdsInJson(added, oldIds), 'intakes jsonb').toEqual([])
       }
     }
+    // Every intake of the copy is the original renamed whole: a dropped `created` or draft part would differ.
+    const originals = (await storage.listIntakes(inv)).intakes
+    const copies = (await storage.listIntakes(m(inv))).intakes
+    expect(originals.some((k) => k.created !== null)).toBe(true)
+    expect(originals.some((k) => k.draft?.newFolders)).toBe(true)
+    const key = (k: { id: string }) => k.id
+    const expected = originals.map((k) => {
+      const r = renameIntakeIds(k, m)
+      return { ...r, id: m(k.id), inventoryId: m(k.inventoryId) }
+    })
+    const strip = ({ draftRev: _d, createdAt: _c, updatedAt: _u, committedAt: _m, ...rest }: Intake) => rest
+    expect(sorted(copies.map(strip), key)).toEqual(sorted(expected.map(strip), key))
     // The movements the committed intake made point at the copy of it, and its lines at the copy's movements.
     const rows = await exec.query<{ id: string; lines: { movementId: string }[] | null; draft: unknown }>(
       sql`select id, lines, draft from intakes where inventory_id = ${m(inv)}`,

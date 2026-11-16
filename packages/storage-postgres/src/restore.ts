@@ -281,7 +281,7 @@ export function backupProblems({ snapshot: s, movements, intakes }: InventoryExp
 const renameUnitKey = (key: string, rename: (id: Id) => Id): string =>
   key.startsWith(CUSTOM_PREFIX) ? CUSTOM_PREFIX + rename(key.slice(CUSTOM_PREFIX.length)) : key
 
-/** The intake with every id inside its `draft` and `lines` renamed, `custom:<id>` unit keys included, as items are. The
+/** The intake with every id inside its `draft`, `lines` and `created` renamed, `custom:<id>` unit keys included, as items are. The
  *  row's own columns (id, inventory, revision) are renamed with the rest of the row, not here. */
 export function renameIntakeIds(intake: Intake, rename: (id: Id) => Id): Intake {
   const opt = (id: Id | null): Id | null => (id === null ? null : rename(id))

@@ -487,14 +487,14 @@ describe.skipIf(!url)('Neon conformance', () => {
           ensureSchema(migrator),
           ...[0, 1, 2, 3].map((i) => write(attributeCreate(inv, newId(), `A${i}`))),
         ])
-        expect(status).toEqual({ state: 'ready', dbVersion: 8, appVersion: 8, minAppSchema: 3 })
+        expect(status).toEqual({ state: 'ready', dbVersion: 9, appVersion: 9, minAppSchema: 3 })
         const prevRevs = writes.map((rows) => rows[0]?.[0]?.value)
         const revs = writes.map((rows) => rows.at(-1)?.[0]?.value)
         // All went through (no deadlock), each after a different revision: none ran beside another.
         expect(new Set(prevRevs).size).toBe(writes.length)
         expect(new Set(revs).size).toBe(writes.length)
         // The app of schema 3 still writes: min_app_schema is 3.
-        expect(await ensureSchema(writer, 3)).toEqual({ state: 'ready', dbVersion: 8, appVersion: 3, minAppSchema: 3 })
+        expect(await ensureSchema(writer, 3)).toEqual({ state: 'ready', dbVersion: 9, appVersion: 3, minAppSchema: 3 })
 
         const { storage } = await openPostgresStorage(migrator)
         const snapshot = await storage.loadInventory(inv)

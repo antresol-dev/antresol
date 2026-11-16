@@ -36,7 +36,7 @@ describe('ensureSchema', () => {
     expect(names).toContain('items')
     expect(names).toContain('movements')
     expect(names).toContain('intakes')
-    expect(APP_SCHEMA_VERSION).toBe(8)
+    expect(APP_SCHEMA_VERSION).toBe(9)
     expect(await exec.query(sql`select 1 from antresol_meta where key = 'rev'`)).toHaveLength(1)
     expect(await exec.query(sql`select 1 from antresol_meta where key = 'intakes_rev'`)).toHaveLength(1)
   })
@@ -276,17 +276,18 @@ describe('schema 4 (migration 0001)', () => {
     expect(attributes.map((a) => a.pinned)).toEqual(attributes.map(() => false))
   })
 
-  it('an empty database runs the initial migration, then 0001 to 0005', async () => {
+  it('an empty database runs the initial migration, then 0001 to 0006', async () => {
     const { wrapped, batches } = recording(await makeExecutor())
     await ensureSchema(wrapped)
     const migrationBatches = batches.filter((b) => b.some((t) => t.includes('antresol_concurrent_migration')))
-    expect(migrationBatches).toHaveLength(6)
+    expect(migrationBatches).toHaveLength(7)
     expect(migrationBatches[0]!.join('\n')).toContain('CREATE TABLE "attributes"')
     expect(migrationBatches[1]!.join('\n')).toContain('"pinned"')
     expect(migrationBatches[2]!.join('\n')).toContain('"delete_handle"')
     expect(migrationBatches[3]!.join('\n')).toContain('CREATE TABLE "intakes"')
     expect(migrationBatches[4]!.join('\n')).toContain('"icon"')
     expect(migrationBatches[5]!.join('\n')).toContain('"color"')
+    expect(migrationBatches[6]!.join('\n')).toContain('"created" jsonb')
     expect(migrationBatches.map((b) => b.at(-1))).toEqual(migrationBatches.map(() => expect.stringContaining('schema_version')))
   })
 
@@ -441,11 +442,11 @@ describe('schema 6 (migration 0003)', () => {
     expect(await storage.listIntakes(inv)).toEqual({ intakes: [], intakesRev: await metaValue(exec, 'intakes_rev') })
   })
 
-  it('an app of schema 4 reads and writes a schema-8 database', async () => {
+  it('an app of schema 4 reads and writes a schema-9 database', async () => {
     const exec = await makeExecutor()
     await ensureSchema(exec)
     const { storage, status } = await openPostgresStorage(exec, { appVersion: 4 })
-    expect(status).toEqual({ state: 'ready', dbVersion: 8, appVersion: 4, minAppSchema: 3 })
+    expect(status).toEqual({ state: 'ready', dbVersion: 9, appVersion: 4, minAppSchema: 3 })
     expect(storage.readOnly).toBe(false)
     const inv = newId()
     for (const c of sampleCommands(inv)) await storage.apply(c, TEST_ACTOR)
@@ -517,7 +518,7 @@ describe('schema 8 (migration 0005)', () => {
     const before = await exec.readBatch(schema3.snapshotStatements(inv))
 
     const { wrapped, batches } = recording(exec)
-    expect(await ensureSchema(wrapped)).toEqual({ state: 'ready', dbVersion: 8, appVersion: 8, minAppSchema: 3 })
+    expect(await ensureSchema(wrapped, 8)).toEqual({ state: 'ready', dbVersion: 8, appVersion: 8, minAppSchema: 3 })
     const migrationBatches = batches.filter((b) => b.some((t) => t.includes('antresol_concurrent_migration')))
     expect(migrationBatches).toHaveLength(1)
     expect(migrationBatches[0]!.join('\n')).toContain('ADD COLUMN "color"')
@@ -563,6 +564,29 @@ describe('schema 8 (migration 0005)', () => {
     const snapshot = await storage.loadInventory(inv)
     expect(snapshot.tags.length).toBeGreaterThan(0)
     expect([...snapshot.items, ...snapshot.tags].every((r) => r.color === null)).toBe(true)
+  })
+})
+
+describe('schema 9 (migration 0006)', () => {
+  it('moves a schema-8 database to 9, keeping its data: intakes gain created, null; min_app_schema stays 3', async () => {
+    const exec = await makeExecutor()
+    await ensureSchema(exec, 8)
+    const inv = newId()
+    await writeAsSchema3(exec, sampleCommands(inv))
+    const before = await exec.readBatch(schema3.snapshotStatements(inv))
+
+    const { wrapped, batches } = recording(exec)
+    expect(await ensureSchema(wrapped)).toEqual({ state: 'ready', dbVersion: 9, appVersion: 9, minAppSchema: 3 })
+    const migrationBatches = batches.filter((b) => b.some((t) => t.includes('antresol_concurrent_migration')))
+    expect(migrationBatches).toHaveLength(1)
+    expect(migrationBatches[0]!.join('\n')).toContain('ADD COLUMN "created" jsonb')
+    expect(await metaValue(exec, 'schema_version')).toBe('9')
+    expect(await metaValue(exec, 'min_app_schema')).toBe('3')
+    expect(await exec.readBatch(schema3.snapshotStatements(inv))).toEqual(before)
+    expect(
+      await exec.query(sql`select data_type, is_nullable, column_default from information_schema.columns
+                           where table_name = 'intakes' and column_name = 'created'`),
+    ).toEqual([{ data_type: 'jsonb', is_nullable: 'YES', column_default: null }])
   })
 })
 

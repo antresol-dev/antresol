@@ -192,7 +192,7 @@ export const intakesRevStatement = sql`select value from antresol_meta where key
 
 /** Every column toIntake reads, of the intakes the condition selects. */
 export const intakesSql = (where: Statement) =>
-  sql`select id, inventory_id, status, shop, order_number, purchased_on, note, draft, lines, draft_rev::text as draft_rev,
+  sql`select id, inventory_id, status, shop, order_number, purchased_on, note, draft, lines, created, draft_rev::text as draft_rev,
              ${raw(AUDIT)}, committed_at
       from intakes where ${where} order by updated_at desc, id`
 

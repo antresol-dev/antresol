@@ -8,6 +8,10 @@ import {
   parseQuantity,
   parseRendition,
   type DraftLinePhoto,
+  type DraftNewAttribute,
+  type DraftNewFolder,
+  type IntakeCreated,
+  type PhotoFile,
   type Intake,
   type InventoryExport,
   type InventorySnapshot,
@@ -204,6 +208,22 @@ const DRAFT_NEW_ITEM: Shape = {
   attributes: (v) => records(v, { attributeId: uuid, value: nullable(str), axis: bool }) !== null,
   /** Absent in drafts saved before tags; stays absent (see `intakeRecord`). */
   tagIds: (v) => v === undefined || listOf(uuid)(v),
+  /** Absent in drafts saved before descriptions, item photos and photo ids; each stays absent (see `intakeRecord`). */
+  description: (v) => v === undefined || nullable(str)(v),
+  photo: (v) => v === undefined || nullable((p) => record(p, ITEM_PHOTO, PHOTO_DEFAULTS) !== null)(v),
+  photoId: (v) => v === undefined || uuid(v),
+}
+const DRAFT_NEW_FOLDER: Shape = { id: uuid, name: str, parentId: nullable(uuid) }
+const DRAFT_NEW_ATTRIBUTE: Shape = {
+  id: uuid, name: str, kind: oneOf('text', 'enum', 'number'), unit: str, siPrefixes: bool, options: listOf(str),
+}
+/** What a commit created (spec 2026-11-16 intake entities §7); null on a draft and on intakes committed before it. */
+const CREATED_NAMED: Shape = { id: uuid, name: str }
+const CREATED: Shape = {
+  folders: (v) => records(v, { id: uuid, name: str, parentId: nullable(uuid) }) !== null,
+  attributes: (v) => records(v, CREATED_NAMED) !== null,
+  tags: (v) => records(v, CREATED_NAMED) !== null,
+  items: (v) => records(v, { id: uuid, name: str, folderId: nullable(uuid) }) !== null,
 }
 const DRAFT_NEW_TAG: Shape = { id: uuid, name: str }
 /** A draft line's photo: the stored file as a photo has it (renditions, size and delete handle absent from drafts saved
@@ -211,6 +231,11 @@ const DRAFT_NEW_TAG: Shape = { id: uuid, name: str }
 const DRAFT_PHOTO: Shape = {
   provider: str, fileId: str, url: str, urls: nullable(renditions), width: nullable(isPhotoSide), height: nullable(isPhotoSide),
   deleteHandle: nullable(isDeleteHandle), replace: bool,
+}
+/** The stored file of an item photo: a draft photo without `replace`. */
+const ITEM_PHOTO: Shape = {
+  provider: str, fileId: str, url: str, urls: nullable(renditions), width: nullable(isPhotoSide), height: nullable(isPhotoSide),
+  deleteHandle: nullable(isDeleteHandle),
 }
 const DRAFT_LINE: Shape = {
   id: uuid, itemId: uuid, axisValues: (v) => records(v, { attributeId: uuid, value: str }) !== null, quantity,
@@ -258,7 +283,7 @@ const SHAPES = {
   /** The row's own fields; `draft` and `lines` are checked and rebuilt by `intakeRecord`. */
   intake: {
     id: uuid, inventoryId: uuid, status: oneOf('draft', 'committed'), header: (v) => record(v, SHAPES_HEADER) !== null,
-    draft: nullable(isRecord), lines: nullable((v) => Array.isArray(v)), draftRev: str, ...AUDIT, committedAt: nullable(time),
+    draft: nullable(isRecord), lines: nullable((v) => Array.isArray(v)), created: nullable(isRecord), draftRev: str, ...AUDIT, committedAt: nullable(time),
   },
 } satisfies Record<string, Shape>
 
@@ -275,6 +300,9 @@ const COLOR_DEFAULTS = { color: null }
 /** `intakeId`: schema 6 (intakes), absent from older files. */
 const MOVEMENT_DEFAULTS = { intakeId: null }
 
+/** `created` of intakes: migration 0006, absent from older files. */
+const INTAKE_DEFAULTS = { created: null }
+
 /** The photos of a file, each rendition rebuilt as parseRendition reads it: a key it does not know is left behind, as
  *  for every record, and `type` absent is null. */
 function photos(value: unknown): Photo[] | null {
@@ -288,9 +316,15 @@ function draftPhoto(value: DraftLinePhoto): DraftLinePhoto {
   return { ...photo, urls: normalizeRenditions(photo.urls) }
 }
 
+/** An item photo (checked by DRAFT_NEW_ITEM) in a new object of ITEM_PHOTO's fields, renditions as `photos` keeps them. */
+function itemPhoto(value: PhotoFile): PhotoFile {
+  const photo = record<PhotoFile>(value, ITEM_PHOTO, PHOTO_DEFAULTS)!
+  return { ...photo, urls: normalizeRenditions(photo.urls) }
+}
+
 /** An intake as the file has it, every nested record rebuilt field by field; a draft has `draft`, a committed one `lines`. */
 function intakeRecord(value: unknown): Intake | null {
-  const row = record<Intake>(value, SHAPES.intake)
+  const row = record<Intake>(value, SHAPES.intake, INTAKE_DEFAULTS)
   if (row === null) return null
   const header = record<Intake['header']>(row.header, SHAPES_HEADER)
   if (!header) return null
@@ -300,9 +334,17 @@ function intakeRecord(value: unknown): Intake | null {
     const newItems = records<NonNullable<Intake['draft']>['newItems'][number]>(raw.newItems, DRAFT_NEW_ITEM)
     const lines = records<NonNullable<Intake['draft']>['lines'][number]>(raw.lines, DRAFT_LINE)
     const newTags = raw.newTags === undefined ? undefined : records<{ id: string; name: string }>(raw.newTags, DRAFT_NEW_TAG)
-    if (newItems === null || lines === null || newTags === null) return null
-    for (const n of newItems) if (n.tagIds === undefined) delete n.tagIds
+    const newFolders = raw.newFolders === undefined ? undefined : records<DraftNewFolder>(raw.newFolders, DRAFT_NEW_FOLDER)
+    const newAttributes =
+      raw.newAttributes === undefined ? undefined : records<DraftNewAttribute>(raw.newAttributes, DRAFT_NEW_ATTRIBUTE)
+    if (newItems === null || lines === null || newTags === null || newFolders === null || newAttributes === null) return null
+    for (const n of newItems) {
+      for (const key of ['tagIds', 'description', 'photo', 'photoId'] as const) if (n[key] === undefined) delete n[key]
+      if (n.photo) n.photo = itemPhoto(n.photo)
+    }
     draft = {
+      ...(newFolders ? { newFolders } : {}),
+      ...(newAttributes ? { newAttributes } : {}),
       ...(newTags ? { newTags } : {}),
       newItems,
       lines: lines.map((l) => (l.photo ? { ...l, photo: draftPhoto(l.photo) } : l)),
@@ -313,8 +355,19 @@ function intakeRecord(value: unknown): Intake | null {
     lines = records<NonNullable<Intake['lines']>[number]>(row.lines, COMMITTED_LINE)
     if (lines === null) return null
   }
+  let created: Intake['created'] = null
+  if (row.created !== null) {
+    const raw = row.created as unknown as Record<string, unknown>
+    if (record(raw, CREATED) === null) return null
+    created = {
+      folders: records<IntakeCreated['folders'][number]>(raw.folders, { id: uuid, name: str, parentId: nullable(uuid) })!,
+      attributes: records<IntakeCreated['attributes'][number]>(raw.attributes, CREATED_NAMED)!,
+      tags: records<IntakeCreated['tags'][number]>(raw.tags, CREATED_NAMED)!,
+      items: records<IntakeCreated['items'][number]>(raw.items, { id: uuid, name: str, folderId: nullable(uuid) })!,
+    }
+  }
   if ((row.status === 'draft') !== (draft !== null) || (row.status === 'committed') !== (lines !== null)) return null
-  return { ...row, header, draft, lines }
+  return { ...row, header, draft, lines, created }
 }
 
 function inventoryExport(value: unknown): InventoryExport | null {

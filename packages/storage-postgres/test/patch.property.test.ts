@@ -24,6 +24,8 @@ import {
   type InventorySnapshot,
   type InventoryStorage,
   type Quantity,
+  type IntakeDraftContent,
+  folderArchived,
 } from '@antresol/core'
 import fc from 'fast-check'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -616,13 +618,40 @@ const GENERATORS: Record<Command['type'], Generator> = {
       })
       const first = resolveIntake({ newItems: newItem ? [newItem] : [], lines }, s)
       const fine = new Set(first.lines.filter((l) => l.resolution.kind !== 'problem').map((l) => l.lineId))
-      const draft = pruneNewItems({ newItems: newItem ? [newItem] : [], lines: lines.filter((l) => fine.has(l.id)) })
+      // A fresh folder (the new item goes into it half the time) and attribute: the commit creates them, and a draft that
+      // would do nothing else still does something.
+      const [folderId, attributeId] = [newId(), newId()]
+      const pruned = pruneNewItems({ newItems: newItem ? [newItem] : [], lines: lines.filter((l) => fine.has(l.id)) })
+      const draft: IntakeDraftContent = {
+        ...pruned,
+        newFolders: [{ id: folderId, name: `Fresh ${folderId}`, parentId: p.oneOrNull(ids(s.folders.filter((f) => !folderArchived(s, f.id)))) }],
+        newAttributes: [{ id: attributeId, name: `Fresh ${attributeId}`, kind: 'text', unit: '', siPrefixes: false, options: [] }],
+        newItems: pruned.newItems.map((n) => ({
+          ...n,
+          folderId: p.bool() ? folderId : n.folderId,
+          description: p.oneOrNull(['Thick film']),
+          attributes: [...n.attributes, { attributeId, axis: false, value: 'x' }],
+        })),
+      }
       const intake: Intake = {
         id: newId(), inventoryId: s.inventory.id, status: 'draft',
         header: { shop: p.oneOrNull(['LCSC', ' Mouser ']), orderNumber: null, purchasedOn: '2026-11-13', note: p.one(NOTES) },
         draft, lines: null, created: null, draftRev: newId(), createdAt: '', createdBy: '', updatedAt: '', updatedBy: '', committedAt: null,
       }
-      return buildIntakeCommit(intake, resolveIntake(draft, s), s, rev)
+      // What the commit would refuse goes: a new item (an empty name, a folder gone) with its lines, a folder to the
+      // root. The fresh folder and attribute remain.
+      const refused = new Set(
+        resolveIntake(draft, s).entities.filter((e) => e.kind === 'item' && e.problem !== null).map((e) => e.id),
+      )
+      intake.draft = {
+        ...draft,
+        newItems: draft.newItems.filter((n) => !refused.has(n.id)),
+        lines: draft.lines.filter((l) => !refused.has(l.itemId)),
+      }
+      if (!resolveIntake(intake.draft, s).ok) {
+        intake.draft = { newFolders: draft.newFolders, newAttributes: draft.newAttributes, newItems: [], lines: [] }
+      }
+      return buildIntakeCommit(intake, resolveIntake(intake.draft, s), s, rev)
     },
   },
 }

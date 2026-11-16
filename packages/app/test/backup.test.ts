@@ -373,6 +373,67 @@ describe('parseBackup: intakes', () => {
     expect(parseBackup(JSON.parse(JSON.stringify(file)))).toEqual({ error: 'format' })
   })
 
+  it('keeps the folders, attributes, description and photo of a draft and the created record of a committed intake; unknown keys stay behind', async () => {
+    const file = JSON.parse(JSON.stringify(await intakesBackup())) as {
+      inventories: { intakes: { draft: { newFolders?: Rec[]; newAttributes?: Rec[]; newItems: Rec[] } | null; created: Rec | null; lines: unknown }[] }[]
+    }
+    const intakes = file.inventories[0]!.intakes
+    const draft = intakes.find((i) => i.draft)!.draft!
+    const [shelf, box, attr] = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()]
+    draft.newFolders = [{ id: shelf, name: 'Shelf', parentId: null }, { id: box, name: 'Box', parentId: shelf }]
+    draft.newAttributes = [{ id: attr, name: 'Voltage', kind: 'number', unit: 'V', siPrefixes: false, options: [] }]
+    Object.assign(draft.newItems[0]!, {
+      description: 'Smoothing',
+      photo: { provider: 'uploadcare', fileId: 'f', url: 'https://u.example/f', urls: null, width: null, height: null, deleteHandle: null },
+      photoId: crypto.randomUUID(),
+    })
+    const committed = intakes.find((i) => i.lines)!
+    committed.created = {
+      folders: [{ id: shelf, name: 'Shelf', parentId: null }], attributes: [{ id: attr, name: 'Voltage' }], tags: [],
+      items: [{ id: crypto.randomUUID(), name: 'Resistor', folderId: shelf }],
+    }
+    expect(parseBackup(JSON.parse(JSON.stringify(file)))).toStrictEqual(file)
+    const leaky = JSON.parse(JSON.stringify(file)) as typeof file
+    leaky.inventories[0]!.intakes.find((i) => i.draft)!.draft!.newFolders![0]!.secret = 'postgres://x'
+    expect(JSON.stringify(parseBackup(leaky))).not.toContain('postgres://')
+    draft.newFolders[0]!.parentId = 'nope'
+    expect(parseBackup(JSON.parse(JSON.stringify(file)))).toEqual({ error: 'format' })
+    draft.newFolders[0]!.parentId = null
+    draft.newAttributes[0]!.kind = 'bogus'
+    expect(parseBackup(JSON.parse(JSON.stringify(file)))).toEqual({ error: 'format' })
+    draft.newAttributes[0]!.kind = 'number'
+    committed.created = { folders: 'x' }
+    expect(parseBackup(JSON.parse(JSON.stringify(file)))).toEqual({ error: 'format' })
+  })
+
+  it('reads a file of schemas 6 to 8 (no created, no draft entities): created is null, the rest is unchanged, absent fields stay absent; it restores', async () => {
+    const file = JSON.parse(JSON.stringify(await intakesBackup())) as {
+      inventories: { intakes: { created?: unknown; draft: { newFolders?: unknown; newAttributes?: unknown; newItems: Rec[] } | null }[] }[]
+    }
+    const [entry] = file.inventories
+    expect(entry!.intakes.some((i) => i.created)).toBe(true)
+    for (const i of entry!.intakes) {
+      delete i.created
+      for (const n of i.draft?.newItems ?? []) for (const k of ['description', 'photo', 'photoId']) delete n[k]
+      if (i.draft) { delete i.draft.newFolders; delete i.draft.newAttributes }
+    }
+    const parsed = parseBackup(JSON.parse(JSON.stringify(file))) as BackupFile
+    expect('error' in parsed).toBe(false)
+    const intakes = parsed.inventories[0]!.intakes
+    expect(intakes.map((i) => i.created)).toEqual(intakes.map(() => null))
+    const withoutCreated = intakes.map(({ created: _c, ...rest }) => rest)
+    expect(JSON.parse(JSON.stringify(withoutCreated))).toEqual(entry!.intakes.map(({ created: _c, ...rest }) => rest))
+    const draft = intakes.find((i) => i.draft)!.draft!
+    for (const k of ['newFolders', 'newAttributes']) expect(draft).not.toHaveProperty(k)
+    for (const n of draft.newItems) for (const k of ['description', 'photo', 'photoId']) expect(n).not.toHaveProperty(k)
+
+    const { storage } = await emptyStorage()
+    await storage.restore(parsed, 'same-ids', newId())
+    const restored = (await storage.listIntakes(parsed.inventories[0]!.snapshot.inventory.id)).intakes
+    expect(restored.map((i) => i.created)).toEqual(restored.map(() => null))
+    expect(restored.map((i) => i.id).sort()).toEqual(intakes.map((i) => i.id).sort())
+  })
+
   it('reads a file whose committed intake names an item deleted permanently since: the lines keep their names', async () => {
     const backup = await intakesBackup({ deleteCommitted: true })
     const file = JSON.parse(JSON.stringify(backup)) as BackupFile

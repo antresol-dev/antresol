@@ -7,6 +7,7 @@ import {
   type DraftLine,
   type Id,
   type InventorySnapshot,
+  type IntakeDraftContent,
   type InventoryStorage,
   type Quantity,
 } from '@antresol/core'
@@ -90,8 +91,15 @@ async function seedIntakes(
   const fresh = newId()
   const [committed, draft] = [newId(), newId()]
   const ohm = (value: string) => [{ attributeId: x.ohm, value }]
-  const content = {
-    newItems: [{ id: fresh, name: 'Capacitor', folderId: x.folder, unitKey: customUnitKey(x.unit), attributes: [{ attributeId: x.ohm, value: null, axis: true }] }],
+  const [drawer, volt] = [newId(), newId()]
+  const content: IntakeDraftContent = {
+    newFolders: [{ id: drawer, name: 'Drawer', parentId: x.folder }],
+    newAttributes: [{ id: volt, name: 'Voltage', kind: 'number', unit: 'V', siPrefixes: false, options: [] }],
+    newItems: [{
+      id: fresh, name: 'Capacitor', folderId: drawer, unitKey: customUnitKey(x.unit), description: 'Ceramic', photoId: newId(),
+      photo: { provider: 'imgbb', fileId: 'cap', url: 'https://i.ibb.co/cap/full.jpg', ...RENDITION_FIELDS },
+      attributes: [{ attributeId: x.ohm, value: null, axis: true }, { attributeId: volt, value: '50', axis: false }],
+    }],
     lines: [
       draftLine(fresh, ohm('100'), '5', { totalPrice: 500, photo: { provider: 'imgbb', fileId: 'f9', url: 'https://i.ibb.co/abc/full.jpg', ...RENDITION_FIELDS, replace: false } }),
       draftLine(x.resistor, [...ohm('1000'), { attributeId: x.size, value: 'S' }], '10', { totalPrice: 100, sourceUrl: 'https://shop.example/r' }),
@@ -108,8 +116,15 @@ async function seedIntakes(
   await storage.apply(buildIntakeCommit(intake, resolved, snapshot, rev), TEST_ACTOR)
 
   const later = newId()
-  const open = {
-    newItems: [{ id: later, name: 'Inductor', folderId: x.folder, unitKey: customUnitKey(x.unit), attributes: [] }],
+  const [shelf, box, amp] = [newId(), newId(), newId()]
+  const open: IntakeDraftContent = {
+    newFolders: [{ id: box, name: 'Box', parentId: shelf }, { id: shelf, name: 'Shelf', parentId: x.folder }],
+    newAttributes: [{ id: amp, name: 'Current', kind: 'text', unit: '', siPrefixes: false, options: [] }],
+    newItems: [{
+      id: later, name: 'Inductor', folderId: box, unitKey: customUnitKey(x.unit), description: null, photoId: newId(),
+      photo: { provider: 'uploadcare', fileId: 'ind', url: 'https://u.example/ind' },
+      attributes: [{ attributeId: amp, value: '2 A', axis: false }],
+    }],
     lines: [draftLine(later, [], '7'), draftLine(x.resistor, [...ohm('4700'), { attributeId: x.size, value: 'M' }], '1', { totalPrice: null })],
   }
   const second = await storage.saveIntakeDraft({ id: draft, inventoryId: inv, header: { ...header, shop: null, note: null }, content: open }, null, TEST_ACTOR)

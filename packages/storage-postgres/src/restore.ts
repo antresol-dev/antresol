@@ -184,7 +184,7 @@ export const RESTORE_TABLES: readonly RestoreTable[] = [
     key: ['id'],
     columns: [
       id('id'), id('inventory_id'), text('status'), text('shop'), text('order_number'), text('purchased_on'), text('note'),
-      { name: 'draft', type: 'jsonb' }, { name: 'lines', type: 'jsonb' }, id('draft_rev'), ...AUDIT, time('committed_at'),
+      { name: 'draft', type: 'jsonb' }, { name: 'lines', type: 'jsonb' }, { name: 'created', type: 'jsonb' }, id('draft_rev'), ...AUDIT, time('committed_at'),
     ],
   },
   {
@@ -281,20 +281,23 @@ export function backupProblems({ snapshot: s, movements, intakes }: InventoryExp
 const renameUnitKey = (key: string, rename: (id: Id) => Id): string =>
   key.startsWith(CUSTOM_PREFIX) ? CUSTOM_PREFIX + rename(key.slice(CUSTOM_PREFIX.length)) : key
 
-/** The intake with every id inside its `draft` and `lines` renamed, `custom:<id>` unit keys included, as items are. The
+/** The intake with every id inside its `draft`, `lines` and `created` renamed, `custom:<id>` unit keys included, as items are. The
  *  row's own columns (id, inventory, revision) are renamed with the rest of the row, not here. */
 export function renameIntakeIds(intake: Intake, rename: (id: Id) => Id): Intake {
   const opt = (id: Id | null): Id | null => (id === null ? null : rename(id))
-  const { draft, lines } = intake
+  const { draft, lines, created } = intake
   return {
     ...intake,
     draft: draft && {
       ...draft,
+      ...(draft.newFolders ? { newFolders: draft.newFolders.map((f) => ({ ...f, id: rename(f.id), parentId: opt(f.parentId) })) } : {}),
+      ...(draft.newAttributes ? { newAttributes: draft.newAttributes.map((a) => ({ ...a, id: rename(a.id) })) } : {}),
       ...(draft.newTags ? { newTags: draft.newTags.map((t) => ({ ...t, id: rename(t.id) })) } : {}),
       newItems: draft.newItems.map((n) => ({
         ...n,
         id: rename(n.id),
         ...(n.tagIds ? { tagIds: n.tagIds.map(rename) } : {}),
+        ...(n.photoId ? { photoId: rename(n.photoId) } : {}),
         folderId: opt(n.folderId),
         unitKey: renameUnitKey(n.unitKey, rename),
         attributes: n.attributes.map((a) => ({ ...a, attributeId: rename(a.attributeId) })),
@@ -306,6 +309,12 @@ export function renameIntakeIds(intake: Intake, rename: (id: Id) => Id): Intake 
         axisValues: l.axisValues.map((v) => ({ ...v, attributeId: rename(v.attributeId) })),
         ids: { movementId: rename(l.ids.movementId), variantId: rename(l.ids.variantId), photoId: rename(l.ids.photoId) },
       })),
+    },
+    created: created && {
+      folders: created.folders.map((f) => ({ ...f, id: rename(f.id), parentId: opt(f.parentId) })),
+      attributes: created.attributes.map((a) => ({ ...a, id: rename(a.id) })),
+      tags: created.tags.map((t) => ({ ...t, id: rename(t.id) })),
+      items: created.items.map((i) => ({ ...i, id: rename(i.id), folderId: opt(i.folderId) })),
     },
     lines: lines && lines.map((l) => ({
       ...l,
@@ -369,6 +378,7 @@ function segmentsOf(entry: InventoryExport): Segment[] {
         k.id, inv, k.status, k.header.shop, k.header.orderNumber, k.header.purchasedOn, k.header.note,
         k.draft && ((rename) => renameIntakeIds(k, rename).draft),
         k.lines && ((rename) => renameIntakeIds(k, rename).lines),
+        k.created && ((rename) => renameIntakeIds(k, rename).created),
         k.draftRev, ...audit(k), k.committedAt,
       ]),
     ],

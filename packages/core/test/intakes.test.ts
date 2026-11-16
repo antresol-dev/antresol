@@ -448,6 +448,13 @@ describe('draft folders, attributes and standalone items', () => {
     expect(validateCommand(normalizeCommand(cmd), base())).toBeNull()
   })
 
+  it('the commit carries a draft attribute trimmed: name, unit and options', () => {
+    const c = content({ newAttributes: [{ ...inductance, name: ' Inductance ', unit: ' H ' }], newItems: [plain()] })
+    expect(build(c).newAttributes).toEqual([{ id: 'IND', name: 'Inductance', kind: 'number', options: [], unit: 'H', siPrefixes: true }])
+    const list = content({ newAttributes: [{ id: 'PK', name: ' Pack ', kind: 'enum', unit: '', siPrefixes: false, options: [' A ', 'B '] }], newItems: [plain()] })
+    expect(build(list).newAttributes).toEqual([{ id: 'PK', name: 'Pack', kind: 'enum', options: ['A', 'B'], unit: '', siPrefixes: false }])
+  })
+
   it('a shared value on a draft attribute is canonical, and one that does not fit marks the item', () => {
     const shared = (value: string) => inductor({ attributes: [{ attributeId: 'IND', value, axis: false }] })
     expect(build(content({ newAttributes: [inductance], newItems: [shared('10u')] })).newItems[0]!.attributes).toEqual([

@@ -1,6 +1,7 @@
 import type { Command, PhotoFile } from './commands'
 import type { Id } from './ids'
 import {
+  draftAttribute,
   draftAttributeProblems,
   draftFolderProblems,
   foldersParentsFirst,
@@ -392,14 +393,10 @@ export function buildIntakeCommit(intake: Intake, resolved: ResolvedIntake, s: I
     parentId: f.parentId,
     name: f.name,
   }))
-  const newAttributes: IntakeCommit['newAttributes'] = (draft.newAttributes ?? []).map((a) => ({
-    id: a.id,
-    name: a.name,
-    kind: a.kind,
-    options: a.options,
-    unit: a.unit,
-    siPrefixes: a.siPrefixes,
-  }))
+  const newAttributes: IntakeCommit['newAttributes'] = (draft.newAttributes ?? []).map((a) => {
+    const made = draftAttribute(a, s.inventory.id)
+    return { id: made.id, name: made.name, kind: made.kind, options: made.options, unit: made.unit, siPrefixes: made.siPrefixes }
+  })
 
   const newItems: IntakeCommit['newItems'] = draft.newItems.map((n) => {
     let position = 0

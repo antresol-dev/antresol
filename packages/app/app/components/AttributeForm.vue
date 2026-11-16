@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Attribute, AttributeKind, Id } from '@antresol/core'
+import type { Attribute, AttributeKind, DraftNewAttribute, Id } from '@antresol/core'
 import { MAX_PINNED_ATTRIBUTES } from '@antresol/core'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,8 +14,16 @@ import { errorMessageKey } from '~/lib/errors'
 import { parseNameList } from '~/lib/lists'
 
 // Creates an inventory attribute or edits one: the name, a list's options, a number's unit and SI prefixes. The type can't change afterwards.
-const props = defineProps<{ attribute: Attribute | null }>()
-const emit = defineEmits<{ done: [attributeId: Id] }>()
+// `draft` (an intake's new attribute, spec 2026-11-16 §4): nothing is written; the form hands the attribute to the
+// parent as `draft` (no "Show in lists", no units made). `attribute` then is the draft attribute being edited (its id is
+// kept). While a name is typed `clash` tells whether an attribute of that name exists (or is in the draft): the form
+// offers it as `useExisting` instead of saving a duplicate.
+const props = defineProps<{
+  attribute: Attribute | null
+  draft?: boolean
+  clash?: (name: string) => { id: Id; name: string } | null
+}>()
+const emit = defineEmits<{ done: [attributeId: Id]; draft: [attribute: DraftNewAttribute]; useExisting: [id: Id] }>()
 
 const { t } = useI18n()
 const workspace = useWorkspace()
@@ -58,13 +66,16 @@ const changes = computed(() =>
 
 // The line under the switch, on or off: what prefixes make of "4k7" with this unit.
 const example = computed(() => prefixExample(unit.value))
+const taken = computed(() => (props.draft && props.clash ? props.clash(name.value) : null))
+// A draft is edited on this device, so it works offline too.
+const blocked = computed(() => (props.draft ? !!state.readOnly && state.readOnly !== 'offline' : !!state.readOnly || !state.snapshot))
 const canSubmit = computed(
-  () => !busy.value && !state.readOnly && !!state.snapshot && (!props.attribute || Object.keys(changes.value).length > 0),
+  () => !busy.value && !blocked.value && !taken.value && (props.draft || !props.attribute || Object.keys(changes.value).length > 0),
 )
 
 async function submit(): Promise<void> {
   const snapshot = state.snapshot
-  if (!canSubmit.value || !snapshot) return
+  if (!canSubmit.value || (!snapshot && !props.draft)) return
   const list = kind.value === 'enum' ? parseNameList(options.value) : []
   const form = { name: name.value, kind: kind.value, options: options.value, unit: unit.value, siPrefixes: siPrefixes.value }
   const invalid = attributeFormError(form)
@@ -72,6 +83,19 @@ async function submit(): Promise<void> {
     errorKey.value = invalid
     return
   }
+  if (props.draft) {
+    errorKey.value = null
+    emit('draft', {
+      id: props.attribute?.id ?? ids.attributeId,
+      name: name.value.trim(),
+      kind: kind.value,
+      unit: kind.value === 'number' ? unit.value.trim() : '',
+      siPrefixes: kind.value === 'number' ? siPrefixes.value : false,
+      options: list,
+    })
+    return
+  }
+  if (!snapshot) return
   busy.value = true
   errorKey.value = null
   try {
@@ -116,6 +140,12 @@ async function submit(): Promise<void> {
         aria-describedby="attribute-form-error"
         class="h-11"
       />
+      <p v-if="taken" class="text-sm">
+        {{ $t('intakes.attribute.exists', { name: taken.name }) }}
+        <button type="button" class="font-semibold underline underline-offset-2 hover:text-accent-ink focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" @click="emit('useExisting', taken.id)">
+          {{ $t('intakes.useExisting', { name: taken.name }) }}
+        </button>
+      </p>
     </div>
     <div class="grid gap-2">
       <Label id="attribute-kind-label">{{ $t('attributeForm.type') }}</Label>
@@ -154,7 +184,7 @@ async function submit(): Promise<void> {
         <p v-if="example" class="field-text text-sm text-subtle-foreground">{{ $t('attributeForm.siExample', { example }) }}</p>
       </div>
     </template>
-    <div class="grid gap-1">
+    <div v-if="!draft" class="grid gap-1">
       <label class="field-text flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm font-semibold" :class="pinnedFull && 'cursor-default'">
         {{ $t('attributeForm.showInLists') }}
         <Switch v-model="pinned" :disabled="pinnedFull" aria-describedby="attribute-pinned-hint" />
@@ -167,7 +197,7 @@ async function submit(): Promise<void> {
       <template v-if="errorKey">{{ $t(errorKey) }}</template>
     </p>
     <Button type="submit" class="h-11 rounded-field" :disabled="!canSubmit">
-      {{ $t(busy ? 'status.saving' : attribute ? 'attributeForm.save' : 'attributeForm.create') }}
+      {{ $t(busy ? 'status.saving' : attribute ? 'attributeForm.save' : draft ? 'intakes.attribute.add' : 'attributeForm.create') }}
     </Button>
   </form>
 </template>

@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { resolveIntake, type Id, type IntakeDraftContent, type IntakeHeader, type InventorySnapshot } from '@antresol/core'
 import { useIntervalFn } from '@vueuse/core'
-import { Pencil, Plus, Trash2, TriangleAlert } from '@lucide/vue'
+import { FolderPlus, Pencil, Plus, Trash2, TriangleAlert } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
 import { errorMessageKey } from '~/lib/errors'
 import type { LocalIntakeDraft } from '~/lib/intake-drafts'
+import { commitLabel } from '~/lib/intake-line'
 import { formatDay, intakeTitle } from '~/lib/intake-list'
 import { isUnknownOutcome } from '~/lib/unconfirmed'
 
@@ -93,6 +94,7 @@ const resolved = computed(() => resolveIntake(content.value, props.snapshot))
 const resolutionOf = computed(() => new Map(resolved.value.lines.map((l) => [l.lineId, l.resolution] as const)))
 const hasProblems = computed(() => !resolved.value.ok || Object.keys(commitProblems.value).length > 0)
 const lineCount = computed(() => content.value.lines.length)
+const label = computed(() => commitLabel(content.value, resolved.value))
 
 const title = computed(() => intakeTitle(local.value.header))
 const crumbs = computed(() => [{ name: t('intakes.title'), to: '/intakes' }])
@@ -112,6 +114,14 @@ const sheetLine = ref<Id | null>(null)
 function openLine(id: Id | null): void {
   sheetLine.value = id
   sheetOpen.value = true
+}
+
+// ---- Draft folders ----
+const folderOpen = ref(false)
+const folderId = ref<Id | null>(null)
+function openFolder(id: Id | null): void {
+  folderId.value = id
+  folderOpen.value = true
 }
 
 // ---- Header, delete ----
@@ -166,7 +176,7 @@ async function resolve(choice: 'keepMine' | 'takeTheirs'): Promise<void> {
 
 // ---- Commit ----
 const canCommit = computed(
-  () => lineCount.value > 0 && !hasProblems.value && !readOnly.value && !state.readOnly && !changedElsewhere.value,
+  () => label.value !== null && !hasProblems.value && !readOnly.value && !state.readOnly && !changedElsewhere.value,
 )
 async function commit(): Promise<void> {
   if (sender.busy.value) return
@@ -203,6 +213,13 @@ const retryErrorKey = computed(() =>
           <Pencil class="size-4" aria-hidden="true" />
           {{ $t('intakes.screen.details') }}
         </Button>
+        <Button v-if="compact" variant="ghost" size="icon" class="size-11 disabled:opacity-35" :aria-label="$t('intakes.screen.newFolder')" :disabled="readOnly" @click="openFolder(null)">
+          <FolderPlus class="size-5" aria-hidden="true" />
+        </Button>
+        <Button v-else variant="outline" class="h-9 rounded-field" :disabled="readOnly" @click="openFolder(null)">
+          <FolderPlus class="size-4" aria-hidden="true" />
+          {{ $t('intakes.screen.newFolder') }}
+        </Button>
         <RowMenu :class="compact ? 'size-11' : 'size-9'" :label="title" :button-label="$t('intakes.screen.more')" :actions="menu" @select="confirmingDelete = true" />
       </template>
     </ScreenHeader>
@@ -235,6 +252,8 @@ const retryErrorKey = computed(() =>
         <Pencil class="size-4 shrink-0 text-icon" aria-hidden="true" />
       </button>
 
+      <IntakeWillCreate :content="content" :snapshot="snapshot" :resolved="resolved" :read-only="readOnly" :edit="edit" @open-folder="openFolder" />
+
       <section class="grid min-w-0 grid-cols-1 gap-2">
         <h2 class="section-label px-1 text-xs">{{ $t('intakes.lines', lineCount) }}</h2>
         <EmptyState v-if="lineCount === 0" :text="$t('intakes.screen.noLines')" />
@@ -266,18 +285,19 @@ const retryErrorKey = computed(() =>
             {{ $t('unconfirmed.hint') }}<template v-if="retryErrorKey"> {{ $t(retryErrorKey) }}</template>
           </template>
           <template v-else-if="commitErrorKey">{{ $t(commitErrorKey) }}</template>
-          <template v-else-if="lineCount > 0 && hasProblems">{{ $t('intakes.screen.fixLines') }}</template>
-          <template v-else-if="lineCount > 0 && state.readOnly === 'offline'">{{ $t('intakes.screen.offline') }}</template>
+          <template v-else-if="label && hasProblems">{{ $t('intakes.screen.fixLines') }}</template>
+          <template v-else-if="label && state.readOnly === 'offline'">{{ $t('intakes.screen.offline') }}</template>
         </p>
         <Button v-if="sender.frozen.value" class="h-11 rounded-field" :disabled="sender.busy.value" @click="commit">
           {{ $t(sender.busy.value ? 'intakes.screen.committing' : 'unconfirmed.retry') }}
         </Button>
         <Button v-else class="h-11 rounded-field" :disabled="!canCommit || sender.busy.value" @click="commit">
-          {{ sender.busy.value ? $t('intakes.screen.committing') : $t('intakes.screen.commit', lineCount) }}
+          {{ sender.busy.value ? $t('intakes.screen.committing') : label ? $t(label.key, label.count) : $t('intakes.screen.commitLines', 0) }}
         </Button>
       </div>
 
       <IntakeLineSheet v-model:open="sheetOpen" :line-id="sheetLine" :content="content" :snapshot="snapshot" :read-only="readOnly" :edit="edit" />
+      <IntakeFolderSheet v-model:open="folderOpen" :folder-id="folderId" :content="content" :snapshot="snapshot" :read-only="readOnly" :edit="edit" />
       <IntakeHeaderSheet v-model:open="editingHeader" :intake-id="intakeId" :header="local.header" :shops="shops" :save-draft="saveHeader" />
       <ConfirmSheet
         v-model:open="confirmingDelete"

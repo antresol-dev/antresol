@@ -55,7 +55,11 @@
       "deleted": "Draft deleted",
       "noLines": "No lines yet. Add what came in, one line per bag.",
       "addLine": "Add line",
-      "commit": "Commit · {count} line | Commit · {count} lines",
+      "commitLines": "Commit · {count} line | Commit · {count} lines",
+      "commitItems": "Commit · {count} item | Commit · {count} items",
+      "commitParts": "Commit · {count} new part | Commit · {count} new parts",
+      "newFolder": "New folder",
+      "siPrefixes": "SI prefixes",
       "committing": "Committing…",
       "committed": "Intake committed",
       "fixLines": "Some lines need fixing before the intake can be committed.",
@@ -87,13 +91,59 @@
       "invalid_link": "The link isn’t a web address: it should start with https://",
       "unknown": "This line can’t be committed as it is: open it to check"
     },
+    "useExisting": "Use existing {name}",
+    "willCreate": {
+      "title": "Will be created",
+      "folders": "Folders",
+      "attributes": "Attributes",
+      "items": "Items"
+    },
+    "created": {
+      "title": "Created",
+      "folders": "Folders",
+      "attributes": "Attributes",
+      "tags": "Tags",
+      "items": "Items"
+    },
+    "entity": {
+      "problem": {
+        "duplicate_name": "Already exists",
+        "parent_gone": "Its folder is gone",
+        "cycle": "Inside itself",
+        "invalid_value": "Check the name and values"
+      }
+    },
+    "item": {
+      "unit": "Unit",
+      "axis": "Varies",
+      "variants": "Variants",
+      "noVariants": "No variants yet. Add a line for this item.",
+      "noAttributes": "None yet",
+      "attributesHint": "Attributes and values are set in the item’s lines.",
+      "remove": "Remove item",
+      "removed": "Item “{name}” removed"
+    },
     "folder": {
+      "newTitle": "New folder",
+      "editTitle": "Folder",
+      "parent": "Goes in",
+      "add": "Add folder",
+      "save": "Save",
+      "remove": "Remove folder",
+      "newSuffix": "{name} (new)",
+      "exists": "“{name}” is already here.",
       "cycle": "A folder can’t go inside itself or inside one of its own folders.",
       "notEmpty": "Move or remove what’s in this folder first.",
       "parentGone": "The folder this goes in no longer exists.",
       "duplicate": "There is already a folder called “{name}” here."
     },
     "attribute": {
+      "add": "Add attribute",
+      "editTitle": "New attribute",
+      "edit": "Edit {name}",
+      "remove": "Remove {name}",
+      "removed": "Attribute “{name}” removed",
+      "exists": "There is already an attribute called “{name}”.",
       "inUse": "A new item uses this attribute. Remove it from the item first.",
       "invalid": "This attribute’s kind or unit isn’t valid.",
       "duplicate": "There is already an attribute called “{name}”."
@@ -137,7 +187,6 @@
       "save": "Save",
       "remove": "Remove line",
       "removed": "Line removed",
-      "removedWithItem": "Line removed, and the new item “{name}” with it",
       "noPhotoOnTopUp": "A line that adds stock to something you already have takes no photo.",
       "alreadyCreated": "Another line of this intake already creates this variant. Edit that line instead.",
       "needsAmount": "Enter the amount.",

@@ -292,7 +292,7 @@ const retryErrorKey = computed(() =>
           {{ $t(sender.busy.value ? 'intakes.screen.committing' : 'unconfirmed.retry') }}
         </Button>
         <Button v-else class="h-11 rounded-field" :disabled="!canCommit || sender.busy.value" @click="commit">
-          {{ sender.busy.value ? $t('intakes.screen.committing') : label ? $t(label.key, label.count) : $t('intakes.screen.commitLines', 0) }}
+          {{ sender.busy.value ? $t('intakes.screen.committing') : label ? $t(label.key, label.count) : $t('intakes.screen.commit') }}
         </Button>
       </div>
 

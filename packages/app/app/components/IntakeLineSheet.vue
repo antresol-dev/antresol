@@ -4,6 +4,7 @@ import {
   formatAmount,
   formatAttributeValue,
   getCurrency,
+  intakeAttributes,
   itemAxes,
   itemStock,
   newId,
@@ -23,12 +24,15 @@ import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { pricePreview, parseMoneyText, unitChoices } from '~/lib/amounts'
 import { parseAttributeInput } from '~/lib/attribute-values'
 import { formatMoney } from '~/lib/format'
+import { folderChoicesWithDraft, folderPathWithDraft } from '~/lib/intake-entities'
 import {
   alreadyInDraft,
   buildDraftLine,
+  creatingLineOf,
   duplicateWarning,
   lineMatches,
   nextLineDefaults,
@@ -41,7 +45,7 @@ import {
   withoutLine,
 } from '~/lib/intake-line'
 import { UNDO_MIN_MS } from '~/lib/undo'
-import { folderChoices, pathOf, snapshotIndex, type SearchRow } from '~/lib/views'
+import { pathOf, snapshotIndex, type SearchRow } from '~/lib/views'
 
 // The line sheet of a draft intake (spec 2026-11-13 intakes §6): "what is it" with what the inventory and the draft
 // already have, then the item's card (or a new item) and the amount; price & link, photo, attributes and folder are
@@ -64,6 +68,8 @@ const intakes = useIntakes()
 
 type Values = { attributeId: Id; value: string }[]
 
+/** The line the form edits: the sheet's own, or another one taken through "Edit that line". */
+const activeLineId = ref<Id | null>(props.lineId)
 const mode = ref<'search' | 'line'>('search')
 const query = ref('')
 const formLineId = ref<Id>(newId())
@@ -80,12 +86,12 @@ const defaults = ref<{ folderId: Id | null; unitKey: string; urlPrefix: string |
 
 const priceOpen = ref(false)
 const photoOpen = ref(false)
+const descriptionOpen = ref(false)
 const attributesOpen = ref(false)
 const tagsOpen = ref(false)
 /** New tags this form made: created by the commit, not now (the source's revision stays as it is). */
 const addedTags = ref<DraftNewTag[]>([])
 const pickingFolder = ref(false)
-const replacing = ref(false)
 const editingAxis = ref<Id | null>(null)
 const recent = ref<Id[]>([])
 const uploading = ref(false)
@@ -94,8 +100,10 @@ const error = ref<{ key: string; params?: Record<string, string> } | null>(null)
 const attributeError = ref<string | null>(null)
 
 const s = computed(() => props.snapshot)
+/** The inventory's attributes and the draft's own: what a new item's attributes and axes read from. */
+const attributeMap = computed(() => intakeAttributes(props.content, props.snapshot))
 const ix = computed(() => snapshotIndex(s.value))
-const editing = computed(() => props.lineId !== null)
+const editing = computed(() => activeLineId.value !== null)
 const busy = computed(() => saving.value || uploading.value)
 const disabled = computed(() => props.readOnly || busy.value)
 const canPhoto = computed(() => !!workspace.state.current && workspace.fileStoreFor(workspace.state.current.sourceId) !== null)
@@ -103,7 +111,7 @@ const canPhoto = computed(() => !!workspace.state.current && workspace.fileStore
 /** What the axes show: a stored number as the attribute writes it ("4700" -> "4.7 kΩ"). */
 function shown(values: Values): Values {
   return values.map(({ attributeId, value }) => {
-    const a = s.value.attributes.find((x) => x.id === attributeId)
+    const a = attributeMap.value.get(attributeId)
     return { attributeId, value: a ? formatAttributeValue(a, value) : value }
   })
 }
@@ -124,19 +132,21 @@ function startNew(from: typeof defaults.value): void {
   photo.value = null
   priceOpen.value = false
   photoOpen.value = false
+  descriptionOpen.value = false
   attributesOpen.value = false
   tagsOpen.value = false
   addedTags.value = []
   pickingFolder.value = false
-  replacing.value = false
   editingAxis.value = null
   error.value = null
   attributeError.value = null
 }
 
-function load(): void {
-  const line = props.content.lines.find((l) => l.id === props.lineId)
+function load(lineId: Id | null = props.lineId): void {
+  activeLineId.value = lineId
+  const line = props.content.lines.find((l) => l.id === lineId)
   if (!line) {
+    activeLineId.value = null
     const last = props.content.lines.at(-1)
     startNew(last ? nextLineDefaults(last, props.content, s.value) : { folderId: null, unitKey: 'pcs', urlPrefix: null })
     return
@@ -160,7 +170,7 @@ watch(
   open,
   (isOpen) => {
     if (!isOpen) return
-    load()
+    load(props.lineId)
     void intakes.recentFolders().then(
       (found) => (recent.value = found),
       () => (recent.value = []),
@@ -230,7 +240,10 @@ function pickFirst(): void {
 const item = computed(() => (itemId.value && !newItem.value ? (ix.value.items.get(itemId.value) ?? null) : null))
 const axes = computed<Attribute[]>(() => {
   const n = newItem.value
-  if (n) return n.attributes.flatMap((x) => (x.axis ? (s.value.attributes.filter((a) => a.id === x.attributeId)) : []))
+  if (n) return n.attributes.flatMap((x) => {
+    const a = x.axis ? attributeMap.value.get(x.attributeId) : undefined
+    return a ? [a] : []
+  })
   return itemId.value ? itemAxes(s.value, itemId.value) : []
 })
 const valueOf = (attributeId: Id): string => axisValues.value.find((x) => x.attributeId === attributeId)?.value ?? ''
@@ -282,9 +295,17 @@ const hintValue = computed(() =>
     })
     .join(' · '),
 )
-const inDraftAlready = computed(() =>
-  itemId.value && canonicalValues.value ? alreadyInDraft(props.content, itemId.value, canonicalValues.value, formLineId.value) : false,
+/** Another line of this intake that already creates what this one would (one line per created variant). */
+const createdBy = computed(() =>
+  itemId.value && canonicalValues.value ? creatingLineOf(s.value, draftForHints.value, itemId.value, canonicalValues.value, formLineId.value) : null,
 )
+const inDraftAlready = computed(() =>
+  !createdBy.value && itemId.value && canonicalValues.value ? alreadyInDraft(props.content, itemId.value, canonicalValues.value, formLineId.value) : false,
+)
+/** "Edit that line": the form switches to the line that already creates this. */
+function editThatLine(lineId: Id | undefined): void {
+  if (lineId && props.content.lines.some((l) => l.id === lineId)) load(lineId)
+}
 
 const tag = computed(() => {
   if (newItem.value) return 'new'
@@ -335,19 +356,28 @@ const similarItem = computed(() => {
   const r = m ? (m.exact[0] ?? m.otherValue[0] ?? m.similar[0]) : undefined
   return r ? { itemId: r.itemId, name: r.name } : null
 })
-const folderName = (id: Id | null): string => (id === null ? s.value.inventory.name : (ix.value.folders.get(id)?.name ?? ''))
+const draftFolderIds = computed(() => new Set((props.content.newFolders ?? []).map((f) => f.id)))
+const folderName = (id: Id | null): string =>
+  id === null ? s.value.inventory.name : (folderPathWithDraft(s.value, props.content, id).at(-1) ?? '')
 const folderChips = computed(() => {
   const n = newItem.value
   if (!n) return []
-  const chips: { id: Id | null; label: string }[] = []
+  const chips: { id: Id | null; label: string; draft: boolean }[] = []
   const add = (id: Id | null, label: string): void => {
-    if (!chips.some((c) => c.id === id) && (id === null || ix.value.folders.has(id))) chips.push({ id, label })
+    const draft = id !== null && draftFolderIds.value.has(id)
+    if (!chips.some((c) => c.id === id) && (id === null || draft || ix.value.folders.has(id))) chips.push({ id, label, draft })
   }
   if (suggested.value) add(suggested.value.folderId, t('intakes.line.suggested', { folder: folderName(suggested.value.folderId), name: suggested.value.nextTo }))
   for (const id of recent.value) add(id, folderName(id))
   add(n.folderId, folderName(n.folderId))
+  for (const f of props.content.newFolders ?? []) add(f.id, f.name)
   return chips
 })
+const folderList = computed(() =>
+  newItem.value
+    ? folderChoicesWithDraft(s.value, props.content, newItem.value.folderId).map((c) => ({ ...c, name: c.draft ? t('intakes.folder.newSuffix', { name: c.name }) : c.name }))
+    : [],
+)
 function setFolder(id: Id | null): void {
   if (newItem.value) newItem.value = { ...newItem.value, folderId: id }
   pickingFolder.value = false
@@ -375,13 +405,20 @@ const attributes = computed({
 const attributesSummary = computed(() =>
   attributes.value
     .flatMap((x) => {
-      const a = s.value.attributes.find((y) => y.id === x.attributeId)
+      const a = attributeMap.value.get(x.attributeId)
       if (!a) return []
       if (x.axis) return [`${a.name} ${valueOf(a.id) || '…'}`]
       return [x.value ? `${a.name} ${formatAttributeValue(a, x.value)}` : a.name]
     })
     .join(' · '),
 )
+
+const description = computed({
+  get: () => newItem.value?.description ?? '',
+  set: (v: string) => {
+    if (newItem.value) newItem.value = { ...newItem.value, description: v.trim() === '' ? null : v }
+  },
+})
 
 // ---- Tags of a new item ----
 /** The new tags of the draft and this form's own, by id: what the picker offers next to the inventory's tags. */
@@ -440,22 +477,31 @@ const priceSummary = computed(() => {
   return parts.filter(Boolean).join(' · ')
 })
 
-/** The photo the variant this line adds to has already (one per variant: replaced only when asked). */
-const variantPhoto = computed(() => {
-  const h = hint.value
-  if (newItem.value || (h?.kind !== 'existing' && h?.kind !== 'archived')) return null
-  return s.value.photos.find((p) => p.variantId === h.variantId) ?? null
+/** Which photo this line takes (spec 2026-11-16 §5): a new item without variants: the item's photo; a line that creates
+ *  a variant: that variant's photo; a top-up: none (a photo saved on one before stays, shown, and can be removed). */
+const photoMode = computed<'item' | 'variant' | 'legacy' | null>(() => {
+  if (newItem.value) return axes.value.length === 0 ? 'item' : 'variant'
+  if (hint.value?.kind === 'new') return 'variant'
+  return photo.value ? 'legacy' : null
 })
-/** `replace`: picked through "Replace photo" (buildDraftLine keeps it only while the variant has a photo). */
-async function upload(files: File[], replace: boolean): Promise<void> {
+const shownPhoto = computed(() => (photoMode.value === 'item' ? (photo.value ?? newItem.value?.photo ?? null) : photo.value))
+function removePhoto(): void {
+  photo.value = null
+  if (photoMode.value === 'item' && newItem.value) newItem.value = { ...newItem.value, photo: null }
+}
+async function upload(files: File[]): Promise<void> {
   const file = files[0]
   if (!file) return
   uploading.value = true
   error.value = null
   try {
     const stored = await intakes.uploadPhoto(file)
-    photo.value = { ...stored, replace }
-    replacing.value = false
+    if (photoMode.value === 'item' && newItem.value) {
+      photo.value = null
+      newItem.value = { ...newItem.value, photo: stored }
+    } else {
+      photo.value = { ...stored, replace: false }
+    }
   } catch {
     error.value = { key: 'intakes.line.photoFailed' }
   } finally {
@@ -699,6 +745,13 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
           <p>{{ $t('intakes.line.newValue', { value: hintValue }) }}</p>
           <p v-if="nearestText">{{ nearestText }}</p>
         </div>
+        <div v-if="createdBy" :class="[banner, 'banner-warn']" role="status">
+          <p class="flex items-center gap-2 font-semibold"><TriangleAlert class="size-4 shrink-0 text-warning" aria-hidden="true" />{{ $t('intakes.line.createdTitle') }}</p>
+          <p>{{ $t('intakes.line.alreadyCreated') }}</p>
+          <div>
+            <Button type="button" variant="outline" size="sm" class="h-9" :disabled="disabled" @click="editThatLine(createdBy)">{{ $t('intakes.line.editThatLine') }}</Button>
+          </div>
+        </div>
         <p v-if="inDraftAlready" :class="[banner, 'flex items-start gap-2 bg-chip text-foreground']" role="status">
           <Info class="mt-0.5 size-4 shrink-0 text-icon" aria-hidden="true" />
           <span>{{ $t('intakes.line.inDraft') }}</span>
@@ -722,12 +775,13 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
               @click="setFolder(c.id)"
             >
               <span class="truncate">{{ c.label }}</span>
+              <span v-if="c.draft" class="shrink-0 rounded-chip bg-accent-soft px-1.5 py-px text-xs font-semibold tracking-[0.04em] text-accent-soft-foreground uppercase">{{ $t('intakes.tag.new') }}</span>
             </button>
             <button type="button" :class="[chip, 'min-h-9 border-input hover:bg-hover']" :aria-expanded="pickingFolder" :disabled="disabled" @click="pickingFolder = !pickingFolder">
               {{ $t('intakes.line.other') }}
             </button>
           </div>
-          <FolderPickerList v-if="pickingFolder" :choices="folderChoices(s, newItem.folderId)" :aria-label="$t('quickAdd.chooseFolder')" @select="setFolder" />
+          <FolderPickerList v-if="pickingFolder" :choices="folderList" :aria-label="$t('quickAdd.chooseFolder')" @select="setFolder" />
         </div>
 
         <div class="grid">
@@ -740,7 +794,7 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
               <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-(--dur-fast) motion-reduce:transition-none" :class="attributesOpen ? 'rotate-180' : ''" aria-hidden="true" />
             </button>
             <div v-if="attributesOpen" class="py-3">
-              <IntakeNewItemAttributes v-model="attributes" :snapshot="s" :similar="similarItem" :disabled="disabled" @update:error="attributeError = $event" />
+              <IntakeNewItemAttributes v-model="attributes" :snapshot="s" :content="content" :edit="edit" :similar="similarItem" :disabled="disabled" @update:error="attributeError = $event" />
             </div>
 
             <button type="button" :class="summaryRow" :aria-expanded="tagsOpen" :disabled="disabled" @click="tagsOpen = !tagsOpen">
@@ -752,6 +806,18 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
             </button>
             <div v-if="tagsOpen" class="py-3">
               <TagPicker v-model="tagIds" :snapshot="s" :extra-tags="draftTags" :locked="disabled" @create="addTag" />
+            </div>
+
+            <button type="button" :class="summaryRow" :aria-expanded="descriptionOpen" :disabled="disabled" @click="descriptionOpen = !descriptionOpen">
+              <span class="shrink-0 text-sm font-semibold">{{ $t('form.description') }}</span>
+              <span class="min-w-0 grow truncate text-right text-sm" :class="description ? 'text-foreground' : 'text-muted-foreground'">
+                {{ description.replace(/\s+/g, ' ').trim() || $t('intakes.line.add') }}
+              </span>
+              <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-(--dur-fast) motion-reduce:transition-none" :class="descriptionOpen ? 'rotate-180' : ''" aria-hidden="true" />
+            </button>
+            <div v-if="descriptionOpen" class="py-3">
+              <Label for="intake-line-description" class="sr-only">{{ $t('form.description') }}</Label>
+              <Textarea id="intake-line-description" v-model="description" rows="3" class="min-h-20" :disabled="disabled" />
             </div>
           </template>
 
@@ -777,37 +843,26 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
             </div>
           </div>
 
-          <template v-if="canPhoto">
+          <template v-if="canPhoto && photoMode">
             <button type="button" :class="summaryRow" :aria-expanded="photoOpen" :disabled="disabled" @click="photoOpen = !photoOpen">
               <span class="shrink-0 text-sm font-semibold">{{ $t('intakes.line.photo') }}</span>
               <span class="flex min-w-0 grow justify-end">
-                <PhotoImg v-if="photo || variantPhoto" :photo="(photo ?? variantPhoto)!" size="thumb" alt="" class="size-8 rounded-thumb object-cover" />
+                <PhotoImg v-if="shownPhoto" :photo="shownPhoto" size="thumb" alt="" class="size-8 rounded-thumb object-cover" />
                 <span v-else class="text-sm text-muted-foreground">{{ $t('intakes.line.add') }}</span>
               </span>
               <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-(--dur-fast) motion-reduce:transition-none" :class="photoOpen ? 'rotate-180' : ''" aria-hidden="true" />
             </button>
             <div v-if="photoOpen" class="grid gap-2 py-3">
-              <div v-if="photo" class="flex items-center gap-3">
-                <PhotoImg :photo="photo" size="thumb" alt="" class="size-10 shrink-0 rounded-thumb object-cover" />
-                <span class="min-w-0 flex-1 text-sm text-muted-foreground">
-                  {{ variantPhoto ? $t(photo.replace ? 'intakes.line.replaces' : 'intakes.line.keepsPhoto') : $t('intakes.line.photoSet') }}
-                </span>
-                <Button v-if="variantPhoto && !photo.replace" type="button" variant="outline" class="h-9" :disabled="disabled" @click="photo = { ...photo, replace: true }">
-                  {{ $t('intakes.line.replacePhoto') }}
-                </Button>
-                <Button type="button" variant="ghost" size="icon" class="size-11 shrink-0" :aria-label="$t('quickAdd.removePhoto')" :disabled="disabled" @click="photo = null">
+              <p v-if="photoMode !== 'legacy'" class="text-sm text-subtle-foreground">{{ $t(photoMode === 'item' ? 'intakes.line.photoOfItem' : 'intakes.line.photoOfVariant') }}</p>
+              <div v-if="shownPhoto" class="flex items-center gap-3">
+                <PhotoImg :photo="shownPhoto" size="thumb" alt="" class="size-10 shrink-0 rounded-thumb object-cover" />
+                <span class="min-w-0 flex-1 text-sm text-muted-foreground">{{ $t('intakes.line.photoSet') }}</span>
+                <Button type="button" variant="ghost" size="icon" class="size-11 shrink-0" :aria-label="$t('quickAdd.removePhoto')" :disabled="disabled" @click="removePhoto">
                   <X class="size-4" aria-hidden="true" />
                 </Button>
               </div>
-              <template v-else-if="variantPhoto && !replacing">
-                <div class="flex items-center gap-3">
-                  <PhotoImg :photo="variantPhoto" size="thumb" alt="" class="size-10 shrink-0 rounded-thumb object-cover" />
-                  <span class="min-w-0 flex-1 text-sm text-muted-foreground">{{ $t('intakes.line.currentPhoto') }}</span>
-                  <Button type="button" variant="outline" class="h-9" :disabled="disabled" @click="replacing = true">{{ $t('intakes.line.replacePhoto') }}</Button>
-                </div>
-              </template>
               <p v-else-if="uploading" class="text-sm text-muted-foreground">{{ $t('intakes.line.uploading') }}</p>
-              <PhotoPicker v-else :disabled="disabled" @pick="upload($event, replacing)" />
+              <PhotoPicker v-else :disabled="disabled" @pick="upload" />
             </div>
           </template>
         </div>
@@ -816,6 +871,9 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
       <p role="alert" class="text-sm text-destructive">
         <template v-if="error">{{ $t(error.key, error.params ?? {}) }}</template>
       </p>
+      <div v-if="error?.key === 'intakes.line.alreadyCreated'">
+        <Button type="button" variant="outline" size="sm" class="h-9" :disabled="disabled" @click="editThatLine(error.params?.line)">{{ $t('intakes.line.editThatLine') }}</Button>
+      </div>
     </div>
 
     <template v-if="mode === 'line'" #footer>

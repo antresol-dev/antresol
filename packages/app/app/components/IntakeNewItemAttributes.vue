@@ -1,18 +1,22 @@
 <script setup lang="ts">
-import type { DraftNewItem, Id, InventorySnapshot } from '@antresol/core'
+import { intakeAttributes, type DraftNewAttribute, type DraftNewItem, type Id, type IntakeDraftContent, type InventorySnapshot } from '@antresol/core'
 import { X } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
+import { nameClash, withNewAttribute } from '~/lib/intake-draft'
 import { attributesFrom } from '~/lib/intake-line'
 import { byName } from '~/lib/views'
 
 // The attributes of a new item of an intake (spec 2026-11-13 intakes §6, state 4): shared values typed by hand, and
-// which of them the variants differ by (an axis: its value goes on each line). A new attribute is created for the
-// inventory at once, as on an item card.
+// which of them the variants differ by (an axis: its value goes on each line). A new attribute is a draft attribute
+// (spec 2026-11-16 §4): it goes into the draft through `edit` and is created by the commit; the picker lists the
+// draft's own next to the inventory's, marked new.
 const props = defineProps<{
   snapshot: InventorySnapshot
+  content: IntakeDraftContent
+  edit: (change: (c: IntakeDraftContent) => IntakeDraftContent) => Promise<boolean>
   disabled?: boolean
   /** A similar item whose attributes the new one can start from. */
   similar: { itemId: Id; name: string } | null
@@ -25,12 +29,19 @@ const choice = ref('')
 const creating = ref(false)
 const formBusy = ref(false)
 
-const known = computed(() => new Map(props.snapshot.attributes.map((a) => [a.id, a] as const)))
+const { t } = useI18n()
+const known = computed(() => intakeAttributes(props.content, props.snapshot))
+const isDraft = (id: Id): boolean => (props.content.newAttributes ?? []).some((a) => a.id === id)
 const rows = computed(() => attributes.value.flatMap((x) => {
   const a = known.value.get(x.attributeId)
   return a ? [{ ...x, attribute: a }] : []
 }))
-const choices = computed(() => props.snapshot.attributes.filter((a) => !attributes.value.some((x) => x.attributeId === a.id)).sort(byName))
+const choices = computed(() =>
+  [...known.value.values()]
+    .filter((a) => !attributes.value.some((x) => x.attributeId === a.id))
+    .sort(byName)
+    .map((a) => ({ id: a.id, name: isDraft(a.id) ? t('intakes.attribute.newSuffix', { name: a.name }) : a.name })),
+)
 const similarAttributes = computed(() => (props.similar ? attributesFrom(props.snapshot, props.similar.itemId) : []))
 
 /** Why a shared value field's text does not read, per attribute; the first one shown goes to the sheet. A field that
@@ -72,9 +83,40 @@ async function cancelNew(): Promise<void> {
   const el = addTrigger.value?.$el
   el?.focus()
 }
-function created(id: Id): void {
-  creating.value = false
+function addId(id: Id): void {
+  if (attributes.value.some((x) => x.attributeId === id)) return
   attributes.value = [...attributes.value, { attributeId: id, value: null, axis: false }]
+}
+/** What the typed name is already called: the inventory's attribute or one of this draft. */
+function clash(name: string): { id: Id; name: string } | null {
+  if (name.trim() === '') return null
+  const hit = nameClash(props.snapshot, props.content, { kind: 'attribute', name })
+  return hit ? { id: hit.id, name: known.value.get(hit.id)?.name ?? name.trim() } : null
+}
+const createError = ref<string | null>(null)
+async function createdDraft(a: DraftNewAttribute): Promise<void> {
+  const next = withNewAttribute(props.content, props.snapshot, a)
+  if ('errorKey' in next) {
+    createError.value = t(next.errorKey, next.params ?? {})
+    return
+  }
+  formBusy.value = true
+  try {
+    const ok = await props.edit((c) => {
+      const r = withNewAttribute(c, props.snapshot, a)
+      return 'errorKey' in r ? c : r
+    })
+    if (!ok) return
+    creating.value = false
+    createError.value = null
+    addId(a.id)
+  } finally {
+    formBusy.value = false
+  }
+}
+function takeExisting(id: Id): void {
+  creating.value = false
+  addId(id)
 }
 </script>
 
@@ -95,6 +137,7 @@ function created(id: Id): void {
       <li v-for="row in rows" :key="row.attributeId" class="grid gap-2">
         <div class="flex min-h-11 items-center gap-2">
           <Label :for="`intake-attr-${row.attributeId}`" class="min-w-0 flex-1 truncate">{{ row.attribute.name }}</Label>
+          <span v-if="isDraft(row.attributeId)" class="shrink-0 rounded-chip bg-accent-soft px-1.5 py-px text-xs font-semibold tracking-[0.04em] text-accent-soft-foreground uppercase">{{ $t('intakes.tag.new') }}</span>
           <label class="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
             {{ $t('intakes.line.axis') }}
             <Switch :model-value="row.axis" :disabled="disabled" @update:model-value="update(row.attributeId, { axis: !!$event, value: null })" />
@@ -125,7 +168,8 @@ function created(id: Id): void {
     </ul>
 
     <InlineCreate v-if="creating" :title="$t('attributeSheet.newTitle')" :close-label="$t('attributeSheet.cancelNew')" :busy="formBusy" @cancel="cancelNew">
-      <AttributeForm v-model:busy="formBusy" :attribute="null" @done="created" />
+      <AttributeForm v-model:busy="formBusy" :attribute="null" draft :clash="clash" @draft="createdDraft" @use-existing="takeExisting" />
+      <p v-if="createError" role="alert" class="text-sm text-destructive">{{ createError }}</p>
     </InlineCreate>
     <div v-else class="grid gap-2">
       <Select :model-value="choice" :disabled="disabled" @update:model-value="add">

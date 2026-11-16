@@ -17,6 +17,9 @@ import {
   withNewAttribute,
   withNewFolder,
   withNewItem,
+  withLine,
+  withoutLine,
+  restoreLine,
   withoutNewAttribute,
   withoutNewFolder,
   withoutNewItem,
@@ -310,5 +313,49 @@ describe('buildDraftLine: one line per created variant and photos', () => {
     expect(buildDraftLine(form({ axisValues: [{ attributeId: 'res', value: '33k' }], photo: { ...photo, replace: true } }), s, base)).toMatchObject({
       line: { photo: { replace: false } },
     })
+  })
+})
+
+describe('fix round 1', () => {
+  const rich = (): IntakeDraftContent => {
+    let d = ok(withNewFolder(base, s, { id: 'DF', name: 'Coils', parentId: null }))
+    d = ok(withNewAttribute(d, s, { id: 'DA', name: 'Tolerance', kind: 'text', unit: '', siPrefixes: false, options: [] }))
+    return { ...d, newTags: [{ id: 'T1', name: 'Kit' }], newItems: [nItem({ tagIds: ['T1'] })] }
+  }
+  const keeps = (d: IntakeDraftContent) => {
+    expect(d.newFolders?.map((f) => f.id)).toEqual(['DF'])
+    expect(d.newAttributes?.map((a) => a.id)).toEqual(['DA'])
+    expect(d.newTags?.map((t) => t.id)).toEqual(['T1'])
+  }
+
+  it('withLine, withoutLine, restoreLine, item helpers and useExisting keep draft folders, attributes and tags', () => {
+    const l = line('M')
+    const d = withLine(rich(), l, null)
+    keeps(d)
+    const { content, removed } = withoutLine(d, l.id)
+    keeps(content)
+    keeps(restoreLine(content, removed!))
+    keeps(withNewItem(d, nItem({ id: 'N2', name: 'Other' })))
+    const out = withoutNewItem(d, 'N2')
+    keeps(out.content)
+    const gone = withoutNewItem(withNewItem(d, nItem({ id: 'N3', name: 'Z' })), 'N3')
+    keeps(gone.content)
+    keeps(restoreNewItem(gone.content, gone.removed!))
+    keeps(useExisting(d, 'nope', 'x'))
+    keeps(useExisting({ ...d, newFolders: [...d.newFolders!, { id: 'D2', name: 'Q', parentId: null }] }, 'D2', 'PASS'))
+  })
+
+  it('the duplicate check uses the new item as the form has it', () => {
+    const plain = nItem()
+    const other = line('N1')
+    const d = withNewItem({ ...base, lines: [other] }, plain)
+    // The sheet gives the item an axis: the other line (no value) is not the same variant.
+    const withAxis = { ...plain, attributes: [{ attributeId: 'res', value: null, axis: true }] }
+    const built = buildDraftLine(form({ itemId: 'N1', newItem: withAxis, axisValues: [{ attributeId: 'res', value: '1k' }] }), s, d)
+    expect(built).toHaveProperty('line')
+    // Same values on the same axes is still refused.
+    const twin = line('N1', { res: '1000' })
+    const d2 = withNewItem({ ...base, lines: [twin] }, withAxis)
+    expect(buildDraftLine(form({ itemId: 'N1', newItem: withAxis, axisValues: [{ attributeId: 'res', value: '1k' }] }), s, d2)).toMatchObject({ errorKey: 'intakes.line.alreadyCreated' })
   })
 })

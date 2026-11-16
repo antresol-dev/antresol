@@ -399,7 +399,9 @@ export function buildDraftLine(form: LineForm, s: InventorySnapshot, draft: Inta
   const values = new Map(axisValues.map((x) => [x.attributeId, x.value] as const))
   const topsUp = !n && (axes.length === 0 || duplicateOf(s, form.itemId, values) !== null)
   if (!topsUp) {
-    const other = creatingLineOf(s, draft, form.itemId, axisValues, form.lineId)
+    // The item as the form has it (its axes may have changed), not as the draft stores it.
+    const seen = n ? { ...draft, newItems: draft.newItems.some((x) => x.id === n.id) ? draft.newItems.map((x) => (x.id === n.id ? n : x)) : [...draft.newItems, n] } : draft
+    const other = creatingLineOf(s, seen, form.itemId, axisValues, form.lineId)
     if (other) return { errorKey: 'intakes.line.alreadyCreated', params: { line: other } }
   }
   const kept = draft.lines.find((l) => l.id === form.lineId)?.photo
@@ -429,6 +431,7 @@ export function withLine(draft: IntakeDraftContent, line: DraftLine, newItem: Dr
     list.some((y) => y.id === x.id) ? list.map((y) => (y.id === x.id ? x : y)) : [...list, x]
   const tags = newTags.reduce((list, t) => replace(list, t), draft.newTags ?? [])
   return pruneNewItems({
+    ...draft,
     newItems: newItem ? replace(draft.newItems, newItem) : draft.newItems,
     lines: replace(draft.lines, line),
     ...(tags.length > 0 || draft.newTags ? { newTags: tags } : {}),

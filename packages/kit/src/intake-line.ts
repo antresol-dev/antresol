@@ -3,7 +3,9 @@ import {
   cmpQ,
   duplicateOf,
   getCurrency,
+  intakeAttributes,
   isSourceUrl,
+  newId,
   MAX_NAME_LENGTH,
   pruneNewItems,
   resolveUnit,
@@ -18,6 +20,7 @@ import {
   type Id,
   type IntakeDraftContent,
   type InventorySnapshot,
+  type PhotoFile,
   type Quantity,
 } from '@antresol/core'
 import { amountExample, parseAmountText, parseMoneyText } from './amounts'
@@ -72,8 +75,14 @@ function normalizeTyped(text: string, s: InventorySnapshot): string {
 function axesOf(s: InventorySnapshot, draft: IntakeDraftContent | null, itemId: Id): Attribute[] {
   const n = draft?.newItems.find((x) => x.id === itemId)
   if (!n) return itemAxes(s, itemId)
+  return newItemAxes(s, draft!, n)
+}
+
+/** The axes of a new item, in order; its attributes may be the draft's own. */
+function newItemAxes(s: InventorySnapshot, draft: IntakeDraftContent, n: DraftNewItem): Attribute[] {
+  const known = intakeAttributes(draft, s)
   return n.attributes.flatMap((x) => {
-    const a = x.axis ? s.attributes.find((y) => y.id === x.attributeId) : undefined
+    const a = x.axis ? known.get(x.attributeId) : undefined
     return a ? [a] : []
   })
 }
@@ -304,6 +313,36 @@ export interface LineForm {
 }
 export type BuiltLine = { line: DraftLine; newItem: DraftNewItem | null; newTags: DraftNewTag[] } | { errorKey: string; params?: Record<string, string> }
 
+/** A photo without the line's "replace" flag: the item's own photo. */
+function fileOnly(p: DraftLinePhoto): PhotoFile {
+  const file: Partial<DraftLinePhoto> = { ...p }
+  delete file.replace
+  return file as PhotoFile
+}
+
+/** The other line that creates the same new variant as a line for `itemId` with these typed values would: for a new
+ *  item without axes any other line of it, otherwise a line of the same item with the same values; for an existing
+ *  item only a value it does not have yet creates a variant. Null for a line that tops up what exists, and while a value
+ *  is missing or does not fit. `exceptLineId`: the line being edited. */
+export function creatingLineOf(
+  s: InventorySnapshot,
+  draft: IntakeDraftContent,
+  itemId: Id,
+  values: { attributeId: Id; value: string }[],
+  exceptLineId?: Id,
+): Id | null {
+  const isNew = draft.newItems.some((n) => n.id === itemId)
+  if (!isNew && !s.items.some((i) => i.id === itemId)) return null
+  const axes = axesOf(s, draft, itemId)
+  const others = draft.lines.filter((l) => l.id !== exceptLineId && l.itemId === itemId)
+  if (axes.length === 0) return isNew ? (others[0]?.id ?? null) : null
+  const canonical = canonicalValues(axes, values)
+  if (!canonical) return null
+  if (!isNew && duplicateOf(s, itemId, canonical)) return null
+  const key = valueKey([...canonical].map(([attributeId, value]) => ({ attributeId, value })))
+  return others.find((l) => valueKey(l.axisValues) === key)?.id ?? null
+}
+
 /** The sheet's fields as a draft line (and its new item), values as the axes store them; or what to fix. A line needs an
  *  amount and a value on every axis, and its link must be an http(s) address; a new item needs a name that is not too
  *  long. What the commit would refuse is refused here, so no line fails the whole commit (spec §7). */
@@ -315,12 +354,8 @@ export function buildDraftLine(form: LineForm, s: InventorySnapshot, draft: Inta
   if (name === '') return { errorKey: 'errors.domain.name_required' }
   if (n && name.length > MAX_NAME_LENGTH) return { errorKey: 'errors.domain.name_too_long' }
 
-  const axes = n
-    ? n.attributes.flatMap((x) => {
-        const a = x.axis ? s.attributes.find((y) => y.id === x.attributeId) : undefined
-        return a ? [a] : []
-      })
-    : axesOf(s, draft, form.itemId)
+  const known = intakeAttributes(draft, s)
+  const axes = n ? newItemAxes(s, draft, n) : axesOf(s, draft, form.itemId)
   const axisValues: DraftLine['axisValues'] = []
   for (const a of axes) {
     const typed = form.axisValues.find((x) => x.attributeId === a.id)?.value ?? ''
@@ -330,7 +365,7 @@ export function buildDraftLine(form: LineForm, s: InventorySnapshot, draft: Inta
     axisValues.push({ attributeId: a.id, value: parsed.value })
   }
   for (const x of n?.attributes ?? []) {
-    const a = !x.axis && x.value?.trim() ? s.attributes.find((y) => y.id === x.attributeId) : undefined
+    const a = !x.axis && x.value?.trim() ? known.get(x.attributeId) : undefined
     if (a && !('value' in parseAttributeInput(a, x.value!))) return { errorKey: 'intakes.line.invalidValue', params: { name: a.name } }
   }
 
@@ -358,32 +393,53 @@ export function buildDraftLine(form: LineForm, s: InventorySnapshot, draft: Inta
         attributes: n.attributes.map((x) => (x.axis ? { ...x, value: null } : { ...x, value: x.value?.trim() ? x.value.trim() : null })),
       }
     : null
-  // A variant has one photo (spec §9): the line's photo replaces it only when the person asked to replace it and the
-  // variant the line goes to now has one. An archived variant counts: it comes back with its photo.
-  const target = n || axes.length === 0 ? null : duplicateOf(s, form.itemId, new Map(axisValues.map((x) => [x.attributeId, x.value] as const)))
-  const hasPhoto = !!target && s.photos.some((p) => p.variantId === target.id)
-  const photo = form.photo ? { ...form.photo, replace: form.photo.replace && hasPhoto } : null
+  // Photo rules (spec 2026-11-16 intake entities §5). A line that tops up what exists carries no photo (one an older
+  // draft already has on this very line is kept). A new item without axes has one field for the line's photo and the
+  // item's: it is the item's. A new variant keeps the photo on its line; the variant has none yet, so it replaces nothing.
+  const values = new Map(axisValues.map((x) => [x.attributeId, x.value] as const))
+  const topsUp = !n && (axes.length === 0 || duplicateOf(s, form.itemId, values) !== null)
+  if (!topsUp) {
+    // The item as the form has it (its axes may have changed), not as the draft stores it.
+    const seen = n ? { ...draft, newItems: draft.newItems.some((x) => x.id === n.id) ? draft.newItems.map((x) => (x.id === n.id ? n : x)) : [...draft.newItems, n] } : draft
+    const other = creatingLineOf(s, seen, form.itemId, axisValues, form.lineId)
+    if (other) return { errorKey: 'intakes.line.alreadyCreated', params: { line: other } }
+  }
+  const kept = draft.lines.find((l) => l.id === form.lineId)?.photo
+  if (topsUp && form.photo && !(kept && kept.fileId === form.photo.fileId && kept.provider === form.photo.provider)) {
+    return { errorKey: 'intakes.line.noPhotoOnTopUp' }
+  }
+  let linePhoto: DraftLinePhoto | null = topsUp ? form.photo : form.photo ? { ...form.photo, replace: false } : null
+  if (newItem && axes.length === 0) {
+    const file = form.photo ? fileOnly(form.photo) : newItem.photo
+    if (file) {
+      newItem.photo = file
+      newItem.photoId ??= newId()
+    }
+    linePhoto = null
+  }
   return {
-    line: { id: form.lineId, itemId: form.itemId, axisValues, quantity, totalPrice, sourceUrl, photo, ids: form.ids },
+    line: { id: form.lineId, itemId: form.itemId, axisValues, quantity, totalPrice, sourceUrl, photo: linePhoto, ids: form.ids },
     newItem,
     newTags: newItem ? form.newTags.filter((t) => newItem.tagIds?.includes(t.id)) : [],
   }
 }
 
-/** The draft with the line put in (in its place when it is there already) and its new item put in or updated; new
- *  items no line references any more are dropped. */
+/** The draft with the line put in (in its place when it is there already) and its new item put in or updated. New items
+ *  live on their own: one left without lines stays (withoutNewItem removes it). */
 export function withLine(draft: IntakeDraftContent, line: DraftLine, newItem: DraftNewItem | null, newTags: DraftNewTag[] = []): IntakeDraftContent {
   const replace = <T extends { id: Id }>(list: T[], x: T): T[] =>
     list.some((y) => y.id === x.id) ? list.map((y) => (y.id === x.id ? x : y)) : [...list, x]
   const tags = newTags.reduce((list, t) => replace(list, t), draft.newTags ?? [])
   return pruneNewItems({
+    ...draft,
     newItems: newItem ? replace(draft.newItems, newItem) : draft.newItems,
     lines: replace(draft.lines, line),
     ...(tags.length > 0 || draft.newTags ? { newTags: tags } : {}),
   })
 }
 
-/** The draft without the line, and what Undo puts back: the line, its place, and the new item that went with it. */
+/** The draft without the line, and what Undo puts back: the line and its place (`newItem` and `newTags` stay for
+ *  callers; a new item no longer goes with its last line, so they are null and empty). */
 export function withoutLine(
   draft: IntakeDraftContent,
   lineId: Id,

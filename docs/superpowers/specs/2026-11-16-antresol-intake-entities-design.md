@@ -110,7 +110,8 @@ Every inline create form that appears inside a sheet (the attribute form in Add 
 
 ## 5. Photo rules (precise)
 - A new item has at most one item photo (goes to the item's gallery on commit).
-- A new variant line may have one photo (the variant's photo on commit). Two lines creating the same variant: the first line's photo wins (today's rule).
+- A new variant line may have one photo (the variant's photo on commit).
+- **One line per created variant** (owner, 2026-11-16): two lines may not create the same new variant (same item, same axis values), and a new item without variants has at most one line. This replaces the intakes spec's "the same thing twice is allowed with a warning, the variant is created once" for creating lines. In the app, the sheet shows "Already in this intake" with "Edit that line" instead of saving a second one; the MCP refuses such a line with an error naming the existing line. A draft that still has two such lines (saved before) blocks the commit with a marking on the second line. Top-up lines of existing items/variants keep today's rule (allowed twice, with the warning) **[Claude's call]**.
 - A new item without variants: the line photo and the item photo are one field.
 - Lines that top up existing items/variants carry no photo. Drafts saved before this change that do have such photos keep committing them as before (backward compatibility); the UI shows them but cannot add new ones **[Claude's call]**.
 - Uploading is unchanged: the photo is uploaded to the source's photo store when set; the draft stores the link.

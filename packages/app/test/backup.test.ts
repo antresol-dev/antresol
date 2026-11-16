@@ -413,9 +413,12 @@ describe('parseBackup: intakes', () => {
     const [entry] = file.inventories
     expect(entry!.intakes.some((i) => i.created)).toBe(true)
     for (const i of entry!.intakes) {
-      delete i.created
-      for (const n of i.draft?.newItems ?? []) for (const k of ['description', 'photo', 'photoId']) delete n[k]
-      if (i.draft) { delete i.draft.newFolders; delete i.draft.newAttributes }
+      Reflect.deleteProperty(i, 'created')
+      for (const n of i.draft?.newItems ?? []) for (const k of ['description', 'photo', 'photoId']) Reflect.deleteProperty(n, k)
+      if (i.draft) {
+        Reflect.deleteProperty(i.draft, 'newFolders')
+        Reflect.deleteProperty(i.draft, 'newAttributes')
+      }
     }
     const parsed = parseBackup(JSON.parse(JSON.stringify(file))) as BackupFile
     expect('error' in parsed).toBe(false)

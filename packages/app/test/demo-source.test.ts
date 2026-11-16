@@ -1,6 +1,7 @@
 import { createSearch, itemAxes, variantLabel } from '@antresol/core'
 import type { Transaction } from '@electric-sql/pglite'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { APP_SCHEMA_VERSION } from '@antresol/storage-postgres'
 import { createDemoDriver, demoStorageName, type DemoDriver } from '../app/lib/dev/demo-source'
 import type { SourceConfig } from '../app/lib/types'
 
@@ -49,7 +50,7 @@ afterEach(async () => {
 
 describe('demo source', () => {
   it('keeps its browser storage under a name carrying the schema version', () => {
-    expect(demoStorageName('demo')).toBe('idb://antresol-dev-s8-demo')
+    expect(demoStorageName('demo')).toBe(`idb://antresol-dev-s${APP_SCHEMA_VERSION}-demo`)
   })
 
   it('seeds two inventories with stock', async () => {

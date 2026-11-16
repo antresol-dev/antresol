@@ -338,15 +338,21 @@ function intakeRecord(value: unknown): Intake | null {
     const newAttributes =
       raw.newAttributes === undefined ? undefined : records<DraftNewAttribute>(raw.newAttributes, DRAFT_NEW_ATTRIBUTE)
     if (newItems === null || lines === null || newTags === null || newFolders === null || newAttributes === null) return null
-    for (const n of newItems) {
-      for (const key of ['tagIds', 'description', 'photo', 'photoId'] as const) if (n[key] === undefined) delete n[key]
-      if (n.photo) n.photo = itemPhoto(n.photo)
-    }
+    const cleanItems = newItems.map((n) => {
+      const { tagIds, description, photo, photoId, ...rest } = n
+      return {
+        ...rest,
+        ...(tagIds !== undefined ? { tagIds } : {}),
+        ...(description !== undefined ? { description } : {}),
+        ...(photo !== undefined ? { photo: photo ? itemPhoto(photo) : photo } : {}),
+        ...(photoId !== undefined ? { photoId } : {}),
+      }
+    })
     draft = {
       ...(newFolders ? { newFolders } : {}),
       ...(newAttributes ? { newAttributes } : {}),
       ...(newTags ? { newTags } : {}),
-      newItems,
+      newItems: cleanItems,
       lines: lines.map((l) => (l.photo ? { ...l, photo: draftPhoto(l.photo) } : l)),
     }
   }

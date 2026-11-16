@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { newId, type Id, type IntakeDraftContent, type InventorySnapshot } from '@antresol/core'
+import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -82,12 +83,17 @@ async function useTheExisting(): Promise<void> {
   const c = clash.value
   if (!c || c.draft || disabled.value) return
   if (!editing.value) {
+    toast(t('intakes.usingExisting', { name: existingName.value }))
     open.value = false
     return
   }
   busy.value = true
   try {
-    if (await props.edit((x) => useExisting(x, formId, c.id))) open.value = false
+    const name = existingName.value
+    if (await props.edit((x) => useExisting(x, formId, c.id))) {
+      toast(t('intakes.usingExisting', { name }))
+      open.value = false
+    }
   } finally {
     busy.value = false
   }
@@ -116,15 +122,15 @@ async function remove(): Promise<void> {
 <template>
   <AppSheet v-model:open="open" :title="$t(editing ? 'intakes.folder.editTitle' : 'intakes.folder.newTitle')" :locked="busy" initial-focus="#intake-folder-name">
     <form id="intake-folder-form" class="mt-4 grid gap-4" novalidate @submit.prevent="save">
-      <div class="grid gap-1.5">
+      <div class="grid gap-2">
         <Label for="intake-folder-name">{{ $t('form.name') }}</Label>
-        <Input id="intake-folder-name" v-model="name" autocomplete="off" class="h-11" :aria-invalid="clash ? true : undefined" aria-describedby="intake-folder-clash" @input="errorKey = null" />
+        <Input id="intake-folder-name" v-model="name" autocomplete="off" class="h-11" :aria-invalid="clash ? true : undefined" :aria-describedby="clash ? 'intake-folder-clash' : undefined" @input="errorKey = null" />
         <p v-if="clash" id="intake-folder-clash" class="text-sm">
           {{ $t('intakes.folder.exists', { name: existingName }) }}
           <button
             v-if="!clash.draft"
             type="button"
-            class="font-semibold underline underline-offset-2 hover:text-accent-ink focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            class="inline-flex min-h-11 items-center font-semibold underline underline-offset-2 hover:text-accent-ink focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
             :disabled="disabled"
             @click="useTheExisting"
           >
@@ -132,8 +138,8 @@ async function remove(): Promise<void> {
           </button>
         </p>
       </div>
-      <div class="grid gap-1.5">
-        <p class="text-sm leading-none font-medium">{{ $t('intakes.folder.parent') }}</p>
+      <div class="grid gap-2">
+        <Label>{{ $t('intakes.folder.parent') }}</Label>
         <FolderPickerList :choices="choices" @select="parentId = $event; errorKey = null" />
       </div>
       <p role="alert" class="text-sm text-destructive">

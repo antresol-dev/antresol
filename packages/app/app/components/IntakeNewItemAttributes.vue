@@ -110,13 +110,22 @@ async function createdDraft(a: DraftNewAttribute): Promise<void> {
     creating.value = false
     createError.value = null
     addId(a.id)
+    await focusNew(a.id)
   } finally {
     formBusy.value = false
   }
 }
-function takeExisting(id: Id): void {
+/** After a new attribute joins the item the form is gone: focus goes to its row's axis switch, or to the add trigger. */
+async function focusNew(id: Id): Promise<void> {
+  await nextTick()
+  const row = document.getElementById(`intake-attr-axis-${id}`)
+  if (row) row.focus()
+  else addTrigger.value?.$el?.focus()
+}
+async function takeExisting(id: Id): Promise<void> {
   creating.value = false
   addId(id)
+  await focusNew(id)
 }
 </script>
 
@@ -140,7 +149,7 @@ function takeExisting(id: Id): void {
           <span v-if="isDraft(row.attributeId)" class="shrink-0 rounded-chip bg-accent-soft px-1.5 py-px text-xs font-semibold tracking-[0.04em] text-accent-soft-foreground uppercase">{{ $t('intakes.tag.new') }}</span>
           <label class="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
             {{ $t('intakes.line.axis') }}
-            <Switch :model-value="row.axis" :disabled="disabled" @update:model-value="update(row.attributeId, { axis: !!$event, value: null })" />
+            <Switch :id="`intake-attr-axis-${row.attributeId}`" :model-value="row.axis" :disabled="disabled" @update:model-value="update(row.attributeId, { axis: !!$event, value: null })" />
           </label>
           <Button
             type="button"

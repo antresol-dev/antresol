@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BUILTIN_UNITS, formatAmountParts, itemArchived, keepValuesTogether, resolveUnit, type CommittedLine, type Intake, type InventorySnapshot } from '@antresol/core'
+import { BUILTIN_UNITS, folderArchived, formatAmountParts, itemArchived, keepValuesTogether, resolveUnit, type CommittedLine, type Intake, type InventorySnapshot } from '@antresol/core'
 import { ExternalLink } from '@lucide/vue'
 import { formatDateTime, formatMoney } from '~/lib/format'
 import { formatDay } from '~/lib/intake-list'
@@ -58,7 +58,7 @@ const created = computed(() => {
     }
     return names.join(' / ')
   }
-  const alive = (id: string) => ix.value.folders.has(id) && !ix.value.folders.get(id)?.archivedAt
+  const alive = (id: string) => ix.value.folders.has(id) && !folderArchived(props.snapshot, id)
   const sections: { key: string; title: string; rows: CreatedRow[] }[] = [
     { key: 'folders', title: 'intakes.created.folders', rows: c.folders.map((f) => ({ key: f.id, text: path(f.id) || f.name, to: alive(f.id) ? `/folder/${f.id}` : null })) },
     { key: 'attributes', title: 'intakes.created.attributes', rows: c.attributes.map((a) => ({ key: a.id, text: a.name, to: null })) },

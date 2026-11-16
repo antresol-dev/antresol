@@ -64,6 +64,7 @@
       "committing": "Committing…",
       "committed": "Intake committed",
       "fixLines": "Some lines need fixing before the intake can be committed.",
+      "fixProblems": "Something in this intake needs fixing before it can be committed.",
       "offline": "Committing needs a connection. Your changes are saved on this device.",
       "changedTitle": "Changed on another device",
       "changedText": "This draft was saved on another device while it had unsaved changes here.",
@@ -90,9 +91,11 @@
       "invalid_value": "Something here doesn’t fit: check the name, unit and values",
       "unknown_item": "The item was deleted",
       "invalid_link": "The link isn’t a web address: it should start with https://",
+      "duplicate_line": "Another line of this intake already creates this",
       "unknown": "This line can’t be committed as it is: open it to check"
     },
     "useExisting": "Use existing {name}",
+    "usingExisting": "Using {name}",
     "willCreate": {
       "title": "Will be created",
       "folders": "Folders",

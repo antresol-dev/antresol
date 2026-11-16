@@ -304,7 +304,9 @@ const inDraftAlready = computed(() =>
 )
 /** "Edit that line": the form switches to the line that already creates this. */
 function editThatLine(lineId: Id | undefined): void {
-  if (lineId && props.content.lines.some((l) => l.id === lineId)) load(lineId)
+  if (!lineId || !props.content.lines.some((l) => l.id === lineId)) return
+  load(lineId)
+  focusSoon('#intake-line-amount')
 }
 
 const tag = computed(() => {
@@ -359,6 +361,9 @@ const similarItem = computed(() => {
 const draftFolderIds = computed(() => new Set((props.content.newFolders ?? []).map((f) => f.id)))
 const folderName = (id: Id | null): string =>
   id === null ? s.value.inventory.name : (folderPathWithDraft(s.value, props.content, id).at(-1) ?? '')
+/** A draft folder by its path (last two parts), so two draft folders with one name differ; others by their name. */
+const chipName = (id: Id | null): string =>
+  id !== null && draftFolderIds.value.has(id) ? folderPathWithDraft(s.value, props.content, id).slice(-2).join(' / ') : folderName(id)
 const folderChips = computed(() => {
   const n = newItem.value
   if (!n) return []
@@ -368,9 +373,9 @@ const folderChips = computed(() => {
     if (!chips.some((c) => c.id === id) && (id === null || draft || ix.value.folders.has(id))) chips.push({ id, label, draft })
   }
   if (suggested.value) add(suggested.value.folderId, t('intakes.line.suggested', { folder: folderName(suggested.value.folderId), name: suggested.value.nextTo }))
-  for (const id of recent.value) add(id, folderName(id))
-  add(n.folderId, folderName(n.folderId))
-  for (const f of props.content.newFolders ?? []) add(f.id, f.name)
+  for (const id of recent.value) add(id, chipName(id))
+  add(n.folderId, chipName(n.folderId))
+  for (const f of props.content.newFolders ?? []) add(f.id, chipName(f.id))
   return chips
 })
 const folderList = computed(() =>
@@ -511,7 +516,7 @@ async function upload(files: File[]): Promise<void> {
 
 // ---- Save, remove ----
 async function save(next: boolean): Promise<void> {
-  if (disabled.value || mode.value !== 'line' || !itemId.value) return
+  if (disabled.value || createdBy.value || mode.value !== 'line' || !itemId.value) return
   if (attributeError.value) {
     error.value = { key: attributeError.value }
     return
@@ -878,16 +883,16 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
 
     <template v-if="mode === 'line'" #footer>
       <template v-if="editing">
-        <Button type="button" data-primary class="h-11 rounded-field" :disabled="disabled" @click="save(false)">
+        <Button type="button" data-primary class="h-11 rounded-field" :disabled="disabled || !!createdBy" @click="save(false)">
           {{ $t(saving ? 'status.saving' : 'intakes.line.save') }}
         </Button>
         <Button type="button" variant="ghost" class="h-11 text-destructive" :disabled="disabled" @click="remove">{{ $t('intakes.line.remove') }}</Button>
       </template>
       <template v-else>
-        <Button type="button" data-primary class="h-11 rounded-field" :disabled="disabled" @click="save(true)">
+        <Button type="button" data-primary class="h-11 rounded-field" :disabled="disabled || !!createdBy" @click="save(true)">
           {{ $t(saving ? 'status.saving' : 'intakes.line.addNext') }}
         </Button>
-        <Button type="button" variant="outline" class="h-11" :disabled="disabled" @click="save(false)">{{ $t('intakes.line.addClose') }}</Button>
+        <Button type="button" variant="outline" class="h-11" :disabled="disabled || !!createdBy" @click="save(false)">{{ $t('intakes.line.addClose') }}</Button>
       </template>
     </template>
   </AppSheet>

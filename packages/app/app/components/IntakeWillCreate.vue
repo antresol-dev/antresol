@@ -119,7 +119,7 @@ const rowClass =
 const tapClass =
   'flex min-h-11 min-w-0 grow items-center gap-2 rounded-field text-left text-sm transition-colors duration-(--dur-fast) hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none'
 const existingLink =
-  'shrink-0 rounded-chip px-1 text-sm font-semibold underline underline-offset-2 hover:text-accent-ink focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none'
+  'inline-flex min-h-11 max-w-[45%] min-w-0 items-center rounded-chip px-1 text-sm font-semibold underline underline-offset-2 hover:text-accent-ink focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none'
 </script>
 
 <template>
@@ -141,7 +141,7 @@ const existingLink =
               <span v-if="problemOf(folder.id)" class="min-w-0 truncate text-xs text-destructive">{{ $t(problemKey(problemOf(folder.id)!)) }}</span>
             </button>
             <button v-if="existingOf(problemOf(folder.id))" type="button" :class="existingLink" :disabled="readOnly" @click="takeExisting(folder.id, existingOf(problemOf(folder.id))!)">
-              {{ $t('intakes.useExisting', { name: existingName(existingOf(problemOf(folder.id))!) }) }}
+              <span class="min-w-0 truncate">{{ $t('intakes.useExisting', { name: existingName(existingOf(problemOf(folder.id))!) }) }}</span>
             </button>
           </li>
         </template>
@@ -162,7 +162,7 @@ const existingLink =
             <Pencil class="ml-auto size-4 shrink-0 text-icon" aria-hidden="true" />
           </button>
           <button v-if="existingOf(problemOf(a.id))" type="button" :class="existingLink" :disabled="readOnly" @click="takeExisting(a.id, existingOf(problemOf(a.id))!)">
-            {{ $t('intakes.useExisting', { name: existingName(existingOf(problemOf(a.id))!) }) }}
+            <span class="min-w-0 truncate">{{ $t('intakes.useExisting', { name: existingName(existingOf(problemOf(a.id))!) }) }}</span>
           </button>
           <Button type="button" variant="ghost" size="icon" class="size-11 shrink-0" :aria-label="$t('intakes.attribute.remove', { name: a.name })" :disabled="readOnly" @click="removeAttribute(a)">
             <X class="size-4" aria-hidden="true" />
@@ -179,19 +179,18 @@ const existingLink =
         </li>
       </ul>
     </div>
-
-    <AppSheet v-model:open="editOpen" :title="$t('intakes.attribute.editTitle')" :locked="formBusy">
-      <div class="mt-4">
-        <AttributeForm
-          v-if="editing"
-          v-model:busy="formBusy"
-          :attribute="editingAttribute"
-          draft
-          :clash="clash"
-          @draft="saveAttribute"
-          @use-existing="useExistingAttribute"
-        />
-      </div>
-    </AppSheet>
   </section>
+  <AppSheet v-model:open="editOpen" :title="$t('intakes.attribute.editTitle')" :locked="formBusy" initial-focus="#attribute-name">
+    <div class="mt-4">
+      <AttributeForm
+        v-if="editing"
+        v-model:busy="formBusy"
+        :attribute="editingAttribute"
+        draft
+        :clash="clash"
+        @draft="saveAttribute"
+        @use-existing="useExistingAttribute"
+      />
+    </div>
+  </AppSheet>
 </template>

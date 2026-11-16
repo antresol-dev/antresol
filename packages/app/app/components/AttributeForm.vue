@@ -142,7 +142,7 @@ async function submit(): Promise<void> {
       />
       <p v-if="taken" class="text-sm">
         {{ $t('intakes.attribute.exists', { name: taken.name }) }}
-        <button type="button" class="font-semibold underline underline-offset-2 hover:text-accent-ink focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" @click="emit('useExisting', taken.id)">
+        <button type="button" class="inline-flex min-h-11 items-center font-semibold underline underline-offset-2 hover:text-accent-ink focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" @click="emit('useExisting', taken.id)">
           {{ $t('intakes.useExisting', { name: taken.name }) }}
         </button>
       </p>

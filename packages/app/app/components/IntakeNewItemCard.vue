@@ -175,12 +175,12 @@ const panelId = `intake-item-${props.item.id}`
       :aria-controls="panelId"
       @click="expanded = !expanded"
     >
-      <PhotoImg v-if="item.photo" :photo="item.photo" size="thumb" alt="" class="size-10 shrink-0 rounded-thumb object-cover" />
-      <span v-else class="grid size-10 shrink-0 place-items-center rounded-thumb bg-thumb text-thumb-foreground"><ImagePlus class="size-4" aria-hidden="true" /></span>
+      <PhotoImg v-if="item.photo" :photo="item.photo" size="thumb" alt="" class="size-9 shrink-0 rounded-thumb object-cover" />
+      <span v-else class="grid size-9 shrink-0 place-items-center rounded-thumb bg-thumb text-thumb-foreground"><ImagePlus class="size-4" aria-hidden="true" /></span>
       <span class="grid min-w-0 grow gap-0.5">
         <span class="flex min-w-0 items-center gap-2">
           <span class="min-w-0 truncate text-base font-semibold">{{ item.name }}</span>
-          <span v-if="problem" class="shrink-0 rounded-chip bg-destructive/15 px-1.5 py-px text-xs font-semibold tracking-[0.04em] text-destructive uppercase">{{ $t('intakes.tag.problem') }}</span>
+          <span v-if="problem" class="shrink-0 rounded-chip border border-destructive px-1.5 py-px text-xs font-semibold tracking-[0.04em] text-destructive uppercase">{{ $t('intakes.tag.problem') }}</span>
         </span>
         <span class="min-w-0 truncate text-sm text-muted-foreground">{{ summary }}</span>
       </span>
@@ -190,25 +190,25 @@ const panelId = `intake-item-${props.item.id}`
     <div v-if="expanded" :id="panelId" class="grid min-w-0 gap-4 px-3 pt-2 pb-4">
       <p v-if="problemKey" role="alert" class="text-sm text-destructive">{{ $t(problemKey) }}</p>
 
-      <div v-if="canPhoto" class="grid gap-2">
-        <p class="text-sm leading-none font-medium">{{ $t('intakes.line.photo') }}</p>
+      <div v-if="canPhoto || item.photo" class="grid gap-2">
+        <Label>{{ $t('intakes.line.photo') }}</Label>
         <div v-if="item.photo" class="flex items-center gap-3">
           <PhotoImg :photo="item.photo" size="thumb" alt="" class="size-16 shrink-0 rounded-thumb object-cover" />
-          <PhotoPicker :disabled="disabled" @pick="upload" />
+          <PhotoPicker v-if="canPhoto" :disabled="disabled" @pick="upload" />
           <Button type="button" variant="ghost" size="icon" class="size-11 shrink-0" :aria-label="$t('quickAdd.removePhoto')" :disabled="disabled" @click="patch({ photo: null })">
             <X class="size-4" aria-hidden="true" />
           </Button>
         </div>
-        <PhotoPicker v-else :disabled="disabled" @pick="upload" />
+        <PhotoPicker v-else-if="canPhoto" :disabled="disabled" @pick="upload" />
       </div>
 
-      <div class="grid gap-1.5">
+      <div class="grid gap-2">
         <Label :for="`${panelId}-name`">{{ $t('form.name') }}</Label>
         <Input :id="`${panelId}-name`" v-model="name" autocomplete="off" class="h-11" :disabled="readOnly" @change="saveName" />
       </div>
 
-      <div class="grid gap-1.5">
-        <p class="text-sm leading-none font-medium">{{ $t('intakes.line.folder') }}</p>
+      <div class="grid gap-2">
+        <Label>{{ $t('intakes.line.folder') }}</Label>
         <button type="button" :class="summaryRow" class="border border-input" :aria-expanded="pickingFolder" :disabled="disabled" @click="pickingFolder = !pickingFolder">
           <span class="min-w-0 grow truncate text-sm">{{ path }}</span>
           <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-(--dur-fast) motion-reduce:transition-none" :class="pickingFolder ? 'rotate-180' : ''" aria-hidden="true" />
@@ -216,7 +216,7 @@ const panelId = `intake-item-${props.item.id}`
         <FolderPickerList v-if="pickingFolder" :choices="folderChoices" @select="setFolder" />
       </div>
 
-      <div class="grid gap-1.5">
+      <div class="grid gap-2">
         <Label :for="`${panelId}-description`">
           {{ $t('form.description') }}
           <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
@@ -224,8 +224,8 @@ const panelId = `intake-item-${props.item.id}`
         <Textarea :id="`${panelId}-description`" v-model="description" rows="3" class="min-h-20" :disabled="readOnly" @change="saveDescription" />
       </div>
 
-      <div class="grid gap-1.5">
-        <p class="text-sm leading-none font-medium">{{ $t('intakes.item.unit') }}</p>
+      <div class="grid gap-2">
+        <Label>{{ $t('intakes.item.unit') }}</Label>
         <Select :model-value="item.unitKey" :disabled="readOnly" @update:model-value="patch({ unitKey: String($event) })">
           <SelectTrigger :aria-label="$t('intakes.item.unit')" class="h-11 w-full">
             <SelectValue>{{ unit.name }}</SelectValue>
@@ -236,7 +236,7 @@ const panelId = `intake-item-${props.item.id}`
         </Select>
       </div>
 
-      <div class="grid gap-1.5">
+      <div class="grid gap-2">
         <button type="button" :class="summaryRow" class="border border-input" :aria-expanded="tagsOpen" :disabled="disabled" @click="tagsOpen = !tagsOpen">
           <span class="shrink-0 text-sm font-semibold">{{ $t('intakes.line.tags') }}</span>
           <span class="min-w-0 grow truncate text-right text-sm" :class="tagNames ? 'text-foreground' : 'text-muted-foreground'">{{ tagNames || $t('intakes.line.add') }}</span>
@@ -245,8 +245,8 @@ const panelId = `intake-item-${props.item.id}`
         <TagPicker v-if="tagsOpen" v-model="tagIds" :snapshot="snapshot" :extra-tags="content.newTags ?? []" :locked="disabled" @create="addTag" />
       </div>
 
-      <div class="grid gap-1.5">
-        <p class="text-sm leading-none font-medium">{{ $t('intakes.line.attributes') }}</p>
+      <div class="grid gap-2">
+        <Label>{{ $t('intakes.line.attributes') }}</Label>
         <ul v-if="item.attributes.length > 0" class="surface-list">
           <li
             v-for="x in item.attributes"
@@ -261,8 +261,8 @@ const panelId = `intake-item-${props.item.id}`
         <p class="text-sm text-subtle-foreground">{{ $t('intakes.item.attributesHint') }}</p>
       </div>
 
-      <div class="grid gap-1.5">
-        <p class="text-sm leading-none font-medium">{{ $t('intakes.item.variants') }}</p>
+      <div class="grid gap-2">
+        <Label>{{ $t('intakes.item.variants') }}</Label>
         <ul v-if="variants.length > 0" class="surface-list">
           <li
             v-for="v in variants"

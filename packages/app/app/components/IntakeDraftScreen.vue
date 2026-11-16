@@ -92,6 +92,8 @@ onBeforeUnmount(() => {
 const content = computed(() => local.value.content)
 const resolved = computed(() => resolveIntake(content.value, props.snapshot))
 const resolutionOf = computed(() => new Map(resolved.value.lines.map((l) => [l.lineId, l.resolution] as const)))
+/** What blocks the commit, in words: neutral when a folder, attribute or new item is among it, not only lines. */
+const fixKey = computed(() => (resolved.value.entities.some((e) => e.problem !== null) ? 'intakes.screen.fixProblems' : 'intakes.screen.fixLines'))
 const hasProblems = computed(() => !resolved.value.ok || Object.keys(commitProblems.value).length > 0)
 const lineCount = computed(() => content.value.lines.length)
 const label = computed(() => commitLabel(content.value, resolved.value))
@@ -190,7 +192,7 @@ async function commit(): Promise<void> {
   }
   if (result) {
     commitProblems.value = Object.fromEntries(result.problems.map((p) => [p.lineId, p.code]))
-    commitErrorKey.value = 'intakes.screen.fixLines'
+    commitErrorKey.value = fixKey.value
     return
   }
   // Refused: edits from another device are shown now (conflict), or the source could not be reached.
@@ -285,7 +287,7 @@ const retryErrorKey = computed(() =>
             {{ $t('unconfirmed.hint') }}<template v-if="retryErrorKey"> {{ $t(retryErrorKey) }}</template>
           </template>
           <template v-else-if="commitErrorKey">{{ $t(commitErrorKey) }}</template>
-          <template v-else-if="label && hasProblems">{{ $t('intakes.screen.fixLines') }}</template>
+          <template v-else-if="label && hasProblems">{{ $t(fixKey) }}</template>
           <template v-else-if="label && state.readOnly === 'offline'">{{ $t('intakes.screen.offline') }}</template>
         </p>
         <Button v-if="sender.frozen.value" class="h-11 rounded-field" :disabled="sender.busy.value" @click="commit">

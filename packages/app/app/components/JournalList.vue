@@ -132,9 +132,9 @@ function partsOf(row: JournalRow): Part[] {
 
 <template>
   <section class="grid min-w-0 grid-cols-1 gap-2">
-    <h2 class="section-label text-[15px]">{{ $t('journal.title') }}</h2>
+    <h2 class="section-label text-base">{{ $t('journal.title') }}</h2>
 
-    <div v-if="waiting" role="status" class="grid gap-5 px-3.5 py-4">
+    <div v-if="waiting" role="status" class="grid gap-5 px-3 py-4">
       <span class="sr-only">{{ $t('journal.loading') }}</span>
       <div v-for="n in 3" :key="n" class="grid gap-2" aria-hidden="true">
         <div class="flex justify-between gap-6">
@@ -160,16 +160,16 @@ function partsOf(row: JournalRow): Part[] {
 
     <template v-else>
       <section v-for="day in days" :key="day.key" class="grid min-w-0 gap-1.5" :aria-label="day.label">
-        <h3 class="pt-1 text-[13px] font-semibold text-muted-foreground">{{ day.label }}</h3>
+        <h3 class="pt-1 text-xs font-semibold text-muted-foreground">{{ day.label }}</h3>
         <!-- A flat list on the page, rows divided by lines. -->
         <ul class="surface-list">
           <li
             v-for="{ row, title, parts, meta } in day.entries"
             :key="row.id"
-            class="relative grid gap-0.5 px-3.5 py-2.5 not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-3.5 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
+            class="relative grid gap-0.5 px-3 py-2 not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
           >
             <div class="flex min-w-0 items-baseline gap-3">
-              <span class="min-w-0 grow text-[15px] font-bold wrap-anywhere">{{ title }}</span>
+              <span class="min-w-0 grow text-base font-semibold wrap-anywhere">{{ title }}</span>
               <!-- A recount that matched shows the quantity it confirmed: "Counted 37 pcs ✓". -->
               <span v-if="row.counted && row.balance" class="amount flex shrink-0 items-baseline gap-1 text-base tabular-nums">
                 {{ row.balance.number }}
@@ -181,7 +181,7 @@ function partsOf(row: JournalRow): Part[] {
                 <span class="text-xs font-semibold text-muted-foreground">{{ row.unit }}</span>
               </span>
             </div>
-            <p v-if="parts.length > 0" class="min-w-0 text-[13px] text-muted-foreground wrap-anywhere">
+            <p v-if="parts.length > 0" class="min-w-0 text-sm text-muted-foreground wrap-anywhere">
               <template v-for="(part, i) in parts" :key="i">
                 <template v-if="i > 0"> · </template>
                 <a
@@ -189,16 +189,16 @@ function partsOf(row: JournalRow): Part[] {
                   :href="part.href"
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="relative inline-flex items-center gap-1 rounded-chip font-semibold text-foreground underline decoration-border underline-offset-2 outline-none transition-colors duration-150 after:absolute after:-inset-x-1 after:-inset-y-3.5 after:content-[''] hover:decoration-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                  class="relative inline-flex items-center gap-1 rounded-chip font-semibold text-foreground underline decoration-border underline-offset-2 outline-none transition-colors duration-(--dur-fast) after:absolute after:-inset-x-1 after:-inset-y-3 after:content-[''] hover:decoration-foreground focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {{ $t('journal.whereBought') }}
-                  <ExternalLink class="size-3" aria-hidden="true" />
+                  <ExternalLink class="size-4" aria-hidden="true" />
                   <span class="sr-only">{{ $t('journal.newTab') }}</span>
                 </a>
                 <NuxtLink
                   v-else-if="part.kind === 'route'"
                   :to="part.to"
-                  class="relative rounded-chip font-semibold text-foreground underline decoration-border underline-offset-2 outline-none transition-colors duration-150 after:absolute after:-inset-x-1 after:-inset-y-3.5 after:content-[''] hover:decoration-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                  class="relative rounded-chip font-semibold text-foreground underline decoration-border underline-offset-2 outline-none transition-colors duration-(--dur-fast) after:absolute after:-inset-x-1 after:-inset-y-3 after:content-[''] hover:decoration-foreground focus-visible:ring-2 focus-visible:ring-ring"
                 >{{ part.text }}</NuxtLink>
                 <template v-else>{{ part.text }}</template>
               </template>

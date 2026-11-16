@@ -5,6 +5,7 @@ import {
   itemStock,
   newId,
   resolveUnit,
+  variantDisplayLabel,
   variantLabel,
   type InventorySnapshot,
   type InventoryStorage,
@@ -12,6 +13,7 @@ import {
 } from '@antresol/core'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
+import { dictionaryView } from '../app/lib/dictionaries'
 import type { SourceConfig } from '../app/lib/types'
 import {
   collapseCrumbs,
@@ -23,6 +25,8 @@ import {
   piecesLabel,
   moveTargets,
   searchRows,
+  usedBy,
+  usedByArchivedCount,
   type Crumb,
 } from '../app/lib/views'
 
@@ -120,7 +124,7 @@ describe('searchRows', () => {
   it('describes a variant hit with its path', () => {
     const hits = createSearch(snap).search('10k')
     const rows = searchRows(snap, hits)
-    const row = rows.find((r) => r.variantName === variantLabel(snap, byValue(snap, snap.items.find((i) => i.name === 'Резистор 0,25 Вт')!.id, '10k')))!
+    const row = rows.find((r) => r.variantName === variantDisplayLabel(snap, byValue(snap, snap.items.find((i) => i.name === 'Резистор 0,25 Вт')!.id, '10k')))!
     expect(row.number).toBe('100')
     expect(row.path).toBe('Passive components / Resistors')
   })
@@ -276,6 +280,19 @@ describe('index and edge cases', () => {
     expect(folderView(onlyVariant, idOf(onlyVariant, 'Resistors'))!.items[0]!.cover).toBeNull()
   })
 
+  it('gives list and search rows the item colour (null when it has none)', () => {
+    const s = clone()
+    const item = s.items.find((i) => i.name === 'Резистор 0,25 Вт')!
+    const folderId = item.folderId
+    const rowOf = (snap: typeof s) => folderView(snap, folderId)!.items.find((r) => r.id === item.id)!
+    expect(rowOf(s).color).toBeNull()
+    expect(searchRows(s, [{ itemId: item.id, variantId: null }])[0]!.color).toBeNull()
+    const painted = clone()
+    painted.items.find((i) => i.id === item.id)!.color = '#9A4F1E'
+    expect(rowOf(painted).color).toBe('#9A4F1E')
+    expect(searchRows(painted, [{ itemId: item.id, variantId: null }])[0]!.color).toBe('#9A4F1E')
+  })
+
   it('gives search rows the cover, and the variant photo when a variant matched', () => {
     const s = clone()
     const item = s.items.find((i) => i.name === 'Резистор 0,25 Вт')!
@@ -290,6 +307,8 @@ describe('index and edge cases', () => {
       { itemId: item.id, variantId: null },
     ])
     expect(rows.map((r) => r.cover?.url)).toEqual(['v-early.jpg', 'cover.jpg'])
+    expect(rows[0]!.variantName).not.toBeNull()
+    expect(rows.map((r) => r.folderName)).toEqual(['Resistors', 'Resistors'])
     // Snapshots are indexed once, so each case gets its own.
     const coverOnly = clone()
     coverOnly.photos = [photo(item.id, null, 0, 'cover.jpg')]
@@ -318,6 +337,40 @@ describe('index and edge cases', () => {
     tl.folderId = null
     const [root] = searchRows(s, [{ itemId: tl.id, variantId: null }])
     expect(root!.path).toBe('')
+    expect(root!.folderName).toBeNull()
+    expect(row!.folderName).toBe('Resistors')
+  })
+
+  it('gives item rows the name of their folder, null in the root', () => {
+    const s = clone()
+    const tl = s.items.find((i) => i.name === 'TL072')!
+    const folder = s.folders.find((f) => f.id === tl.folderId)!
+    expect(folderView(s, folder.id)!.items.find((r) => r.id === tl.id)!.folderName).toBe(folder.name)
+    const moved = clone()
+    moved.items.find((i) => i.id === tl.id)!.folderId = null
+    expect(folderView(moved, null)!.items.find((r) => r.id === tl.id)!.folderName).toBeNull()
+  })
+
+  it('gives rows the item icon and the folder icon, from the snapshot index; null when unset', () => {
+    const s = clone()
+    const tl = s.items.find((i) => i.name === 'TL072')!
+    const folder = s.folders.find((f) => f.id === tl.folderId)!
+    tl.icon = 'microchip'
+    folder.icon = 'cpu'
+    const row = folderView(s, folder.id)!.items.find((r) => r.id === tl.id)!
+    expect([row.icon, row.folderIcon]).toEqual(['microchip', 'cpu'])
+    expect(folderView(s, folder.parentId)!.folders.find((f) => f.id === folder.id)!.icon).toBe('cpu')
+    const [hit] = searchRows(s, [{ itemId: tl.id, variantId: null }])
+    expect([hit!.icon, hit!.folderIcon]).toEqual(['microchip', 'cpu'])
+    const bare = clone()
+    const other = bare.items.find((i) => i.name === 'TL072')!
+    other.icon = null
+    const [none] = searchRows(bare, [{ itemId: other.id, variantId: null }])
+    expect(none!.icon).toBeNull()
+    expect(none!.folderIcon).toBeNull()
+    const root = clone()
+    root.items.find((i) => i.id === other.id)!.folderId = null
+    expect(folderView(root, null)!.items.find((r) => r.id === other.id)!.folderIcon).toBeNull()
   })
 })
 
@@ -462,5 +515,84 @@ describe('list rows', () => {
     // Search rows carry the same chips, a variant hit its item's.
     const [row] = searchRows(s, [{ itemId: tl, variantId: null }])
     expect(row!.pinned).toEqual(['DIP-8', 'B4'])
+  })
+})
+
+describe('usedBy', () => {
+  const item = (id: string, name: string, over: Record<string, unknown> = {}) =>
+    ({ id, name, folderId: null, tagIds: [], unitKey: 'pcs', archivedAt: null, ...over }) as unknown as InventorySnapshot['items'][number]
+  const base = { photos: [], folders: [], variants: [], itemAttributes: [], variantAttributeValues: [] }
+  const make = (over: Record<string, unknown>) => ({ ...snap, ...base, ...over }) as InventorySnapshot
+
+  it('lists active items with the tag, by name, skipping archived ones', () => {
+    const s = make({
+      items: [item('b', 'beta', { tagIds: ['t1'] }), item('a', 'Alpha', { tagIds: ['t1', 't2'] }), item('c', 'Gamma'), item('d', 'Dead', { tagIds: ['t1'], archivedAt: 'x' })],
+    })
+    expect(usedBy(s, { kind: 'tag', id: 't1' }).map((r) => r.name)).toEqual(['Alpha', 'beta'])
+    expect(usedBy(s, { kind: 'tag', id: 'none' })).toEqual([])
+  })
+
+  it('matches the unit key', () => {
+    const s = make({ items: [item('a', 'Wire', { unitKey: 'm' }), item('b', 'Chip')] })
+    expect(usedBy(s, { kind: 'unit', id: 'm' }).map((r) => r.name)).toEqual(['Wire'])
+  })
+
+  it('finds an attribute on an item that has a row for it, even an empty one, once per item', () => {
+    const s = make({
+      items: [item('a', 'A'), item('b', 'B'), item('c', 'C'), item('d', 'D'), item('e', 'E')],
+      itemAttributes: [
+        { itemId: 'a', attributeId: 'x', value: '1', axisPosition: null },
+        { itemId: 'b', attributeId: 'x', value: null, axisPosition: 0 },
+        { itemId: 'c', attributeId: 'x', value: ' ', axisPosition: null },
+        { itemId: 'd', attributeId: 'x', value: '', axisPosition: null },
+        { itemId: 'e', attributeId: 'y', value: '1', axisPosition: null },
+      ],
+    })
+    expect(usedBy(s, { kind: 'attribute', id: 'x' }).map((r) => r.name)).toEqual(['A', 'B', 'C', 'D'])
+  })
+
+  it('counts archived users apart, so active plus archived is the dictionary count', () => {
+    const s = make({
+      folders: [{ id: 'f', name: 'Old', parentId: null, archivedAt: 'x' }],
+      tags: [{ id: 't', name: 'T' }],
+      attributes: [{ id: 'x', name: 'X' }],
+      units: [],
+      items: [
+        item('a', 'A', { tagIds: ['t'] }),
+        item('b', 'B', { tagIds: ['t'], archivedAt: 'x' }),
+        item('c', 'C', { tagIds: ['t'], folderId: 'f' }),
+        item('d', 'D'),
+      ],
+      itemAttributes: [
+        { itemId: 'a', attributeId: 'x', value: '', axisPosition: null },
+        { itemId: 'b', attributeId: 'x', value: '1', axisPosition: null },
+        { itemId: 'c', attributeId: 'x', value: null, axisPosition: 0 },
+      ],
+    })
+    const dv = dictionaryView(s)
+    const counts = {
+      tag: dv.tags.find((t) => t.tag.id === 't'),
+      attribute: dv.attributes.find((x) => x.attribute.id === 'x'),
+      unit: dv.units.find((u) => u.unit.key === 'pcs'),
+    }
+    for (const kind of ['tag', 'attribute', 'unit'] as const) {
+      const id = kind === 'tag' ? 't' : kind === 'attribute' ? 'x' : 'pcs'
+      const target = { kind, id }
+      expect(usedBy(s, target).length + usedByArchivedCount(s, target)).toBe(counts[kind]?.itemCount)
+      expect(usedByArchivedCount(s, target)).toBe(2)
+    }
+  })
+
+  it('gives the folder path, the folder name and drops items under an archived folder', () => {
+    const folder = (id: string, name: string, parentId: string | null, archivedAt: string | null = null) => ({ id, name, parentId, archivedAt })
+    const s = make({
+      folders: [folder('f1', 'ICs', null), folder('f2', 'Op-amps', 'f1'), folder('f3', 'Old', null, 'x')],
+      items: [item('a', 'TL072', { folderId: 'f2', tagIds: ['t'] }), item('b', 'Root', { tagIds: ['t'] }), item('c', 'Gone', { folderId: 'f3', tagIds: ['t'] })],
+    })
+    const rows = usedBy(s, { kind: 'tag', id: 't' })
+    expect(rows.map((r) => [r.name, r.path, r.folderName])).toEqual([
+      ['Root', '', null],
+      ['TL072', 'ICs / Op-amps', 'Op-amps'],
+    ])
   })
 })

@@ -181,6 +181,7 @@ export function deriveSurfaces(k: MockupTokens & Partial<AppSurfaces>, mode: Mod
     rowHover: k.rowHover ?? k.kinds.ghost.h.bg,
     chip: k.chip ?? k.chips[0]!,
     thumb: k.thumb ?? k.thumbs[0]!,
+    statusOut: k.statusOut ?? (dark ? '#6B7280' : '#B4BAC4'),
     surface,
     rail: k.rail ? opaque(k.rail) : pageColor,
     railLine: k.railLine ?? '1px solid ' + border,

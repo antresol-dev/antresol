@@ -186,8 +186,8 @@ describe('itemView', () => {
     await run({ type: 'tag.create', id: audio, inventoryId, name: 'audio' })
     await run({ type: 'item.update', id: item.id, tagIds: [smd, audio] })
     expect(itemView(s, item.id)!.tags).toEqual([
-      { id: audio, name: 'audio' },
-      { id: smd, name: 'smd' },
+      { id: audio, name: 'audio', color: null },
+      { id: smd, name: 'smd', color: null },
     ])
     expect(itemView(s, ne555)!.tags).toEqual([])
   })
@@ -481,7 +481,7 @@ describe('bucketDescription', () => {
     await run({ type: 'attribute.create', id: tolerance, inventoryId, name: 'Tolerance', kind: 'number', options: [], unit: '%', siPrefixes: false })
     await run({ type: 'item.setAttribute', itemId: resistor, attributeId: tolerance, value: '5' })
     const v = s.variants.find((x) => x.itemId === resistor && itemView(s, resistor)!.buckets.find((b) => b.variantId === x.id)?.name?.replace(/\s/g, '').toLowerCase().startsWith('10k'))!
-    expect(bucketDescription(s, resistor, v.id)).toBe('10 kΩ · Резистор 0,25 Вт · 5 %')
+    expect(bucketDescription(s, resistor, v.id)).toBe('10 kΩ · Резистор 0,25 Вт · 5 %')
   })
 
   it('is the item name and its attributes for the item itself, three attributes at most', async () => {

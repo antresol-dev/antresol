@@ -182,9 +182,7 @@ describe.each(MODES)('Neumorphism equals main.css before styles: %s', (mode) => 
         ['ghost-pressed', t.kinds.ghost.p.bg], ['selected-pill', t.pillSelBg], ['selected-step-hover', t.stepSel.h.bg],
         ['selected-step-hover-ink', t.stepSel.h.fg], ['selected-step-pressed', t.stepSel.p.bg], ['chip', t.chip], ['chip', t.chips[0]!],
         ['thumb', t.thumb], ['thumb', t.thumbs[0]!], ['thumb', t.photo], ['field', t.field], ['rail', t.rail],
-        ['accent-button', t.kinds.primary.n.bg], ['accent-button-hover', t.kinds.primary.h.bg], ['accent-button-pressed', t.kinds.primary.p.bg],
-        ['accent-button-foreground', t.kinds.primary.n.fg], ['accent-button-foreground', t.kinds.primary.h.fg],
-        ['accent-button-foreground', t.kinds.primary.p.fg], ['glass-hover', t.popHover], ['glass-hover-foreground', t.popHoverFg],
+        ['glass-hover', t.popHover], ['glass-hover-foreground', t.popHoverFg],
         ['glass-divider', t.popDiv], ['glass-muted', t.popMuted], ['glass-danger', t.popDanger], ['glass-border', t.popBorder],
         ['glass-bg', topLevel(t.pop).at(-1)!], ['primary', t.primary], ['primary-foreground', t.primaryFg], ['ring', t.ring],
         ['popover-foreground', t.popFg], ['pill-seam', t.seam.replace(/^1px solid /, '')], ['divider', t.divider.replace(/^1px solid /, '')],
@@ -215,8 +213,7 @@ describe.each(MODES)('Neumorphism equals main.css before styles: %s', (mode) => 
         ['card-shadow', t.cardSh], ['pill-shadow', t.pillSh], ['pill-shadow-selected', t.pillSelSh],
         ['flat-shadow', t.kinds.step.n.sh], ['flat-shadow', t.kinds.step.h.sh], ['step-shadow-pressed', t.kinds.step.p.sh],
         ['flat-shadow', t.stepSel.n.sh], ['flat-shadow', t.stepSel.h.sh], ['selected-step-shadow-pressed', t.stepSel.p.sh],
-        ['accent-button-shadow', t.kinds.primary.n.sh], ['accent-button-shadow-hover', t.kinds.primary.h.sh],
-        ['accent-button-shadow-pressed', t.kinds.primary.p.sh], ['glass-shadow', t.popSh],
+        ['glass-shadow', t.popSh],
         ['hover-shadow', t.painted.n.sh, pv.accent], ['hover-shadow', t.painted.h.sh, pv.accent], ['active-shadow', t.painted.p.sh, pv.accent],
         ['hover-shadow', t.paintedDanger.n.sh, pv.destructive], ['hover-shadow', t.paintedDanger.h.sh, pv.destructive],
         ['active-shadow', t.paintedDanger.p.sh, pv.destructive],
@@ -226,10 +223,15 @@ describe.each(MODES)('Neumorphism equals main.css before styles: %s', (mode) => 
         return p ? [`--${name}: ${p}`] : []
       })
       // Flat things had no shadow; sheets had Tailwind's shadow-lg (DialogContent), the ghost none.
-      for (const [name, value] of [['hdrSh', t.hdrSh], ['listSh', t.listSh], ['photoSh', t.photoSh], ['thumbSh', t.thumbSh], ['chipSh', t.chipSh], ['curSh', t.curSh], ['fieldSh', t.fieldSh], ['tipSh', t.tipSh]]) {
+      for (const [name, value] of [['hdrSh', t.hdrSh], ['photoSh', t.photoSh], ['thumbSh', t.thumbSh], ['chipSh', t.chipSh], ['curSh', t.curSh], ['fieldSh', t.fieldSh], ['tipSh', t.tipSh]]) {
         if (value !== 'none') problems.push(`${name} ${value}`)
       }
       for (const s of ['n', 'h', 'p'] as const) if (t.kinds.ghost[s].sh !== 'none') problems.push(`ghost.${s}.sh`)
+      // Plan 12 (F5): lists lie in a concave panel — the raised button's pair (R(4, 10)) turned inward.
+      const raised = shadows('var(--raised-shadow)', v).slice(0, 2)
+      const sunk = shadows(t.listSh).filter((x) => x.color.a > 0)
+      const lp = shadowProblem(sunk, raised.map((x) => ({ ...x, inset: true })))
+      if (lp) problems.push(`listSh: ${lp}`)
       const lg = /--shadow-lg:\s*([^;]+);/.exec(readFileSync(createRequire(import.meta.url).resolve('tailwindcss/theme.css'), 'utf8'))![1]!
       const p = shadowProblem(shadows(t.sheetSh), shadows(lg.replace(/rgb\((\d+) (\d+) (\d+) \/ ([\d.]+)\)/g, 'rgba($1, $2, $3, $4)')))
       if (p) problems.push(`sheetSh: ${p}`)
@@ -255,7 +257,9 @@ describe.each(MODES)('Neumorphism equals main.css before styles: %s', (mode) => 
       expect(t.kinds.btn.p.tf).toBe(pressTf(scale('.raised')))
       expect(t.kinds.ib.p.tf).toBe(pressTf(scale('.raised-sm')))
       expect(t.kinds.add.p.tf).toBe(pressTf(scale('.raised-sm')))
-      expect(t.kinds.primary.p.tf).toBe(pressTf(scale('.accent-button')))
+      // Plan 12 (F5): the accent button (the FAB) is painted in the accent in both themes, like .painted (its colours and
+      // shadows are checked against the old .painted above); before, light was a soft tint with accent ink.
+      expect(t.kinds.primary).toEqual(t.painted)
       expect(t.painted.p.tf).toBe(pressTf(scale('.painted')))
       expect(t.paintedDanger.p.tf).toBe(pressTf(scale('.painted')))
       expect([t.kinds.step.p.tf, t.kinds.ghost.p.tf, t.stepSel.p.tf]).toEqual(['none', 'none', 'none'])
@@ -277,7 +281,8 @@ describe.each(MODES)('Neumorphism equals main.css before styles: %s', (mode) => 
       expect([t.numWeight, t.btnWeight, t.plainBtnWeight]).toEqual(['700', '700', '500'])
       expect(t.barSh).toBe('none')
       expect([t.winBg, t.winBlur, t.hdrBlur, t.surfBlur, t.ctrlBlur, t.sheetBlur, t.led]).toEqual(['transparent', 'none', 'none', 'none', 'none', 'none', false])
-      expect([t.list, t.listR, t.curM, t.pillImg, t.hdr]).toEqual(['transparent', '0', '0', 'none', t.pageColor])
+      // Plan 12 (F5): the list's concave panel is rounded like a card (before: rows on the page, radius 0).
+      expect([t.list, t.listR, t.curM, t.pillImg, t.hdr]).toEqual(['transparent', '20px', '0', 'none', t.pageColor])
       expect(t.overlay).toBe('rgba(0, 0, 0, 0.8)')
     })
   })
@@ -454,6 +459,7 @@ function contrastProblems(t: StyleTokens, neumorphismGhostSel = false, stateInk:
   const n = Math.max(t.chips.length, t.chipFgs.length) * Math.min(t.chips.length, t.chipFgs.length)
   for (let i = 0; i < n; i++) check(`chipFgs[${i % t.chipFgs.length}] on chips[${i % t.chips.length}]`, t.chipFgs[i % t.chipFgs.length]!, on(t.chips[i % t.chips.length]!, page))
   t.thumbs.forEach((thumb, i) => check(`thumbFg on thumbs[${i}]`, t.thumbFg, on(thumb, page)))
+  // statusOut is not paired: the word "Out" always stands beside the dot, so its colour is decorative.
   // Controls: the text of each state on its fill (and image), over what the control sits on.
   const pill = on(t.pillBg, page)
   const pillSel = on(t.pillSelBg, cur)
@@ -600,6 +606,50 @@ describe.each(FIELD_RING_3_1)('field outline at 3:1: %s', (name) => {
   it('the check bites: the style\'s old hairline fails it', () => {
     expect(fieldRingProblems({ ...STYLES[name].build('light', 'blue'), fieldLine: 'rgba(20,24,40,0.08)' }).length).toBeGreaterThan(0)
   })
+})
+
+/**
+ * A selected radio (plan 13, item 1): its ring (border-primary) and dot (fill-primary) are --primary, drawn on the
+ * field's fill over the surface the group sits on. Both read at 3:1 (WCAG 1.4.11) on page, card, list and sheet.
+ * Liquid dark's primary was the accent at 86 % over the dark wallpaper: too dark to see on the grey glass.
+ */
+function radioProblems(t: StyleTokens, cardPrimary = false): string[] {
+  const primary = parseColor0(t.primary)
+  const fieldFill = parseColor0(t.field)
+  if (!primary) return [`primary ${t.primary} is not a colour`]
+  const page = backdrops(`${t.winBg}, ${t.page}`, [WHITE])
+  const problems: string[] = []
+  for (const [name, bgs] of [
+    ['page', page],
+    ['card', backdrops(t.card, page)],
+    ['list', backdrops(t.list, page)],
+    ['sheet', backdrops(t.sheet, page)],
+  ] as const) {
+    // Neo-brutal's CSS re-points --primary (ink) and --field (paper) on a card; the other surfaces use the tokens.
+    const onCard = name === 'card' && cardPrimary
+    const ringC = onCard ? parseColor0(t.cardFg)! : primary
+    const fill = onCard ? WHITE : fieldFill
+    for (const b of bgs) {
+      const ring = contrast(over(ringC, b), b)
+      if (ring < 3) problems.push(`radio ring ${t.primary} on ${name} = ${ring.toFixed(2)}`)
+      if (fill) {
+        const inside = over(fill, b)
+        const dot = contrast(over(ringC, inside), inside)
+        if (dot < 3) problems.push(`radio dot ${t.primary} on field over ${name} = ${dot.toFixed(2)}`)
+      }
+    }
+  }
+  return problems
+}
+// Every style: a selected radio reads as selected everywhere.
+describe.each(STYLE_NAMES)('selected radio at 3:1: %s', (name) => {
+  const accents: AccentName[] = STYLES[name].fixedPalette ? [STYLES[name].defaultAccent] : ACCENT_NAMES
+  it.each(MODES.flatMap((mode) => accents.map((accent) => [mode, accent] as const)))('%s, %s', (mode, accent) => {
+    expect(radioProblems(STYLES[name].build(mode, accent), cardInkOf(name).has('--primary'))).toEqual([])
+  })
+})
+it('the radio check bites: a dark accent on dark glass fails it', () => {
+  expect(radioProblems({ ...STYLES.liquid.build('dark', 'indigo'), primary: '#2A2F6B' }).length).toBeGreaterThan(0)
 })
 
 describe('fixed palettes ignore the accent they are given', () => {
@@ -1093,5 +1143,21 @@ describe('derived: the bottom bar and plain button labels', () => {
     const t = deriveSurfaces({ ...rest, hdrSh: 'inset 0 -2px 0 #111111', btnWeight: '600' }, 'light')
     expect(t.barSh).toBe('inset 0 2px 0 #111111')
     expect(t.plainBtnWeight).toBe('600')
+  })
+})
+
+describe('plan 12 tokens: out-of-stock dot, motion, num-font', () => {
+  it('writes the status colour as a CSS variable, from the design system by default', () => {
+    const vars = Object.fromEntries(styleVars(STYLES.base.build('light', 'indigo')))
+    expect(vars['--st-status-out']).toBe('#B4BAC4')
+    const dark = Object.fromEntries(styleVars(STYLES.base.build('dark', 'indigo')))
+    expect(dark['--st-status-out']).toBe('#6B7280')
+  })
+
+  it('main.css exposes the semantic status colour, motion tokens and .num-font', () => {
+    expect(css).toMatch(/--status-out:\s*var\(--st-status-out\)/)
+    expect(css).toMatch(/--color-status-out:\s*var\(--status-out\)/)
+    for (const v of ['--dur-fast', '--dur-base', '--dur-slow', '--ease-standard', '--ease-exit']) expect(css).toContain(`${v}:`)
+    expect(css).toMatch(/\.num-font\s*\{\s*font-family:\s*var\(--st-num-font\);\s*\}/)
   })
 })

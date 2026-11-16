@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SWIPE, SWIPE_DOWN, swipeAction, swipeDownCloses } from '../app/lib/swipe'
+import { SWIPE, SWIPE_DOWN, sheetDragOffset, sheetSwipeCanStart, swipeAction, swipeDownCloses } from '../app/lib/swipe'
 
 describe('swipeAction', () => {
   it('opens the menu with a rightward swipe', () => {
@@ -50,5 +50,29 @@ describe('swipeDownCloses', () => {
     expect(swipeDownCloses({ x: 100, y: 200 }, { x: 100, y: 250 }, false)).toBe(false)
     expect(swipeDownCloses({ x: 100, y: 400 }, { x: 100, y: 200 }, false)).toBe(false)
     expect(swipeDownCloses({ x: 100, y: 200 }, { x: 220, y: 300 }, false)).toBe(false)
+  })
+})
+
+describe('sheetSwipeCanStart', () => {
+  const ok = { phone: true, locked: false, scrolledDown: false, onControl: false, hasSelection: false }
+  it('starts on a phone sheet at rest', () => {
+    expect(sheetSwipeCanStart(ok)).toBe(true)
+  })
+  it.each([
+    ['from 768 px up', { phone: false }],
+    ['while saving', { locked: true }],
+    ['over scrolled content', { scrolledDown: true }],
+    ['on a control', { onControl: true }],
+    ['over a text selection', { hasSelection: true }],
+  ])('does not start %s', (_name, patch) => {
+    expect(sheetSwipeCanStart({ ...ok, ...patch })).toBe(false)
+  })
+})
+
+describe('sheetDragOffset', () => {
+  it('follows the finger down, damped, and never goes up', () => {
+    expect(sheetDragOffset(100)).toBe(60)
+    expect(sheetDragOffset(0)).toBe(0)
+    expect(sheetDragOffset(-40)).toBe(0)
   })
 })

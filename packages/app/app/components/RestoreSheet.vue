@@ -150,9 +150,9 @@ const percent = computed(() =>
     :title="$t('backup.restoreTitle')"
     :description="$t('backup.restoreDescription', { name: source.name })"
   >
-    <div class="mt-2 grid gap-3.5">
+    <div class="mt-2 grid gap-4">
       <input ref="input" type="file" accept=".json,application/json" class="hidden" tabindex="-1" @change="choose" >
-      <div v-if="picked" class="grid gap-0.5 rounded-field bg-chip px-3 py-2.5">
+      <div v-if="picked" class="grid gap-0.5 rounded-field bg-chip px-3 py-2">
         <p class="text-sm font-semibold break-words">{{ summary }}</p>
         <p class="text-sm text-subtle-foreground break-words">
           {{ $t('backup.exported', { date: formatDateTime(picked.backup.exportedAt), name: picked.backup.source.name }) }}
@@ -178,7 +178,7 @@ const percent = computed(() =>
       <RadioGroup v-if="picked" v-model="mode" :aria-label="$t('backup.mode')" :disabled="busy" class="grid gap-1">
         <label
           :class="[
-            'flex min-h-11 items-start gap-2.5 rounded-field px-3 py-2 text-sm transition-colors duration-150',
+            'flex min-h-11 items-start gap-3 rounded-field px-3 py-2 text-sm transition-colors duration-(--dur-fast)',
             sameIdsAllowed && 'cursor-pointer hover:bg-hover',
           ]"
         >
@@ -188,7 +188,7 @@ const percent = computed(() =>
             <span class="text-subtle-foreground">{{ $t(sameIdsHint) }}</span>
           </span>
         </label>
-        <label class="flex min-h-11 cursor-pointer items-start gap-2.5 rounded-field px-3 py-2 text-sm transition-colors duration-150 hover:bg-hover">
+        <label class="flex min-h-11 cursor-pointer items-start gap-3 rounded-field px-3 py-2 text-sm transition-colors duration-(--dur-fast) hover:bg-hover">
           <RadioGroupItem value="new-ids" class="mt-0.5" />
           <span class="grid gap-0.5">
             <span class="font-semibold">{{ $t('backup.newIds') }}</span>
@@ -200,9 +200,9 @@ const percent = computed(() =>
         {{ $t('backup.restoredBefore') }}
       </p>
 
-      <div v-if="progress && busy" class="grid gap-1.5">
+      <div v-if="progress && busy" class="grid gap-2">
         <div class="h-2 overflow-hidden rounded-full bg-muted" role="progressbar" :aria-valuenow="percent" aria-valuemin="0" aria-valuemax="100">
-          <div class="h-full bg-primary transition-[width] duration-150" :style="{ width: `${percent}%` }" />
+          <div class="h-full bg-primary transition-[width] duration-(--dur-fast)" :style="{ width: `${percent}%` }" />
         </div>
         <p class="text-sm text-subtle-foreground">
           {{ $t('backup.running', { done: progress.done.toLocaleString('en'), total: progress.total.toLocaleString('en') }) }}

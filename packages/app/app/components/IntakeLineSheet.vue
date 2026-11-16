@@ -532,11 +532,11 @@ const title = computed(() => t(editing.value ? 'intakes.line.editTitle' : 'intak
 // Like the app's list rows: a rounded highlight inside the column (its edges line up with the fields above, the text sits
 // 12 px in, like a field's text), and an inset divider between rows instead of a full-width border.
 const summaryRow =
-  "relative flex min-h-11 min-w-0 items-center gap-3 rounded-field px-3 py-2 text-left transition-colors duration-150 not-first:before:absolute not-first:before:top-0 not-first:before:right-3 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-[''] hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none"
+  "relative flex min-h-11 min-w-0 items-center gap-3 rounded-field px-3 py-2 text-left transition-colors duration-(--dur-fast) not-first:before:absolute not-first:before:top-0 not-first:before:right-3 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-[''] hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none"
 const matchRow =
-  'flex min-h-11 w-full min-w-0 items-center gap-2.5 rounded-field px-3 py-2 text-left transition-colors duration-150 hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none'
-const banner = 'grid gap-1 rounded-field px-3 py-2.5 text-[13px]'
-const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-2.5 py-1 text-[13px] font-semibold'
+  'flex min-h-11 w-full min-w-0 items-center gap-3 rounded-field px-3 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none'
+const banner = 'grid gap-1 rounded-field px-3 py-3 text-sm'
+const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py-1 text-sm font-semibold'
 </script>
 
 <template>
@@ -558,17 +558,17 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-2.5 
         </div>
         <template v-if="typed.trim()">
           <section v-if="matches.exact.length + matches.otherValue.length + matches.similar.length > 0" class="grid gap-1" aria-labelledby="intake-line-have">
-            <h3 id="intake-line-have" class="section-label px-1 text-[11px]">{{ $t('intakes.line.alreadyHave') }}</h3>
+            <h3 id="intake-line-have" class="section-label px-1 text-xs">{{ $t('intakes.line.alreadyHave') }}</h3>
             <ul class="surface-list">
               <li v-for="r in matches.exact" :key="`e:${r.itemId}:${r.variantId}`">
                 <button type="button" :class="[matchRow, 'match-best']" :disabled="disabled" @click="pickExisting(r, true)">
                   <span class="min-w-0 grow">
-                    <span class="block truncate text-sm font-bold">{{ r.name }}<template v-if="r.variantName"> · {{ r.variantName }}</template></span>
+                    <span class="block truncate text-sm font-semibold">{{ r.name }}<template v-if="r.variantName"> · {{ r.variantName }}</template></span>
                     <span class="block truncate text-xs text-muted-foreground">
                       <template v-if="r.variantName">{{ $t('intakes.line.exact') }} · </template>{{ $t('intakes.line.have', { amount: r.amount }) }} · {{ where(r) }}
                     </span>
                   </span>
-                  <span class="tag-add shrink-0 rounded-chip px-1.5 py-px text-[11px] font-bold tracking-[0.04em] uppercase">{{ $t('intakes.tag.add') }}</span>
+                  <span class="tag-add shrink-0 rounded-chip px-1.5 py-px text-xs font-semibold tracking-[0.04em] uppercase">{{ $t('intakes.tag.add') }}</span>
                 </button>
               </li>
               <li v-for="r in matches.otherValue" :key="`o:${r.itemId}`">
@@ -592,12 +592,12 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-2.5 
             </ul>
           </section>
           <section v-if="matches.inDraft.length > 0" class="grid gap-1" aria-labelledby="intake-line-in-draft">
-            <h3 id="intake-line-in-draft" class="section-label px-1 text-[11px]">{{ $t('intakes.line.inIntake') }}</h3>
+            <h3 id="intake-line-in-draft" class="section-label px-1 text-xs">{{ $t('intakes.line.inIntake') }}</h3>
             <ul class="surface-list">
               <li v-for="d in matches.inDraft" :key="d.newItemId">
                 <button type="button" :class="matchRow" :disabled="disabled" @click="pickDraftItem(d.newItemId)">
-                  <span class="min-w-0 grow truncate text-sm font-bold">{{ d.name }}</span>
-                  <span class="shrink-0 rounded-chip bg-accent-soft px-1.5 py-px text-[11px] font-bold tracking-[0.04em] text-accent-soft-foreground uppercase">{{ $t('intakes.tag.new') }}</span>
+                  <span class="min-w-0 grow truncate text-sm font-semibold">{{ d.name }}</span>
+                  <span class="shrink-0 rounded-chip bg-accent-soft px-1.5 py-px text-xs font-semibold tracking-[0.04em] text-accent-soft-foreground uppercase">{{ $t('intakes.tag.new') }}</span>
                 </button>
               </li>
             </ul>
@@ -616,7 +616,7 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-2.5 
       <!-- 2–4 · The item and the line -->
       <template v-else>
         <div v-if="duplicate" :class="[banner, 'banner-warn']" role="status">
-          <p class="flex items-center gap-2 font-bold"><TriangleAlert class="size-4 shrink-0 text-warning" aria-hidden="true" />{{ $t('intakes.line.duplicate') }}</p>
+          <p class="flex items-center gap-2 font-semibold"><TriangleAlert class="size-4 shrink-0 text-warning" aria-hidden="true" />{{ $t('intakes.line.duplicate') }}</p>
           <p class="wrap-anywhere">
             <template v-if="duplicate.kind === 'inventory'">
               {{ duplicate.row.name }}<template v-if="duplicate.row.variantName"> · {{ duplicate.row.variantName }}</template> · {{ $t('intakes.line.have', { amount: duplicate.row.amount }) }}
@@ -638,16 +638,16 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-2.5 
                   :model-value="newItem.name"
                   autocomplete="off"
                   :disabled="disabled"
-                  class="h-10 font-bold"
+                  class="h-10 font-semibold"
                   @update:model-value="newItem = { ...newItem!, name: String($event) }"
                   @keydown.enter.prevent="save(!editing)"
                 />
               </template>
-              <p v-else class="pt-0.5 text-[15px] font-bold wrap-anywhere">{{ item?.name }}</p>
+              <p v-else class="pt-0.5 text-base font-semibold wrap-anywhere">{{ item?.name }}</p>
             </div>
             <span
               v-if="tag"
-              class="mt-1.5 shrink-0 rounded-chip px-1.5 py-px text-[11px] font-bold tracking-[0.04em] uppercase"
+              class="mt-1.5 shrink-0 rounded-chip px-1.5 py-px text-xs font-semibold tracking-[0.04em] uppercase"
               :class="tag === 'add' ? 'tag-add' : 'bg-accent-soft text-accent-soft-foreground'"
             >{{ $t(`intakes.tag.${tag}`) }}</span>
           </div>
@@ -664,7 +664,7 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-2.5 
               @click="editingAxis = editingAxis === a.id ? null : a.id; editingAxis && focusSoon(`#intake-axis-${a.id}`)"
             >
               {{ valueOf(a.id) || a.name }}
-              <Pencil class="size-3" aria-hidden="true" />
+              <Pencil class="size-4" aria-hidden="true" />
             </button>
           </div>
           <div v-if="editingAxis" class="grid gap-1.5">
@@ -733,11 +733,11 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-2.5 
         <div class="grid">
           <template v-if="newItem">
             <button type="button" :class="summaryRow" :aria-expanded="attributesOpen" :disabled="disabled" @click="attributesOpen = !attributesOpen">
-              <span class="shrink-0 text-[13px] font-semibold">{{ $t('intakes.line.attributes') }}</span>
-              <span class="min-w-0 grow truncate text-right text-[13px]" :class="attributesSummary ? 'text-foreground' : 'text-muted-foreground'">
+              <span class="shrink-0 text-sm font-semibold">{{ $t('intakes.line.attributes') }}</span>
+              <span class="min-w-0 grow truncate text-right text-sm" :class="attributesSummary ? 'text-foreground' : 'text-muted-foreground'">
                 {{ attributesSummary || $t('intakes.line.add') }}
               </span>
-              <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-150 motion-reduce:transition-none" :class="attributesOpen ? 'rotate-180' : ''" aria-hidden="true" />
+              <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-(--dur-fast) motion-reduce:transition-none" :class="attributesOpen ? 'rotate-180' : ''" aria-hidden="true" />
             </button>
             <div v-if="attributesOpen" class="py-3">
               <IntakeNewItemAttributes v-model="attributes" :snapshot="s" :similar="similarItem" :disabled="disabled" @update:error="attributeError = $event" />
@@ -756,11 +756,11 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-2.5 
           </template>
 
           <button type="button" :class="summaryRow" :aria-expanded="priceOpen" :disabled="disabled" @click="priceOpen = !priceOpen">
-            <span class="shrink-0 text-[13px] font-semibold">{{ $t('intakes.line.priceLink') }}</span>
-            <span class="min-w-0 grow truncate text-right text-[13px]" :class="priceSummary ? 'text-foreground' : 'text-muted-foreground'">
+            <span class="shrink-0 text-sm font-semibold">{{ $t('intakes.line.priceLink') }}</span>
+            <span class="min-w-0 grow truncate text-right text-sm" :class="priceSummary ? 'text-foreground' : 'text-muted-foreground'">
               {{ priceSummary || $t('intakes.line.add') }}
             </span>
-            <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-150 motion-reduce:transition-none" :class="priceOpen ? 'rotate-180' : ''" aria-hidden="true" />
+            <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-(--dur-fast) motion-reduce:transition-none" :class="priceOpen ? 'rotate-180' : ''" aria-hidden="true" />
           </button>
           <div v-if="priceOpen" class="grid gap-3 py-3" @keydown.enter.prevent="save(!editing)">
             <div class="grid gap-1.5">
@@ -779,16 +779,16 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-2.5 
 
           <template v-if="canPhoto">
             <button type="button" :class="summaryRow" :aria-expanded="photoOpen" :disabled="disabled" @click="photoOpen = !photoOpen">
-              <span class="shrink-0 text-[13px] font-semibold">{{ $t('intakes.line.photo') }}</span>
+              <span class="shrink-0 text-sm font-semibold">{{ $t('intakes.line.photo') }}</span>
               <span class="flex min-w-0 grow justify-end">
                 <PhotoImg v-if="photo || variantPhoto" :photo="(photo ?? variantPhoto)!" size="thumb" alt="" class="size-8 rounded-thumb object-cover" />
-                <span v-else class="text-[13px] text-muted-foreground">{{ $t('intakes.line.add') }}</span>
+                <span v-else class="text-sm text-muted-foreground">{{ $t('intakes.line.add') }}</span>
               </span>
-              <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-150 motion-reduce:transition-none" :class="photoOpen ? 'rotate-180' : ''" aria-hidden="true" />
+              <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-(--dur-fast) motion-reduce:transition-none" :class="photoOpen ? 'rotate-180' : ''" aria-hidden="true" />
             </button>
             <div v-if="photoOpen" class="grid gap-2 py-3">
               <div v-if="photo" class="flex items-center gap-3">
-                <PhotoImg :photo="photo" size="thumb" alt="" class="size-[42px] shrink-0 rounded-thumb object-cover" />
+                <PhotoImg :photo="photo" size="thumb" alt="" class="size-10 shrink-0 rounded-thumb object-cover" />
                 <span class="min-w-0 flex-1 text-sm text-muted-foreground">
                   {{ variantPhoto ? $t(photo.replace ? 'intakes.line.replaces' : 'intakes.line.keepsPhoto') : $t('intakes.line.photoSet') }}
                 </span>
@@ -801,7 +801,7 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-2.5 
               </div>
               <template v-else-if="variantPhoto && !replacing">
                 <div class="flex items-center gap-3">
-                  <PhotoImg :photo="variantPhoto" size="thumb" alt="" class="size-[42px] shrink-0 rounded-thumb object-cover" />
+                  <PhotoImg :photo="variantPhoto" size="thumb" alt="" class="size-10 shrink-0 rounded-thumb object-cover" />
                   <span class="min-w-0 flex-1 text-sm text-muted-foreground">{{ $t('intakes.line.currentPhoto') }}</span>
                   <Button type="button" variant="outline" class="h-9" :disabled="disabled" @click="replacing = true">{{ $t('intakes.line.replacePhoto') }}</Button>
                 </div>

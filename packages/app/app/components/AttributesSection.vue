@@ -33,6 +33,13 @@ const sheetOpen = (kind: Target['kind']) =>
 const formOpen = sheetOpen('form')
 const deleteOpen = sheetOpen('delete')
 
+const usage = shallowRef<{ kind: 'attribute'; id: string; name: string } | null>(null)
+const usageOpen = ref(false)
+function showUsage(attribute: Attribute): void {
+  usage.value = { kind: 'attribute', id: attribute.id, name: attribute.name }
+  usageOpen.value = true
+}
+
 const actions = [
   { key: 'edit', label: 'dictionaries.edit', icon: Pencil },
   { key: 'delete', label: 'dictionaries.delete', icon: Trash2, destructive: true },
@@ -66,7 +73,7 @@ async function remove(): Promise<void> {
 <template>
   <section class="grid min-w-0 gap-2" aria-labelledby="dictionaries-attributes">
     <div class="flex min-h-11 items-center justify-between gap-2">
-      <h2 id="dictionaries-attributes" class="text-[17px] font-bold tracking-[-0.01em] text-foreground">
+      <h2 id="dictionaries-attributes" class="text-base font-semibold tracking-[-0.01em] text-foreground">
         {{ $t('dictionaries.attributes') }}
       </h2>
       <!-- Thinner than the default raised button (R(3,7), 40 px): it must not outweigh the section's heading. -->
@@ -79,13 +86,15 @@ async function remove(): Promise<void> {
       <li
         v-for="row in rows"
         :key="row.attribute.id"
-        class="relative flex min-h-[62px] items-center gap-3 px-3.5 py-1.5 not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-3.5 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
+        class="relative flex min-h-14 items-center gap-3 pr-3 not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
       >
-        <span class="flex min-w-0 grow flex-col gap-0.5">
-          <span class="truncate text-[15px] font-bold">{{ row.attribute.name }}</span>
-          <span class="truncate text-[13px] text-muted-foreground">{{ typeLabel(row.attribute) }}</span>
-        </span>
-        <span class="shrink-0 text-[13px] text-muted-foreground">{{ $t('dictionaries.itemCount', row.itemCount) }}</span>
+        <button type="button" class="flex min-h-14 min-w-0 grow items-center gap-3 py-1.5 pl-3 text-left" @click="showUsage(row.attribute)">
+          <span class="flex min-w-0 grow flex-col gap-0.5">
+            <span class="truncate text-base font-semibold">{{ row.attribute.name }}</span>
+            <span class="truncate text-sm text-muted-foreground">{{ typeLabel(row.attribute) }}</span>
+          </span>
+          <span class="shrink-0 text-sm text-muted-foreground">{{ $t('dictionaries.itemCount', row.itemCount) }}</span>
+        </button>
         <RowMenu
           class="size-11"
           :label="row.attribute.name"
@@ -96,6 +105,7 @@ async function remove(): Promise<void> {
     </ul>
     <p v-else class="text-sm text-muted-foreground">{{ $t('dictionaries.noAttributes') }}</p>
 
+    <UsedBySheet v-model:open="usageOpen" :target="usage" />
     <AppSheet
       v-model:open="formOpen"
       :title="$t(shown?.kind === 'form' && shown.attribute ? 'dictionaries.attributeEditTitle' : 'dictionaries.attributeNewTitle')"

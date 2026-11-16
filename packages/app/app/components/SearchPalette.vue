@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { useMediaQuery } from '@vueuse/core'
+import { useLocalStorage, useMediaQuery } from '@vueuse/core'
 import { Archive, ArrowLeftRight, Folder, FolderPlus, PackageOpen, Plus, Search, SlidersHorizontal, Tags, X } from '@lucide/vue'
 import { DialogContent, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui'
 import type { Component } from 'vue'
 import { toast } from 'vue-sonner'
+import type { InventorySnapshot } from '@antresol/core'
 import { DialogOverlay } from '@/components/ui/dialog'
 import { errorMessageKey } from '~/lib/errors'
-import { bottomUp, paletteResults, pastedShare, snapshotSearch, stepSelection, type PaletteAction, type PaletteRow } from '~/lib/palette'
+import { bottomUp, paletteResults, pastedShare, sameRef, snapshotSearch, stepSelection, type PaletteAction, type PaletteOther, type PaletteRow, type RowInventory } from '~/lib/palette'
 import { currentInventoryName, NAV_SECTIONS, treeCurrent } from '~/lib/shell'
 import { swipeDownCloses } from '~/lib/swipe'
 import { pathOf, snapshotIndex } from '~/lib/views'
@@ -45,6 +46,56 @@ const scroller = ref<HTMLElement | null>(null)
 const query = ref('')
 const text = computed(() => query.value.trim())
 const inventoryName = computed(() => currentInventoryName(state))
+
+// "All inventories": items and folders of the other inventories whose copy is saved on this device. Remembered.
+const allInventories = useLocalStorage('antresol.palette.allInventories', false)
+const others = shallowRef<PaletteOther[]>([])
+// Snapshot objects kept between openings, by "source:inventory", with the savedAt they were read at: a copy that did not
+// change keeps its object, so the per-snapshot search and index caches (snapshotSearch, snapshotIndex) stay warm.
+const copies = new Map<string, { snapshot: InventorySnapshot; savedAt: string }>()
+let loadingOthers = 0
+async function loadOthers(): Promise<void> {
+  const token = ++loadingOthers
+  const list = state.inventories.filter((e) => e.inventory.archivedAt === null && !sameRef(e.ref, state.current))
+  const loaded = await Promise.all(
+    list.map(async (entry) => {
+      const key = `${entry.ref.sourceId}:${entry.ref.inventoryId}`
+      const read = await workspace.cachedSnapshot(entry.ref).catch(() => null)
+      if (!read) {
+        copies.delete(key)
+        return { entry, snapshot: null }
+      }
+      const kept = copies.get(key)
+      if (kept && kept.savedAt === read.savedAt) return { entry, snapshot: kept.snapshot }
+      copies.set(key, read)
+      return { entry, snapshot: read.snapshot }
+    }),
+  )
+  if (token !== loadingOthers) return
+  // Inventories gone from the list (or the current one) keep nothing.
+  const wanted = new Set(loaded.filter((o) => o.snapshot).map((o) => `${o.entry.ref.sourceId}:${o.entry.ref.inventoryId}`))
+  for (const key of copies.keys()) if (!wanted.has(key)) copies.delete(key)
+  others.value = loaded
+}
+watch(
+  [paletteOpen, allInventories, () => state.inventories, () => state.current],
+  () => {
+    if (paletteOpen.value && allInventories.value) {
+      void loadOthers()
+      return
+    }
+    // Closed: no snapshots in the list, only the objects the next opening reuses. Chip off: nothing kept.
+    loadingOthers++
+    others.value = []
+    if (!allInventories.value) copies.clear()
+    else for (const key of copies.keys()) if (!state.inventories.some((e) => `${e.ref.sourceId}:${e.ref.inventoryId}` === key)) copies.delete(key)
+  },
+  { immediate: true },
+)
+// The chip is for two or more inventories; with one, a remembered "on" searches nothing more.
+const crossing = computed(() => allInventories.value && state.inventories.length >= 2)
+const shownOthers = computed(() => others.value.filter((o) => !sameRef(o.entry.ref, state.current)))
+const skipped = computed(() => (crossing.value && text.value ? shownOthers.value.filter((o) => !o.snapshot).length : 0))
 
 // Built once per snapshot object (snapshots are replaced whole), on the first search; shared with quick add.
 const search = computed(() => (state.snapshot ? snapshotSearch(state.snapshot) : null))
@@ -91,6 +142,7 @@ const groups = computed(() =>
       current: state.current,
       sections: SECTIONS,
       canWrite: !state.readOnly,
+      others: crossing.value ? shownOthers.value : null,
     },
     labelOf,
   ),
@@ -151,6 +203,12 @@ function clear(): void {
   input.value?.focus()
 }
 
+// The chip never takes focus from the field (mousedown is prevented on it); a touch tap focuses it anyway, so the field gets it back.
+function toggleAll(): void {
+  allInventories.value = !allInventories.value
+  input.value?.focus()
+}
+
 // What had focus when the palette opened gets it back when it closes.
 let opener: HTMLElement | null = null
 watch(paletteOpen, (open) => {
@@ -193,11 +251,28 @@ async function run(row: PaletteRow): Promise<void> {
     await openNearest((below ?? above)!)
   } else if (row.kind === 'item') {
     const { itemId, variantId } = row.hit
-    void router.push({ path: `/item/${itemId}`, query: variantId ? { variant: variantId } : {} })
+    await openIn(row.inventory, { path: `/item/${itemId}`, query: variantId ? { variant: variantId } : {} })
   } else if (row.kind === 'folder') {
-    void router.push(`/folder/${row.hit.id}`)
+    await openIn(row.inventory, `/folder/${row.hit.id}`)
   } else {
     await act(row.action)
+  }
+}
+
+// A row of another inventory: as the switcher does, selectInventory sets the current inventory before its first await,
+// so the route pushed next is stamped with it; the screen shows the cached copy at once.
+async function openIn(inventory: RowInventory | null, to: Parameters<typeof router.push>[0]): Promise<void> {
+  if (!inventory) {
+    void router.push(to)
+    return
+  }
+  const selecting = workspace.selectInventory(inventory.ref)
+  // force: a copy of the same inventory from another source still gets its own history entry, stamped with it.
+  void router.push(typeof to === 'string' ? { path: to, force: true } : { ...to, force: true })
+  try {
+    await selecting
+  } catch (e) {
+    toast.error(t(errorMessageKey(e)))
   }
 }
 
@@ -260,7 +335,11 @@ function onTouchEnd(event: TouchEvent): void {
 
 // A match is a square chip inside the text; keys are chips (radius scale, spec 4.2).
 const markClass = 'rounded-none bg-chip text-foreground'
-const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-subtle-foreground'
+const chipClass = computed(() => [
+  'pressable shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold',
+  allInventories.value ? 'bg-accent-soft text-accent-soft-foreground' : 'bg-chip text-subtle-foreground',
+])
+const kbdClass = 'rounded-chip bg-chip px-1.5 text-xs font-semibold text-subtle-foreground'
 </script>
 
 <template>
@@ -291,17 +370,17 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
           :class="
             desktop
               ? 'flex shrink-0 items-center border-b border-divider px-4 py-1.5'
-              : 'flex shrink-0 items-center gap-1.5 pt-1 pr-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pl-2.5'
+              : 'flex shrink-0 items-center gap-1.5 pt-1 pr-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pl-3'
           "
         >
           <div
             :class="[
-              'flex min-w-0 flex-1 items-center gap-2.5',
+              'flex min-w-0 flex-1 items-center gap-3',
               // A plain field on the phone: colour belongs to the accent button only.
-              desktop ? 'min-h-11' : 'h-[50px] rounded-field border border-input bg-field pr-0.5 pl-3.5',
+              desktop ? 'min-h-11' : 'h-14 rounded-field border border-input bg-field pr-0.5 pl-3',
             ]"
           >
-            <Search class="size-[18px] shrink-0 text-muted-foreground" aria-hidden="true" />
+            <Search class="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <input
               ref="input"
               v-model="query"
@@ -331,17 +410,37 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
             >
               <X class="size-4" aria-hidden="true" />
             </button>
+            <button
+              v-if="desktop && state.inventories.length >= 2"
+              type="button"
+              :aria-pressed="allInventories"
+              :class="chipClass"
+              @mousedown.prevent
+              @click="toggleAll"
+            >
+              {{ $t('search.allInventories') }}
+            </button>
             <span
               v-if="desktop && inventoryName"
-              class="max-w-44 shrink-0 truncate rounded-full bg-accent-soft px-2 py-0.5 text-xs font-bold text-accent-soft-foreground"
+              class="max-w-44 shrink-0 truncate rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent-soft-foreground"
             >
               {{ inventoryName }}
             </span>
           </div>
           <button
+            v-if="!desktop && state.inventories.length >= 2"
+            type="button"
+            :aria-pressed="allInventories"
+            :class="[chipClass, 'min-h-11 min-w-11']"
+            @mousedown.prevent
+            @click="toggleAll"
+          >
+            {{ $t('search.allInventories') }}
+          </button>
+          <button
             v-if="!desktop"
             type="button"
-            class="pressable h-11 shrink-0 px-2 font-bold text-accent-ink"
+            class="pressable h-11 shrink-0 px-2 font-semibold text-accent-ink"
             @click="paletteOpen = false"
           >
             {{ $t('ui.cancel') }}
@@ -353,10 +452,14 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
           ref="scroller"
           :class="
             desktop
-              ? 'min-h-0 max-h-[380px] overflow-y-auto overscroll-contain p-1.5'
+              ? 'min-h-0 max-h-[380px] overflow-y-auto overscroll-contain p-2'
               : 'flex min-h-0 flex-1 flex-col-reverse overflow-y-auto overscroll-contain p-2'
           "
         >
+          <!-- On the phone the scroller is reversed: first in the DOM is the bottom, so the note sits under the results. -->
+          <p v-if="!desktop && skipped > 0" class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground">
+            {{ $t('search.notOnDevice', skipped) }}
+          </p>
           <div v-if="shownRows.length > 0" :id="listId" role="listbox" :aria-label="$t('search.results')" class="grid min-w-0 grid-cols-1 gap-0.5">
             <div
               v-for="group in shown"
@@ -367,7 +470,7 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
             >
               <div
                 :id="`${listId}-${group.key}`"
-                class="px-2.5 pt-2 pb-1 text-[11px] font-extrabold tracking-[0.05em] text-muted-foreground uppercase"
+                class="px-3 pt-2 pb-1 text-xs font-semibold tracking-[0.05em] text-muted-foreground uppercase"
               >
                 {{ groupLabels[group.key] }}
               </div>
@@ -380,7 +483,7 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
                 :class="[
                   // The selected option is a selected row (spec 4.1): accent gradient, text and icons in its ink.
                   // min-w-0 and the one-column grids above: a long name truncates instead of widening the list past its edge.
-                  'flex min-h-11 min-w-0 cursor-pointer items-center gap-2.5 rounded-field px-3.5 select-none',
+                  'flex min-h-11 min-w-0 cursor-pointer items-center gap-3 rounded-field px-3 select-none',
                   desktop ? 'py-1.5' : 'py-2',
                   row.key === selected?.key ? 'row-selected' : '',
                 ]"
@@ -389,10 +492,10 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
                 @click="run(row)"
               >
                 <template v-if="row.kind === 'item'">
-                  <ItemThumb :name="row.hit.name" :cover="row.hit.cover" class="size-8 rounded-icon text-xs" />
+                  <ItemThumb :id="row.hit.itemId" :folder-name="row.hit.folderName" :icon="row.hit.icon" :folder-icon="row.hit.folderIcon" :cover="row.hit.cover" :color="row.hit.color" class="size-9 rounded-thumb text-xs" />
                   <span class="flex min-w-0 flex-1 flex-col">
                     <span class="flex min-w-0 items-center gap-1.5">
-                      <span class="min-w-[min(7.5rem,100%)] truncate text-sm font-bold" :class="row.hit.outOfStock && 'text-dimmed-foreground'">
+                      <span class="min-w-[min(7.5rem,100%)] truncate text-sm font-semibold" :class="row.hit.outOfStock && 'text-dimmed-foreground'">
                         <template v-for="(p, i) in row.name" :key="i"><mark v-if="p.match" :class="markClass">{{ p.text }}</mark><template v-else>{{ p.text }}</template></template>
                         <span v-if="row.variant" class="font-semibold text-muted-foreground">
                           · <template v-for="(p, i) in row.variant" :key="i"><mark v-if="p.match" :class="markClass">{{ p.text }}</mark><template v-else>{{ p.text }}</template></template>
@@ -401,14 +504,17 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
                       <span
                         v-for="(value, i) in row.hit.pinned"
                         :key="`pin${i}`"
-                        class="max-w-28 min-w-0 shrink truncate rounded-chip bg-chip px-1.5 py-px text-[11px] font-semibold text-subtle-foreground"
+                        class="max-w-28 min-w-0 shrink truncate rounded-chip bg-chip px-1.5 py-px text-xs font-semibold text-subtle-foreground"
                       >{{ value }}</span>
                     </span>
                     <span v-if="row.hit.path" class="truncate text-xs font-semibold text-muted-foreground">{{ row.hit.path }}</span>
                   </span>
-                  <span class="shrink-0 text-sm font-extrabold tabular-nums" :class="row.hit.outOfStock && 'text-muted-foreground'">
-                    {{ row.hit.number }}
-                    <span class="text-xs font-semibold text-muted-foreground">{{ row.hit.unit }}</span>
+                  <span class="min-w-18 shrink-0 text-right">
+                    <StockStatus v-if="row.hit.outOfStock" />
+                    <span v-else class="text-sm font-semibold tabular-nums">
+                      {{ row.hit.number }}
+                      <span class="text-xs font-semibold text-muted-foreground">{{ row.hit.unit }}</span>
+                    </span>
                   </span>
                 </template>
                 <template v-else-if="row.kind === 'nearest'">
@@ -419,7 +525,7 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
                         <span v-if="i === 1 && row.suggestion.below" aria-hidden="true"> · </span>
                         <button
                           type="button"
-                          class="font-extrabold tabular-nums underline-offset-4 hover:underline"
+                          class="font-semibold tabular-nums underline-offset-4 hover:underline"
                           :aria-label="$t('search.openNearest', { value: e.value })"
                           @click.stop="openNearest(e)"
                         >
@@ -432,14 +538,14 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
                 <template v-else-if="row.kind === 'folder'">
                   <span
                     :class="[
-                      'grid size-8 shrink-0 place-items-center rounded-icon text-accent-soft-foreground',
+                      'grid size-9 shrink-0 place-items-center rounded-thumb text-accent-soft-foreground',
                       row.key === selected?.key ? 'bg-(--selected-pill)' : 'bg-accent-soft',
                     ]"
                   >
                     <Folder class="size-4" aria-hidden="true" />
                   </span>
                   <span class="flex min-w-0 flex-1 flex-col">
-                    <span class="truncate text-sm font-bold">
+                    <span class="truncate text-sm font-semibold">
                       <template v-for="(p, i) in row.name" :key="i"><mark v-if="p.match" :class="markClass">{{ p.text }}</mark><template v-else>{{ p.text }}</template></template>
                     </span>
                     <span v-if="row.hit.path" class="truncate text-xs font-semibold text-muted-foreground">{{ row.hit.path }}</span>
@@ -448,13 +554,13 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
                 <template v-else>
                   <span
                     :class="[
-                      'grid size-8 shrink-0 place-items-center rounded-icon text-icon',
+                      'grid size-9 shrink-0 place-items-center rounded-thumb text-icon',
                       row.key === selected?.key ? 'bg-(--selected-pill)' : 'bg-chip',
                     ]"
                   >
                     <component :is="actionIcon(row.action)" class="size-4" aria-hidden="true" />
                   </span>
-                  <span class="min-w-0 flex-1 truncate text-sm font-bold">{{ row.label }}</span>
+                  <span class="min-w-0 flex-1 truncate text-sm font-semibold">{{ row.label }}</span>
                 </template>
               </div>
             </div>
@@ -462,12 +568,15 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-sub
           <p v-else class="px-3 py-6 text-center text-sm font-semibold text-muted-foreground">
             {{ $t('search.nothing', { q: text }) }}
           </p>
+          <p v-if="desktop && skipped > 0" class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground">
+            {{ $t('search.notOnDevice', skipped) }}
+          </p>
         </div>
 
         <div
           v-if="desktop"
           aria-hidden="true"
-          class="flex shrink-0 gap-3.5 border-t border-divider px-3.5 py-2 text-xs font-semibold text-muted-foreground"
+          class="flex shrink-0 gap-4 border-t border-divider px-3 py-2 text-xs font-semibold text-muted-foreground"
         >
           <span><kbd :class="kbdClass">{{ $t('search.key.move') }}</kbd> {{ $t('search.hint.move') }}</span>
           <span><kbd :class="kbdClass">{{ $t('search.key.open') }}</kbd> {{ $t('search.hint.open') }}</span>

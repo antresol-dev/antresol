@@ -16,6 +16,8 @@ import { sql, type Statement } from '../src/sql'
 import { openPostgresStorage } from '../src/storage'
 import journal from '../migrations/meta/_journal.json'
 import * as schema3 from './fixtures/schema3-reads'
+import * as schema6 from './fixtures/schema6-icon-writes'
+import * as schema7 from './fixtures/schema7-color-writes'
 import { attributeCreate, itemCreate, makeExecutor, sizeAxis, TEST_ACTOR, variantsCreate } from './helpers'
 
 describe('ensureSchema', () => {
@@ -34,7 +36,7 @@ describe('ensureSchema', () => {
     expect(names).toContain('items')
     expect(names).toContain('movements')
     expect(names).toContain('intakes')
-    expect(APP_SCHEMA_VERSION).toBe(6)
+    expect(APP_SCHEMA_VERSION).toBe(8)
     expect(await exec.query(sql`select 1 from antresol_meta where key = 'rev'`)).toHaveLength(1)
     expect(await exec.query(sql`select 1 from antresol_meta where key = 'intakes_rev'`)).toHaveLength(1)
   })
@@ -194,10 +196,21 @@ const metaValue = async (exec: PgExecutor, key: string): Promise<string | null> 
 
 const revOf = async (exec: PgExecutor): Promise<string | null> => metaValue(exec, 'rev')
 
+/** The write statements of a command as an app of schema 7 or older sent them: folder.create and item.create name no
+ *  `icon` (frozen in fixtures/schema6-icon-writes.ts), tag.create no `color` (fixtures/schema7-color-writes.ts), every
+ *  other command is unchanged since schema 3. */
+function statementsOfOldApp(c: Command): Statement[] {
+  const n = normalizeCommand(c)
+  if (n.type === 'folder.create') return [schema6.folderCreate(n, TEST_ACTOR)]
+  if (n.type === 'item.create') return schema6.itemCreate(n, TEST_ACTOR)
+  if (n.type === 'tag.create') return [schema7.tagCreate(n, TEST_ACTOR)]
+  return toStatements(n, TEST_ACTOR)
+}
+
 /** Writes the commands as an app of schema 3 does, without the reads back (those name the new columns): the write
  *  statements of every command without `pinned` are the ones schema 3 sent. */
 async function writeAsSchema3(exec: PgExecutor, commands: Command[]): Promise<void> {
-  for (const c of commands) await exec.batch([LOCK_REV, ...toStatements(normalizeCommand(c), TEST_ACTOR), REV_BUMP])
+  for (const c of commands) await exec.batch([LOCK_REV, ...statementsOfOldApp(c), REV_BUMP])
 }
 
 /** An inventory with a folder, a tag, a custom unit, attributes (shared and an axis), items with variants, a photo and
@@ -263,15 +276,17 @@ describe('schema 4 (migration 0001)', () => {
     expect(attributes.map((a) => a.pinned)).toEqual(attributes.map(() => false))
   })
 
-  it('an empty database runs the initial migration, then 0001, 0002 and 0003', async () => {
+  it('an empty database runs the initial migration, then 0001 to 0005', async () => {
     const { wrapped, batches } = recording(await makeExecutor())
     await ensureSchema(wrapped)
     const migrationBatches = batches.filter((b) => b.some((t) => t.includes('antresol_concurrent_migration')))
-    expect(migrationBatches).toHaveLength(4)
+    expect(migrationBatches).toHaveLength(6)
     expect(migrationBatches[0]!.join('\n')).toContain('CREATE TABLE "attributes"')
     expect(migrationBatches[1]!.join('\n')).toContain('"pinned"')
     expect(migrationBatches[2]!.join('\n')).toContain('"delete_handle"')
     expect(migrationBatches[3]!.join('\n')).toContain('CREATE TABLE "intakes"')
+    expect(migrationBatches[4]!.join('\n')).toContain('"icon"')
+    expect(migrationBatches[5]!.join('\n')).toContain('"color"')
     expect(migrationBatches.map((b) => b.at(-1))).toEqual(migrationBatches.map(() => expect.stringContaining('schema_version')))
   })
 
@@ -333,7 +348,7 @@ describe('schema 4 (migration 0001)', () => {
       let write: Promise<ApplyResult> | undefined
       let migrationRev: unknown
       const send = () =>
-        old.apply({ type: 'folder.create', id: newId(), inventoryId: inv, parentId: null, name: 'Shelf', description: null }, TEST_ACTOR)
+        old.apply({ type: 'unit.create', id: newId(), inventoryId: inv, name: 'Metre', symbol: 'm', prefixPowers: [] }, TEST_ACTOR)
       // The write is sent just before, or just after, the migration's batch: the transaction sent second waits for the
       // first (on PGlite, its single connection; on Postgres, the revision row both lock first).
       const migrating: PgExecutor = {
@@ -412,7 +427,7 @@ describe('schema 6 (migration 0003)', () => {
     expect(await metaValue(exec, 'intakes_rev')).toBeNull()
 
     const { wrapped, batches } = recording(exec)
-    expect(await ensureSchema(wrapped)).toEqual({ state: 'ready', dbVersion: 6, appVersion: 6, minAppSchema: 3 })
+    expect(await ensureSchema(wrapped, 6)).toEqual({ state: 'ready', dbVersion: 6, appVersion: 6, minAppSchema: 3 })
     const migrationBatches = batches.filter((b) => b.some((t) => t.includes('antresol_concurrent_migration')))
     expect(migrationBatches).toHaveLength(1)
     expect(migrationBatches[0]!.join('\n')).toContain('CREATE TABLE "intakes"')
@@ -426,11 +441,11 @@ describe('schema 6 (migration 0003)', () => {
     expect(await storage.listIntakes(inv)).toEqual({ intakes: [], intakesRev: await metaValue(exec, 'intakes_rev') })
   })
 
-  it('an app of schema 4 reads and writes a schema-6 database', async () => {
+  it('an app of schema 4 reads and writes a schema-8 database', async () => {
     const exec = await makeExecutor()
     await ensureSchema(exec)
     const { storage, status } = await openPostgresStorage(exec, { appVersion: 4 })
-    expect(status).toEqual({ state: 'ready', dbVersion: 6, appVersion: 4, minAppSchema: 3 })
+    expect(status).toEqual({ state: 'ready', dbVersion: 8, appVersion: 4, minAppSchema: 3 })
     expect(storage.readOnly).toBe(false)
     const inv = newId()
     for (const c of sampleCommands(inv)) await storage.apply(c, TEST_ACTOR)
@@ -440,6 +455,114 @@ describe('schema 6 (migration 0003)', () => {
     const snapshot = await storage.loadInventory(inv)
     expect(snapshot.items.map((i) => i.name)).toContain('Fuse')
     expect(snapshot.items.map((i) => i.name)).toContain('TL072')
+  })
+})
+
+describe('schema 7 (migration 0004)', () => {
+  it('moves a schema-6 database to 7, keeping its data: folders and items gain icon, null', async () => {
+    const exec = await makeExecutor()
+    await ensureSchema(exec, 6)
+    const inv = newId()
+    await writeAsSchema3(exec, sampleCommands(inv))
+    const before = await exec.readBatch(schema3.snapshotStatements(inv))
+
+    const { wrapped, batches } = recording(exec)
+    expect(await ensureSchema(wrapped, 7)).toEqual({ state: 'ready', dbVersion: 7, appVersion: 7, minAppSchema: 3 })
+    const migrationBatches = batches.filter((b) => b.some((t) => t.includes('antresol_concurrent_migration')))
+    expect(migrationBatches).toHaveLength(1)
+    expect(migrationBatches[0]!.join('\n')).toContain('ADD COLUMN "icon"')
+    expect(await metaValue(exec, 'schema_version')).toBe('7')
+    expect(await metaValue(exec, 'min_app_schema')).toBe('3')
+    expect(await exec.readBatch(schema3.snapshotStatements(inv))).toEqual(before)
+    const { storage } = await openPostgresStorage(exec)
+    const snapshot = await storage.loadInventory(inv)
+    expect(snapshot.folders.length).toBeGreaterThan(0)
+    expect(snapshot.items.length).toBeGreaterThan(0)
+    expect([...snapshot.folders, ...snapshot.items].map((r) => r.icon)).toEqual([...snapshot.folders, ...snapshot.items].map(() => null))
+    // The migrated database takes icons.
+    await storage.apply({ type: 'item.update', id: snapshot.items[0]!.id, icon: 'microchip' }, TEST_ACTOR)
+    expect((await storage.loadInventory(inv)).items.find((i) => i.id === snapshot.items[0]!.id)!.icon).toBe('microchip')
+  })
+
+  it('adds folders.icon and items.icon: text, nullable, no default', async () => {
+    const exec = await makeExecutor()
+    await ensureSchema(exec)
+    const columns = await exec.query(
+      sql`select table_name, data_type, is_nullable, column_default from information_schema.columns
+          where column_name = 'icon' order by table_name`,
+    )
+    expect(columns).toEqual([
+      { table_name: 'folders', data_type: 'text', is_nullable: 'YES', column_default: null },
+      { table_name: 'items', data_type: 'text', is_nullable: 'YES', column_default: null },
+    ])
+  })
+
+  it('an app of schema 6 writes folders and items without the icon column to a schema-7 database', async () => {
+    const exec = await makeExecutor()
+    await ensureSchema(exec)
+    const inv = newId()
+    await writeAsSchema3(exec, sampleCommands(inv))
+    const { storage } = await openPostgresStorage(exec)
+    const snapshot = await storage.loadInventory(inv)
+    expect([...snapshot.folders, ...snapshot.items].every((r) => r.icon === null)).toBe(true)
+  })
+})
+
+describe('schema 8 (migration 0005)', () => {
+  it('moves a schema-7 database to 8, keeping its data: items and tags gain color, null', async () => {
+    const exec = await makeExecutor()
+    await ensureSchema(exec, 7)
+    const inv = newId()
+    await writeAsSchema3(exec, sampleCommands(inv))
+    const before = await exec.readBatch(schema3.snapshotStatements(inv))
+
+    const { wrapped, batches } = recording(exec)
+    expect(await ensureSchema(wrapped)).toEqual({ state: 'ready', dbVersion: 8, appVersion: 8, minAppSchema: 3 })
+    const migrationBatches = batches.filter((b) => b.some((t) => t.includes('antresol_concurrent_migration')))
+    expect(migrationBatches).toHaveLength(1)
+    expect(migrationBatches[0]!.join('\n')).toContain('ADD COLUMN "color"')
+    expect(await metaValue(exec, 'schema_version')).toBe('8')
+    expect(await metaValue(exec, 'min_app_schema')).toBe('3')
+    expect(await exec.readBatch(schema3.snapshotStatements(inv))).toEqual(before)
+    const { storage } = await openPostgresStorage(exec)
+    const snapshot = await storage.loadInventory(inv)
+    expect(snapshot.items.length).toBeGreaterThan(0)
+    expect(snapshot.tags.length).toBeGreaterThan(0)
+    expect([...snapshot.items, ...snapshot.tags].every((r) => r.color === null)).toBe(true)
+    await storage.apply({ type: 'item.update', id: snapshot.items[0]!.id, color: '#4F46E5' }, TEST_ACTOR)
+    expect((await storage.loadInventory(inv)).items.find((i) => i.id === snapshot.items[0]!.id)!.color).toBe('#4F46E5')
+  })
+
+  it('adds items.color and tags.color: text, nullable, no default, with a check on the form', async () => {
+    const exec = await makeExecutor()
+    await ensureSchema(exec)
+    const columns = await exec.query(
+      sql`select table_name, data_type, is_nullable, column_default from information_schema.columns
+          where column_name = 'color' order by table_name`,
+    )
+    expect(columns).toEqual([
+      { table_name: 'items', data_type: 'text', is_nullable: 'YES', column_default: null },
+      { table_name: 'tags', data_type: 'text', is_nullable: 'YES', column_default: null },
+    ])
+    const inv = newId()
+    await writeAsSchema3(exec, sampleCommands(inv))
+    const updates = (color: string) => [
+      sql`update items set color = ${color}`,
+      sql`update tags set color = ${color}`,
+    ]
+    for (const bad of ['#4f46e5', 'red']) for (const u of updates(bad)) await expect(exec.batch([u])).rejects.toThrow()
+    for (const u of updates('#4F46E5')) await exec.batch([u])
+  })
+
+  it('an app of schema 7 writes tags, items and folders without the color column to a schema-8 database', async () => {
+    const exec = await makeExecutor()
+    await ensureSchema(exec)
+    const inv = newId()
+    await writeAsSchema3(exec, sampleCommands(inv))
+    const { storage } = await openPostgresStorage(exec)
+    const snapshot = await storage.loadInventory(inv)
+    expect(snapshot.tags.length).toBeGreaterThan(0)
+    expect([...snapshot.items, ...snapshot.tags].every((r) => r.color === null)).toBe(true)
   })
 })
 

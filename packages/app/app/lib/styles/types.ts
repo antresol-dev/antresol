@@ -302,6 +302,9 @@ export interface AppSurfaces {
   chip: string
   /** Photo and thumbnail backing in lists (--thumb). Default: thumbs[0]. */
   thumb: string
+  /** The out-of-stock dot (--status-out). Decorative: the word "Out" always stands next to it, so it is not contrast
+   *  checked. Default: #B4BAC4 light, #6B7280 dark. */
+  statusOut: string
   /** An opaque surface: the desktop tree panel, badges, shadcn's --card (--surface). Default: `card` made opaque. */
   surface: string
   /** The desktop sidebar and the navigation drawer (--rail). A translucent tint is laid over pageColor (the rail is

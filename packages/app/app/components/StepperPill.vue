@@ -28,6 +28,8 @@ const locked = computed(() => !!workspace.state.readOnly || busy.value)
 const minusLabel = computed(() => (props.name === null ? t('stockActions.useOne') : t('stockActions.useOneOf', { name: props.name })))
 const plusLabel = computed(() => (props.name === null ? t('stockActions.addOne') : t('stockActions.addOneOf', { name: props.name })))
 
+// The tick comes with the click, when the finger lifts: a touch that turned into a scroll fires no click, so a scroll
+// that starts on a button stays silent. A disabled button gets no click either, so it never ticks.
 function press(step: 1 | -1): void {
   buzz()
   props.stepper.press(step)
@@ -56,7 +58,7 @@ const zone = 'pill-step size-11 shrink-0'
     <button
       v-if="amount"
       type="button"
-      class="pill-step pressable flex min-h-11 min-w-14 items-center justify-center rounded-none px-1 text-[15px] amount tabular-nums disabled:opacity-60"
+      class="pill-step pressable flex min-h-11 min-w-18 items-center justify-center rounded-none px-1 text-base amount tabular-nums disabled:opacity-60"
       :aria-label="$t('stock.countAmount', { amount: `${amount.number} ${amount.unit}` })"
       :disabled="!!workspace.state.readOnly"
       @click="emit('count')"

@@ -379,7 +379,7 @@ export function snapshotAfterIntake(s: InventorySnapshot, c: IntakeCommit): Inve
   const unarchive = new Set(c.unarchiveVariants)
   return {
     ...s,
-    tags: [...s.tags, ...tags.map((t): Tag => ({ id: t.id, inventoryId: c.inventoryId, name: t.name, ...NO_AUDIT }))],
+    tags: [...s.tags, ...tags.map((t): Tag => ({ id: t.id, inventoryId: c.inventoryId, name: t.name, color: null, ...NO_AUDIT }))],
     items: [
       ...s.items,
       ...items.map(
@@ -389,6 +389,8 @@ export function snapshotAfterIntake(s: InventorySnapshot, c: IntakeCommit): Inve
           folderId: n.folderId,
           name: n.name,
           description: null,
+          icon: null,
+          color: null,
           unitKey: n.unitKey,
           tagIds: n.tagIds,
           ...NO_AUDIT,

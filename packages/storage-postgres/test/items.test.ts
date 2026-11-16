@@ -8,7 +8,7 @@ import {
   type InventoryStorage,
 } from '@antresol/core'
 import { describe, expect, it } from 'vitest'
-import { attributeCreate, makeStorage, TEST_ACTOR, variantsCreate } from './helpers'
+import { attributeCreate, itemCreate, makeStorage, TEST_ACTOR, variantsCreate } from './helpers'
 
 async function setup(): Promise<{ storage: InventoryStorage; inv: string; t1: string; t2: string }> {
   const storage = await makeStorage()
@@ -479,5 +479,104 @@ describe('duplicate tag ids', () => {
     expect(await tags()).toEqual([t1])
     await storage.apply({ type: 'item.update', id, tagIds: [t2, t2, t1, t2] }, TEST_ACTOR)
     expect([...(await tags())].sort()).toEqual([t1, t2].sort())
+  })
+})
+
+describe('icons', () => {
+  async function setup() {
+    const storage = await makeStorage()
+    const inv = newId()
+    await storage.apply({ type: 'inventory.create', id: inv, name: 'A', description: null, currency: 'USD' }, TEST_ACTOR)
+    return { storage, inv }
+  }
+
+  it('an item is created without an icon, with one, changed, kept by other updates and cleared', async () => {
+    const { storage, inv } = await setup()
+    const [plain, iconic] = [newId(), newId()]
+    await storage.apply(itemCreate(inv, plain), TEST_ACTOR)
+    await storage.apply({ ...(itemCreate(inv, iconic, 'Chip') as Extract<Command, { type: 'item.create' }>), icon: 'microchip' }, TEST_ACTOR)
+    const icons = async () => Object.fromEntries((await storage.loadInventory(inv)).items.map((i) => [i.id, i.icon]))
+    expect(await icons()).toEqual({ [plain]: null, [iconic]: 'microchip' })
+    await storage.apply({ type: 'item.update', id: iconic, icon: 'cpu' }, TEST_ACTOR)
+    await storage.apply({ type: 'item.update', id: iconic, name: 'Chip 2' }, TEST_ACTOR)
+    expect((await icons())[iconic]).toBe('cpu')
+    await storage.apply({ type: 'item.update', id: iconic, icon: null }, TEST_ACTOR)
+    expect((await icons())[iconic]).toBeNull()
+  })
+
+  it('a folder is created without an icon, with one, changed, kept by other updates and cleared', async () => {
+    const { storage, inv } = await setup()
+    const [plain, iconic] = [newId(), newId()]
+    await storage.apply({ type: 'folder.create', id: plain, inventoryId: inv, parentId: null, name: 'P', description: null }, TEST_ACTOR)
+    await storage.apply({ type: 'folder.create', id: iconic, inventoryId: inv, parentId: null, name: 'I', description: null, icon: 'box' }, TEST_ACTOR)
+    const icons = async () => Object.fromEntries((await storage.loadInventory(inv)).folders.map((f) => [f.id, f.icon]))
+    expect(await icons()).toEqual({ [plain]: null, [iconic]: 'box' })
+    await storage.apply({ type: 'folder.update', id: iconic, icon: 'archive' }, TEST_ACTOR)
+    await storage.apply({ type: 'folder.update', id: iconic, name: 'I2' }, TEST_ACTOR)
+    expect((await icons())[iconic]).toBe('archive')
+    await storage.apply({ type: 'folder.update', id: iconic, icon: null }, TEST_ACTOR)
+    expect((await icons())[iconic]).toBeNull()
+  })
+
+  it('the patch rows of an item and a folder write carry the icon', async () => {
+    const { storage, inv } = await setup()
+    const [f, i] = [newId(), newId()]
+    const fr = await storage.apply({ type: 'folder.create', id: f, inventoryId: inv, parentId: null, name: 'F', description: null, icon: 'box' }, TEST_ACTOR)
+    expect(fr.patch!.folders!.find((x) => x.id === f)!.icon).toBe('box')
+    await storage.apply(itemCreate(inv, i), TEST_ACTOR)
+    const ir = await storage.apply({ type: 'item.update', id: i, icon: 'microchip' }, TEST_ACTOR)
+    expect(ir.patch!.items!.find((x) => x.id === i)!.icon).toBe('microchip')
+  })
+})
+
+describe('colours', () => {
+  async function setup() {
+    const storage = await makeStorage()
+    const inv = newId()
+    await storage.apply({ type: 'inventory.create', id: inv, name: 'A', description: null, currency: 'USD' }, TEST_ACTOR)
+    return { storage, inv }
+  }
+
+  it('an item is created without a colour, with one, changed, kept by other updates and cleared', async () => {
+    const { storage, inv } = await setup()
+    const [plain, tinted] = [newId(), newId()]
+    await storage.apply(itemCreate(inv, plain), TEST_ACTOR)
+    await storage.apply({ ...(itemCreate(inv, tinted, 'Chip') as Extract<Command, { type: 'item.create' }>), color: '#4F46E5' }, TEST_ACTOR)
+    const colors = async () => Object.fromEntries((await storage.loadInventory(inv)).items.map((i) => [i.id, i.color]))
+    expect(await colors()).toEqual({ [plain]: null, [tinted]: '#4F46E5' })
+    await storage.apply({ type: 'item.update', id: tinted, color: '#0D9488' }, TEST_ACTOR)
+    await storage.apply({ type: 'item.update', id: tinted, name: 'Chip 2' }, TEST_ACTOR)
+    expect((await colors())[tinted]).toBe('#0D9488')
+    const r = await storage.apply({ type: 'item.update', id: tinted, color: null }, TEST_ACTOR)
+    expect((await colors())[tinted]).toBeNull()
+    expect(r.patch!.items!.find((x) => x.id === tinted)!.color).toBeNull()
+  })
+
+  it('a lower-case hex from another client is stored in capitals', async () => {
+    const { storage, inv } = await setup()
+    const id = newId()
+    await storage.apply(itemCreate(inv, id), TEST_ACTOR)
+    await storage.apply({ type: 'item.update', id, color: '#4f46e5' }, TEST_ACTOR)
+    expect((await storage.loadInventory(inv)).items[0]!.color).toBe('#4F46E5')
+  })
+
+  it('a tag is created without a colour, with one, recoloured alone, renamed alone, and cleared', async () => {
+    const { storage, inv } = await setup()
+    const [plain, tinted] = [newId(), newId()]
+    await storage.apply({ type: 'tag.create', id: plain, inventoryId: inv, name: 'plain' }, TEST_ACTOR)
+    await storage.apply({ type: 'tag.create', id: tinted, inventoryId: inv, name: 'tinted', color: '#4F46E5' }, TEST_ACTOR)
+    const tags = async () => Object.fromEntries((await storage.loadInventory(inv)).tags.map((t) => [t.id, [t.name, t.color]]))
+    expect(await tags()).toEqual({ [plain]: ['plain', null], [tinted]: ['tinted', '#4F46E5'] })
+    const r = await storage.apply({ type: 'tag.update', id: tinted, color: '#0D9488' }, TEST_ACTOR)
+    expect((await tags())[tinted]).toEqual(['tinted', '#0D9488'])
+    expect(r.patch!.tags!.find((x) => x.id === tinted)!.color).toBe('#0D9488')
+    await storage.apply({ type: 'tag.update', id: tinted, name: 'renamed' }, TEST_ACTOR)
+    expect((await tags())[tinted]).toEqual(['renamed', '#0D9488'])
+    await storage.apply({ type: 'tag.update', id: tinted, name: 'both', color: '#DC2626' }, TEST_ACTOR)
+    expect((await tags())[tinted]).toEqual(['both', '#DC2626'])
+    await storage.apply({ type: 'tag.update', id: tinted, color: null }, TEST_ACTOR)
+    expect((await tags())[tinted]).toEqual(['both', null])
+    await storage.apply({ type: 'tag.rename', id: tinted, name: 'old way' }, TEST_ACTOR)
+    expect((await tags())[tinted]).toEqual(['old way', null])
   })
 })

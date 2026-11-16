@@ -57,10 +57,10 @@ describe('usePhotoSrc', () => {
 
     props.photo = { url: 'https://i.ibb.co/p/photo.webp', urls: COPIES }
     await nextTick()
-    expect(src.value).toBe('https://i.ibb.co/c/t.webp?antresol=thumb')
+    expect(src.value).toBe('https://i.ibb.co/c/m.webp?antresol=thumb')
     props.photo = { url: 'https://i.ibb.co/p/photo.webp', urls: COPIES.slice(0, 2) }
     await nextTick()
-    expect(src.value).toBe('https://i.ibb.co/c/m.webp')
+    expect(src.value).toBe('https://i.ibb.co/c/m.webp?antresol=thumb')
     props.size = 'full'
     await nextTick()
     expect(src.value).toBe('https://i.ibb.co/c/o.webp')

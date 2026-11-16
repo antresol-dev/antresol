@@ -716,6 +716,11 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     if (isConnected(statusOf(ref.sourceId))) await loadCurrent(true)
   }
 
+  async function cachedSnapshot(ref: InventoryRef): Promise<{ snapshot: InventorySnapshot; savedAt: string } | null> {
+    const cached = shownCopy(await db.getSnapshot({ sourceId: ref.sourceId, inventoryId: ref.inventoryId }))
+    return cached ? { snapshot: markRaw(cached.snapshot), savedAt: cached.savedAt } : null
+  }
+
   async function startFromCache(): Promise<void> {
     const [settings, configs, stored] = await Promise.all([db.getSettings(), db.getSources(), db.getListings()])
     state.persistent = db.persistent
@@ -1666,6 +1671,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
     },
     flushCache: saveShown,
     selectInventory,
+    cachedSnapshot,
     apply,
     applyTo,
     isBucketSaving: (itemId, variantId) => savingBuckets.has(bucketKey(itemId, variantId)),

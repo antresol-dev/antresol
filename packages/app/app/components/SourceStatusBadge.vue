@@ -13,7 +13,7 @@ const tone = computed(() =>
 </script>
 
 <template>
-  <span class="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold" :class="tone">
+  <span class="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold" :class="tone">
     {{ $t(`settings.sources.status.${status}`) }}
   </span>
 </template>

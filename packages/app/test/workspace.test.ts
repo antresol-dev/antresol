@@ -510,6 +510,27 @@ describe('workspace', () => {
     expect(after.snapshot.folders).toHaveLength(1)
   })
 
+  it('8b. cachedSnapshot reads the saved copy of another inventory without switching or the network', async () => {
+    const h = setup()
+    await h.seed(CS('one'), 'A-inv')
+    await h.seed(CS('two'), 'B-inv')
+    await h.db.putSource(config('s1', CS('one')))
+    await h.db.putSource(config('s2', CS('two')))
+    const ws = h.workspace()
+    await ws.start()
+    const current = ws.state.current!
+    const other = ws.state.inventories.find((e) => e.inventory.id !== current.inventoryId)!
+    expect(await ws.cachedSnapshot(other.ref)).toBeNull()
+    await ws.selectInventory(other.ref)
+    await ws.flushCache()
+    await ws.selectInventory(current)
+    const copy = await ws.cachedSnapshot(other.ref)
+    expect(copy?.snapshot.inventory.id).toBe(other.inventory.id)
+    expect(isReactive(copy?.snapshot)).toBe(false)
+    expect(typeof copy?.savedAt).toBe('string')
+    expect(ws.state.current).toEqual(current)
+  })
+
   it('8a. keeps the snapshot non-reactive after cache start, refresh, apply and select', async () => {
     const h = setup()
     const aId = await h.seed(CS('one'), 'A-inv')

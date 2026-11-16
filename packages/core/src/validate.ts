@@ -1,7 +1,7 @@
 import type { Command, PhotoFile } from './commands'
 import type { Id } from './ids'
 import { snapshotAfterIntake } from './intakes'
-import { isSourceUrl, MAX_NAME_LENGTH } from './limits'
+import { isColorHex, isIconName, isSourceUrl, MAX_NAME_LENGTH } from './limits'
 import { CURRENCIES } from './money'
 import {
   isDeleteHandle,
@@ -101,6 +101,7 @@ export function normalizeCommand(c: Command): Command {
   if (c.type === 'item.create' && c.initialReceipt) {
     out.initialReceipt = { ...c.initialReceipt, quantity: canon(c.initialReceipt.quantity) }
   }
+  if ('color' in c && typeof c.color === 'string') out.color = c.color.toUpperCase()
   if (c.type === 'item.create' || c.type === 'item.update') {
     set('tagIds', c.tagIds && [...new Set(c.tagIds)])
   }
@@ -148,6 +149,15 @@ function checkName(name: string | undefined) {
   const t = name.trim()
   if (!t) fail('name_required')
   if (t.length > MAX_NAME_LENGTH) fail('name_too_long')
+}
+
+function checkIcon(icon: unknown) {
+  // A command may come from untyped JSON (a replayed outbox, a draft): a number would pass the pattern as text.
+  if (icon != null && (typeof icon !== 'string' || !isIconName(icon))) fail('invalid_option')
+}
+
+function checkColor(color: unknown) {
+  if (color != null && (typeof color !== 'string' || !isColorHex(color))) fail('invalid_option')
 }
 
 /** numeric(20,6) holds absolute values below 10^14. */
@@ -481,12 +491,14 @@ function check(c: Command, s: Snap | null): void {
     case 'folder.create':
       needInventory(s, c.inventoryId)
       checkName(c.name)
+      checkIcon(c.icon)
       activeFolder(s, c.parentId)
       return
     case 'folder.update': {
       needFolder(s, c.id)
       if (folderArchived(s, c.id)) fail('archived')
       checkName(c.name)
+      checkIcon(c.icon)
       return
     }
     case 'folder.move':
@@ -501,6 +513,8 @@ function check(c: Command, s: Snap | null): void {
     case 'item.create':
       needInventory(s, c.inventoryId)
       checkName(c.name)
+      checkIcon(c.icon)
+      checkColor(c.color)
       activeFolder(s, c.folderId)
       if (!resolveUnit(c.unitKey, s.units)) fail('not_found')
       for (const t of c.tagIds) if (!s.tags.some((x) => x.id === t)) fail('not_found')
@@ -513,6 +527,8 @@ function check(c: Command, s: Snap | null): void {
     case 'item.update':
       activeItem(s, c.id)
       checkName(c.name)
+      checkIcon(c.icon)
+      checkColor(c.color)
       if (c.folderId !== undefined) activeFolder(s, c.folderId)
       if (c.unitKey !== undefined && !resolveUnit(c.unitKey, s.units)) fail('not_found')
       for (const t of c.tagIds ?? []) if (!s.tags.some((x) => x.id === t)) fail('not_found')
@@ -573,6 +589,7 @@ function check(c: Command, s: Snap | null): void {
     case 'tag.create':
       needInventory(s, c.inventoryId)
       checkName(c.name)
+      checkColor(c.color)
       // The tag this very command created (a retry after an unknown outcome, spec 4.7) is no duplicate of it.
       if (s.tags.some((t) => t.id !== c.id && same(t.name, c.name))) fail('duplicate_name')
       return
@@ -580,6 +597,12 @@ function check(c: Command, s: Snap | null): void {
       if (!s.tags.some((t) => t.id === c.id)) fail('not_found')
       checkName(c.name)
       if (s.tags.some((t) => t.id !== c.id && same(t.name, c.name))) fail('duplicate_name')
+      return
+    case 'tag.update':
+      if (!s.tags.some((t) => t.id === c.id)) fail('not_found')
+      checkName(c.name)
+      checkColor(c.color)
+      if (c.name !== undefined && s.tags.some((t) => t.id !== c.id && same(t.name, c.name!))) fail('duplicate_name')
       return
     case 'tag.delete':
       if (!s.tags.some((t) => t.id === c.id)) fail('not_found')

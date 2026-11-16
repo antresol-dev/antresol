@@ -59,6 +59,7 @@ export const folders = pgTable(
     parentId: uuid('parent_id'),
     name: text('name').notNull(),
     description: text('description'),
+    icon: text('icon'),
     ...audit(),
     ...archive(),
   },
@@ -78,9 +79,13 @@ export const tags = pgTable(
       .notNull()
       .references(() => inventories.id, { onDelete: 'cascade' }),
     name: text('name').notNull(),
+    color: text('color'),
     ...audit(),
   },
-  (t) => [index('tags_inventory_id_idx').on(t.inventoryId)],
+  (t) => [
+    index('tags_inventory_id_idx').on(t.inventoryId),
+    check('tags_color_check', sql`${t.color} ~ '^#[0-9A-F]{6}$'`),
+  ],
 )
 
 export const attributes = pgTable(
@@ -130,6 +135,8 @@ export const items = pgTable(
     folderId: uuid('folder_id').references(() => folders.id),
     name: text('name').notNull(),
     description: text('description'),
+    icon: text('icon'),
+    color: text('color'),
     unitKey: text('unit_key').notNull().default('pcs'),
     ...audit(),
     ...archive(),
@@ -138,6 +145,7 @@ export const items = pgTable(
     index('items_inventory_id_idx').on(t.inventoryId),
     index('items_folder_id_idx').on(t.folderId),
     index('items_archive_id_idx').on(t.archiveId),
+    check('items_color_check', sql`${t.color} ~ '^#[0-9A-F]{6}$'`),
   ],
 )
 

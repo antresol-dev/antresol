@@ -23,6 +23,8 @@ export interface Folder extends Audited, Archivable {
   parentId: Id | null
   name: string
   description: string | null
+  /** An icon name (isIconName) or null. */
+  icon: string | null
 }
 export interface Item extends Audited, Archivable {
   id: Id
@@ -30,6 +32,9 @@ export interface Item extends Audited, Archivable {
   folderId: Id | null
   name: string
   description: string | null
+  icon: string | null
+  /** A colour as #RRGGBB in capitals (isColorHex), or null: the item takes a colour by its id. */
+  color: string | null
   unitKey: string
   tagIds: Id[]
 }
@@ -45,6 +50,8 @@ export interface Tag extends Audited {
   id: Id
   inventoryId: Id
   name: string
+  /** A colour as #RRGGBB in capitals (isColorHex), or null: a grey chip. */
+  color: string | null
 }
 export type AttributeKind = 'text' | 'enum' | 'number'
 export interface Attribute extends Audited {

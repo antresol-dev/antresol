@@ -53,10 +53,10 @@ async function choose(value: unknown): Promise<void> {
         :style="scene.vars"
         class="style-card group relative block h-24 min-w-0 cursor-pointer overflow-hidden rounded-card text-left focus-visible:outline-offset-[6px] data-[state=checked]:ring-2 data-[state=checked]:ring-ring data-[state=checked]:ring-offset-2 data-[state=checked]:ring-offset-background"
       >
-        <span class="style-card-page absolute inset-0 grid content-between p-2.5" aria-hidden="true">
+        <span class="style-card-page absolute inset-0 grid content-between p-3" aria-hidden="true">
           <span class="style-card-label truncate">{{ scene.label }}</span>
           <span class="style-card-box flex items-center justify-between gap-2 px-2 py-1.5">
-            <span class="style-card-chip h-3.5 w-8" />
+            <span class="style-card-chip h-4 w-8" />
             <span class="style-card-button h-5 w-11" />
           </span>
         </span>

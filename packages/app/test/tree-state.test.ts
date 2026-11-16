@@ -1,7 +1,7 @@
 import { newId, type InventorySnapshot, type InventoryStorage } from '@antresol/core'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
-import { loadTreeOpen, openPath, rowClickAction, saveTreeOpen, toggleOpen, treeRows } from '../app/lib/tree-state'
+import { collapseAll, expandAll, longPressExpands, loadTreeOpen, openPath, rowClickAction, saveTreeOpen, toggleOpen, treeRows } from '../app/lib/tree-state'
 import type { SourceConfig } from '../app/lib/types'
 
 const cfg: SourceConfig = {
@@ -91,6 +91,31 @@ describe('treeRows', () => {
     const rows = treeRows(snap, { [opamps]: true, [ics]: true }, null)
     expect(rows[0]!.children[0]!.hasChildren).toBe(false)
     expect(rows[0]!.children[0]!.open).toBe(false)
+  })
+
+  it('a long press expands only a closed folder with children', () => {
+    expect(longPressExpands(true, false)).toBe(true)
+    expect(longPressExpands(true, true)).toBe(false)
+    expect(longPressExpands(false, false)).toBe(false)
+  })
+
+  it('collapseAll closes everything, expandAll opens every folder with children', () => {
+    expect(collapseAll()).toEqual({})
+    const all = expandAll(snap)
+    expect(all[ics]).toBe(true)
+    expect(all[passive]).toBe(true)
+    expect(all[opamps]).toBeUndefined()
+    const rows = treeRows(snap, all, null)
+    const walk = (rs: ReturnType<typeof treeRows>): boolean => rs.every((r) => (!r.hasChildren || r.open) && walk(r.children))
+    expect(walk(rows)).toBe(true)
+  })
+
+  it('collapseAll and expandAll persist like toggles', () => {
+    vi.stubGlobal('localStorage', memoryStorage())
+    saveTreeOpen(inventoryId, expandAll(snap))
+    expect(Object.keys(loadTreeOpen(inventoryId)).length).toBeGreaterThan(0)
+    saveTreeOpen(inventoryId, collapseAll())
+    expect(loadTreeOpen(inventoryId)).toEqual({})
   })
 
   it('toggles a folder open and closed', () => {

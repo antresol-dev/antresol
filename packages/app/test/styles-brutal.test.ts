@@ -100,20 +100,23 @@ describe.each(MODES)('Neo-brutal equals the mock-up (board S6): %s', (mode) => {
 
   it('controls: lift on the ink line, a pale role colour under the pointer, sink into the shadow when pressed', () => {
     const line = mode === 'dark' ? '#F6EFDF' : '#111111'
+    const shadow = line
     const surf = mode === 'dark' ? '#222228' : '#FFFFFF'
     const ring = `inset 0 0 0 2px ${line}`
-    expect(t.kinds.btn.n).toEqual({ bg: surf, img: 'none', sh: `${ring}, 4px 4px 0 ${line}`, fg: m.fg, tf: 'none' })
-    expect(t.kinds.btn.p).toEqual({ bg: '#5B8CFF', img: 'none', sh: `${ring}, 0 0 0 ${line}`, fg: '#111111', tf: 'translate(4px, 4px)' })
+    expect(t.kinds.btn.n).toEqual({ bg: surf, img: 'none', sh: `${ring}, 4px 4px 0 ${shadow}`, fg: m.fg, tf: 'none' })
+    expect(t.kinds.btn.p).toEqual({ bg: '#5B8CFF', img: 'none', sh: `${ring}, 0 0 0 ${shadow}`, fg: '#111111', tf: 'translate(4px, 4px)' })
     expect(t.kinds.ib.h.bg).toBe(mode === 'dark' ? '#ffdd6f' : '#ffe99f')
-    expect(t.kinds.add.p).toEqual({ bg: '#FF8C42', img: 'none', sh: `${ring}, 0 0 0 ${line}`, fg: '#111111', tf: 'translate(3px, 3px)' })
-    expect(t.kinds.primary.n).toEqual({ bg: '#FFD23F', img: 'none', sh: `${ring}, 4px 4px 0 ${line}`, fg: '#111111', tf: 'none' })
+    expect(t.kinds.add.p).toEqual({ bg: '#FF8C42', img: 'none', sh: `${ring}, 0 0 0 ${shadow}`, fg: '#111111', tf: 'translate(3px, 3px)' })
+    expect(t.kinds.primary.n).toEqual({ bg: '#FFD23F', img: 'none', sh: `${ring}, 4px 4px 0 ${shadow}`, fg: '#111111', tf: 'none' })
     expect(t.kinds.primary.h.bg).toBe('#ffe079')
     expect(t.kinds.step.p.bg).toBe('#3DDCAA')
     expect(t.kinds.ghost.p.bg).toBe('#FFD23F')
     expect(t.stepSel.h.bg).toBe('#9eeed5')
     expect(t.ghostSel.h.bg).toBe('rgba(255,255,255,0.5)')
     expect(t.pillSelBg).toBe('#FFFFFF')
-    expect(t.pillSelSh).toBe('inset 0 0 0 2px #111111, 3px 3px 0 #111111')
+    // Plan 12 (F8): the stepper is nested in a lined panel, so its line is 1.5 px.
+    expect(t.pillSh).toBe(`inset 0 0 0 1.5px ${line}, 3px 3px 0 ${shadow}`)
+    expect(t.pillSelSh).toBe('inset 0 0 0 1.5px #111111, 3px 3px 0 #111111')
   })
 })
 
@@ -125,7 +128,6 @@ describe('Neo-brutal: a fixed Memphis palette (spec §4)', () => {
       expect(t.kinds.primary.n.bg, 'primary: yellow').toBe('#FFD23F')
       expect(t.card, 'card: pink').toBe('#FF7AB6')
       expect(t.cur, 'selected row: blue').toBe('#5B8CFF')
-      expect(t.photo, 'photo: violet').toBe('#B08CFF')
       expect(t.chips, 'chips from blue').toEqual(['#5B8CFF', '#3DDCAA', '#FF8C42', '#B08CFF'])
       expect(t.thumbs, 'thumbnails from mint').toEqual(['#3DDCAA', '#FF8C42', '#FF7AB6'])
     }
@@ -163,9 +165,10 @@ describe('Neo-brutal: shades changed for contrast (spec §8), and app surfaces t
     const t = build(mode, 'blue')
     const dark = mode === 'dark'
     const line = dark ? '#F6EFDF' : '#111111'
+    const shadow = line
     expect(t.sheet).toBe(t.list)
     expect(t.sheetLine).toBe(line)
-    expect(t.sheetSh).toBe(`inset 0 0 0 1px ${line}, 5px 5px 0 ${line}`)
+    expect(t.sheetSh).toBe(`inset 0 0 0 1px ${line}, 5px 5px 0 ${shadow}`)
     expect(t.surface).toBe(dark ? '#222228' : '#FFFFFF')
     expect(t.chip).toBe(dark ? '#313032' : '#ece2cc')
     expect(t.rowHover).toBe(dark ? '#413b2b' : '#ffe99f')
@@ -258,5 +261,42 @@ describe('Neo-brutal: every Memphis colour carries ink text at 4.5:1 (cards, chi
     }
     for (const c of t.chips) for (const f of t.chipFgs) expect(contrast(f, c), `${f} on chip ${c}`).toBeGreaterThanOrEqual(4.5)
     for (const c of t.thumbs) expect(contrast(t.thumbFg, c), `thumbnail ${c}`).toBeGreaterThanOrEqual(4.5)
+  })
+})
+
+describe('Neo-brutal: plan 12 (F8)', () => {
+  it('dark: the hard shadow and the line are both cream (plan 13 takes F8\'s black shadow back)', () => {
+    const t = build('dark', 'blue')
+    for (const [name, sh] of [['card', t.cardSh], ['list', t.listSh], ['pop', t.popSh], ['photo', t.photoSh], ['thumb', t.thumbSh], ['btn', t.kinds.btn.n.sh], ['ib', t.kinds.ib.n.sh]] as const) {
+      expect(sh, name).toMatch(/^inset 0 0 0 2px #F6EFDF, \dpx \dpx 0 #F6EFDF$/)
+    }
+    expect(t.list).toBe('#222228')
+  })
+
+  it.each(MODES)('%s: the empty photo block is neutral (the panel with a faint hatch), its placeholder in muted text', (mode) => {
+    const t = build(mode, 'blue')
+    expect(t.photo.startsWith('repeating-linear-gradient(135deg, ')).toBe(true)
+    expect(t.photo.endsWith(', ' + t.list)).toBe(true)
+    expect(t.photoFg).toBe(t.muted)
+    expect(contrast(t.photoFg, t.list)).toBeGreaterThanOrEqual(4.5)
+  })
+
+  it.each(MODES)('%s: text on every bright plate is ink (cards in turn, chips and gallery)', (mode) => {
+    const t = build(mode, 'blue')
+    const plates: [string, string, string][] = [
+      ...[t.card, ...t.chips].map((bg) => ['cardFg', t.cardFg, bg] as [string, string, string]),
+      ...t.chips.map((bg) => ['chipFgs[0]', t.chipFgs[0]!, bg] as [string, string, string]),
+      ...t.thumbs.map((bg) => ['thumbFg', t.thumbFg, bg] as [string, string, string]),
+    ]
+    for (const [label, fg, bg] of plates) {
+      expect(fg, `${label} on ${bg}`).toBe('#111111')
+      expect(contrast(fg, bg), `${label} on ${bg}`).toBeGreaterThanOrEqual(4.5)
+    }
+  })
+
+  it('controls nested in a card or the selected row draw a 1.5 px line (brutal.css), the card its 2 px', () => {
+    expect(brutalCss()).toMatch(/--brutal-ring: inset 0 0 0 1\.5px var\(--brutal-ink\)/)
+    expect(brutalCss()).toMatch(/\.pill > \.pill-step \+ \.pill-step\s*\{\s*border-left-color: var\(--brutal-ink\)/)
+    expect(build('light', 'blue').cardSh.startsWith('inset 0 0 0 2px ')).toBe(true)
   })
 })

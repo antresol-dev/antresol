@@ -28,7 +28,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
       props.class,
     )"
   >
-    <span class="pointer-events-none absolute left-3 flex size-3.5 items-center justify-center">
+    <span class="pointer-events-none absolute left-3 flex size-4 items-center justify-center">
       <DropdownMenuItemIndicator>
         <slot name="indicator-icon">
           <Circle class="size-2 fill-current" />

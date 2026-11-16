@@ -22,19 +22,23 @@ const MOCKUP: Record<Mode, Record<string, string>> = {
     page: '#F7F7F8',
     card: '#FFFFFF',
     cardR: '8px',
-    cardSh: 'inset 0 0 0 1px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04)',
+    // Plan 12 (F7): the hairline alone, no elevation (the mock-up added 0 1px 2px rgba(0,0,0,0.04)).
+    cardSh: 'inset 0 0 0 1px rgba(0,0,0,0.08)',
     primary: '#4F46E5',
     pop: 'rgba(255,255,255,0.92)',
     popR: '8px',
   },
   dark: {
-    page: '#08090A',
-    card: '#101113',
+    // Plan 12 (F7): the page #0B0B0D, cards about 5 % OKLCH lightness up, a hairline that reads at 10 % (the mock-up:
+    // #08090A, #101113, 7 %).
+    page: '#0B0B0D',
+    card: '#161618',
     cardR: '8px',
-    cardSh: 'inset 0 0 0 1px rgba(255,255,255,0.07)',
+    cardSh: 'inset 0 0 0 1px rgba(255,255,255,0.1)',
     // Linear keeps its saturated brand fill on dark too.
     primary: '#4F46E5',
-    pop: 'rgba(22,23,26,0.94)',
+    // A step above the card (mock-up rgba(22,23,26,0.94), darker than the new card).
+    pop: 'rgba(30,30,34,0.94)',
     popR: '8px',
   },
 }
@@ -57,8 +61,9 @@ describe.each(['light', 'dark'] as const)('Linear, %s, default accent: the mock-
     expect(t.tr).toBe(TR)
   })
 
-  it('hairlines and 6/8 px corners; menus blurred', () => {
-    expect([t.ibR, t.btnR, t.primR, t.ghostR, t.popItemR, t.pillR, t.curR, t.thumbR, t.photoR, t.listR, t.chipR]).toEqual(['6px', '6px', '6px', '6px', '6px', '6px', '6px', '6px', '8px', '8px', '999px'])
+  it('hairlines and 4/6/8 px corners; menus blurred', () => {
+    expect([t.ibR, t.btnR, t.primR, t.ghostR, t.popItemR, t.pillR, t.curR, t.thumbR, t.photoR, t.listR, t.chipR]).toEqual(['6px', '6px', '6px', '6px', '6px', '6px', '6px', '6px', '8px', '8px', '4px'])
+    expect([t.cardR, t.smallR]).toEqual(['8px', '4px'])
     expect(t.popBlur).toBe('blur(12px)')
     expect([t.winBlur, t.hdrBlur, t.surfBlur, t.ctrlBlur, t.led]).toEqual(['none', 'none', 'none', 'none', false])
     expect(t.curM).toBe('0 6px')
@@ -89,9 +94,33 @@ describe('Linear: app surfaces the mock-up does not draw', () => {
     const l = build('light', 'indigo')
     const d = build('dark', 'indigo')
     expect([l.chip, l.fieldLine, l.border]).toEqual(['#EFEFF1', 'rgba(0,0,0,0.15)', 'rgba(0,0,0,0.08)'])
-    expect([d.chip, d.fieldLine, d.border]).toEqual(['#202124', 'rgba(255,255,255,0.13)', 'rgba(255,255,255,0.07)'])
+    expect([d.chip, d.fieldLine, d.border]).toEqual(['#26262A', 'rgba(255,255,255,0.16)', 'rgba(255,255,255,0.1)'])
     // The tags keep the mock-up's: the surface with a ring.
     expect([l.chips, l.chipSh]).toEqual([['#FFFFFF'], 'inset 0 0 0 1px rgba(0,0,0,0.08)'])
+  })
+})
+
+describe('Linear set apart from Base (plan 12, F7)', () => {
+  it.each(['light', 'dark'] as const)('%s: no elevation: cards and lists are their hairline in the border colour, rows split by 1 px lines', (mode) => {
+    const t = build(mode, 'indigo')
+    expect(t.cardSh).toBe(`inset 0 0 0 1px ${t.border}`)
+    expect(t.listSh).toBe(t.cardSh)
+    expect(t.divider).toMatch(/^1px solid /)
+  })
+
+  it('dark: cards about 5 % OKLCH lightness above the page', () => {
+    const d = build('dark', 'indigo')
+    const L = (hex: string) => {
+      const { r, g, b } = parseColor(hex)
+      const lin = (v: number) => (v / 255 <= 0.04045 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4)
+      const [R, G, B] = [lin(r), lin(g), lin(b)]
+      const l = Math.cbrt(0.4122214708 * R + 0.5363325363 * G + 0.0514459929 * B)
+      const m = Math.cbrt(0.2119034982 * R + 0.6806995451 * G + 0.1073969566 * B)
+      const s = Math.cbrt(0.0883024619 * R + 0.2817188376 * G + 0.6299787005 * B)
+      return 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s
+    }
+    expect(L(d.card) - L(d.pageColor)).toBeGreaterThan(0.045)
+    expect(L(d.card) - L(d.pageColor)).toBeLessThan(0.06)
   })
 })
 

@@ -77,8 +77,8 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <form class="mt-3.5 grid gap-3.5" novalidate @submit.prevent="submit">
-    <div v-for="a in axes" :key="a.id" class="grid gap-1.5">
+  <form class="mt-4 grid gap-4" novalidate @submit.prevent="submit">
+    <div v-for="a in axes" :key="a.id" class="grid gap-2">
       <Label :for="`variant-axis-${a.id}`">{{ a.name }}</Label>
       <AttributeValueField
         :id="`variant-axis-${a.id}`"
@@ -89,7 +89,7 @@ async function submit(): Promise<void> {
       />
       <p v-if="fieldErrors[a.id]" role="alert" class="field-text text-sm text-destructive">{{ $t(fieldErrors[a.id]!) }}</p>
     </div>
-    <div class="grid gap-1.5">
+    <div class="grid gap-2">
       <Label for="variant-description">
         {{ $t('variantForm.description') }}
         <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>

@@ -13,6 +13,7 @@ import {
 import { KEYBOARD_SETTLE_MS, keyboardWatch, opensKeyboard, revealDelta } from '~/lib/keyboard'
 import { keepOpener, waitsForKeyboard } from '~/lib/sheet-close'
 import { isSubmitChord, pressPrimary } from '~/lib/sheet-keys'
+import { sheetDragOffset, sheetSwipeCanStart, swipeDownCloses } from '~/lib/swipe'
 
 const props = defineProps<{
   title: string
@@ -155,6 +156,79 @@ function submitChord(event: KeyboardEvent): void {
   if (pressPrimary(event.currentTarget)) event.preventDefault()
 }
 
+// Phone: swipe the sheet down to close it (like the search palette). It follows the finger and goes through the same
+// `open = false` as the close button, so focus return and the keyboard wait stay as they are. Under reduced motion it
+// doesn't follow, it just closes on release past the threshold.
+const wide = useMediaQuery('(min-width: 768px)')
+const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)')
+const dragY = ref(0)
+let swipeStart: { x: number; y: number } | null = null
+let swipeAborted = false
+
+function scrolledDown(target: Element | null, root: HTMLElement): boolean {
+  for (let el = target; el; el = el.parentElement) {
+    if (el.scrollTop > 0) return true
+    if (el === root) break
+  }
+  return false
+}
+
+function onTouchStart(event: TouchEvent): void {
+  swipeStart = null
+  swipeAborted = false
+  dragY.value = 0
+  const root = event.currentTarget
+  if (!(root instanceof HTMLElement) || event.touches.length !== 1) return
+  const touch = event.touches[0]!
+  const target = event.target instanceof Element ? event.target : null
+  const canStart = sheetSwipeCanStart({
+    phone: !wide.value,
+    locked: !!props.locked,
+    scrolledDown: scrolledDown(target, root),
+    onControl: !!target?.closest('input, textarea, select, [contenteditable], [role="slider"], [data-no-sheet-swipe]'),
+    hasSelection: !(globalThis.getSelection()?.isCollapsed ?? true),
+  })
+  if (canStart) swipeStart = { x: touch.clientX, y: touch.clientY }
+}
+
+function onTouchMove(event: TouchEvent): void {
+  if (!swipeStart || swipeAborted) return
+  if (props.locked || event.touches.length !== 1) return endSwipe()
+  const touch = event.touches[0]!
+  const dx = touch.clientX - swipeStart.x
+  const dy = touch.clientY - swipeStart.y
+  // Up (past a 6 px dead zone) or across: the finger is scrolling or doing something else.
+  if (dy < -6 || (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10)) {
+    swipeAborted = true
+    dragY.value = 0
+    return
+  }
+  if (!reducedMotion.value) dragY.value = sheetDragOffset(dy)
+}
+
+function endSwipe(): void {
+  swipeStart = null
+  swipeAborted = false
+  dragY.value = 0
+}
+
+function onTouchEnd(event: TouchEvent): void {
+  const start = swipeStart
+  const aborted = swipeAborted
+  const touch = event.changedTouches[0]
+  const closes = !!start && !aborted && !!touch && !props.locked && swipeDownCloses(start, { x: touch.clientX, y: touch.clientY }, false)
+  swipeStart = null
+  swipeAborted = false
+  // Closing keeps the offset: the slide-out leaves from where the finger let go. Otherwise it springs back.
+  if (closes) open.value = false
+  else dragY.value = 0
+}
+
+// A reopened sheet starts in place.
+watch(open, (isOpen) => {
+  if (isOpen) dragY.value = 0
+})
+
 function refuseWhileLocked(event: Event): void {
   if (props.locked) event.preventDefault()
 }
@@ -176,24 +250,33 @@ function returnFocus(event: Event): void {
 <template>
   <Dialog :open="shown" @update:open="open = $event">
     <!-- A bottom sheet below 768 px that slides up, a centred window from 768 px that scales in; no movement under
-         reduced motion. No transitions on it: the keyboard changes its max height, and that must not animate. -->
+         reduced motion. Only its transform transitions (the swipe-down spring-back): the keyboard changes its max height, and that must not animate. -->
     <DialogContent
       :show-close-button="false"
-      class="max-h-[calc(100dvh-1rem)] overflow-y-auto top-auto bottom-0 left-0 max-w-full translate-x-0 translate-y-0 rounded-b-none rounded-t-card border-x-0 border-b-0 p-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] outline-none motion-safe:data-[state=open]:animate-sheet-in motion-safe:data-[state=closed]:animate-sheet-out motion-reduce:animate-none sm:max-w-full md:top-1/2 md:bottom-auto md:left-1/2 md:max-w-[480px] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-card md:border md:pb-4 md:motion-safe:data-[state=open]:animate-pop-in md:motion-safe:data-[state=closed]:animate-pop-out"
+      class="max-h-[calc(100dvh-1rem)] overflow-y-auto overscroll-y-contain top-auto bottom-0 left-0 max-w-full translate-x-0 translate-y-0 rounded-b-none rounded-t-card border-x-0 border-b-0 p-5 pb-[calc(1.5rem+env(safe-area-inset-bottom))] outline-none motion-safe:data-[state=open]:animate-sheet-in motion-safe:data-[state=closed]:animate-sheet-out motion-reduce:animate-none sm:max-w-full md:top-1/2 md:bottom-auto md:left-1/2 md:max-w-[480px] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-card md:border md:pb-5 md:motion-safe:data-[state=open]:animate-pop-in md:motion-safe:data-[state=closed]:animate-pop-out"
       :inert="leaving || undefined"
       :class="leaving && 'pointer-events-none'"
-      :style="leavingHeight === null ? undefined : { height: `${leavingHeight}px` }"
+      :style="{
+        ...(leavingHeight === null ? undefined : { height: `${leavingHeight}px` }),
+        ...(dragY > 0 ? { transform: `translateY(${dragY}px)` } : undefined),
+        // Back to place after a short drag: a spring, not a jump (never while the finger is down).
+        ...(dragY === 0 && !reducedMotion ? { transition: 'transform var(--dur-base) var(--ease-standard)' } : undefined),
+      }"
       @escape-key-down="refuseWhileLocked"
       @pointer-down-outside="refuseWhileLocked"
       @interact-outside="refuseWhileLocked"
       @open-auto-focus="focusInitial"
       @close-auto-focus="returnFocus"
+      @touchstart.passive="onTouchStart"
+      @touchmove.passive="onTouchMove"
+      @touchend.passive="onTouchEnd"
+      @touchcancel.passive="endSwipe"
       @keydown="submitChord"
       @focusout="noteFieldLeft"
     >
       <!-- pr-10: the title stays clear of the close button. -->
       <DialogHeader class="pr-10 text-left">
-        <DialogTitle class="text-lg font-bold tracking-[-0.02em]">{{ title }}</DialogTitle>
+        <DialogTitle class="text-lg font-semibold tracking-[-0.02em]">{{ title }}</DialogTitle>
         <DialogDescription :class="description ? 'text-subtle-foreground' : 'sr-only'">
           {{ description ?? title }}
         </DialogDescription>

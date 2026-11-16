@@ -293,7 +293,7 @@ describe('buildIntakeCommit', () => {
 })
 
 describe('tags of new items', () => {
-  const tag = (id: string, name: string) => ({ id, inventoryId: 'inv', name, createdAt: '', updatedAt: '', createdBy: '', updatedBy: '' })
+  const tag = (id: string, name: string) => ({ id, inventoryId: 'inv', name, color: null, createdAt: '', updatedAt: '', createdBy: '', updatedBy: '' })
   const base = () => ({ ...electronics(), tags: [tag('smd', 'SMD')] })
   const tagged = (tagIds: string[] | undefined, newTags: { id: string; name: string }[] | undefined, lines = [line('NEW')]) => ({
     ...draft(lines, [{ ...resistorItem(), attributes: [], ...(tagIds ? { tagIds } : {}) }]),

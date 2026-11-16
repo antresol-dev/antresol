@@ -10,6 +10,8 @@ export type PhotoSize = 'thumb' | 'card' | 'full'
 export type PhotoRef = { url: string; urls?: Rendition[] | null }
 
 const SIDE: Record<PhotoSize, number> = { thumb: 160, card: 800, full: 2048 }
+/** An uncropped copy for thumb should reach this many pixels per thumb pixel on its short side. */
+const THUMB_DENSITY = 2
 
 export function isDeviceUrl(url: string): boolean {
   return url.startsWith('device:')
@@ -25,16 +27,21 @@ export function isPhotoHostUrl(url: string): boolean {
 }
 
 /** The stored copy to show at a size (spec 6): the smallest by area whose side reaches the size, else the largest there is.
- *  Only `inside` copies serve card and full (a `cover` copy is cropped); thumb takes any. A copy on a foreign host, or one
- *  core's parseRendition refuses, is never chosen (reads drop those, but an inventory saved on the device may be older);
- *  `urls` that is not a list is none. null: no usable copy, the caller falls back to the url. */
+ *  Only `inside` copies serve card and full (a `cover` copy is cropped by the host, anchored where it likes). Thumb prefers
+ *  `inside` copies too, so CSS centre-crops them like the card: the smallest whose short side reaches twice the thumb's
+ *  (screen density), else the largest inside copy; a `cover` copy serves thumb only when there is no inside one. A copy on
+ *  a foreign host, or one core's parseRendition refuses, is never chosen (reads drop those, but an inventory saved on the
+ *  device may be older); `urls` that is not a list is none. null: no usable copy, the caller falls back to the url. */
 export function pickRendition(urls: unknown, size: PhotoSize): Rendition | null {
-  const allowed = (Array.isArray(urls) ? urls : []).filter(
-    (r): r is Rendition => parseRendition(r) !== null && isPhotoHostUrl(r.url) && (size === 'thumb' || r.fit === 'inside'),
+  const usable = (Array.isArray(urls) ? urls : []).filter(
+    (r): r is Rendition => parseRendition(r) !== null && isPhotoHostUrl(r.url),
   )
+  const inside = usable.filter((r) => r.fit === 'inside')
+  const allowed = size === 'thumb' && inside.length === 0 ? usable : inside
   const side = (r: Rendition) => (size === 'thumb' ? Math.min(r.width, r.height) : Math.max(r.width, r.height))
   const area = (r: Rendition) => r.width * r.height
-  const big = allowed.filter((r) => side(r) >= SIDE[size])
+  const need = size === 'thumb' && allowed === inside ? THUMB_DENSITY * SIDE.thumb : SIDE[size]
+  const big = allowed.filter((r) => side(r) >= need)
   if (big.length > 0) return big.reduce((a, b) => (area(b) < area(a) ? b : a))
   if (allowed.length > 0) return allowed.reduce((a, b) => (area(b) > area(a) ? b : a))
   return null
@@ -43,9 +50,9 @@ export function pickRendition(urls: unknown, size: PhotoSize): Rendition | null 
 /** Query the service worker caches with the thumbnails (nuxt.config.ts matches it): ImgBB has no size in its urls and
  *  ignores the query. Only hosts where this was checked get it; today that is ImgBB. */
 const THUMB_MARK = '?antresol=thumb'
-/** Only a small copy is marked: one picked for thumb for want of a thumb copy (an original) stays out of the 600
- *  thumbnails. */
-const THUMB_MARK_MAX_SIDE = 2 * SIDE.thumb
+/** Only a small copy is marked: the ~320-640 px copy a thumb takes. A big one picked for thumb for want of a smaller copy
+ *  (an original) stays out of the 600 thumbnails. */
+const THUMB_MARK_MAX_SIDE = 4 * SIDE.thumb
 
 /** `url` without the thumbnail cache mark displayablePhotoUrl may have put on it. */
 export function withoutThumbMark(url: string): string {

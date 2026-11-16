@@ -31,11 +31,11 @@ describe('itemView with axes', () => {
 
   it('sorts variants by their axis values, not by creation, and labels them', () => {
     const v = itemView(axisSnapshot(), 'R')!
-    expect(v.buckets.map((b) => b.name)).toEqual(['1 kΩ', '10 kΩ'])
+    expect(v.buckets.map((b) => b.name)).toEqual(['1 kΩ', '10 kΩ'])
     expect(v.buckets[0]).toMatchObject({
       variantId: 'r1k',
       quantity: '2',
-      values: [{ attributeId: 'res', name: 'Resistance', value: '1000', display: '1 kΩ' }],
+      values: [{ attributeId: 'res', name: 'Resistance', value: '1000', display: '1 kΩ' }],
       incomplete: false,
     })
     expect(v.hasVariants).toBe(true)
@@ -44,8 +44,8 @@ describe('itemView with axes', () => {
   it('marks a variant with an empty axis as incomplete', () => {
     const v = itemView(axisSnapshot(), 'C')!
     const byId = Object.fromEntries(v.buckets.map((b) => [b.variantId, b]))
-    expect(byId.c50).toMatchObject({ name: '100 nF · 50 V', incomplete: false })
-    expect(byId.c16).toMatchObject({ name: '100 nF · —', incomplete: true })
+    expect(byId.c50).toMatchObject({ name: '100 nF · 50 V', incomplete: false })
+    expect(byId.c16).toMatchObject({ name: '100 nF · —', incomplete: true })
     expect(byId.c16!.values[1]).toEqual({ attributeId: 'volt', name: 'Voltage', value: null, display: '—' })
   })
 
@@ -62,19 +62,19 @@ describe('variant labels elsewhere', () => {
       movement('m2', 'r1k', { kind: 'transfer', quantity: '-1', transferId: 't', seq: 3 }),
       movement('m3', 'r10k', { kind: 'transfer', quantity: '1', transferId: 't', seq: 3 }),
     ])
-    expect(rows[0]).toMatchObject({ variantName: '4.7 kΩ' })
-    expect(rows[1]).toMatchObject({ transfer: { from: '1 kΩ', to: '10 kΩ' }, variantName: null })
+    expect(rows[0]).toMatchObject({ variantName: '4.7 kΩ' })
+    expect(rows[1]).toMatchObject({ transfer: { from: '1 kΩ', to: '10 kΩ' }, variantName: null })
   })
 
   it('names the variant in search rows (and so the palette)', () => {
     const s = axisSnapshot()
     const [row] = searchRows(s, [{ itemId: 'R', variantId: 'r10k' }])
-    expect(row!.variantName).toBe('10 kΩ')
+    expect(row!.variantName).toBe('10 kΩ')
     expect(createSearch(s)).toBeTruthy()
   })
 
   it('names an archived variant in the archive', () => {
     const s = axisSnapshot()
-    expect(archiveEntries(s)).toMatchObject([{ target: 'variant', id: 'r4k7', name: '4.7 kΩ', itemName: 'R' }])
+    expect(archiveEntries(s)).toMatchObject([{ target: 'variant', id: 'r4k7', name: '4.7 kΩ', itemName: 'R' }])
   })
 })

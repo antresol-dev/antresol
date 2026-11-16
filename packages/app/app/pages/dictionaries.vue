@@ -68,7 +68,7 @@ function retry(): void {
       >
         <NuxtLink :to="fixTo" :class="linkClass">{{ $t('status.fix') }}</NuxtLink>
       </EmptyState>
-      <div v-else class="grid grid-cols-1 gap-3.5" aria-hidden="true">
+      <div v-else class="grid grid-cols-1 gap-4" aria-hidden="true">
         <Skeleton class="h-40 rounded-card" />
       </div>
     </ScreenBody>

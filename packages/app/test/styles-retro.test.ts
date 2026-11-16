@@ -49,7 +49,8 @@ const MOCKUP = {
     card: '#273049',
     cardR: BOOM,
     cardSh: 'inset 0 0 0 1.5px rgba(244,236,216,0.7), 4px 4px 0 rgba(233,196,106,0.55)',
-    primary: '#93C1BE',
+    // Plan 12: the palette's saturated teal (the mock-up's #93C1BE, the pale dark accent, read as disabled).
+    primary: '#2A9D8F',
     pop: '#273049',
     popR: '18px 6px 18px 6px',
     popSh: 'inset 0 0 0 1.5px rgba(244,236,216,0.7), 5px 5px 0 #2A9D8F',
@@ -97,9 +98,10 @@ describe.each(MODES)('Retro atomic equals the mock-up (board S8): %s', (mode) =>
     }).toEqual(m)
   })
 
-  it('type, icons, motion: Jost in capitals, the ✦ mark in orange, round strokes, a smooth 200 ms', () => {
+  it('type, icons, motion: Jost, labels in capitals, the ✦ mark in orange, round strokes, a smooth 200 ms', () => {
     expect([t.font, t.headFont, t.labelFont]).toEqual([JOST, JOST, JOST])
-    expect([t.headWeight, t.headTrack, t.headCase]).toEqual(['600', '0.06em', 'uppercase'])
+    // Plan 12: the screen title keeps the user's case (the mock-up's capitals turned "ICs" into "ICS").
+    expect([t.headWeight, t.headTrack, t.headCase]).toEqual(['600', '0.06em', 'none'])
     expect([t.labelWeight, t.labelCase, t.labelTrack]).toEqual(['600', 'uppercase', '0.16em'])
     expect([t.mark, t.markColor]).toEqual(['✦ ', '#E76F51'])
     expect([t.numWeight, t.btnWeight, t.numFont]).toEqual(['600', '600', 'inherit'])
@@ -213,4 +215,16 @@ describe('Retro atomic: every cycled colour carries its text at 4.5:1', () => {
     for (const c of t.thumbs) expect(contrast(t.thumbFg, c), `thumbnail ${c}`).toBeGreaterThanOrEqual(4.5)
     expect(contrast(t.photoFg, t.photo), 'photo').toBeGreaterThanOrEqual(4.5)
   })
+})
+
+describe('Retro atomic: plan 12', () => {
+  it('dark: the primary (the dock\'s "+", main buttons) is the saturated teal with navy text at 4.5:1 in every state', () => {
+    const t = build('dark', 'teal')
+    expect(t.kinds.primary.n.bg).toBe('#2A9D8F')
+    for (const s of ['n', 'h', 'p'] as const) expect(contrast(t.kinds.primary[s].fg, t.kinds.primary[s].bg), s).toBeGreaterThanOrEqual(4.5)
+    // Pressing sinks into the offset without darkening: 8 % darker took the navy text to 4.0:1.
+    expect(t.kinds.primary.p.bg).toBe('#2A9D8F')
+    expect(build('light', 'teal').kinds.primary.n.bg).toBe('#0F766E')
+  })
+
 })

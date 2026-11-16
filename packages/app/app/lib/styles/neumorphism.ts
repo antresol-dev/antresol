@@ -8,14 +8,18 @@ import type { Kind, StyleBuild } from './types'
  * S2 Neumorphism: "Hybrid v2" — the owner's boards 7 (light: depth 0.7, light 1.1, shade 0.7, soft accent button) and
  * 8 (dark: base #2A2E37, depth 0.8, light 0.7, shade 0.9, painted accent button, a 1 px rim). The mock-up's
  * `neumorphism` branch, with the values the app settled on after the owner's reviews where they differ (spec §5:
- * Neumorphism looks exactly as before styles; test/styles.test.ts compares every value with main.css as it was):
+ * Neumorphism looks as before styles; test/styles.test.ts compares every value with main.css as it was, except the
+ * plan 12 F5 changes marked below):
  *  - the dark accent is the light one lifted by 12 % white (not the mock-up's pastel), accent text half-way to white;
  *  - hover tints raised controls 7 % and press 12 % (the mock-up's btn: 6 / 11 %); no "down" gradient on press;
- *  - the soft accent button keeps its hover tint when pressed (the mock-up's 24 % fails accent-ink on blue, green,
- *    orange); dark: painted in the accent itself (the 12 % lift takes white text under 4.5:1), darkening on hover;
+ *  - the accent button (the FAB, primary actions) is painted in the accent itself in both themes (plan 12, F5: light was a
+ *    soft tint with accent ink; dark: the 12 % lift takes white text under 4.5:1), darkening on hover;
+ *  - lists (variants, a folder's items, the history) lie in a concave panel, an inset pair at R(4, 10)'s size, radius 20
+ *    (plan 12, F5; before: rows on the page, no panel); cards stay convex;
  *  - flat controls and the selected row tint 24 % at most on dark (the mock-up's 26 % fails rose);
  *  - the stepper on a selected row lights up white on hover and sinks deeper into the accent;
- *  - menus: a real 1 px border for the rim; dark: hovered items keep the text colour, muted text lighter;
+ *  - menus (the row menu "⋯" included) are glass: the translucent pane with its blur (F5), a real 1 px border for the
+ *    rim; dark: hovered items keep the text colour, muted text lighter. The desktop search palette stays convex;
  *  - shadow and sink share one duration and curve: 160 ms cubic-bezier(0.4, 0, 0.2, 1) (the mock-up: 200 ms ease-out);
  *  - radii: every control and tile 14, photo 20, small things 10; the header's line is its 1 px border;
  *  - the font stack keeps @nuxt/fonts' metric-matched fallbacks for Manrope; plain button labels 500 (emphasised 700).
@@ -116,9 +120,11 @@ export const build: StyleBuild = (mode, accent) => {
       cardR: '20px',
       cardFg: fg,
       cardMuted: muted,
+      // F5 (plan 12): lists lie in a concave panel of the page — variants, a folder's list and the history on one
+      // surface, pressed into the page where cards rise out of it.
       list: 'transparent',
-      listSh: 'none',
-      listR: '0',
+      listSh: I(4, 10, DK),
+      listR: '20px',
       divider: `1px solid ${border}`,
       cur: `linear-gradient(90deg, ${rgba(A, dark ? 0.24 : 0.17)}, ${rgba(A, dark ? 0.12 : 0.08)})`,
       curSh: 'none',
@@ -158,9 +164,9 @@ export const build: StyleBuild = (mode, accent) => {
         ib: K(S(B, 0, R(3, 7), icon), S(tint(0.07), 0, R(3, 7, DKa(0.3)), ink), S(tint(0.12), 0, I(2.5, 6, DKa(0.42)), ink, 'scale(0.97)')),
         add: K(S(B, 0, R(3, 7), icon), S(tint(0.07), 0, R(3, 7, DKa(0.3)), ink), S(tint(0.12), 0, I(2.5, 6, DKa(0.42)), ink, 'scale(0.97)')),
         btn: K(S(B, 0, R(4, 10), fg), S(tint(0.07), 0, R(4, 10, DKa(0.3)), ink), S(tint(0.12), 0, I(3, 7, DKa(0.42)), ink, 'scale(0.985)')),
-        primary: dark
-          ? painted(AL, '#FFFFFF', '#000000')
-          : K(S(tint(0.14), 0, R(4, 10, DKa(0.45)), ink), S(tint(0.2), 0, R(4, 10, DKa(0.5)), ink), S(tint(0.2), 0, I(3, 7, DKa(0.55)), ink, 'scale(0.985)')),
+        // F5 (plan 12): painted in the accent in both themes (light was a soft tint with accent ink: the FAB's "+" hardly
+        // stood out).
+        primary: painted(AL, '#FFFFFF', '#000000'),
         step: K(S('transparent', 0, FLAT, icon), S(rgba(A, hv), 0, FLAT, ink), S(tint(0.12), 0, I(2, 5, DKa(0.42)), ink)),
         ghost: K(S('transparent', 0, 0, muted), S(rgba(A, hv), 0, 0, ink), S(rgba(A, dark ? 0.24 : 0.16), 0, 0, ink)),
       },

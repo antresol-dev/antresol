@@ -98,7 +98,7 @@ function addNew(): void {
 
 <template>
   <AppSheet v-model:open="open" :title="$t('share.title')" :summary="shown.query || undefined">
-    <div class="grid min-w-0 gap-3.5 pt-2">
+    <div class="grid min-w-0 gap-4 pt-2">
       <p v-if="!snapshot" class="text-sm text-muted-foreground">
         {{ $t(state.refreshing || state.sources.some((s) => s.status === 'connecting') ? 'share.loading' : 'share.noInventory') }}
       </p>
@@ -109,7 +109,7 @@ function addNew(): void {
             :key="c.text"
             :aria-label="chipLabel(c)"
             :class="[
-              'rounded-chip px-2 py-1 text-[13px] font-semibold tabular-nums',
+              'rounded-chip px-2 py-1 text-xs font-semibold tabular-nums',
               c.inStock ? 'bg-chip text-foreground' : 'border border-border text-subtle-foreground',
             ]"
           >
@@ -130,7 +130,7 @@ function addNew(): void {
                 <span v-if="i === 1 && c.nearest!.below" aria-hidden="true"> · </span>
                 <button
                   type="button"
-                  class="pressable inline-flex min-h-11 items-center font-bold text-foreground tabular-nums underline-offset-4 hover:underline"
+                  class="pressable inline-flex min-h-11 items-center font-semibold text-foreground tabular-nums underline-offset-4 hover:underline"
                   :aria-label="$t('share.openNearest', { value: e.value })"
                   @click="openNearest(e)"
                 >
@@ -141,9 +141,9 @@ function addNew(): void {
           </li>
         </ul>
 
-        <ul v-if="bought.length > 0" class="grid gap-1.5" :aria-label="$t('share.boughtBefore')">
+        <ul v-if="bought.length > 0" class="grid gap-2" :aria-label="$t('share.boughtBefore')">
           <li v-for="(b, i) in bought" :key="i" class="grid min-w-0 rounded-field bg-chip px-3 py-2 text-sm">
-            <span class="truncate font-bold">
+            <span class="truncate font-semibold">
               {{ b.name }}<span v-if="b.variantName" class="font-semibold text-subtle-foreground"> · {{ b.variantName }}</span>
             </span>
             <span class="text-subtle-foreground">{{ $t('share.bought', { date: formatDate(b.at), amount: b.bought, left: b.left }) }}</span>
@@ -156,13 +156,13 @@ function addNew(): void {
             <li v-for="m in matches" :key="`${m.itemId}:${m.variantId ?? ''}`" class="flex min-w-0 items-center gap-1.5">
               <button
                 type="button"
-                class="pressable flex min-h-11 min-w-0 flex-1 items-center gap-2.5 px-1 py-1 text-left"
+                class="pressable flex min-h-11 min-w-0 flex-1 items-center gap-3 px-1 py-1 text-left"
                 :aria-label="$t('share.open', { name: m.variantName ? `${m.name} · ${m.variantName}` : m.name })"
                 @click="openItem(m)"
               >
-                <ItemThumb :name="m.name" :cover="m.cover" class="size-8 rounded-icon text-xs" />
+                <ItemThumb :id="m.itemId" :folder-name="m.folderName" :icon="m.icon" :folder-icon="m.folderIcon" :cover="m.cover" :color="m.color" class="size-9 rounded-thumb text-xs" />
                 <span class="flex min-w-0 flex-1 flex-col">
-                  <span class="truncate text-sm font-bold" :class="m.outOfStock && 'text-dimmed-foreground'">
+                  <span class="truncate text-sm font-semibold" :class="m.outOfStock && 'text-dimmed-foreground'">
                     {{ m.name }}<span v-if="m.variantName" class="font-semibold text-muted-foreground"> · {{ m.variantName }}</span>
                   </span>
                   <span class="truncate text-xs text-muted-foreground">{{ detail(m) }}</span>

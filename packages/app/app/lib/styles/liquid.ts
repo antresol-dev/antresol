@@ -39,6 +39,10 @@ export const build: StyleBuild = (mode, accent) => {
   const ctrlRim = dark
     ? highlight + ', inset 0 0 0 1px rgba(255,255,255,0.10), 0 2px 8px rgba(0,0,0,0.3)'
     : highlight + ', inset 0 0 0 1px rgba(255,255,255,0.4), 0 2px 8px rgba(20,24,40,0.10)'
+  /** The small controls' rim — icon buttons and the stepper pill (plan 12): on dark, the card's specular rim at half its
+   *  alpha (top 11 %, ring 5 %), so a row of small glass buttons does not glitter brighter than the panel they sit on.
+   *  Light keeps ctrlRim. */
+  const smallRim = dark ? 'inset 0 1px 0 rgba(255,255,255,0.11), inset 0 0 0 1px rgba(255,255,255,0.05), 0 2px 8px rgba(0,0,0,0.3)' : ctrlRim
   const c0 = dark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.40)'
   const c1 = dark ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.60)'
   const c2 = dark ? 'rgba(255,255,255,0.24)' : 'rgba(255,255,255,0.78)'
@@ -105,7 +109,7 @@ export const build: StyleBuild = (mode, accent) => {
       curMuted: muted,
       pillBg: c0,
       pillImg: 'none',
-      pillSh: ctrlRim,
+      pillSh: smallRim,
       pillR: '999px',
       seam: '1px solid ' + (dark ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.55)'),
       ibR: '999px',
@@ -117,7 +121,7 @@ export const build: StyleBuild = (mode, accent) => {
       popR: '22px',
       popHoverFg: ink,
       kinds: {
-        ib: K(S(c0, 0, ctrlRim, fg), S(c1, 0, ctrlRim, fg), S(c2, 0, ctrlRim, fg, 'scale(0.92)')),
+        ib: K(S(c0, 0, smallRim, fg), S(c1, 0, smallRim, fg), S(c2, 0, smallRim, fg, 'scale(0.92)')),
         add: K(S(c0, 0, ctrlRim, fg), S(c1, 0, ctrlRim, fg), S(c2, 0, ctrlRim, fg, 'scale(0.94)')),
         btn: K(S(c0, 0, ctrlRim, fg), S(c1, 0, ctrlRim, fg), S(c2, 0, ctrlRim, fg, 'scale(0.96)')),
         // contrast: the label is white on the tinted glass, at 4.5:1 on every accent —
@@ -151,6 +155,12 @@ export const build: StyleBuild = (mode, accent) => {
       // App surfaces (see the header comment).
       sheet: spec + ', ' + solidOf(glassBg, solidOf(wall)),
       sheetBlur: 'none',
+      // contrast: dark, the selected radio (and checkbox, switch, progress) is --primary: the accent at 86 % over the dark
+      // wallpaper was 1.4–2.8:1 on the grey glass, an unselected-looking circle. Dark takes the accent lightened 45 % toward
+      // white, with the dark ink for its check mark; the ring and the dot read 3:1 on page, card, list and sheet. Light keeps
+      // the accent.
+      primary: dark ? mix(AL, '#ffffff', 0.45) : AL,
+      primaryFg: dark ? '#14161C' : '#FFFFFF',
       field: c0,
       // contrast: the field's outline (and Camera / Gallery's) is 3:1 on every surface it sits on (WCAG 1.4.11): it was the
       // divider's 8 % hairline, 1.2:1. Light 55 % of the page ink, dark 40 % white.

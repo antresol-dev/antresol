@@ -48,7 +48,7 @@ function key(e: KeyboardEvent): void {
       :aria-valuenow="width"
       :aria-valuemin="TREE_WIDTH_MIN"
       :aria-valuemax="max"
-      class="absolute inset-y-0 -right-1 z-20 w-2 cursor-col-resize touch-none outline-none transition-colors duration-150 hover:bg-accent-soft focus-visible:bg-accent-soft focus-visible:ring-2 focus-visible:ring-ring"
+      class="absolute inset-y-0 -right-1 z-20 w-2 cursor-col-resize touch-none outline-none transition-colors duration-(--dur-fast) hover:bg-accent-soft focus-visible:bg-accent-soft focus-visible:ring-2 focus-visible:ring-ring"
       @pointerdown="down"
       @pointermove="move"
       @pointerup="up"
@@ -58,45 +58,41 @@ function key(e: KeyboardEvent): void {
     />
     <button
       type="button"
-      class="raised pressable mx-3 mt-3.5 mb-2 flex min-h-11 shrink-0 items-center gap-2 px-3 text-left text-sm font-semibold text-muted-foreground hover:text-accent-ink disabled:pointer-events-none disabled:opacity-50"
+      class="raised pressable mx-3 mt-4 mb-2 flex min-h-11 shrink-0 items-center gap-2 px-3 text-left text-sm font-semibold text-muted-foreground hover:text-accent-ink disabled:pointer-events-none disabled:opacity-50"
       aria-haspopup="dialog"
       :aria-expanded="paletteOpen"
       :aria-keyshortcuts="mac ? 'Meta+K' : 'Control+K'"
       :disabled="!state.current"
       @click="paletteOpen = true"
     >
-      <Search class="size-[15px] shrink-0" aria-hidden="true" />
+      <Search class="size-4 shrink-0" aria-hidden="true" />
       <span class="flex-1">{{ $t('search.label') }}</span>
       <kbd
         aria-hidden="true"
-        class="rounded-chip bg-chip px-1.5 text-[11px] font-semibold text-subtle-foreground"
+        class="rounded-chip bg-chip px-1.5 text-xs font-semibold text-subtle-foreground"
       >
         {{ mac ? $t('search.shortcut.mac') : $t('search.shortcut.other') }}
       </kbd>
     </button>
-    <div class="flex shrink-0 items-center justify-between gap-2 pt-1.5 pr-3.5 pb-1.5 pl-4">
-      <h2 class="text-xs font-bold tracking-[0.02em] text-muted-foreground uppercase">
-        {{ $t('folder.tree') }}
-      </h2>
-      <Tooltip>
-        <TooltipTrigger as-child>
-          <button
-            type="button"
-            class="pressable grid size-7 shrink-0 place-items-center rounded-chip disabled:pointer-events-none disabled:opacity-50"
-            :aria-label="$t('folderMenu.new')"
-            :disabled="locked"
-            @click="open({ kind: 'create', parentId: null })"
-          >
-            <FolderPlus class="size-4" aria-hidden="true" />
-          </button>
-        </TooltipTrigger>
-        <TooltipContent>{{ $t('folderMenu.new') }}</TooltipContent>
-      </Tooltip>
-    </div>
-    <!-- The hierarchy sits flat on the panel (the owner, 2026-11-12: neither concave nor raised). pt-0.5: room for the
-         first row's focus ring inside the scroll container. -->
-    <div class="min-h-0 flex-1 overflow-y-auto px-2 pt-0.5 pb-3">
-      <FolderTree variant="panel" />
-    </div>
+    <!-- The hierarchy sits flat on the panel (the owner, 2026-11-12: neither concave nor raised); the section header with
+         its buttons lives in FolderTree. -->
+    <FolderTree variant="panel">
+      <template #actions>
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <button
+              type="button"
+              class="pressable grid size-8 shrink-0 place-items-center rounded-chip disabled:pointer-events-none disabled:opacity-50"
+              :aria-label="$t('folderMenu.new')"
+              :disabled="locked"
+              @click="open({ kind: 'create', parentId: null })"
+            >
+              <FolderPlus class="size-4" aria-hidden="true" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>{{ $t('folderMenu.new') }}</TooltipContent>
+        </Tooltip>
+      </template>
+    </FolderTree>
   </div>
 </template>

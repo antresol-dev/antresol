@@ -96,26 +96,26 @@ watch(() => props.highlight, reveal)
         :data-variant="row.variantId ?? undefined"
         :aria-current="row.variantId !== null && row.variantId === highlight ? 'true' : undefined"
         :class="[
-          'relative grid min-w-0 py-2 pr-3.5 pl-5',
+          'relative grid min-h-14 min-w-0 content-center py-1 pr-3 pl-5',
           isHighlight(row.variantId)
             ? 'row-selected row-inset my-0.5'
             : !isHighlight(rows[i - 1]?.variantId) &&
-              'not-first:before:absolute not-first:before:top-0 not-first:before:right-3.5 not-first:before:left-3.5 not-first:before:h-px not-first:before:bg-divider not-first:before:content-[\'\']',
+              'not-first:before:absolute not-first:before:top-0 not-first:before:right-3 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-[\'\']',
         ]"
       >
-        <div class="flex min-h-[46px] min-w-0 items-center gap-2.5">
+        <div class="flex min-h-11 min-w-0 items-center gap-2">
           <PhotoImg
             v-if="row.photo"
             :photo="row.photo"
             size="thumb"
             alt=""
-            class="size-10 shrink-0 rounded-icon object-cover"
+            class="size-9 shrink-0 rounded-thumb object-cover"
           />
           <span class="flex min-w-0 grow flex-col gap-0.5">
-            <span class="line-clamp-2 text-[15px] font-bold wrap-anywhere" :class="row.outOfStock && !isHighlight(row.variantId) && 'text-dimmed-foreground'">
+            <span class="line-clamp-3 text-base font-semibold wrap-anywhere" :class="row.outOfStock && !isHighlight(row.variantId) && 'text-dimmed-foreground'">
               {{ row.name ?? $t('item.noVariant') }}
             </span>
-            <span v-if="row.sub" class="truncate text-[13px] text-muted-foreground">{{ row.sub }}</span>
+            <span v-if="row.sub" class="truncate text-sm text-muted-foreground">{{ row.sub }}</span>
           </span>
           <StepperPill
             :stepper="stepperOf(row.variantId)"
@@ -124,7 +124,7 @@ watch(() => props.highlight, reveal)
             @count="emit('open', 'set', row.variantId)"
           />
           <RowMenu
-            class="h-11 w-9"
+            class="h-11 w-8"
             :label="row.name ?? $t('item.noVariant')"
             :actions="actionsOf(row)"
             @select="(key) => choose(key, row)"

@@ -8,7 +8,7 @@ const source = computed(() => state.sources.find((s) => s.config.id === route.pa
 
 <template>
   <main v-if="source" class="min-w-0">
-    <ScreenHeader :title="source.name" :subtitle="$t('sourceForm.editTitle')" />
+    <ScreenHeader :title="source.name" :subtitle="$t('sourceForm.editTitle')" :crumbs="[{ name: $t('settings.title'), to: '/settings' }]" />
     <ScreenBody>
       <SourceForm :key="source.id" :source="source" />
     </ScreenBody>

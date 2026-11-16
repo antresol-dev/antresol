@@ -1,4 +1,4 @@
-import { newId, variantLabel, type Command, type InventorySnapshot, type InventoryStorage } from '@antresol/core'
+import { newId, variantDisplayLabel, variantLabel, type Command, type InventorySnapshot, type InventoryStorage } from '@antresol/core'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { archiveEntries } from '../app/lib/archive'
 import { createDemoDriver, seedDemo } from '../app/lib/dev/demo-source'
@@ -75,7 +75,7 @@ describe('archiveEntries', () => {
   it('lists an archived variant with its item name', async () => {
     const resistor = snap.items.find((i) => i.name === 'Резистор 0,25 Вт')!
     await archive('variant', byValue(snap, resistor.id, '100k').id)
-    expect(archiveEntries(snap)[0]).toMatchObject({ target: 'variant', name: variantLabel(snap, byValue(snap, resistor.id, '100k')), itemName: 'Резистор 0,25 Вт', path: 'Passive components / Resistors' })
+    expect(archiveEntries(snap)[0]).toMatchObject({ target: 'variant', name: variantDisplayLabel(snap, byValue(snap, resistor.id, '100k')), itemName: 'Резистор 0,25 Вт', path: 'Passive components / Resistors' })
   })
 
   it('shows the path through archived folders', async () => {

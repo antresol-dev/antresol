@@ -74,10 +74,10 @@ export const snapshotSql = {
     sql`select id, name, description, currency::text as currency, ${raw(`${AUDIT}, ${ARCHIVE}`)}
           from inventories where id = ${inventoryId}`,
   folders: (inventoryId: Statement) =>
-    sql`select id, inventory_id, parent_id, name, description, ${raw(`${AUDIT}, ${ARCHIVE}`)}
+    sql`select id, inventory_id, parent_id, name, description, icon, ${raw(`${AUDIT}, ${ARCHIVE}`)}
           from folders where inventory_id = ${inventoryId} order by name, id`,
   items: (where: Statement) =>
-    sql`select i.id, i.inventory_id, i.folder_id, i.name, i.description, i.unit_key,
+    sql`select i.id, i.inventory_id, i.folder_id, i.name, i.description, i.icon, i.color, i.unit_key,
                  i.created_at, i.updated_at, i.created_by, i.updated_by, i.archived_at, i.archive_id,
                  coalesce((select array_agg(it.tag_id::text order by it.tag_id) from item_tags it
                            where it.item_id = i.id), '{}') as tag_ids
@@ -88,7 +88,7 @@ export const snapshotSql = {
           from variants v join items i on i.id = v.item_id
           where ${where} order by v.item_id, v.position, v.id`,
   tags: (inventoryId: Statement) =>
-    sql`select id, inventory_id, name, ${raw(AUDIT)} from tags where inventory_id = ${inventoryId} order by name, id`,
+    sql`select id, inventory_id, name, color, ${raw(AUDIT)} from tags where inventory_id = ${inventoryId} order by name, id`,
   attributes: (inventoryId: Statement) =>
     sql`select id, inventory_id, name, kind, options, unit, si_prefixes, pinned, ${raw(AUDIT)}
           from attributes where inventory_id = ${inventoryId} order by name, id`,

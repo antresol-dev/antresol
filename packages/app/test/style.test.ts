@@ -210,29 +210,13 @@ describe('spec values', () => {
 })
 
 describe('the accent button (Review Focus 5)', () => {
-  it('light theme: soft — the accent tint 14 % (hover 20 %), accent-ink text', () => {
-    for (const accent of accents) {
-      const v = themeVars('light', accent)
-      const A = ACCENTS[accent].light
-      const ink = resolveColor('accent-ink', v)
-      const near = (name: string, k: number) => {
-        const e = parseColor(mixHex('#EDEFF3', A, k))
-        const a = resolveColor(name, v)
-        for (const ch of ['r', 'g', 'b'] as const) expect(Math.abs(a[ch] - e[ch]), `${accent} ${name} ${ch}`).toBeLessThanOrEqual(0.5)
+  it('both themes: painted in the accent itself, white text (plan 12, F5: light was a soft 14 % tint with accent-ink, the dock\'s + hardly stood out; the dark 12 % lift takes white text under 4.5:1)', () => {
+    for (const mode of ['light', 'dark'] as const) {
+      for (const accent of accents) {
+        const v = themeVars(mode, accent)
+        expect(resolveColor('st-primary-n-bg', v), `${mode} ${accent}`).toEqual(parseColor(ACCENTS[accent].light))
+        expect(resolveColor('st-primary-n-fg', v), `${mode} ${accent}`).toEqual(parseColor('#FFFFFF'))
       }
-      near('st-primary-n-bg', 0.14)
-      near('st-primary-h-bg', 0.2)
-      // The mock-up's pressed tint (24 %) takes accent-ink under 4.5:1 on blue, green and orange: the press keeps the
-      // hover tint and shows by the sink.
-      near('st-primary-p-bg', 0.2)
-      expect(resolveColor('st-primary-n-fg', v)).toEqual(ink)
-    }
-  })
-  it('dark theme: painted in the accent itself (the mock-up\'s 12 % lift takes white text under 4.5:1), white text', () => {
-    for (const accent of accents) {
-      const v = themeVars('dark', accent)
-      expect(resolveColor('st-primary-n-bg', v)).toEqual(parseColor(ACCENTS[accent].light))
-      expect(resolveColor('st-primary-n-fg', v)).toEqual(parseColor('#FFFFFF'))
     }
   })
   it('Button "default" and the dock\'s + are the accent button', () => {
@@ -730,12 +714,12 @@ describe('components and pages', () => {
       expect(css).not.toMatch(/\.concave\b|--well-shadow/)
     })
 
-    it('Tags & fields: section headings 17 px bold in the text colour, thinner "Add …" buttons (raised-sm, 40 px), a divider between sections', () => {
+    it('Tags & fields: section headings 16 px semibold in the text colour, thinner "Add …" buttons (raised-sm, 40 px), a divider between sections', () => {
       for (const name of ['components/TagsSection.vue', 'components/AttributesSection.vue', 'components/UnitsSection.vue']) {
         const heading = nodes(name).find((n) => n.tag === 'h2')
         expect(heading, name).toBeDefined()
         const h = words(classText(heading!))
-        for (const c of ['text-[17px]', 'font-bold', 'text-foreground']) expect(h.has(c), `${name} ${c}`).toBe(true)
+        for (const c of ['text-base', 'font-semibold', 'text-foreground']) expect(h.has(c), `${name} ${c}`).toBe(true)
         const add = nodes(name).filter((n) => n.tag === 'Button' && /\braised-sm\b/.test(classText(n)))
         expect(add.length, name).toBe(1)
         expect(attr(add[0]!, 'variant'), name).toBe('ghost')

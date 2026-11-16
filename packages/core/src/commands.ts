@@ -17,8 +17,17 @@ export interface PhotoFile {
 export type Command =
   | { type: 'inventory.create'; id: Id; name: string; description: string | null; currency: string }
   | { type: 'inventory.update'; id: Id; name?: string; description?: string | null }
-  | { type: 'folder.create'; id: Id; inventoryId: Id; parentId: Id | null; name: string; description: string | null }
-  | { type: 'folder.update'; id: Id; name?: string; description?: string | null }
+  | {
+      type: 'folder.create'
+      id: Id
+      inventoryId: Id
+      parentId: Id | null
+      name: string
+      description: string | null
+      /** An icon name (isIconName); absent counts as none. */
+      icon?: string | null
+    }
+  | { type: 'folder.update'; id: Id; name?: string; description?: string | null; icon?: string | null }
   | { type: 'folder.move'; id: Id; parentId: Id | null }
   | {
       type: 'item.create'
@@ -27,11 +36,25 @@ export type Command =
       folderId: Id | null
       name: string
       description: string | null
+      /** An icon name (isIconName); absent counts as none. */
+      icon?: string | null
+      /** #RRGGBB (isColorHex); absent counts as none. */
+      color?: string | null
       unitKey: string
       tagIds: Id[]
       initialReceipt: { movementId: Id; quantity: Quantity; totalPrice: number | null; sourceUrl: string | null } | null
     }
-  | { type: 'item.update'; id: Id; name?: string; description?: string | null; folderId?: Id | null; unitKey?: string; tagIds?: Id[] }
+  | {
+      type: 'item.update'
+      id: Id
+      name?: string
+      description?: string | null
+      icon?: string | null
+      color?: string | null
+      folderId?: Id | null
+      unitKey?: string
+      tagIds?: Id[]
+    }
   /** Shared attributes only: attaches the attribute as shared if it is not attached yet. */
   | { type: 'item.setAttribute'; itemId: Id; attributeId: Id; value: string | null }
   /** Shared attribute or axis; an axis goes as item.removeAxis does, then the link is removed. */
@@ -57,8 +80,10 @@ export type Command =
   /** Axis values of one or more variants of the item, applied at once: uniqueness is checked on the final state of all
    *  of them, so two variants may trade values. Axes only; null erases the value; a value not named stays. */
   | { type: 'variant.setValues'; itemId: Id; rows: { variantId: Id; values: { attributeId: Id; value: string | null }[] }[] }
-  | { type: 'tag.create'; id: Id; inventoryId: Id; name: string }
+  | { type: 'tag.create'; id: Id; inventoryId: Id; name: string; color?: string | null }
   | { type: 'tag.rename'; id: Id; name: string }
+  /** Name and colour in one command; tag.rename stays for older apps. */
+  | { type: 'tag.update'; id: Id; name?: string; color?: string | null }
   | { type: 'tag.delete'; id: Id }
   | {
       type: 'attribute.create'

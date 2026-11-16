@@ -27,7 +27,8 @@ describe('Y2K: the mock-up\'s values at the style\'s accent (blue)', () => {
     [
       'light',
       {
-        page: 'repeating-linear-gradient(0deg, rgba(255,255,255,0.4) 0 1px, transparent 1px 28px), repeating-linear-gradient(90deg, rgba(255,255,255,0.4) 0 1px, transparent 1px 28px), linear-gradient(135deg, #BAE6FD, #E9D5FF 50%, #FDE0F0)',
+        // The mock-up's rgba(255,255,255,0.4) grid, its alpha scaled by --y2k-grid (plan 12: y2k.css, from 1024 px).
+        page: 'repeating-linear-gradient(0deg, rgb(255 255 255 / calc(0.4 * var(--y2k-grid, 1))) 0 1px, transparent 1px 28px), repeating-linear-gradient(90deg, rgb(255 255 255 / calc(0.4 * var(--y2k-grid, 1))) 0 1px, transparent 1px 28px), linear-gradient(135deg, #BAE6FD, #E9D5FF 50%, #FDE0F0)',
         card: 'linear-gradient(180deg, rgba(255,255,255,0.6), rgba(255,255,255,0) 35%), rgba(255,255,255,0.62)',
         cardR: '22px',
         cardSh: 'inset 0 0 0 1px rgba(255,255,255,0.9), 0 6px 18px -6px rgba(90,80,180,0.35)',
@@ -38,7 +39,7 @@ describe('Y2K: the mock-up\'s values at the style\'s accent (blue)', () => {
     [
       'dark',
       {
-        page: 'radial-gradient(rgba(255,255,255,0.55) 0.8px, transparent 1.2px) 0 0 / 38px 38px, radial-gradient(70% 50% at 20% 0%, rgba(37,99,235,0.45), transparent 60%), radial-gradient(70% 50% at 90% 60%, rgba(205,48,232,0.35), transparent 60%), #0B0D26',
+        page: 'radial-gradient(rgb(255 255 255 / calc(0.55 * var(--y2k-grid, 1))) 0.8px, transparent 1.2px) 0 0 / 38px 38px, radial-gradient(70% 50% at 20% 0%, rgba(37,99,235,0.45), transparent 60%), radial-gradient(70% 50% at 90% 60%, rgba(205,48,232,0.35), transparent 60%), #0B0D26',
         card: 'linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0) 35%), rgba(255,255,255,0.07)',
         cardR: '22px',
         cardSh: 'inset 0 0 0 1px rgba(255,255,255,0.16), inset 0 1px 0 rgba(255,255,255,0.22), 0 0 24px -8px rgba(157,185,246,0.6)',
@@ -250,5 +251,17 @@ describe('assets/css/styles/y2k.css', () => {
     expect(t.chips).toHaveLength(4)
     expect(t.thumbs).toHaveLength(3)
     for (const v of ['--st-chips-1', '--st-chips-2', '--st-chips-3', '--st-thumbs-1', '--st-thumbs-2']) expect(rules).toContain(`var(${v})`)
+  })
+})
+
+describe('Y2K: plan 12', () => {
+  const css = read('../app/assets/css/styles/y2k.css').replace(/\/\*[\s\S]*?\*\//g, '')
+
+  it('the wallpaper\'s grid and stars are 30 % fainter from 1024 px: y2k.css scales their alpha on the root, nothing else', () => {
+    expect(css).toMatch(/@media \(width >= 64rem\)\s*\{\s*\[data-style='y2k'\]:root\s*\{\s*--y2k-grid: 0\.7;\s*\}\s*\}/)
+    for (const mode of MODES) {
+      const page = build(mode, defaultAccent).page
+      expect(page.match(/var\(--y2k-grid, 1\)/g)?.length, mode).toBe(mode === 'light' ? 2 : 1)
+    }
   })
 })

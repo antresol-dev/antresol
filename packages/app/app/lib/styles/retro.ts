@@ -4,10 +4,13 @@ import { stack } from './fonts'
 import type { StyleBuild } from './types'
 
 /*
- * S8 Retro atomic: the 1950–60s space age — Jost in capitals, cream and teal with orange and mustard, boomerang
- * corners, print offsets, the atom-dot page. The mock-up's `retro` branch of build() (styles-mockup.dc.html),
+ * S8 Retro atomic: the 1950–60s space age — Jost with labels in capitals, cream and teal with orange and mustard,
+ * boomerang corners, print offsets, the atom-dot page. The mock-up's `retro` branch of build() (styles-mockup.dc.html),
  * verbatim, except:
  *  - a fixed palette: the accent is always teal (spec §4), whatever accent it is given;
+ *  - plan 12: the screen title keeps the user's case (the mock-up's capitals turned "ICs" into "ICS"; section labels
+ *    keep theirs); dark: the primary paint is the palette's saturated teal with navy text, not the pale dark accent;
+ *    row thumbnails take six of the palette's colours with dark ink;
  *  - shades changed for contrast (spec §8; test/styles-retro.test.ts lists each): the thumbnails' ink #2B2A33 →
  *    #24232B (4.26:1 on the teal thumbnail); light: the primary button's hover lightened the teal 12 %, which takes its
  *    cream text to 4.0:1, so it darkens to the pressed teal instead (pressing still sinks into the offset); dark: muted
@@ -39,9 +42,14 @@ export const build: StyleBuild = (mode) => {
       'radial-gradient(circle at 20px 20px, rgba(244,236,216,0.32) 2px, transparent 2.5px) 0 0 / 80px 80px, radial-gradient(circle at 60px 52px, rgba(42,157,143,0.5) 2px, transparent 2.5px) 0 0 / 80px 80px, ' + pageColor
     : 'radial-gradient(circle at 20px 20px, rgba(42,157,143,0.20) 3px, transparent 3.5px) 0 0 / 80px 80px, radial-gradient(circle at 60px 52px, rgba(231,111,81,0.18) 2px, transparent 2.5px) 0 0 / 80px 80px, ' + pageColor
   const boom = '26px 8px 26px 8px'
+  /** Ink on the palette's colours (the mock-up's #2B2A33 darkened: 4.68:1 on teal, the darkest of them). */
+  const thumbInk = '#24232B'
   const tnt = (x: number) => mix(A, surf, 1 - x)
   const onPrimary = dark ? '#1C2335' : '#FBF5E6'
-  const primaryPressed = mix(A, '#000000', 0.08)
+  /** The primary paint (the dock's "+", main buttons): light, the accent's deep teal; dark, the palette's saturated teal
+   *  with navy text (4.71:1) instead of the dark accent's pale #93C1BE, which read as a washed-out, disabled button. */
+  const paint = dark ? teal : A
+  const primaryPressed = dark ? teal : mix(A, '#000000', 0.08)
 
   return finish(
     {
@@ -51,7 +59,9 @@ export const build: StyleBuild = (mode) => {
       headSize: '22px',
       headWeight: '600',
       headTrack: '0.06em',
-      headCase: 'uppercase',
+      // The screen title as the user typed it ("Резистор 0,25 Вт", "ICs"): capitals turned "ICs" into "ICS". The
+      // character stays in Jost's wide tracking; section labels keep their capitals.
+      headCase: 'none',
       labelFont: jost,
       labelSize: '12px',
       labelWeight: '600',
@@ -78,7 +88,7 @@ export const build: StyleBuild = (mode) => {
       photoR: boom,
       photoFg: '#FBF5E6',
       thumbs: [mustard, orange, teal],
-      thumbFg: '#24232B',
+      thumbFg: thumbInk,
       thumbSh: ring,
       thumbR: '999px',
       chips: [mustard, '#9FD3C7', '#F4A58A'],
@@ -124,8 +134,8 @@ export const build: StyleBuild = (mode) => {
         add: K(S(surf, 0, ring + ', 3px 3px 0 ' + offC, fg), S(tnt(0.15), 0, ring + ', 3px 3px 0 ' + offC, fg), S(tnt(0.25), 0, ring + ', 0 0 0 ' + offC, fg, 'translate(3px, 3px)')),
         btn: K(S(surf, 0, ring + ', 3px 3px 0 ' + offC, fg), S(tnt(0.15), 0, ring + ', 3px 3px 0 ' + offC, fg), S(tnt(0.25), 0, ring + ', 0 0 0 ' + offC, fg, 'translate(3px, 3px)')),
         primary: K(
-          S(A, 0, ring + ', 3px 3px 0 ' + orange, onPrimary),
-          S(dark ? mix(A, '#ffffff', 0.12) : primaryPressed, 0, ring + ', 3px 3px 0 ' + orange, onPrimary),
+          S(paint, 0, ring + ', 3px 3px 0 ' + orange, onPrimary),
+          S(dark ? mix(paint, '#ffffff', 0.12) : primaryPressed, 0, ring + ', 3px 3px 0 ' + orange, onPrimary),
           S(primaryPressed, 0, ring + ', 0 0 0 ' + orange, onPrimary, 'translate(3px, 3px)'),
         ),
         step: K(S('rgba(0,0,0,0)', 0, 0, fg), S(tnt(0.15), 0, 0, fg), S(tnt(0.28), 0, 'inset 2px 2px 0 rgba(43,42,51,0.18)', fg)),

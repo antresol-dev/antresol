@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { unitChoices } from '~/lib/amounts'
 import { captureBaseline, changedFields } from '~/lib/changed-fields'
 import { errorMessageKey } from '~/lib/errors'
+import { defaultItemColor } from '~/lib/item-colors'
 
 // Reads the item's values once: the dialog gives every item its own form (key).
 const props = defineProps<{ item: Item }>()
@@ -21,6 +22,10 @@ const name = ref(props.item.name)
 const description = ref(props.item.description ?? '')
 const unitKey = ref(props.item.unitKey)
 const tagIds = ref<Id[]>([...props.item.tagIds])
+const icon = ref<string | null>(props.item.icon)
+const color = ref<string | null>(props.item.color)
+const shownColor = computed(() => color.value ?? defaultItemColor(props.item.id))
+const pickingIcon = ref(false)
 // The sheet around the form locks while this is set.
 const busy = defineModel<boolean>('busy', { default: false })
 const errorKey = ref<string | null>(null)
@@ -34,11 +39,13 @@ const baseline = captureBaseline({
   description: props.item.description,
   unitKey: props.item.unitKey,
   tagIds: props.item.tagIds,
+  icon: props.item.icon,
+  color: props.item.color,
 })
 const changes = computed(() =>
   changedFields(
     baseline,
-    { name: name.value.trim(), description: description.value.trim() || null, unitKey: unitKey.value, tagIds: tagIds.value },
+    { name: name.value.trim(), description: description.value.trim() || null, unitKey: unitKey.value, tagIds: tagIds.value, icon: icon.value, color: color.value },
   ),
 )
 const canSubmit = computed(() => !locked.value && !!snapshot.value && Object.keys(changes.value).length > 0)
@@ -80,19 +87,19 @@ async function submit(): Promise<void> {
 </script>
 
 <template>
-  <form class="grid gap-3.5" novalidate @submit.prevent="submit">
-    <div class="grid gap-1.5">
+  <form class="grid gap-4" novalidate @submit.prevent="submit">
+    <div class="grid gap-2">
       <Label for="item-name">{{ $t('form.name') }}</Label>
       <Input id="item-name" v-model="name" autocomplete="off" :aria-invalid="errorKey ? true : undefined" aria-describedby="item-form-error" class="h-11" />
     </div>
-    <div class="grid gap-1.5">
+    <div class="grid gap-2">
       <Label for="item-description">
         {{ $t('form.description') }}
         <span class="font-normal text-subtle-foreground">· {{ $t('form.optional') }}</span>
       </Label>
       <Textarea id="item-description" v-model="description" rows="3" class="min-h-20" />
     </div>
-    <div class="grid gap-1.5">
+    <div class="grid gap-2">
       <Label for="item-unit">{{ $t('itemForm.unit') }}</Label>
       <Select v-model="unitKey">
         <SelectTrigger id="item-unit" class="h-11 w-full">
@@ -103,7 +110,9 @@ async function submit(): Promise<void> {
         </SelectContent>
       </Select>
     </div>
-    <div v-if="snapshot" class="grid gap-1.5">
+    <IconField v-model:picking="pickingIcon" :icon="icon" :color="shownColor" :disabled="locked" @pick="icon = $event" />
+    <ColorSwatches v-model="color" :auto="defaultItemColor(item.id)" :label="$t('colors.label')" :disabled="locked" />
+    <div v-if="snapshot" class="grid gap-2">
       <Label>{{ $t('itemForm.tags') }}</Label>
       <TagPicker v-model="tagIds" :snapshot="snapshot" :locked="locked" @create="createTag" />
     </div>

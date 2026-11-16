@@ -28,6 +28,7 @@ export function toStatements(c: Command, actor: Actor): Statement[] {
       return folderStatements(c, actor)
     case 'tag.create':
     case 'tag.rename':
+    case 'tag.update':
     case 'tag.delete':
     case 'attribute.create':
     case 'attribute.update':

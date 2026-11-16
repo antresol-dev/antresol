@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import type { Photo } from '@antresol/core'
 import { FileError } from '@antresol/core'
-import { Plus } from '@lucide/vue'
+import { Ban, ImagePlus, Plus, Shapes } from '@lucide/vue'
+import { iconFrom } from '~/lib/item-icons'
 import { toast } from 'vue-sonner'
 import { errorMessageKey } from '~/lib/errors'
 
-const props = defineProps<{ itemId: string; photos: Photo[] }>()
+const props = defineProps<{ itemId: string; photos: Photo[]; icon?: string | null; folderIcon?: string | null; color?: string | null }>()
+defineSlots<{
+  /** Without photos: what stands beside the 64 px photo tile (the item's description and tags). */
+  beside?: () => unknown
+}>()
 
 const { t } = useI18n()
 const router = useRouter()
@@ -63,6 +68,31 @@ async function upload(files: File[]): Promise<void> {
 }
 
 const addOpen = ref(false)
+
+// Without photos the 64 px tile shows the item's icon (own, else its folder's) on the item's tone; a tap offers a photo or an icon.
+const iconSet = useItemIconSet()
+const shownIcon = computed(() => iconFrom(iconSet.value, props.icon) ?? iconFrom(iconSet.value, props.folderIcon))
+const tileOpen = ref(false)
+const iconOpen = ref(false)
+function tilePhoto(): void {
+  tileOpen.value = false
+  addOpen.value = true
+}
+function tileIcon(): void {
+  tileOpen.value = false
+  iconOpen.value = true
+}
+async function saveIcon(icon: string | null): Promise<void> {
+  if (readOnly.value || state.saving) {
+    toast.error(t(readOnly.value ? 'errors.storage.read_only' : 'photos.busy'))
+    return
+  }
+  try {
+    await workspace.apply({ type: 'item.update', id: props.itemId, icon })
+  } catch (e) {
+    toast.error(t(errorMessageKey(e)))
+  }
+}
 function pickedFromSheet(files: File[]): void {
   addOpen.value = false
   void upload(files)
@@ -121,8 +151,8 @@ const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thu
 
 <template>
   <section
-    v-if="photos.length > 0 || progress || !readOnly"
-    :aria-label="$t('photos.viewer')"
+    v-if="photos.length > 0 || progress || !readOnly || $slots.beside"
+    :aria-label="photos.length > 0 || progress || !readOnly ? $t('photos.viewer') : undefined"
     :class="['grid min-w-0 gap-1.5 rounded-card', dragging && 'ring-2 ring-ring']"
     @dragover="onDragOver"
     @dragleave="onDragLeave"
@@ -161,41 +191,85 @@ const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thu
         </button>
       </div>
     </template>
-    <template v-else>
+    <!-- No photos (design system F1): a 64 px tile instead of the cover-sized block, so the stock and variants stay on
+         the first screen; beside it the description and tags, or one line on what the tile is for. -->
+    <div v-else class="flex min-w-0 items-start gap-3">
       <div
         v-if="progress"
-        :class="['aspect-[4/3] max-h-96 w-full rounded-card text-sm', pending]"
         role="status"
         :aria-label="$t('photos.uploading', { n: progress.done + 1, total: progress.total })"
+        :class="[tile, 'photo-thumb', pending]"
       >
         {{ $t('photos.progress', { n: progress.done + 1, total: progress.total }) }}
       </div>
-      <div
-        v-else
-        class="raised-card grid aspect-[4/3] max-h-96 w-full place-items-center gap-2 p-4.5 text-center"
+      <ItemThumb
+        v-else-if="readOnly && shownIcon"
+        :id="itemId"
+        :folder-name="null"
+        :icon="icon"
+        :folder-icon="folderIcon"
+        :cover="null"
+        :color="color ?? null"
+        :class="[tile, 'photo-thumb']"
+      />
+      <button
+        v-else-if="!readOnly"
+        type="button"
+        :class="[tile, 'pressable', shownIcon ? 'photo-thumb' : 'add-tile grid place-items-center text-icon']"
+        :aria-label="$t(shownIcon ? 'iconPicker.tileTitle' : 'photos.add')"
+        :disabled="busy"
+        @click="shownIcon ? (tileOpen = true) : (addOpen = true)"
       >
-        <p v-if="!hasStore" class="text-sm text-muted-foreground">{{ $t('photos.noStore') }}</p>
-        <PhotoPicker v-else multiple :disabled="!canAdd" @pick="upload" />
+        <ItemThumb v-if="shownIcon" :id="itemId" :folder-name="null" :icon="icon" :folder-icon="folderIcon" :cover="null" :color="color ?? null" class="size-full" style="border-radius: inherit" />
+        <ImagePlus v-else class="size-6" aria-hidden="true" />
+      </button>
+      <div class="min-w-0 flex-1 self-center">
+        <slot name="beside">
+          <p v-if="!readOnly" class="text-sm text-muted-foreground">{{ $t(hasStore ? 'photos.emptyHint' : 'photos.noStore') }}</p>
+        </slot>
       </div>
-      <div v-if="skeletons.length > 1" class="flex flex-wrap gap-1.5">
-        <div v-for="n in skeletons.slice(1)" :key="`up${n}`" :class="[tile, 'photo-thumb', pending]">
-          {{ $t('photos.progress', { n, total: progress?.total ?? 0 }) }}
-        </div>
-      </div>
-    </template>
-    <p v-if="!hasStore && photos.length > 0 && !readOnly" class="pt-1.5 text-[13px] text-muted-foreground">
+    </div>
+    <p v-if="!hasStore && photos.length > 0 && !readOnly" class="pt-2 text-sm text-muted-foreground">
       {{ $t('photos.noStore') }}
     </p>
     <NuxtLink
-      v-if="!hasStore && sourceId && !readOnly"
+      v-if="!hasStore && sourceId && !readOnly && photos.length > 0"
       :to="`/settings/sources/${sourceId}`"
       class="min-h-11 content-center rounded-chip text-sm font-semibold text-accent-ink underline-offset-4 hover:underline"
     >
       {{ $t('photos.noStoreLink') }}
     </NuxtLink>
     <AppSheet v-model:open="addOpen" :title="$t('photos.addTitle')">
-      <PhotoPicker multiple :disabled="!canAdd" class="py-2" @pick="pickedFromSheet" />
+      <PhotoPicker v-if="hasStore" multiple :disabled="!canAdd" class="py-2" @pick="pickedFromSheet" />
+      <div v-else class="grid gap-2 py-2">
+        <p class="text-sm text-muted-foreground">{{ $t('photos.noStore') }}</p>
+        <NuxtLink
+          v-if="sourceId"
+          :to="`/settings/sources/${sourceId}`"
+          class="min-h-11 content-center rounded-chip text-sm font-semibold text-accent-ink underline-offset-4 hover:underline"
+          @click="addOpen = false"
+        >
+          {{ $t('photos.noStoreLink') }}
+        </NuxtLink>
+      </div>
     </AppSheet>
+    <AppSheet v-model:open="tileOpen" :title="$t('iconPicker.tileTitle')">
+      <div class="grid gap-2 py-2">
+        <button type="button" class="pressable flex min-h-11 items-center gap-2 rounded-field bg-field px-3 text-left text-sm" @click="tilePhoto">
+          <ImagePlus class="size-5 text-icon" aria-hidden="true" />
+          {{ $t('iconPicker.photo') }}
+        </button>
+        <button type="button" class="pressable flex min-h-11 items-center gap-2 rounded-field bg-field px-3 text-left text-sm" @click="tileIcon">
+          <Shapes class="size-5 text-icon" aria-hidden="true" />
+          {{ $t('iconPicker.icon') }}
+        </button>
+        <button v-if="icon" type="button" class="pressable flex min-h-11 items-center gap-2 rounded-field bg-field px-3 text-left text-sm" @click="tileOpen = false; void saveIcon(null)">
+          <Ban class="size-5 text-icon" aria-hidden="true" />
+          {{ $t('iconPicker.remove') }}
+        </button>
+      </div>
+    </AppSheet>
+    <IconPicker v-model:open="iconOpen" :current="icon ?? null" @pick="saveIcon" />
     <PhotoViewer v-model:open="viewerOpen" v-model:index="viewerIndex" :item-id="itemId" :photos="photos" :locked="progress !== null" />
   </section>
 </template>

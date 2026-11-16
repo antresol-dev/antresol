@@ -25,22 +25,22 @@ const icons: Record<ArchiveRow['kind'], Component> = { folder: Folder, item: Pac
     <li
       v-for="row in rows"
       :key="row.key"
-      class="relative not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-[58px] not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
+      class="relative not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-15 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
     >
-      <div class="flex min-h-[62px] items-center gap-3 px-3.5 py-1.5">
+      <div class="flex min-h-14 items-center gap-3 px-3 py-1.5">
         <span
           :class="[
             'flex shrink-0 items-center justify-center',
             row.kind === 'folder'
-              ? 'size-8 rounded-icon bg-accent-soft text-accent-soft-foreground'
-              : 'size-8 rounded-thumb bg-thumb text-thumb-foreground',
+              ? 'size-9 rounded-icon bg-accent-soft text-accent-soft-foreground'
+              : 'size-9 rounded-thumb bg-thumb text-thumb-foreground',
           ]"
         >
-          <component :is="icons[row.kind]" class="size-[17px]" aria-hidden="true" />
+          <component :is="icons[row.kind]" class="size-5" aria-hidden="true" />
         </span>
         <span class="flex min-w-0 grow flex-col gap-0.5">
-          <span class="truncate text-[15px] font-bold">{{ row.name }}</span>
-          <span class="truncate text-[13px] text-muted-foreground">{{ row.sub }}</span>
+          <span class="truncate text-base font-semibold">{{ row.name }}</span>
+          <span class="truncate text-sm text-muted-foreground">{{ row.sub }}</span>
         </span>
         <Button
           variant="outline"
@@ -58,7 +58,7 @@ const icons: Record<ArchiveRow['kind'], Component> = { folder: Folder, item: Pac
           :disabled="row.locked || row.busy"
           @click="$emit('remove', row.key)"
         >
-          <Trash2 class="size-[18px]" aria-hidden="true" />
+          <Trash2 class="size-5" aria-hidden="true" />
         </Button>
       </div>
     </li>

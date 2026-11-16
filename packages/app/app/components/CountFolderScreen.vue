@@ -107,7 +107,7 @@ onBeforeRouteLeave(() => changes.value.length === 0 || window.confirm(t('countFo
 const linkClass =
   'min-h-11 content-center rounded-chip text-sm font-semibold text-accent-ink underline-offset-4 hover:underline'
 const divider =
-  "relative not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-3.5 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
+  "relative not-first:before:absolute not-first:before:top-0 not-first:before:right-0 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
 </script>
 
 <template>
@@ -121,21 +121,21 @@ const divider =
         <p class="text-sm text-muted-foreground">{{ $t('countFolder.hint') }}</p>
         <ul ref="list">
           <template v-for="g in groups" :key="g.itemId">
-            <li v-if="g.hasVariants" :class="[divider, 'px-3.5 pt-2.5 pb-1 text-[15px] font-bold wrap-anywhere']">{{ g.name }}</li>
+            <li v-if="g.hasVariants" :class="[divider, 'px-3 pt-3 pb-1 text-base font-semibold wrap-anywhere']">{{ g.name }}</li>
             <li
               v-for="row in g.rows"
               :key="row.key"
-              :class="[divider, 'flex min-h-[58px] items-center gap-3 py-1.5 pr-3.5', g.hasVariants ? 'pl-7' : 'pl-3.5', changeOf.has(row.key) && 'rounded-field bg-accent-soft']"
+              :class="[divider, 'flex min-h-14 items-center gap-3 py-1.5 pr-3', g.hasVariants ? 'pl-8' : 'pl-3', changeOf.has(row.key) && 'rounded-field bg-accent-soft']"
             >
               <label :for="`count-${row.key}`" class="flex min-w-0 grow flex-col gap-0.5">
-                <span class="line-clamp-2 text-[15px] wrap-anywhere" :class="g.hasVariants ? 'font-semibold' : 'font-bold'">
+                <span class="line-clamp-2 text-base wrap-anywhere" :class="g.hasVariants ? 'font-medium' : 'font-semibold'">
                   {{ row.variantName ?? row.itemName }}
                 </span>
-                <span v-if="changeOf.get(row.key)?.target === null" class="text-[13px] text-destructive">{{ $t('countFolder.invalid') }}</span>
-                <span v-else-if="failed?.key === row.key" class="text-[13px] text-destructive">
+                <span v-if="changeOf.get(row.key)?.target === null" class="text-sm text-destructive">{{ $t('countFolder.invalid') }}</span>
+                <span v-else-if="failed?.key === row.key" class="text-sm text-destructive">
                   {{ $t(failed.unknown ? 'countFolder.notConfirmed' : 'countFolder.notSaved', { reason: $t(failed.messageKey) }) }}
                 </span>
-                <span v-else-if="changeOf.has(row.key)" class="text-[13px] text-muted-foreground tabular-nums">
+                <span v-else-if="changeOf.has(row.key)" class="text-sm text-muted-foreground tabular-nums">
                   <template v-if="exprOf(row)">{{ $t('expression.result', { value: exprOf(row) }) }} · </template>{{ $t('countFolder.was', { amount: `${row.number} ${row.unit}` }) }}
                 </span>
               </label>
@@ -153,7 +153,7 @@ const divider =
                   :aria-label="$t('countFolder.field', { name: labelOf(row) })"
                   :aria-invalid="changeOf.get(row.key)?.target === null ? true : undefined"
                   :readonly="busy"
-                  class="h-11 pr-12 text-right font-bold tabular-nums"
+                  class="h-11 pr-12 text-right font-semibold tabular-nums"
                   @update:model-value="(v) => edit(row, v)"
                   @keydown.enter.prevent="next"
                   @focus="selectAll"
@@ -167,7 +167,7 @@ const divider =
         </ul>
         <div
           v-if="changes.length > 0 || busy || failed"
-          class="sticky bottom-0 z-10 -mx-4 surface-bar flex items-center gap-3 border-t px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] lg:-mx-7 lg:px-7"
+          class="sticky bottom-0 z-10 -mx-4 surface-bar flex items-center gap-3 border-t px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] lg:-mx-8 lg:px-8"
         >
           <p role="status" class="min-w-0 grow text-sm" :class="failed && !busy ? 'text-destructive' : 'text-muted-foreground'">
             <template v-if="progress">{{ $t('countFolder.saving', { done: progress.done, total: progress.total }) }}</template>
@@ -183,7 +183,7 @@ const divider =
     <EmptyState v-else-if="snapshot" :text="$t('countFolder.gone')">
       <NuxtLink to="/" :class="linkClass">{{ $t('empty.backTo', { name: snapshot.inventory.name }) }}</NuxtLink>
     </EmptyState>
-    <div v-else class="grid grid-cols-1 gap-3.5" aria-hidden="true">
+    <div v-else class="grid grid-cols-1 gap-4" aria-hidden="true">
       <Skeleton class="h-40 rounded-card" />
     </div>
   </ScreenBody>

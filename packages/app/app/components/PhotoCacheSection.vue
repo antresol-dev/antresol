@@ -30,8 +30,8 @@ async function clear(): Promise<void> {
 
 <template>
   <section class="grid gap-2" aria-labelledby="settings-photo-cache">
-    <h2 id="settings-photo-cache" class="section-label text-sm">{{ $t('photoCache.title') }}</h2>
-    <div class="raised-card grid gap-2 p-4.5">
+    <h2 id="settings-photo-cache" class="section-label text-base">{{ $t('photoCache.title') }}</h2>
+    <div class="raised-card grid gap-2 p-4">
       <p class="text-sm text-subtle-foreground">{{ $t('photoCache.hint') }}</p>
       <p v-if="size !== null" class="text-sm">{{ $t('photoCache.size', { size: formatBytes(size) }) }}</p>
       <div class="-mx-2 flex flex-wrap">

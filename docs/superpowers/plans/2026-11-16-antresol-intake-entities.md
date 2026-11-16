@@ -24,6 +24,7 @@
 - **Одна строка на создаваемый вариант:** две строки не создают один новый вариант (тот же предмет и значения осей); у нового предмета без осей не больше одной строки. Пополнение существующего — как сейчас (можно дважды, с предупреждением).
 - **Фото (вариант B):** фото предмета — у нового предмета (в галерею при проведении); фото строки нового варианта — фото варианта; у строки нового предмета без осей поле фото — это фото предмета; строки пополнения фото не несут, «Replace photo» убирается. Фото строк пополнения из старых черновиков проводятся как раньше.
 - **Не делаем:** иконки и цвета у черновых папок и предметов (ставятся потом), единицы и «Show in lists» у черновых атрибутов, новые значения в существующих атрибутах-списках, правку существующих предметов.
+- **Дизайн-система** из `master` (`docs/superpowers/plans/2026-11-13-antresol-12-design-system.md`) обязательна для всего нового интерфейса задач 6–7.
 - **Числа** без float; **тексты** интерфейса — английские в `packages/app/i18n/locales/en.json`, ключи `intakes.*`; контраст ≥ 4.5:1.
 - **Проверка в браузере** — только в UI-задачах: два снимка (1280 и 360 px, без горизонтальной прокрутки), demo-данные, свой dev-сервер на порту `3030 + N` из своего worktree, без `--host`.
 - **Команды:** `pnpm vitest run <path>`, тяжёлые прогоны с `--maxWorkers=3`; `pnpm typecheck`; `pnpm lint`.
@@ -38,20 +39,21 @@
 
 ---
 
-### Task 1: Влить `master` в `mcp`
+### Task 1: Двустороннее слияние `master` и `mcp`
 
-Слияние с правилами разрешения. Ревью — сильная модель (данные, миграции).
+Владелец (2026-11-16): слияние в обе стороны. Правки `master` переносятся в код, который `mcp` переместил в `kit`; правки `master`, которые не задели ветку (интерфейс, размеры, дизайн-система), сверяются с тем, что `mcp` добавил в интерфейс, и `mcp` приводится к ним. Ревью — сильная модель.
 
-**Files:** всё, что даст `git merge master`.
+**Files:** всё, что даст `git merge master`, плюс интерфейс, добавленный веткой `mcp`: `ConnectAiSheet.vue`, `pages/settings/index.vue` (строка действий источника), `TagPicker.vue` (теги черновика), `IntakeLineSheet.vue` (сводка «Tags»), `IntakeNewItemAttributes.vue`.
 
 - [ ] **Step 1:** `git merge master` в `/Users/as/dev/graymatter/.worktrees/mcp`.
-- [ ] **Step 2: Правила разрешения конфликтов:**
-  - `packages/app/app/lib/{amounts,attribute-values,quick-add,views,photo-url,intake-line}.ts` в `mcp` — однострочные реэкспорты из `@antresol/kit/<module>`. Правки `master` в этих файлах (`views.ts`, `photo-url.ts`) перенести в `packages/kit/src/<module>.ts`; в `app/lib` оставить реэкспорт.
-  - Ядро и хранилище: взять обе стороны — иконки и цвета из `master`, теги черновика из `mcp` (`intake.commit`, `validate.ts`, `restore.ts`, `rows.ts`).
-  - Миграции: `0004_icons`, `0005_colors` и их `meta` — из `master` как есть.
-  - Компоненты поступлений (`IntakeLineSheet.vue`, `IntakeList.vue`, `IntakeRecord.vue`), `TagPicker.vue`, `pages/settings/index.vue`: обе стороны (теги и «Connect AI» из `mcp`, стили и иконки из `master`).
-- [ ] **Step 3:** `pnpm install`, `pnpm vitest run --maxWorkers=3`, `pnpm typecheck`, `pnpm lint`, один прогон набора Neon (`neon.conformance.test.ts`) — PASS; `pnpm --filter @antresol/mcp run pack:mcpb` собирается.
-- [ ] **Step 4:** Коммит слияния: `Merge master into mcp: icons and colors (0004, 0005), structural UX`.
+- [ ] **Step 2: Конфликты (master → mcp):**
+  - `packages/app/app/lib/{amounts,attribute-values,quick-add,views,photo-url,intake-line}.ts` в `mcp` — однострочные реэкспорты из `@antresol/kit/<module>`. Все правки `master` в этих файлах (в том числе `views.ts`, `photo-url.ts`) перенести в `packages/kit/src/<module>.ts`; в `app/lib` оставить реэкспорт. Проверить, что новые импорты `master` из этих модулей (новые имена) экспортируются из `kit`.
+  - Ядро и хранилище: обе стороны — иконки и цвета из `master`, теги черновика из `mcp` (`intake.commit`, `validate.ts`, `restore.ts`, `rows.ts`, `backup.ts`). Новые предметы из `intake.commit` создаются без иконки и цвета.
+  - Миграции `0004_icons`, `0005_colors` и их `meta` — из `master` как есть.
+  - Компоненты поступлений, `TagPicker.vue`, `pages/settings/index.vue`: обе стороны.
+- [ ] **Step 3: Сверка mcp → дизайн `master`:** прочитать `docs/superpowers/plans/2026-11-13-antresol-12-design-system.md` (и итоги планов 13–15) и привести к их правилам то, что добавила ветка `mcp`: шторка «Connect AI» (заголовок, кнопки, ссылки, предупреждение), кнопки строки источника в Settings, строка-сводка «Tags» и выбор тегов в шторке строки, теги черновика в `TagPicker` (с учётом цветов тегов из `master`: у тега черновика цвета нет — как у тега без цвета), формы атрибутов в шторке. Использовать токены, компоненты и размеры дизайн-системы, а не собственные классы, где они есть.
+- [ ] **Step 4:** `pnpm install`, `pnpm vitest run --maxWorkers=3`, `pnpm typecheck`, `pnpm lint`, один прогон набора Neon (`neon.conformance.test.ts`) — PASS; `pnpm --filter @antresol/mcp run pack:mcpb` собирается. Два снимка: шторка «Connect AI» и шторка строки нового предмета с тегами (1280 и 360 px; для «Connect AI» — источник Neon с заведомо фиктивной строкой подключения в одноразовом профиле браузера).
+- [ ] **Step 5:** Коммит слияния `Merge master into mcp: icons and colours (0004, 0005), structural UX, design system`; сверка — отдельным коммитом `fix(app): mcp screens follow the design system from master`.
 
 ---
 

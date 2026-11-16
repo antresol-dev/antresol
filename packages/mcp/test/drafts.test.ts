@@ -483,4 +483,81 @@ describe('item photos', () => {
     const ok = (await drafts.addIntakeLines(f.ctx, { intake: id, lines: [{ item: f.ids.resistor, values: { Resistance: '33k' }, amount: '1', photo: 'a.png' }] })) as any
     expect(ok.lines[0].photo.url).toBe('https://img.example/1')
   })
+
+  it('update_intake_line and update_new_item refuse before any upload', async () => {
+    const { f, uploads, id } = await photoSetup()
+    const v = (await drafts.addIntakeLines(f.ctx, { intake: id, lines: [{ item: f.ids.resistor, values: { Resistance: '4k7' }, amount: '1' }] })) as any
+    const top = (await drafts.updateIntakeLine(f.ctx, { intake: id, line: v.lines[0].id, photo: 'a.png' }).catch((e: unknown) => e)) as Error
+    expect(top).toBeInstanceOf(ToolError)
+    expect(top.message).toMatch(/takes no photo/)
+    const unknown = (await drafts.updateNewItem(f.ctx, { intake: id, item: 'nope', photo: 'a.png' }).catch((e: unknown) => e)) as Error
+    expect(unknown).toBeInstanceOf(ToolError)
+    const badFolder = (await drafts.updateNewItem(f.ctx, { intake: id, item: 'nope', folder: 'No/Such', photo: 'a.png' }).catch((e: unknown) => e)) as Error
+    expect(badFolder).toBeInstanceOf(ToolError)
+    expect(uploads).toHaveLength(0)
+  })
+
+  it('an item photo has its own id, not the item id; a second photo on a plain new item is refused before the upload', async () => {
+    const { f, uploads, id } = await photoSetup()
+    await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Saw', photo: 'a.png', withoutLines: true }] })
+    const raw = (await rawIntake(f, id)).draft!
+    expect(raw.newItems[0]!.photoId).toBeTruthy()
+    expect(raw.newItems[0]!.photoId).not.toBe(raw.newItems[0]!.id)
+    const before = uploads.length
+    const both = (await drafts.addIntakeLines(f.ctx, {
+      intake: id,
+      newItems: [{ ref: 'b', name: 'Plane', photo: 'a.png' }],
+      lines: [{ item: 'b', amount: '1', photo: 'a.png' }],
+    }).catch((e: unknown) => e)) as Error
+    expect(both).toBeInstanceOf(ToolError)
+    expect(both.message).toMatch(/give the photo once/)
+    expect(uploads).toHaveLength(before)
+    expect((await get(f, id)).newItems).toHaveLength(1)
+  })
+})
+
+describe('problems an edit would leave behind', () => {
+  const refused = async (p: Promise<unknown>): Promise<string> => {
+    const e = await p.catch((x: unknown) => x)
+    expect(e).toBeInstanceOf(ToolError)
+    return (e as Error).message
+  }
+
+  it('items without lines are checked: empty or long name, a value that does not fit', async () => {
+    const f = await ctxOf()
+    const id = await create(f)
+    expect(await refused(drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: '  ', withoutLines: true }] }))).toMatch(/Nothing was saved/)
+    expect(await refused(drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'x'.repeat(201), withoutLines: true }] }))).toMatch(/Nothing was saved/)
+    await drafts.createAttribute(f.ctx, { intake: id, name: 'Capacity', kind: 'number', unit: 'F' })
+    expect(
+      await refused(drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Cap', attributes: [{ attribute: 'Capacity', value: 'abc' }], withoutLines: true }] })),
+    ).toMatch(/Nothing was saved/)
+    expect((await get(f, id)).newItems).toHaveLength(0)
+    const ok = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Cap', attributes: [{ attribute: 'Capacity', value: '10' }], withoutLines: true }] })) as any
+    expect(ok.newItems).toHaveLength(1)
+  })
+
+  it('update_new_item on an item with no lines is checked; update_attribute cannot break values in use', async () => {
+    const f = await ctxOf()
+    const id = await create(f)
+    await drafts.createAttribute(f.ctx, { intake: id, name: 'Pack', kind: 'list', options: ['A', 'B'] })
+    const v = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Cap', attributes: [{ attribute: 'Pack', value: 'A' }], withoutLines: true }] })) as any
+    const itemId = v.newItems[0].id
+    expect(await refused(drafts.updateNewItem(f.ctx, { intake: id, item: itemId, name: '' }))).toMatch(/Nothing was saved/)
+    expect(await refused(drafts.updateAttribute(f.ctx, { intake: id, attribute: 'Pack', options: ['C'] }))).toMatch(/Nothing was saved/)
+    expect(await refused(drafts.updateAttribute(f.ctx, { intake: id, attribute: 'Pack', kind: 'number' }))).toMatch(/Nothing was saved/)
+    const raw = (await rawIntake(f, id)).draft!
+    expect(raw.newAttributes![0]!.options).toEqual(['A', 'B'])
+    expect(raw.newItems[0]!.name).toBe('Cap')
+  })
+
+  it('a list attribute needs options; archived folders are not offered', async () => {
+    const f = await ctxOf()
+    const id = await create(f)
+    expect(await refused(drafts.createAttribute(f.ctx, { intake: id, name: 'Pack', kind: 'list' }))).toMatch(/at least one option/)
+    expect(await refused(drafts.createAttribute(f.ctx, { intake: id, name: 'Pack', kind: 'list', options: [' '] }))).toMatch(/at least one option/)
+    await f.apply({ type: 'archive', target: 'folder', id: f.ids.modules, archiveId: newId() })
+    f.source.refresh()
+    expect(await refused(drafts.createFolder(f.ctx, { intake: id, name: 'Sub', parent: 'Modules' }))).toMatch(/No folder "Modules"/)
+  })
 })

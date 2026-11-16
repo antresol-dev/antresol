@@ -207,7 +207,6 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
             price: z.string().optional().describe('Total price of the line, like "35.50".'),
             url: z.string().optional().describe('Link to the product, https://...'),
             photo: z.string().optional().describe('A picture to attach to the line: a path from list_photos (absolute or relative to the photos folder). It is uploaded once to the photo store, whatever line it is used on.'),
-            replacePhoto: z.boolean().optional().describe('Replace the photo the variant already has in stock with this one; otherwise the variant keeps its photo.'),
           }),
           )
           .optional()
@@ -229,7 +228,6 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
         price: z.string().optional(),
         url: z.string().optional(),
         photo: z.string().optional().describe('A picture path from list_photos to attach to the line (uploaded once); an empty text removes the line\'s photo.'),
-        replacePhoto: z.boolean().optional().describe('With a photo: replace the photo the variant already has in stock; otherwise it keeps its photo.'),
       },
       annotations: { ...WRITE, idempotentHint: true },
     },

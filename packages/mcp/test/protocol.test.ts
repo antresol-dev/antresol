@@ -38,6 +38,7 @@ describe('protocol', () => {
     const item = (add.inputSchema.properties as any).newItems.items.properties
     expect(Object.keys(item)).toEqual(expect.arrayContaining(['description', 'photo', 'withoutLines']))
     expect((add.inputSchema as any).required).not.toContain('lines')
+    expect(JSON.stringify(tools.map((t) => t.inputSchema))).not.toContain('replacePhoto')
     const attr = tools.find((t) => t.name === 'create_attribute')!
     expect((attr.inputSchema.properties as any).kind.enum).toEqual(['number', 'list', 'text'])
     const result = (await client.callTool({ name: 'create_folder', arguments: { intake: 'nope', name: 'x' } })) as any

@@ -1,9 +1,11 @@
 import {
   emptyIntakeDraft,
+  folderArchived,
   itemArchived,
   itemAxes,
   newId,
   pruneNewItems,
+  resolveIntake,
   type Attribute,
   type AttributeKind,
   type DraftLine,
@@ -34,7 +36,7 @@ import { requireStorage, requireSource, resolveInventory, type ToolContext } fro
 import { checkEditable, editDraft, locateIntake, viewOf } from '../draft-edit'
 import { ToolError } from '../errors'
 import { messageFor } from '../messages'
-import { draftAttributes, draftFolderPath, folderPath } from '../shape'
+import { draftAttributes, draftFolderPath, entityProblemText, folderPath, problemText } from '../shape'
 import { attachPhoto, markPhotosUsed } from './photos'
 
 export interface NewItemArgs {
@@ -122,7 +124,7 @@ export async function updateIntakeHeader(
 
 /** Every folder a path can name: the stock's active folders and the draft's own, with their paths. */
 function folderChoices(s: InventorySnapshot, draft: IntakeDraftContent): { id: Id; path: string }[] {
-  const existing = s.folders.map((f) => ({ id: f.id, path: folderPath(s, f.id) })).filter((f) => f.path !== '')
+  const existing = s.folders.filter((f) => !folderArchived(s, f.id)).map((f) => ({ id: f.id, path: folderPath(s, f.id) })).filter((f) => f.path !== '')
   const own = (draft.newFolders ?? []).map((f) => ({ id: f.id, path: draftFolderPath(s, draft, f.id) }))
   return [...existing, ...own]
 }
@@ -249,15 +251,64 @@ const failed = (r: IntakeDraftContent | DraftError, s: InventorySnapshot, draft:
   return r
 }
 
+/**
+ * Refuses a change that leaves a line or an entity (folder, attribute, new item) with a problem it did not have before:
+ * the checks that only run inside buildDraftLine do not cover an item without lines, an item whose lines stay, or an
+ * attribute that lines already use. A problem that was already there is not this call's and does not block it.
+ */
+function refuseNewProblems(before: IntakeDraftContent, after: IntakeDraftContent, s: InventorySnapshot): void {
+  const was = resolveIntake(before, s)
+  const now = resolveIntake(after, s)
+  const attrs = draftAttributes(s, after)
+  const nameOf = (id: Id): string => {
+    const folder = folderChoices(s, after).find((f) => f.id === id)
+    return folder ? `"${folder.path}"` : `"${attrs.find((a) => a.id === id)?.name ?? id}"`
+  }
+  const list: string[] = []
+  now.lines.forEach((l, i) => {
+    if (l.resolution.kind !== 'problem') return
+    const had = was.lines.find((x) => x.lineId === l.lineId)
+    if (had && had.resolution.kind === 'problem') return
+    list.push(`line ${i + 1}: ${problemText(l.resolution.code)}.`)
+  })
+  for (const e of now.entities) {
+    if (e.problem === null || was.entities.some((x) => x.kind === e.kind && x.id === e.id && x.problem !== null)) continue
+    const label =
+      e.kind === 'item'
+        ? `new item "${after.newItems.find((n) => n.id === e.id)?.name ?? e.id}"`
+        : e.kind === 'folder'
+          ? `new folder ${nameOf(e.id)}`
+          : `new attribute ${nameOf(e.id)}`
+    list.push(`${label}: ${entityProblemText(e.problem, e.kind, nameOf) ?? 'has a problem'}.`)
+  }
+  if (list.length > 0) throw problems(list)
+}
+
+/** A picture that stands in for the upload while an edit is only being checked. */
+const STAND_IN_FILE: PhotoFile = { provider: 'dry', fileId: 'dry', url: 'dry', urls: null, deleteHandle: null, width: 1, height: 1 }
+const STAND_IN: DraftLinePhoto = { ...STAND_IN_FILE, replace: false }
+
+/** Runs `edit` against the draft as the database holds it now, writing nothing: the refusals that need no I/O, before an upload. */
+async function dryRun(
+  ctx: ToolContext,
+  intakeId: Id,
+  edit: (draft: IntakeDraftContent, header: IntakeHeader, s: InventorySnapshot) => unknown,
+): Promise<void> {
+  const { inventory, intake } = await locateIntake(ctx, intakeId)
+  if (intake.status !== 'draft' || intake.draft === null) await checkEditable(ctx, intakeId)
+  edit(intake.draft!, intake.header, await requireSource(ctx).snapshot(inventory.id))
+}
+
 // ---- add ----------------------------------------------------------------------------------------------------------
 
 export async function addIntakeLines(ctx: ToolContext, args: { intake: string; newItems?: NewItemArgs[]; lines?: LineArgs[] }) {
   const lines = args.lines ?? []
   const newItems = args.newItems ?? []
   if (lines.length === 0 && !newItems.some((n) => n.withoutLines)) throw new ToolError('Pass at least one line, or a new item with withoutLines: true.')
-  // Uploads come first and the ids are fixed here: editDraft may run its callback twice, and neither may upload again.
+  // The ids are fixed here: editDraft may run its callback twice, and neither may mint new ones. Uploads happen after the dry run below.
   const lineIds = lines.map(() => newId())
   const itemIds = newItems.map(() => newId())
+  const itemPhotoIds = newItems.map(() => newId())
   const build = (photos: (DraftLinePhoto | null)[], itemPhotos: (PhotoFile | null)[]) => (draft: IntakeDraftContent, header: IntakeHeader, s: InventorySnapshot) => {
     const errors: string[] = []
     const attrs = draftAttributes(s, draft)
@@ -280,7 +331,7 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
             attributes: resolveAttributes(attrs, n.attributes ?? []),
             tagIds: resolveTags(s, tags, n.tags ?? []),
             description: field(n.description),
-            ...(photo ? { photo, photoId: itemIds[i]! } : {}),
+            ...(photo ? { photo, photoId: itemPhotoIds[i]! } : {}),
           },
         })
       })
@@ -301,7 +352,9 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
           if (itemArchived(s, existing)) throw new ToolError(`"${existing.name}" is archived.`)
         }
         const itemId = newItem?.id ?? existing!.id
-        const axisValues = resolveValues(attrs, axesOf(s, attrs, newItem, itemId), l.values)
+        const axes = axesOf(s, attrs, newItem, itemId)
+        if (made?.photo && photos[i] && axes.length === 0) throw new ToolError('give the photo once: this new item has its own photo and the line has one too (the line\'s photo would be lost). Use the item\'s photo.')
+        const axisValues = resolveValues(attrs, axes, l.values)
         const built = buildDraftLine(
           {
             lineId: lineIds[i]!,
@@ -331,16 +384,17 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
       else if (!next.newItems.some((n) => n.id === f.item.id)) next = withNewItem(next, f.item)
     }
     if (unused.length > 0) throw problems(unused)
+    refuseNewProblems(draft, next, s)
     return { draft: next, header }
-    }
+  }
   // Refusals that need no I/O come before any upload: the same checks, run on stand-in photos against what the database holds now.
   if (lines.some((l) => l.photo?.trim()) || newItems.some((n) => n.photo?.trim())) {
     const { inventory, intake } = await locateIntake(ctx, args.intake)
     if (intake.status !== 'draft' || intake.draft === null) await checkEditable(ctx, args.intake)
-    const stand: DraftLinePhoto = { provider: 'dry', fileId: 'dry', url: 'dry', urls: null, deleteHandle: null, width: 1, height: 1, replace: false }
+    const stand = STAND_IN
     build(
       lines.map((l) => (l.photo?.trim() ? { ...stand, replace: l.replacePhoto ?? false } : null)),
-      newItems.map((n) => (n.photo?.trim() ? stand : null)),
+      newItems.map((n) => (n.photo?.trim() ? STAND_IN_FILE : null)),
     )(intake.draft!, intake.header, await requireSource(ctx).snapshot(inventory.id))
   }
   const photos: (DraftLinePhoto | null)[] = []
@@ -367,7 +421,7 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
   // Only a saved line or item makes its picture "used".
   const warning = markPhotosUsed(ctx, [
     ...lines.flatMap((l, i) => (photos[i] ? [{ file: l.photo!.trim(), intakeId: args.intake.trim(), lineId: lineIds[i]! }] : [])),
-    ...newItems.flatMap((n, i) => (itemPhotos[i] ? [{ file: n.photo!.trim(), intakeId: args.intake.trim(), lineId: itemIds[i]! }] : [])),
+    ...newItems.flatMap((n, i) => (itemPhotos[i] ? [{ file: n.photo!.trim(), intakeId: args.intake.trim(), lineId: itemPhotoIds[i]! }] : [])),
   ])
   return warning ? { ...view, warning } : view
 }
@@ -385,9 +439,7 @@ export async function updateIntakeLine(
   args: { intake: string; line: string; values?: Record<string, string>; amount?: string; price?: string; url?: string; photo?: string; replacePhoto?: boolean },
 ) {
   const path = args.photo?.trim()
-  if (path) await checkEditable(ctx, args.intake)
-  const uploaded = path ? { ...(await attachPhoto(ctx, path)), replace: args.replacePhoto ?? false } : null
-  const view = await editDraft(ctx, args.intake, (draft, header, s) => {
+  const build = (uploaded: DraftLinePhoto | null) => (draft: IntakeDraftContent, header: IntakeHeader, s: InventorySnapshot) => {
     const old = findLine(draft, args.line)
     const newItem = draft.newItems.find((n) => n.id === old.itemId) ?? null
     const attrs = draftAttributes(s, draft)
@@ -420,7 +472,11 @@ export async function updateIntakeLine(
       sourceUrl: args.url === undefined ? old.sourceUrl : built.line.sourceUrl,
     }
     return { draft: withLine(draft, line, built.newItem, built.newTags), header }
-  })
+  }
+  // Refusals that need no I/O come before the upload: the same edit, run with a stand-in photo on what the database holds now.
+  if (path) await dryRun(ctx, args.intake, (draft, header, s) => build({ ...STAND_IN, replace: args.replacePhoto ?? false })(draft, header, s))
+  const uploaded = path ? { ...(await attachPhoto(ctx, path)), replace: args.replacePhoto ?? false } : null
+  const view = await editDraft(ctx, args.intake, build(uploaded))
   const warning = path && uploaded ? markPhotosUsed(ctx, [{ file: path, intakeId: args.intake.trim(), lineId: args.line.trim() }]) : null
   return warning ? { ...view, warning } : view
 }
@@ -455,11 +511,8 @@ export async function updateNewItem(
   },
 ) {
   const path = args.photo?.trim()
-  if (path) await checkEditable(ctx, args.intake)
-  const up = path ? await attachPhoto(ctx, path) : null
-  const photo: PhotoFile | null = up ? { provider: up.provider, fileId: up.fileId, url: up.url, urls: up.urls, deleteHandle: up.deleteHandle, width: up.width, height: up.height } : null
   const photoId = newId()
-  const view = await editDraft(ctx, args.intake, (draft, header, s) => {
+  const build = (photo: PhotoFile | null) => (draft: IntakeDraftContent, header: IntakeHeader, s: InventorySnapshot) => {
     const id = args.item.trim()
     const old = findNewItem(draft, id)
     const attrs = draftAttributes(s, draft)
@@ -503,9 +556,16 @@ export async function updateNewItem(
     })
     if (errors.length > 0) throw problems(errors)
     const withItem = withNewItem({ ...draft, ...(tags.length > 0 || draft.newTags ? { newTags: tags } : {}), lines }, item)
-    return { draft: pruneNewItems(withItem), header }
-  })
-  const warning = path && photo ? markPhotosUsed(ctx, [{ file: path, intakeId: args.intake.trim(), lineId: args.item.trim() }]) : null
+    const next = pruneNewItems(withItem)
+    refuseNewProblems(draft, next, s)
+    return { draft: next, header }
+  }
+  // Refusals that need no I/O come before the upload: the same edit, run with a stand-in photo on what the database holds now.
+  if (path) await dryRun(ctx, args.intake, build(STAND_IN_FILE))
+  const up = path ? await attachPhoto(ctx, path) : null
+  const photo: PhotoFile | null = up ? { provider: up.provider, fileId: up.fileId, url: up.url, urls: up.urls, deleteHandle: up.deleteHandle, width: up.width, height: up.height } : null
+  const view = await editDraft(ctx, args.intake, build(photo))
+  const warning = path && photo ? markPhotosUsed(ctx, [{ file: path, intakeId: args.intake.trim(), lineId: photoId }]) : null
   return warning ? { ...view, warning } : view
 }
 
@@ -566,6 +626,7 @@ const KIND: Record<AttributeArgs['kind'], AttributeKind> = { number: 'number', l
 function attributeOf(id: Id, a: AttributeArgs): DraftNewAttribute {
   const kind = KIND[a.kind]
   if (!kind) throw new ToolError(`Attribute kind "${String(a.kind)}" is not one of number, list, text.`)
+  if (kind === 'enum' && !(a.options ?? []).some((o) => o.trim() !== '')) throw new ToolError('A list attribute needs at least one option: pass options.')
   return {
     id,
     name: a.name ?? '',
@@ -599,7 +660,9 @@ export async function updateAttribute(ctx: ToolContext, args: Partial<AttributeA
       siPrefixes: args.siPrefixes ?? old.siPrefixes,
       options: args.options ?? old.options,
     }
-    return { draft: failed(withNewAttribute(draft, s, attributeOf(old.id, merged)), s, draft), header }
+    const next = failed(withNewAttribute(draft, s, attributeOf(old.id, merged)), s, draft)
+    refuseNewProblems(draft, next, s)
+    return { draft: next, header }
   })
 }
 

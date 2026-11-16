@@ -119,7 +119,7 @@ export interface IntakeView {
   createdBy: string
   updatedBy: string
   updatedAt: string
-  /** The draft can be committed as it is: no line has a problem. Committed: true. */
+  /** The draft can be committed as it is: no line, folder, attribute or new item has a problem, and it does something (a line or something to create). Committed: true. */
   ok: boolean
   newFolders: IntakeNewFolderView[]
   newAttributes: IntakeNewAttributeView[]
@@ -127,7 +127,7 @@ export interface IntakeView {
   lines: IntakeLineView[]
 }
 
-function entityProblemText(p: EntityProblem | null, what: 'folder' | 'attribute' | 'item', nameOf: (id: Id) => string): string | null {
+export function entityProblemText(p: EntityProblem | null, what: 'folder' | 'attribute' | 'item', nameOf: (id: Id) => string): string | null {
   if (p === null) return null
   if (p.code === 'duplicate_name') return `a ${what === 'folder' ? 'folder' : 'attribute'} with this name already exists: ${nameOf(p.existingId)} (id ${p.existingId})`
   if (p.code === 'parent_gone') return 'the folder or item it belongs to is archived or gone'

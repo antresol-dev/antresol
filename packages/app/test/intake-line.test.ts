@@ -356,12 +356,12 @@ describe('tags of new items', () => {
     expect(draft.newTags).toEqual([])
   })
 
-  it('withoutLine takes the new tag of the last line of its item away; restoreLine brings it back', () => {
+  it('withoutLine keeps the new tag of the item, which lives on without lines; restoreLine puts the line back', () => {
     const n = newItem({ tagIds: [kit.id] })
     const l = line({ itemId: n.id })
     const draft = withLine(emptyIntakeDraft(), l, n, [kit])
     const { content, removed } = withoutLine(draft, l.id)
-    expect(content.newTags ?? []).toEqual([])
+    expect(content.newTags).toEqual([kit])
     expect(restoreLine(content, removed!)).toEqual(draft)
   })
 })
@@ -390,26 +390,21 @@ describe('buildDraftLine: shared values and photos', () => {
     })
   })
 
-  it('replaces a photo only when asked and only when the variant the line goes to has one', async () => {
-    await run({ type: 'photo.add', id: newId(), itemId: resistor, variantId: v.r4k7, provider: 'uploadcare', fileId: 'old', url: 'https://ucarecdn.com/old/' })
-    const withPhoto = await storage.loadInventory(inventoryId)
-    const replaceOf = (f: LineForm, s: InventorySnapshot): boolean | undefined => {
-      const built = buildDraftLine(f, s, emptyIntakeDraft())
-      return 'line' in built ? built.line.photo?.replace : undefined
-    }
-    // Asked, and 4.7 kΩ has a photo: replaced.
-    expect(replaceOf(form({ photo: photo(true) }), withPhoto)).toBe(true)
-    // Not asked: kept.
-    expect(replaceOf(form({ photo: photo(false) }), withPhoto)).toBe(false)
-    // Asked while on 4.7 kΩ, then the value changed to one without a photo: nothing to replace.
-    expect(replaceOf(form({ photo: photo(true), axisValues: [{ attributeId: resistance, value: '10k' }] }), withPhoto)).toBe(false)
-    // A new value: no photo yet.
-    expect(replaceOf(form({ photo: photo(true), axisValues: [{ attributeId: resistance, value: '33k' }] }), withPhoto)).toBe(false)
+  it('a top-up line takes no photo (no "Replace photo"); a new variant’s photo replaces nothing', () => {
+    const built = (f: LineForm, draft = emptyIntakeDraft()) => buildDraftLine(f, snap, draft)
+    // 4.7 kΩ exists: this line tops it up.
+    expect(built(form({ photo: photo(true) }))).toEqual({ errorKey: 'intakes.line.noPhotoOnTopUp' })
+    expect(built(form({ photo: photo(false) }))).toEqual({ errorKey: 'intakes.line.noPhotoOnTopUp' })
+    // A photo an older draft already has on this very line stays.
+    const old = line({ axisValues: [{ attributeId: resistance, value: '4700' }], photo: photo(true) })
+    expect(built(form({ lineId: old.id, photo: photo(true) }), { ...emptyIntakeDraft(), lines: [old] })).toMatchObject({ line: { photo: { replace: true } } })
+    // A new value: the photo is the new variant's.
+    expect(built(form({ photo: photo(true), axisValues: [{ attributeId: resistance, value: '33k' }] }))).toMatchObject({ line: { photo: { replace: false } } })
   })
 })
 
 describe('withLine, withoutLine, restoreLine', () => {
-  it('puts a line in place, drops new items left without lines, and Undo brings both back', () => {
+  it('puts a line in place; a new item lives on without its lines; Undo brings the line back', () => {
     const fuse = newItem()
     const first = line({ itemId: fuse.id })
     const second = line()
@@ -420,11 +415,11 @@ describe('withLine, withoutLine, restoreLine', () => {
     expect(draft.newItems).toEqual([{ ...fuse, name: 'Fuse' }])
 
     const { content, removed } = withoutLine(draft, first.id)
-    expect(content).toEqual({ newItems: [], lines: [second] })
-    expect(removed).toMatchObject({ index: 0, newItem: { id: fuse.id } })
+    expect(content).toEqual({ newItems: [{ ...fuse, name: 'Fuse' }], lines: [second] })
+    expect(removed).toMatchObject({ index: 0, newItem: null })
     expect(restoreLine(content, removed!)).toEqual(draft)
-    // A line moved off its new item takes the item away.
-    expect(withLine(draft, { ...first, itemId: resistor }, null).newItems).toEqual([])
+    // A line moved off its new item leaves the item as it is: removing it is explicit (withoutNewItem).
+    expect(withLine(draft, { ...first, itemId: resistor }, null).newItems).toEqual([{ ...fuse, name: 'Fuse' }])
   })
 })
 

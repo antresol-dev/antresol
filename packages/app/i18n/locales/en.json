@@ -87,6 +87,17 @@
       "invalid_link": "The link isn’t a web address: it should start with https://",
       "unknown": "This line can’t be committed as it is: open it to check"
     },
+    "folder": {
+      "cycle": "A folder can’t go inside itself or inside one of its own folders.",
+      "notEmpty": "Move or remove what’s in this folder first.",
+      "parentGone": "The folder this goes in no longer exists.",
+      "duplicate": "There is already a folder called “{name}” here."
+    },
+    "attribute": {
+      "inUse": "A new item uses this attribute. Remove it from the item first.",
+      "invalid": "This attribute’s kind or unit isn’t valid.",
+      "duplicate": "There is already an attribute called “{name}”."
+    },
     "line": {
       "addTitle": "Add line",
       "editTitle": "Edit line",
@@ -127,6 +138,8 @@
       "remove": "Remove line",
       "removed": "Line removed",
       "removedWithItem": "Line removed, and the new item “{name}” with it",
+      "noPhotoOnTopUp": "A line that adds stock to something you already have takes no photo.",
+      "alreadyCreated": "Another line of this intake already creates this variant. Edit that line instead.",
       "needsAmount": "Enter the amount.",
       "needsValue": "Enter {name}.",
       "invalidValue": "{name} doesn’t read as a value.",

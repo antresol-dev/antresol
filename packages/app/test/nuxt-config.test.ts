@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest'
-import { DEFAULT_STYLE, STYLES } from '../app/lib/styles/registry'
 
 vi.stubGlobal('defineNuxtConfig', <T>(config: T) => config)
 const { default: config } = await import('../nuxt.config')
@@ -38,12 +37,11 @@ describe('nuxt config', () => {
     })
   })
 
-  it('paints the splash and title bar in the default style\'s light page colour', () => {
+  // Android paints an installed app's bottom system bar from the manifest, one colour for every theme: a neutral dark
+  // grey rather than a white strip under a dark page.
+  it('paints the splash and the system bars in one neutral dark grey', () => {
     const manifest = config.pwa?.manifest
-    const { build, defaultAccent } = STYLES[DEFAULT_STYLE]
-    const page = build('light', defaultAccent).pageColor
-    expect(page).toBe('#F4F5F7')
-    expect(manifest && [manifest.background_color, manifest.theme_color]).toEqual([page, page])
+    expect(manifest && [manifest.background_color, manifest.theme_color]).toEqual(['#1E2026', '#1E2026'])
   })
 
   it('loads Manrope 800 (font-extrabold)', () => {

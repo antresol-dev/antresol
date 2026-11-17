@@ -13,7 +13,7 @@ const current = computed(() => iconFrom(iconSet.value, props.icon))
 
 <template>
   <div class="grid gap-2">
-    <span id="icon-field-label" class="text-sm leading-none font-medium">{{ $t('iconPicker.field') }}</span>
+    <span id="icon-field-label" class="field-text text-sm leading-none font-medium">{{ $t('iconPicker.field') }}</span>
     <button
       type="button"
       aria-labelledby="icon-field-label icon-field-value"

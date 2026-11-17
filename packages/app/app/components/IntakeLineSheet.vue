@@ -636,7 +636,7 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
         </div>
         <template v-if="typed.trim()">
           <section v-if="matches.exact.length + matches.otherValue.length + matches.similar.length > 0" class="grid gap-1" aria-labelledby="intake-line-have">
-            <h3 id="intake-line-have" class="section-label px-1 text-xs">{{ $t('intakes.line.alreadyHave') }}</h3>
+            <h3 id="intake-line-have" class="section-label field-text text-xs">{{ $t('intakes.line.alreadyHave') }}</h3>
             <ul class="surface-list">
               <li v-for="r in matches.exact" :key="`e:${r.itemId}:${r.variantId}`">
                 <button type="button" :class="[matchRow, 'match-best']" :disabled="disabled" @click="pickExisting(r, true)">
@@ -670,7 +670,7 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
             </ul>
           </section>
           <section v-if="matches.inDraft.length > 0" class="grid gap-1" aria-labelledby="intake-line-in-draft">
-            <h3 id="intake-line-in-draft" class="section-label px-1 text-xs">{{ $t('intakes.line.inIntake') }}</h3>
+            <h3 id="intake-line-in-draft" class="section-label field-text text-xs">{{ $t('intakes.line.inIntake') }}</h3>
             <ul class="surface-list">
               <li v-for="d in matches.inDraft" :key="d.newItemId">
                 <button type="button" :class="matchRow" :disabled="disabled" @click="pickDraftItem(d.newItemId)">
@@ -721,7 +721,7 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
                   @keydown.enter.prevent="save(!editing)"
                 />
               </template>
-              <p v-else class="pt-0.5 text-base font-semibold wrap-anywhere">{{ item?.name }}</p>
+              <p v-else class="field-text pt-0.5 text-base font-semibold wrap-anywhere">{{ item?.name }}</p>
             </div>
             <span
               v-if="tag"
@@ -760,7 +760,7 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
               @keydown.enter.prevent="editingAxis = axes.find((a) => a.id !== editingAxis && !valueOf(a.id).trim())?.id ?? null; focusSoon(editingAxis ? `#intake-axis-${editingAxis}` : '#intake-line-amount')"
             />
           </div>
-          <p class="text-xs text-muted-foreground wrap-anywhere">
+          <p class="field-text text-xs text-muted-foreground wrap-anywhere">
             <template v-if="newItem">{{ $t('intakes.line.newItemCaption') }}</template>
             <template v-else>{{ haveText }}</template>
           </p>
@@ -795,7 +795,7 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
         </div>
 
         <div v-if="newItem" class="grid gap-1.5">
-          <p class="text-sm font-medium leading-none">{{ $t('intakes.line.folder') }}</p>
+          <p class="field-text text-sm leading-none font-medium">{{ $t('intakes.line.folder') }}</p>
           <div class="flex flex-wrap gap-1.5">
             <button
               v-for="c in folderChips"

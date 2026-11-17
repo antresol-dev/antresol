@@ -23,7 +23,7 @@ function choose(value: unknown): void {
 
 <template>
   <div class="grid gap-2">
-    <span :id="labelId" class="text-sm leading-none font-medium">{{ label }}</span>
+    <span :id="labelId" class="field-text text-sm leading-none font-medium">{{ label }}</span>
     <RadioGroupRoot
       :model-value="model ?? AUTO"
       :aria-labelledby="labelId"

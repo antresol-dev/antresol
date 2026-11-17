@@ -630,4 +630,15 @@ describe('draft folders, attributes and standalone items', () => {
     expect(cmd.created).toEqual({ folders: [], attributes: [], tags: [], items: [{ id: 'NEW', name: 'Resistor 0.6 W', folderId: null }] })
     expect(validateCommand(normalizeCommand(cmd), base())).toBeNull()
   })
+
+  it('a command built before draft tags normalizes and validates', () => {
+    const old = { newItems: [{ id: 'NEW', name: 'Resistor 0.6 W', folderId: null, unitKey: 'pcs', attributes: [{ attributeId: 'res', value: null, axis: true }] }], lines: [line('NEW', { res: '1k' }), line('M')] } as IntakeDraftContent
+    const cmd = build(old) as unknown as Record<string, unknown>
+    delete cmd.newTags
+    ;(cmd.newItems as { tagIds?: string[] }[]).forEach((x) => delete x.tagIds)
+    const n = normalizeCommand(cmd as unknown as IntakeCommit) as IntakeCommit
+    expect(n.newTags).toEqual([])
+    expect(n.newItems[0]!.tagIds).toEqual([])
+    expect(validateCommand(n, base())).toBeNull()
+  })
 })

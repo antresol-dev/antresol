@@ -119,7 +119,7 @@ export function normalizeCommand(c: Command): Command {
       note: desc(c.header.note) ?? null,
     }
     // A command built before draft folders, attributes and the created record reads as creating none of them.
-    const older = c as Partial<Pick<IntakeCommit, 'newFolders' | 'newAttributes' | 'created'>>
+    const older = c as Partial<Pick<IntakeCommit, 'newFolders' | 'newAttributes' | 'newTags' | 'created'>>
     out.newFolders = (older.newFolders ?? []).map((f) => ({ ...f, name: f.name.trim() }))
     out.newAttributes = (older.newAttributes ?? []).map((a) => {
       const number = a.kind === 'number'
@@ -133,12 +133,12 @@ export function normalizeCommand(c: Command): Command {
       tags: named(created.tags),
       items: named(created.items),
     }
-    out.newTags = c.newTags.map((t) => ({ ...t, name: t.name.trim() }))
+    out.newTags = (older.newTags ?? []).map((t) => ({ ...t, name: t.name.trim() }))
     out.newItems = c.newItems.map((n) => ({
       ...n,
       name: n.name.trim(),
       description: desc(n.description) ?? null,
-      tagIds: [...new Set(n.tagIds)],
+      tagIds: [...new Set(n.tagIds ?? [])],
       attributes: n.attributes.map((x) => ({ ...x, value: desc(x.value) ?? null })),
     }))
     out.newVariants = c.newVariants.map((v) => ({ ...v, values: v.values.map((x) => ({ ...x, value: x.value.trim() })) }))

@@ -413,8 +413,11 @@
     border-right: var(--st-rail-line);
   }
 
+  /* overflow: rows reach the list's edges, so a highlighted first or last row (and its hover tint) is clipped to the
+     list's own corners instead of sticking out past them. */
   .surface-list {
     border-radius: var(--st-list-r);
+    overflow: hidden;
     background: var(--st-list);
     box-shadow: var(--st-list-sh);
     -webkit-backdrop-filter: var(--st-surf-blur);

@@ -90,7 +90,9 @@ const pressHandlers = computed(() =>
       :class="[
         'group relative flex items-center gap-1.5 rounded-field text-sm font-semibold transition-colors duration-(--dur-fast)',
         // Clear space from the highlight's edge and its rounded corners: 10 px on the 32 px panel rows, 12 px in the drawer.
-        panel ? 'h-8 px-3' : 'min-h-11 pr-3',
+        // The chevron's centre sits on the children's guide line (12 px on the panel, 20 in the drawer): the row's left
+        // padding gives way to it rather than the line moving right, so the names keep their room.
+        panel ? 'h-8 pr-3 pl-0.5' : 'min-h-11 pr-3 -ml-0.5',
         row.current ? 'row-selected' : 'text-icon hover:bg-(--ghost-hover) hover:text-foreground',
       ]"
     >

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Folder, Id } from '@antresol/core'
+import { folderNameTaken, type Folder, type Id } from '@antresol/core'
 import { ChevronDown } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -47,9 +47,21 @@ const changes = computed(() =>
     { name: name.value.trim(), description: description.value.trim() || null, icon: icon.value },
   ),
 )
+// The name must be free among the folders of the parent (archived ones count). A rename left as it was is not checked.
+const taken = computed(() => {
+  const s = state.snapshot
+  const n = name.value.trim()
+  if (!s || !n) return null
+  if (props.mode === 'create') return folderNameTaken(s, parentId.value, n)
+  if (!existing || changes.value.name === undefined) return null
+  return folderNameTaken(s, existing.parentId, n, existing.id)
+})
+const takenIn = (id: Id | null): 'active' | 'archived' | null =>
+  state.snapshot && name.value.trim() ? folderNameTaken(state.snapshot, id, name.value) : null
 const canSubmit = computed(
   () =>
     !busy.value &&
+    !taken.value &&
     !state.readOnly &&
     !!state.snapshot &&
     (props.mode === 'create' || (!!existing && Object.keys(changes.value).length > 0)),
@@ -96,9 +108,10 @@ async function submit(): Promise<void> {
         v-model="name"
         autocomplete="off"
         :aria-invalid="errorKey ? true : undefined"
-        aria-describedby="folder-form-error"
+        aria-describedby="folder-name-taken folder-form-error"
         class="h-11"
       />
+      <NameTakenNote id="folder-name-taken" :taken="taken" :name="name" />
     </div>
     <div v-if="mode === 'create'" class="grid gap-2">
       <Label for="folder-parent">{{ $t('folderForm.parent') }}</Label>
@@ -113,7 +126,7 @@ async function submit(): Promise<void> {
         <span class="min-w-0 flex-1 truncate">{{ parentPath }}</span>
         <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-(--dur-fast) motion-reduce:transition-none" :class="picking ? 'rotate-180' : ''" aria-hidden="true" />
       </button>
-      <FolderPickerList v-if="picking" :choices="choices" :aria-label="$t('folderForm.chooseParent')" @select="pick" />
+      <FolderPickerList v-if="picking" :choices="choices" :taken="takenIn" :aria-label="$t('folderForm.chooseParent')" @select="pick" />
     </div>
     <div class="grid gap-2">
       <Label for="folder-description">

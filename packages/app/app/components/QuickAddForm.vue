@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { getCurrency, type Command, type Id } from '@antresol/core'
+import { getCurrency, itemNameTaken, type Command, type Id } from '@antresol/core'
 import { refDebounced } from '@vueuse/core'
 import { ChevronDown, X } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
@@ -78,7 +78,11 @@ const currencySymbol = computed(() => {
 // A shared link is kept only with an amount (see buildQuickAdd): say so while it would be left out.
 const linkHint = computed(() => linkNeedsAmount(url.value, prefilledUrl, amount.value))
 
-const canSubmit = computed(() => !busy.value && !state.readOnly && !!snapshot.value)
+// The name must be free in the chosen folder (archived twins count); the folder list marks the folders where it isn't.
+const takenIn = (id: Id | null): 'active' | 'archived' | null =>
+  snapshot.value && name.value.trim() ? itemNameTaken(snapshot.value, id, name.value) : null
+const taken = computed(() => takenIn(folderId.value))
+const canSubmit = computed(() => !busy.value && !state.readOnly && !!snapshot.value && !taken.value)
 
 // "You already have it" (spec 4.9): up to three things with this name, a moment after typing stops. Save stays free.
 const typedName = refDebounced(name, 150)
@@ -175,7 +179,8 @@ async function send(command: ItemCreate): Promise<void> {
     <fieldset :disabled="unconfirmed" class="grid min-w-0 gap-4">
       <div class="grid gap-2">
         <Label for="quick-add-name">{{ $t('form.name') }}</Label>
-        <Input id="quick-add-name" v-model="name" autocomplete="off" class="h-11" />
+        <Input id="quick-add-name" v-model="name" autocomplete="off" :aria-describedby="taken ? 'quick-add-name-taken' : undefined" class="h-11" />
+        <NameTakenNote id="quick-add-name-taken" :taken="taken" :name="name" />
         <section v-if="matches.length > 0" class="grid gap-1" aria-labelledby="quick-add-existing">
           <h3 id="quick-add-existing" class="pt-1 text-xs font-semibold text-subtle-foreground">{{ $t('quickAdd.existing') }}</h3>
           <ul class="grid gap-0.5">
@@ -208,7 +213,7 @@ async function send(command: ItemCreate): Promise<void> {
           <span class="min-w-0 flex-1 truncate">{{ folderPath }}</span>
           <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-(--dur-fast) motion-reduce:transition-none" :class="picking ? 'rotate-180' : ''" aria-hidden="true" />
         </button>
-        <FolderPickerList v-if="picking" :choices="choices" :aria-label="$t('quickAdd.chooseFolder')" @select="pick" />
+        <FolderPickerList v-if="picking" :choices="choices" :taken="takenIn" :aria-label="$t('quickAdd.chooseFolder')" @select="pick" />
       </div>
 
       <div class="grid gap-2">

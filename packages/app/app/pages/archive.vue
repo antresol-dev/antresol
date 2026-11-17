@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Command } from '@antresol/core'
+import { DomainError, type Command } from '@antresol/core'
 import { toast } from 'vue-sonner'
 import type { ArchiveRow } from '~/components/ArchiveList.vue'
 import { archiveEntries } from '~/lib/archive'
@@ -88,6 +88,12 @@ const find = (key: string): Job | undefined => jobs.value.find((j) => j.row.key 
 const loading = computed(() => !snapshot.value && state.current !== null)
 const empty = computed(() => !loading.value && jobs.value.length === 0)
 
+/** A restore that meets a living twin of the same name says which one, instead of the general "already used". */
+function clashText(job: Job, command: Command, e: unknown): string | null {
+  if (command.type !== 'restore' || !(e instanceof DomainError) || e.code !== 'duplicate_name' || job.row.kind === 'variant') return null
+  return t('nameTaken.restoreClash', { name: job.row.name })
+}
+
 async function run(job: Job, command: Command, done?: () => string): Promise<void> {
   if (writing.value) return
   writing.value = job.row.key
@@ -95,7 +101,7 @@ async function run(job: Job, command: Command, done?: () => string): Promise<voi
     await workspace.applyTo(job.ref, command)
     if (done) toast.success(done())
   } catch (e) {
-    toast.error(t(errorMessageKey(e)))
+    toast.error(clashText(job, command, e) ?? t(errorMessageKey(e)))
   } finally {
     writing.value = null
   }

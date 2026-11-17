@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Tag } from '@antresol/core'
+import { sameName, type Tag } from '@antresol/core'
 import { Pencil, Plus, Trash2 } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
@@ -27,6 +27,15 @@ const opened = ref(0)
 const busy = ref(false)
 const errorKey = ref<string | null>(null)
 const locked = computed(() => !!state.readOnly || state.saving || busy.value)
+// Tag names are unique across the inventory; a rename left as it was is not checked.
+const nameTaken = computed(() => {
+  const n = name.value.trim()
+  const cur = shown.value
+  if (!n || !state.snapshot || !cur || cur.kind === 'delete') return null
+  if (cur.kind === 'rename' && n === cur.tag.name) return null
+  const id = cur.kind === 'rename' ? cur.tag.id : null
+  return state.snapshot.tags.some((x) => x.id !== id && sameName(x.name, n)) ? ('active' as const) : null
+})
 
 function open(next: Target): void {
   target.value = next
@@ -156,15 +165,16 @@ async function remove(): Promise<void> {
             v-model="name"
             autocomplete="off"
             :aria-invalid="errorKey ? true : undefined"
-            aria-describedby="tag-form-error"
+            aria-describedby="tag-name-taken tag-form-error"
             class="h-11"
           />
+          <NameTakenNote id="tag-name-taken" :taken="nameTaken" :name="name" />
         </div>
         <ColorSwatches :key="opened" v-model="color" :auto="null" :label="$t('colors.label')" :disabled="busy" />
         <p id="tag-form-error" role="alert" class="field-text text-sm text-destructive">
           <template v-if="errorKey && formOpen">{{ $t(errorKey) }}</template>
         </p>
-        <Button type="submit" class="h-11 rounded-field" :disabled="locked || !state.snapshot">
+        <Button type="submit" class="h-11 rounded-field" :disabled="locked || !state.snapshot || !!nameTaken">
           {{ $t(busy ? 'status.saving' : shown?.kind === 'rename' ? 'dictionaries.tagSave' : 'dictionaries.tagCreate') }}
         </Button>
       </form>

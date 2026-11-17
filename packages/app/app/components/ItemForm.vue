@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Id, Item } from '@antresol/core'
+import { itemNameTaken, type Id, type Item } from '@antresol/core'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -48,7 +48,13 @@ const changes = computed(() =>
     { name: name.value.trim(), description: description.value.trim() || null, unitKey: unitKey.value, tagIds: tagIds.value, icon: icon.value, color: color.value },
   ),
 )
-const canSubmit = computed(() => !locked.value && !!snapshot.value && Object.keys(changes.value).length > 0)
+// A renamed item must not take a name of its folder (archived twins included); a name left as it was is not checked.
+const taken = computed(() => {
+  const n = name.value.trim()
+  if (!snapshot.value || !n || changes.value.name === undefined) return null
+  return itemNameTaken(snapshot.value, props.item.folderId, n, props.item.id)
+})
+const canSubmit = computed(() => !locked.value && !!snapshot.value && !taken.value && Object.keys(changes.value).length > 0)
 
 async function createTag(tagName: string): Promise<void> {
   const s = snapshot.value
@@ -90,7 +96,8 @@ async function submit(): Promise<void> {
   <form class="grid gap-4" novalidate @submit.prevent="submit">
     <div class="grid gap-2">
       <Label for="item-name">{{ $t('form.name') }}</Label>
-      <Input id="item-name" v-model="name" autocomplete="off" :aria-invalid="errorKey ? true : undefined" aria-describedby="item-form-error" class="h-11" />
+      <Input id="item-name" v-model="name" autocomplete="off" :aria-invalid="errorKey ? true : undefined" aria-describedby="item-name-taken item-form-error" class="h-11" />
+      <NameTakenNote id="item-name-taken" :taken="taken" :name="name" />
     </div>
     <div class="grid gap-2">
       <Label for="item-description">

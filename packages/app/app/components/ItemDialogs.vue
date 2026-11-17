@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Id, Item } from '@antresol/core'
+import { itemNameTaken, type Id, type Item } from '@antresol/core'
 import { toast } from 'vue-sonner'
 import type { ItemDialog } from '~/composables/useDialogs'
 import { errorMessageKey } from '~/lib/errors'
@@ -47,6 +47,10 @@ const editBusy = ref(false)
 useCloseOnSwitch(() => state.current, close, () => busy.value || editBusy.value)
 const choices = computed(() => (state.snapshot && item.value ? folderChoices(state.snapshot, item.value.folderId) : []))
 
+// Folders that already hold an item of this name (archived ones included) can't be chosen.
+const takenIn = (folderId: Id | null): 'active' | 'archived' | null =>
+  state.snapshot && item.value ? itemNameTaken(state.snapshot, folderId, item.value.name, item.value.id) : null
+
 async function move(folderId: Id | null): Promise<void> {
   const target = item.value
   if (!target || busy.value || state.readOnly) return
@@ -87,6 +91,6 @@ async function archive(): Promise<void> {
     <ItemForm v-if="item && shown?.kind === 'edit'" :key="item.id" v-model:busy="editBusy" :item="item" @done="close" />
   </AppSheet>
   <AppSheet v-model:open="moveOpen" :title="$t('itemMenu.moveTitle')" :description="$t('itemMenu.moveHint')" :locked="busy">
-    <FolderPickerList v-if="item" :choices="choices" disable-current :aria-label="$t('itemMenu.moveTitle')" @select="move" />
+    <FolderPickerList v-if="item" :choices="choices" disable-current :taken="takenIn" :aria-label="$t('itemMenu.moveTitle')" @select="move" />
   </AppSheet>
 </template>

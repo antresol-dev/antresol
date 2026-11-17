@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Attribute, AttributeKind, DraftNewAttribute, Id } from '@antresol/core'
-import { MAX_PINNED_ATTRIBUTES } from '@antresol/core'
+import { MAX_PINNED_ATTRIBUTES, sameName } from '@antresol/core'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -67,10 +67,17 @@ const changes = computed(() =>
 // The line under the switch, on or off: what prefixes make of "4k7" with this unit.
 const example = computed(() => prefixExample(unit.value))
 const taken = computed(() => (props.draft && props.clash ? props.clash(name.value) : null))
+// Saved for real (not a draft): the name must be free among the inventory's attributes; a name left as it was is not checked.
+const nameTaken = computed(() => {
+  const n = name.value.trim()
+  if (props.draft || !n || !state.snapshot) return null
+  if (props.attribute && sameName(props.attribute.name, n) && n === props.attribute.name) return null
+  return state.snapshot.attributes.some((a) => a.id !== props.attribute?.id && sameName(a.name, n)) ? ('active' as const) : null
+})
 // A draft is edited on this device, so it works offline too.
 const blocked = computed(() => (props.draft ? !!state.readOnly && state.readOnly !== 'offline' : !!state.readOnly || !state.snapshot))
 const canSubmit = computed(
-  () => !busy.value && !blocked.value && !taken.value && (props.draft || !props.attribute || Object.keys(changes.value).length > 0),
+  () => !busy.value && !blocked.value && !taken.value && !nameTaken.value && (props.draft || !props.attribute || Object.keys(changes.value).length > 0),
 )
 
 async function submit(): Promise<void> {
@@ -137,9 +144,10 @@ async function submit(): Promise<void> {
         v-model="name"
         autocomplete="off"
         :aria-invalid="errorKey ? true : undefined"
-        aria-describedby="attribute-form-error"
+        aria-describedby="attribute-name-taken attribute-form-error"
         class="h-11"
       />
+      <NameTakenNote id="attribute-name-taken" :taken="nameTaken" :name="name" />
       <p v-if="taken" class="text-sm">
         {{ $t('intakes.attribute.exists', { name: taken.name }) }}
         <button type="button" class="inline-flex min-h-11 items-center font-semibold underline underline-offset-2 hover:text-accent-ink focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" @click="emit('useExisting', taken.id)">

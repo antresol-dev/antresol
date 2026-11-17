@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { SI_PREFIXES, type CustomUnit } from '@antresol/core'
+import { SI_PREFIXES, unitClash, type CustomUnit } from '@antresol/core'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -41,8 +41,19 @@ const changes = computed(() =>
     prefixPowers: [...powers.value].sort((a, b) => a - b),
   }),
 )
+// Name (no case) and symbol (with case) must be free among built-in and custom units; only a changed part is checked.
+const nameTaken = computed(() => {
+  const n = name.value.trim()
+  if (!state.snapshot || !n || (props.unit && changes.value.name === undefined)) return null
+  return unitClash(state.snapshot, { name: n }, props.unit?.id) ? ('name' as const) : null
+})
+const symbolTaken = computed(() => {
+  const sym = symbol.value.trim()
+  if (!state.snapshot || !sym || (props.unit && changes.value.symbol === undefined)) return null
+  return unitClash(state.snapshot, { symbol: sym }, props.unit?.id) ? ('symbol' as const) : null
+})
 const canSubmit = computed(
-  () => !busy.value && !state.readOnly && !!state.snapshot && (!props.unit || Object.keys(changes.value).length > 0),
+  () => !busy.value && !nameTaken.value && !symbolTaken.value && !state.readOnly && !!state.snapshot && (!props.unit || Object.keys(changes.value).length > 0),
 )
 
 function toggle(power: number, on: boolean): void {
@@ -90,13 +101,15 @@ async function submit(): Promise<void> {
         v-model="name"
         autocomplete="off"
         :aria-invalid="errorKey ? true : undefined"
-        aria-describedby="unit-form-error"
+        aria-describedby="unit-name-taken unit-form-error"
         class="h-11"
       />
+      <NameTakenNote id="unit-name-taken" :taken="nameTaken" :name="name" />
     </div>
     <div class="grid gap-2">
       <Label for="unit-symbol">{{ $t('unitForm.symbol') }}</Label>
-      <Input id="unit-symbol" v-model="symbol" autocomplete="off" class="h-11" />
+      <Input id="unit-symbol" v-model="symbol" autocomplete="off" aria-describedby="unit-symbol-taken" class="h-11" />
+      <NameTakenNote id="unit-symbol-taken" :taken="symbolTaken" :name="symbol" />
     </div>
     <fieldset class="grid gap-2">
       <legend class="mb-1.5 text-sm font-medium">{{ $t('unitForm.prefixes') }}</legend>

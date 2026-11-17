@@ -946,6 +946,15 @@
     "create": "Create",
     "save": "Save"
   },
+  "nameTaken": {
+    "active": "“{name}” already exists here",
+    "archived": "“{name}” is in the archive here — restore it or choose another name",
+    "unitName": "A unit called “{name}” already exists",
+    "unitSymbol": "The symbol “{name}” is already used by another unit",
+    "inList": "Name taken",
+    "inListArchived": "Name in archive",
+    "restoreClash": "“{name}” already exists here — rename that one to bring this one back"
+  },
   "folderForm": { "create": "Create", "save": "Save", "parent": "Parent folder", "chooseParent": "Choose the parent folder" },
   "errors": {
     "unknown": "Something went wrong. Try again.",

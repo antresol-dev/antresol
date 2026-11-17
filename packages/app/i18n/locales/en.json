@@ -75,6 +75,7 @@
       "discard": "Discard my changes"
     },
     "tag": {
+      "invalidColor": "The colour must look like #RRGGBB.",
       "add": "Add",
       "new": "New",
       "newValue": "New value",
@@ -118,6 +119,7 @@
       }
     },
     "item": {
+      "notInDraft": "Only an item this intake creates can take attributes, tags or a unit.",
       "unit": "Unit",
       "axis": "Varies",
       "variants": "Variants",
@@ -139,7 +141,8 @@
       "cycle": "A folder can’t go inside itself or inside one of its own folders.",
       "notEmpty": "Move or remove what’s in this folder first.",
       "parentGone": "The folder this goes in no longer exists.",
-      "duplicate": "There is already a folder called “{name}” here."
+      "duplicate": "There is already a folder called “{name}” here.",
+      "duplicateArchived": "An archived folder “{name}” is here — restore it or choose another name."
     },
     "attribute": {
       "add": "Add attribute",
@@ -151,7 +154,18 @@
       "exists": "There is already an attribute called “{name}”.",
       "inUse": "A new item uses this attribute. Remove it from the item first.",
       "invalid": "This attribute’s kind or unit isn’t valid.",
-      "duplicate": "There is already an attribute called “{name}”."
+      "duplicate": "There is already an attribute called “{name}”.",
+      "unknown": "This attribute doesn’t exist."
+    },
+    "unit": {
+      "unknown": "This unit doesn’t exist.",
+      "invalid": "A unit needs a symbol and valid prefixes.",
+      "symbolTooLong": "This symbol is too long.",
+      "duplicate": "There is already a unit called “{name}” or with this symbol."
+    },
+    "option": {
+      "exists": "The list already has “{value}”.",
+      "notList": "Only a list attribute takes added values."
     },
     "line": {
       "addTitle": "Add line",

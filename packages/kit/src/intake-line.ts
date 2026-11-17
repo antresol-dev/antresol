@@ -7,7 +7,8 @@ import {
   isSourceUrl,
   newId,
   MAX_NAME_LENGTH,
-  pruneNewItems,
+  intakeUnits,
+  pruneDraft,
   resolveUnit,
   itemAxes,
   nearestValues,
@@ -26,6 +27,7 @@ import {
 } from '@antresol/core'
 import { amountExample, parseAmountText, parseMoneyText } from './amounts'
 import { parseAttributeInput } from './attribute-values'
+import { prunedParts, restoredParts, type RemovedNewItem } from './intake-draft'
 import { existingMatches, kiloK } from './quick-add'
 import { searchRows, type SearchRow } from './views'
 
@@ -75,7 +77,11 @@ function normalizeTyped(text: string, s: InventorySnapshot): string {
 /** The axes of an existing item or of a new item of the draft, in order. */
 function axesOf(s: InventorySnapshot, draft: IntakeDraftContent | null, itemId: Id): Attribute[] {
   const n = draft?.newItems.find((x) => x.id === itemId)
-  if (!n) return itemAxes(s, itemId)
+  if (!n) {
+    // A list attribute of the draft's added values reads them too.
+    const known = draft ? intakeAttributes(draft, s) : null
+    return itemAxes(s, itemId).map((a) => known?.get(a.id) ?? a)
+  }
   return newItemAxes(s, draft!, n)
 }
 
@@ -311,6 +317,9 @@ export interface LineForm {
   photo: DraftLinePhoto | null
   /** The new tags the form added or shows (of the draft); only those the new item uses are kept. */
   newTags: DraftNewTag[]
+  /** The description of the variant this line creates; trimmed, empty is none. Kept on the line; core uses it only
+   *  when this line is the one creating the variant. */
+  variantDescription?: string | null
 }
 export type BuiltLine = { line: DraftLine; newItem: DraftNewItem | null; newTags: DraftNewTag[] } | { errorKey: string; params?: Record<string, string> }
 
@@ -370,7 +379,7 @@ export function buildDraftLine(form: LineForm, s: InventorySnapshot, draft: Inta
     if (a && !('value' in parseAttributeInput(a, x.value!))) return { errorKey: 'intakes.line.invalidValue', params: { name: a.name } }
   }
 
-  const unit = resolveUnit(n ? n.unitKey : item!.unitKey, s.units)
+  const unit = resolveUnit(n ? n.unitKey : item!.unitKey, intakeUnits(draft, s))
   if (!unit) return { errorKey: 'intakes.problem.invalid_value' }
   if (form.amount.trim() === '') return { errorKey: 'intakes.line.needsAmount' }
   const quantity = parseAmountText(form.amount, unit)
@@ -418,8 +427,10 @@ export function buildDraftLine(form: LineForm, s: InventorySnapshot, draft: Inta
     }
     linePhoto = null
   }
+  // Only a line that creates a variant carries a description: not a top-up, not a new item without axes.
+  const variantDescription = form.variantDescription === undefined || topsUp || axes.length === 0 ? undefined : form.variantDescription?.trim() || null
   return {
-    line: { id: form.lineId, itemId: form.itemId, axisValues, quantity, totalPrice, sourceUrl, photo: linePhoto, ids: form.ids },
+    line: { id: form.lineId, itemId: form.itemId, axisValues, quantity, totalPrice, sourceUrl, photo: linePhoto, ids: form.ids, ...(variantDescription !== undefined ? { variantDescription } : {}) },
     newItem,
     newTags: newItem ? form.newTags.filter((t) => newItem.tagIds?.includes(t.id)) : [],
   }
@@ -431,7 +442,7 @@ export function withLine(draft: IntakeDraftContent, line: DraftLine, newItem: Dr
   const replace = <T extends { id: Id }>(list: T[], x: T): T[] =>
     list.some((y) => y.id === x.id) ? list.map((y) => (y.id === x.id ? x : y)) : [...list, x]
   const tags = newTags.reduce((list, t) => replace(list, t), draft.newTags ?? [])
-  return pruneNewItems({
+  return pruneDraft({
     ...draft,
     newItems: newItem ? replace(draft.newItems, newItem) : draft.newItems,
     lines: replace(draft.lines, line),
@@ -439,33 +450,38 @@ export function withLine(draft: IntakeDraftContent, line: DraftLine, newItem: Dr
   })
 }
 
+/** What Undo of withoutLine puts back: the line, its place, and the parts pruned with it. */
+export type RemovedLine = Pick<RemovedNewItem, 'newTags' | 'newAttributes' | 'newUnits' | 'addedOptions'> & {
+  line: DraftLine
+  index: number
+  newItem: DraftNewItem | null
+}
+
 /** The draft without the line, and what Undo puts back: the line and its place (`newItem` and `newTags` stay for
  *  callers; a new item no longer goes with its last line, so they are null and empty). */
 export function withoutLine(
   draft: IntakeDraftContent,
   lineId: Id,
-): { content: IntakeDraftContent; removed: { line: DraftLine; index: number; newItem: DraftNewItem | null; newTags: DraftNewTag[] } | null } {
+): { content: IntakeDraftContent; removed: RemovedLine | null } {
   const index = draft.lines.findIndex((l) => l.id === lineId)
   if (index < 0) return { content: draft, removed: null }
   const line = draft.lines[index]!
-  const content = pruneNewItems({ ...draft, lines: draft.lines.filter((l) => l.id !== lineId) })
+  const content = pruneDraft({ ...draft, lines: draft.lines.filter((l) => l.id !== lineId) })
   const newItem = draft.newItems.find((n) => n.id === line.itemId && !content.newItems.some((m) => m.id === n.id)) ?? null
-  const newTags = (draft.newTags ?? []).filter((t) => !(content.newTags ?? []).some((u) => u.id === t.id))
-  return { content, removed: { line, index, newItem, newTags } }
+  return { content, removed: { line, index, newItem, ...prunedParts(draft, content) } }
 }
 
 /** Undo of withoutLine: the line back in its place, with its new item. */
 export function restoreLine(
   draft: IntakeDraftContent,
-  removed: { line: DraftLine; index: number; newItem: DraftNewItem | null; newTags: DraftNewTag[] },
+  removed: RemovedLine,
 ): IntakeDraftContent {
   if (draft.lines.some((l) => l.id === removed.line.id)) return draft
   const lines = [...draft.lines]
   lines.splice(Math.min(removed.index, lines.length), 0, removed.line)
   const newItems =
     removed.newItem && !draft.newItems.some((n) => n.id === removed.newItem!.id) ? [...draft.newItems, removed.newItem] : draft.newItems
-  const newTags = [...(draft.newTags ?? []), ...removed.newTags.filter((t) => !(draft.newTags ?? []).some((u) => u.id === t.id))]
-  return { ...draft, newItems, lines, ...(newTags.length > 0 || draft.newTags ? { newTags } : {}) }
+  return restoredParts({ ...draft, newItems, lines }, removed)
 }
 
 /** Minor units as the price field shows them, in integers only: 1234 USD -> "12.34", 50 JPY -> "50". */

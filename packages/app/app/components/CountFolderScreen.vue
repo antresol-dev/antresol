@@ -167,7 +167,7 @@ const divider =
         </ul>
         <div
           v-if="changes.length > 0 || busy || failed"
-          class="sticky bottom-0 z-10 -mx-4 surface-bar flex items-center gap-3 border-t px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] lg:-mx-8 lg:px-8"
+          class="sticky bottom-0 z-10 -mx-4 surface-bar flex items-center gap-3 border-t px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] lg:-mx-5 lg:px-5"
         >
           <p role="status" class="min-w-0 grow text-sm" :class="failed && !busy ? 'text-destructive' : 'text-muted-foreground'">
             <template v-if="progress">{{ $t('countFolder.saving', { done: progress.done, total: progress.total }) }}</template>

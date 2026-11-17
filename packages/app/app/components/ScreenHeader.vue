@@ -47,8 +47,8 @@ const crumbLink = 'pressable min-w-0 truncate rounded-chip'
   <header class="surface-header sticky top-0 z-20 border-b">
     <div
       :class="[
-        'mx-auto grid w-full max-w-[720px] min-w-0 grid-cols-1 px-4 lg:max-w-[760px] lg:px-8',
-        desktop ? 'gap-3 pt-4 pb-2' : 'gap-0.5 pt-1 pb-2',
+        'mx-auto grid w-full max-w-[720px] min-w-0 grid-cols-1 px-4 lg:max-w-[760px] lg:px-5',
+        desktop ? 'gap-2 pt-3 pb-2' : 'gap-0.5 pt-1 pb-2',
       ]"
     >
       <template v-if="desktop">

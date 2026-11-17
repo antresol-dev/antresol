@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Archive, Boxes, ChevronRight, Folder, FolderInput, FolderPlus, Pencil, Plus } from '@lucide/vue'
+import { iconFrom } from '~/lib/item-icons'
 import { treeAriaCurrent } from '~/lib/shell'
 import { longPressExpands, rowClickAction, type TreeRow } from '~/lib/tree-state'
 import { piecesLabel } from '~/lib/views'
@@ -14,6 +15,7 @@ const props = defineProps<{
   level?: number
 }>()
 const MAX_INDENT = 6
+const iconSet = useItemIconSet()
 const emit = defineEmits<{ toggle: [id: string] }>()
 
 const { t } = useI18n()
@@ -121,7 +123,7 @@ const pressHandlers = computed(() =>
         @click="click"
       >
         <Boxes v-if="root" class="size-4 shrink-0" aria-hidden="true" />
-        <Folder v-else :class="['size-4 shrink-0', row.current ? '' : 'text-accent-ink']" aria-hidden="true" />
+        <component :is="iconFrom(iconSet, row.icon) ?? Folder" v-else :class="['size-4 shrink-0', row.current ? '' : 'text-accent-ink']" aria-hidden="true" />
         <span class="min-w-0 flex-1 truncate">{{ row.name }}</span>
       </NuxtLink>
       <template v-if="!root">
@@ -163,6 +165,7 @@ const pressHandlers = computed(() =>
         :level="(level ?? 0) + 1"
         @toggle="emit('toggle', $event)"
       />
+      <TreeItemNode v-for="item in row.items" :key="`item:${item.id}`" :row="item" :variant="variant" />
     </ul>
   </li>
 </template>

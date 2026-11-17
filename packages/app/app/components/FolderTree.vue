@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { treeCurrent } from '~/lib/shell'
-import { ChevronsDownUp, ChevronsUpDown } from '@lucide/vue'
-import { collapseAll, expandAll, loadTreeOpen, openPath, saveTreeOpen, toggleOpen, treeRows, type TreeOpen, type TreeRow } from '~/lib/tree-state'
+import { ChevronsDownUp, ChevronsUpDown, ListTree } from '@lucide/vue'
+import { collapseAll, expandAll, loadTreeItems, loadTreeOpen, openPath, rootItemRows, saveTreeItems, saveTreeOpen, toggleOpen, treeRows, type TreeOpen, type TreeRow } from '~/lib/tree-state'
 import { inventoryPieces } from '~/lib/views'
 
 const props = defineProps<{ variant: 'panel' | 'drawer' }>()
@@ -42,7 +42,16 @@ watch(
   { immediate: true },
 )
 
-const rows = computed(() => (snapshot.value ? treeRows(snapshot.value, open.value, current.value) : []))
+// "Show items": the items under their folders, like files in an editor's tree; kept on this device.
+const showItems = ref(loadTreeItems())
+function toggleItems(): void {
+  showItems.value = !showItems.value
+  saveTreeItems(showItems.value)
+}
+const currentItem = computed(() => (route.name === 'item-id' && typeof route.params.id === 'string' ? route.params.id : null))
+const itemsOption = computed(() => (showItems.value ? { currentItem: currentItem.value } : undefined))
+const rows = computed(() => (snapshot.value ? treeRows(snapshot.value, open.value, current.value, itemsOption.value) : []))
+const rootItems = computed(() => (snapshot.value && showItems.value ? rootItemRows(snapshot.value, currentItem.value) : []))
 const root = computed<TreeRow | null>(() =>
   snapshot.value
     ? {
@@ -52,7 +61,9 @@ const root = computed<TreeRow | null>(() =>
         hasChildren: false,
         open: false,
         current: current.value === 'root',
+        icon: null,
         children: [],
+        items: [],
       }
     : null,
 )
@@ -72,7 +83,7 @@ function setAll(next: (s: NonNullable<typeof snapshot.value>) => TreeOpen): void
   saveTreeOpen(inventory, open.value)
 }
 const collapse = (): void => setAll(() => collapseAll())
-const expand = (): void => setAll(expandAll)
+const expand = (): void => setAll((s) => expandAll(s, showItems.value))
 // Phone: 44 px touch zones; desktop: 32 px.
 const buttonSize = computed(() => (panel.value ? 'size-8 rounded-chip' : 'size-11 rounded-field'))
 </script>
@@ -85,6 +96,16 @@ const buttonSize = computed(() => (panel.value ? 'size-8 rounded-chip' : 'size-1
       <h2 class="text-xs font-semibold tracking-[0.02em] text-muted-foreground uppercase">{{ $t('folder.tree') }}</h2>
       <div class="flex items-center">
         <slot name="actions" />
+        <button
+          type="button"
+          :class="[buttonSize, 'pressable grid shrink-0 place-items-center aria-pressed:bg-accent-soft aria-pressed:text-accent-soft-foreground']"
+          :aria-pressed="showItems"
+          :aria-label="$t('tree.showItems')"
+          :title="$t('tree.showItems')"
+          @click="toggleItems"
+        >
+          <ListTree class="size-4" aria-hidden="true" />
+        </button>
         <button
           v-for="b in [
             { key: 'collapse', icon: ChevronsDownUp, run: collapse },
@@ -106,6 +127,7 @@ const buttonSize = computed(() => (panel.value ? 'size-8 rounded-chip' : 'size-1
         <ul class="flex flex-col gap-0.5">
           <FolderTreeNode :row="root" :variant="variant" root />
           <FolderTreeNode v-for="r in rows" :key="r.id" :row="r" :variant="variant" @toggle="toggle" />
+          <TreeItemNode v-for="item in rootItems" :key="`item:${item.id}`" :row="item" :variant="variant" />
         </ul>
       </nav>
     </div>

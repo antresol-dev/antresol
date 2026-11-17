@@ -206,6 +206,9 @@ const linkClass =
 
 <template>
   <ScreenHeader :title="title" :crumbs="crumbs" wrap-title>
+    <template v-if="view" #before-title>
+      <ItemTitleIcon :id="itemId" :icon="view.item.icon" :folder-icon="folderIcon" :color="view.item.color" />
+    </template>
     <template v-if="view" #actions="{ compact }">
       <ItemActions :item-id="itemId" :compact="compact" />
     </template>

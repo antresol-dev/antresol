@@ -29,19 +29,26 @@ export async function locateIntake(ctx: ToolContext, intakeId: Id): Promise<Loca
   throw new ToolError(`No intake with id "${id}". Find ids with list_intakes.`)
 }
 
-/** Refusals that need no upload: no connection, read-only, archived, unknown or committed. Run before a photo goes to the public store. */
-export async function checkEditable(ctx: ToolContext, intakeId: Id): Promise<void> {
-  const { intake } = await locateIntake(ctx, intakeId)
+/** A committed intake takes no draft edit (only its header). */
+export function assertDraft(intake: Intake): asserts intake is Intake & { draft: IntakeDraftContent } {
   if (intake.status !== 'draft' || intake.draft === null) throw new ToolError(COMMITTED)
 }
 
-/** The intake as the tools show it, from a fresh read. */
-export async function viewOf(ctx: ToolContext, inventoryId: Id, intakeId: Id): Promise<IntakeView> {
+/**
+ * The intake as the tools show it after a write, from what the write had in hand: the intake as it was read, what was
+ * saved and the revision the database gave back. No second listing; the cached lists are dropped so the next read is fresh.
+ * `updatedAt` is this machine's clock, the database stamps its own.
+ */
+export async function viewAfterSave(
+  ctx: ToolContext,
+  intake: Intake,
+  saved: Pick<Intake, 'header' | 'draft'> & { draftRev: string },
+  s?: InventorySnapshot,
+): Promise<IntakeView> {
   const source = requireSource(ctx)
   source.refreshIntakes()
-  const intake = (await source.intakes(inventoryId)).find((i) => i.id === intakeId)
-  if (!intake) throw new ToolError('The intake is gone: it may have been deleted in the app.')
-  return intakeView(await source.snapshot(inventoryId), intake)
+  const next: Intake = { ...intake, header: saved.header, draft: saved.draft, draftRev: saved.draftRev, updatedAt: ctx.now().toISOString(), updatedBy: ctx.actor().device }
+  return intakeView(s ?? (await source.snapshot(intake.inventoryId)), next)
 }
 
 /**
@@ -61,7 +68,7 @@ export async function editDraft(
   const { inventory } = located
   let intake = located.intake
   for (let attempt = 0; attempt < 2; attempt++) {
-    if (intake.status !== 'draft' || intake.draft === null) throw new ToolError(COMMITTED)
+    assertDraft(intake)
     const s = await source.snapshot(inventory.id)
     const result = edit(intake.draft, intake.header, s)
     const saved = await storage.saveIntakeDraft(
@@ -69,7 +76,7 @@ export async function editDraft(
       intake.draftRev,
       ctx.actor(),
     )
-    if (saved.saved) return viewOf(ctx, inventory.id, intake.id)
+    if (saved.saved) return viewAfterSave(ctx, intake, { header: result.header, draft: result.draft, draftRev: saved.draftRev }, s)
     if (saved.reason === 'committed') throw new ToolError(COMMITTED)
     intake = saved.current
   }

@@ -251,7 +251,7 @@ describe('photo in draft lines', () => {
     const line = v.lines[0].id as string
     expect(v.lines[0].photo).toBeNull()
     // The variant is new: "replace" has nothing to replace and is dropped.
-    v = (await drafts.updateIntakeLine(ctx, { intake: id, line, photo: 'a.png', replacePhoto: true })) as any
+    v = (await drafts.updateIntakeLine(ctx, { intake: id, line, photo: 'a.png' })) as any
     expect(v.lines[0].photo).toMatchObject({ url: 'https://img.example/1', replace: false })
     v = (await drafts.updateIntakeLine(ctx, { intake: id, line, amount: '4' })) as any
     expect(v.lines[0].photo).toMatchObject({ url: 'https://img.example/1' })

@@ -1,13 +1,24 @@
 import { copyFile, mkdir, mkdtemp } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { newId, type FileStore, type Id, type Intake, type InventoryStorage } from '@antresol/core'
+import { buildIntakeCommit, newId, resolveIntake, type FileStore, type Id, type Intake, type InventoryStorage } from '@antresol/core'
 import { describe, expect, it } from 'vitest'
 import { readConfig } from '../src/config'
 import { ToolError } from '../src/errors'
 import * as drafts from '../src/tools/drafts'
 import * as read from '../src/tools/read'
 import { makeContext, TEST_ACTOR, type Fixture } from './fixture'
+
+const count = (f: Fixture) => {
+  let n = 0
+  const real = f.storage.listIntakes.bind(f.storage)
+  f.storage.listIntakes = async (...a: Parameters<typeof real>) => {
+    n++
+    return real(...a)
+  }
+  return () => n
+}
+
 
 const CLIENT = { device: 'Test Client · MCP' }
 
@@ -474,6 +485,15 @@ describe('item photos', () => {
     expect(uploads).toHaveLength(1)
   })
 
+  it('a line with a photo lists the intakes twice: the dry run, then the edit', async () => {
+    const { f, uploads, id } = await photoSetup()
+    const calls = count(f)
+    const v = (await drafts.addIntakeLines(f.ctx, { intake: id, lines: [{ item: f.ids.resistor, values: { Resistance: '33k' }, amount: '1', photo: 'a.png' }] })) as any
+    expect(uploads).toHaveLength(1)
+    expect(v.lines[0].photo.url).toBe('https://img.example/1')
+    expect(calls()).toBe(2)
+  })
+
   it('a photo on a top-up line is refused with the app text; a new variant takes it', async () => {
     const { f, id } = await photoSetup()
     const bad = (await drafts.addIntakeLines(f.ctx, { intake: id, lines: [{ item: f.ids.resistor, values: { Resistance: '4k7' }, amount: '1', photo: 'a.png' }] }).catch((e: unknown) => e)) as Error
@@ -559,5 +579,112 @@ describe('problems an edit would leave behind', () => {
     await f.apply({ type: 'archive', target: 'folder', id: f.ids.modules, archiveId: newId() })
     f.source.refresh()
     expect(await refused(drafts.createFolder(f.ctx, { intake: id, name: 'Sub', parent: 'Modules' }))).toMatch(/No folder "Modules"/)
+  })
+})
+
+describe('review fixes: tags and photos', () => {
+  it('a new item without lines may name a new tag; it is saved with the draft and the commit creates it', async () => {
+    const f = await ctxOf()
+    const id = await create(f)
+    const v = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Saw', tags: ['brandnewtag', 'SMD', 'brandnewtag'], withoutLines: true }] })) as any
+    expect(v.newItems[0].tags).toEqual(['brandnewtag', 'SMD'])
+    expect((await get(f, id)).newItems[0].tags).toEqual(['brandnewtag', 'SMD'])
+    const intake = await rawIntake(f, id)
+    expect(intake.draft!.newTags!.map((t) => t.name)).toEqual(['brandnewtag'])
+    const s = await f.source.snapshot(f.inventoryId)
+    const cmd = buildIntakeCommit(intake, resolveIntake(intake.draft!, s), s, (await f.storage.listInventories()).rev)
+    await f.storage.apply(cmd, TEST_ACTOR)
+    f.source.refresh()
+    expect((await f.source.snapshot(f.inventoryId)).tags.map((t) => t.name)).toContain('brandnewtag')
+  })
+
+  it('update_new_item with a new tag name keeps the tag with the item', async () => {
+    const f = await ctxOf()
+    const id = await create(f)
+    const v = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Saw', withoutLines: true }] })) as any
+    const u = (await drafts.updateNewItem(f.ctx, { intake: id, item: v.newItems[0].id, tags: ['fresh'] })) as any
+    expect(u.newItems[0].tags).toEqual(['fresh'])
+    expect((await rawIntake(f, id)).draft!.newTags!.map((t) => t.name)).toEqual(['fresh'])
+  })
+
+  it('a line photo on a new item that already has its own photo is refused, also in a later call', async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'antresol-twophoto-'))
+    const photosDir = path.join(root, 'photos')
+    await mkdir(photosDir)
+    await copyFile(path.join(__dirname, 'fixtures', 'gradient.png'), path.join(photosDir, 'a.png'))
+    const uploads: string[] = []
+    const files: FileStore = {
+      provider: 'fake',
+      async upload(_blob, name) {
+        uploads.push(name)
+        return { provider: 'fake', fileId: `f${uploads.length}`, url: `https://img.example/${uploads.length}`, urls: null, deleteHandle: null }
+      },
+    }
+    const f = await ctxOf()
+    f.ctx.config = { ...readConfig({ ANTRESOL_PHOTOS_DIR: photosDir }, 'linux', root), stateDir: path.join(root, 'state') }
+    f.ctx.files = files
+    const id = await create(f)
+    const first = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Saw', photo: 'a.png', withoutLines: true }] })) as any
+    const itemId = first.newItems[0].id
+    const before = uploads.length
+    const e = (await drafts.addIntakeLines(f.ctx, { intake: id, lines: [{ item: itemId, amount: '1', photo: 'a.png' }] }).catch((x: unknown) => x)) as Error
+    expect(e).toBeInstanceOf(ToolError)
+    expect(e.message).toMatch(/already has a photo[\s\S]*update_new_item/)
+    expect(uploads).toHaveLength(before)
+    expect((await rawIntake(f, id)).draft!.newItems[0]!.photo!.url).toBe('https://img.example/1')
+    // without a line photo the line is fine
+    const ok = (await drafts.addIntakeLines(f.ctx, { intake: id, lines: [{ item: itemId, amount: '1' }] })) as any
+    expect(ok.lines).toHaveLength(1)
+  })
+})
+
+describe('a committed intake tells what it created', () => {
+  it('get_intake lists the folders (with paths), attributes, tags and items the commit made', async () => {
+    const f = await ctxOf()
+    const id = await create(f)
+    await drafts.createFolder(f.ctx, { intake: id, name: 'Coils', parent: 'Passives' })
+    await drafts.createAttribute(f.ctx, { intake: id, name: 'Core', kind: 'list', options: ['Air', 'Ferrite'] })
+    await drafts.addIntakeLines(f.ctx, {
+      intake: id,
+      newItems: [{ ref: 'c', name: 'Choke', folder: 'Passives/Coils', tags: ['magnetic'], attributes: [{ attribute: 'Core', value: 'Air' }] }],
+      lines: [{ item: 'c', amount: '3' }],
+    })
+    const intake = await rawIntake(f, id)
+    const s = await f.source.snapshot(f.inventoryId)
+    await f.storage.apply(buildIntakeCommit(intake, resolveIntake(intake.draft!, s), s, (await f.storage.listInventories()).rev), TEST_ACTOR)
+    f.source.refresh()
+    const v = await get(f, id)
+    expect(v.status).toBe('committed')
+    expect(v.created.folders).toEqual([{ id: expect.any(String), path: 'Passives/Coils' }])
+    expect(v.created.attributes).toEqual([{ id: expect.any(String), name: 'Core' }])
+    expect(v.created.tags).toEqual([{ id: expect.any(String), name: 'magnetic' }])
+    expect(v.created.items).toEqual([{ id: expect.any(String), name: 'Choke', folder: 'Passives/Coils' }])
+    expect(v.created.items[0].id).toBe(v.lines[0].itemId)
+  })
+})
+
+describe('reads per write', () => {
+  it('a draft write lists the intakes once; with a photo, twice (the dry run and the edit)', async () => {
+    const f = await ctxOf()
+    const id = await create(f)
+    const calls = count(f)
+    const v = (await drafts.addIntakeLines(f.ctx, { intake: id, lines: [{ item: f.ids.esp32, amount: '1' }] })) as any
+    expect(calls()).toBe(1)
+    // the answer is the draft as saved, not a stale one
+    expect(v.lines).toHaveLength(1)
+    expect((await get(f, id)).lines).toHaveLength(1)
+    expect(((await rawIntake(f, id)) as Intake).draftRev).toBeTruthy()
+    const h = (await drafts.updateIntakeHeader(f.ctx, { intake: id, note: 'x' })) as any
+    expect(h.header.note).toBe('x')
+    expect((await get(f, id)).header.note).toBe('x')
+  })
+
+  it('two writes in a row each see the other (the saved revision is carried)', async () => {
+    const f = await ctxOf()
+    const id = await create(f)
+    await drafts.addIntakeLines(f.ctx, { intake: id, lines: [{ item: f.ids.esp32, amount: '1' }] })
+    const v = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Saw', withoutLines: true }] })) as any
+    expect(v.lines).toHaveLength(1)
+    expect(v.newItems).toHaveLength(1)
   })
 })

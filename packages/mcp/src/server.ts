@@ -40,7 +40,7 @@ export function registerReadTools(server: McpServer, ctx: ToolContext): void {
     'get_overview',
     {
       description:
-        'Call first. Lists the inventories (with currency), folders with paths and item counts, attributes with units, tags, units, and where photos are looked for.',
+        'Call first. Lists the inventories (with currency), folders with paths and item counts, attributes with kind (number, list, text), units and number rules, tags, units, and where photos are looked for.',
       inputSchema: { inventory },
       annotations: READ_ONLY,
     },
@@ -97,7 +97,7 @@ export function registerReadTools(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
     'get_intake',
     {
-      description: 'One intake in full: header, folders, attributes and items it would create (with "looks like" warnings and problems), and lines with their problems.',
+      description: 'One intake in full: header, folders, attributes and items it would create (with "looks like" warnings and problems), and lines with their problems. A committed intake also lists what it created.',
       inputSchema: { intake: z.string().describe('Intake id, from list_intakes.') },
       annotations: READ_ONLY,
     },

@@ -37,13 +37,23 @@ describe('getOverview', () => {
       { id: f.ids.passives, path: 'Passives', items: 0 },
       { id: f.ids.resistors, path: 'Passives/Resistors', items: 1 },
     ])
-    expect(o.attributes).toContainEqual({ id: f.ids.resistance, name: 'Resistance', kind: 'number', unit: 'Ω', options: [] })
+    expect(o.attributes).toContainEqual({ id: f.ids.resistance, name: 'Resistance', kind: 'number', unit: 'Ω', siPrefixes: true, options: [] })
+    expect(o.attributes).toContainEqual({ id: f.ids.power, name: 'Power', kind: 'number', unit: 'W', siPrefixes: false, options: [] })
     expect(o.attributes.map((a: any) => a.name).sort()).toEqual(['Power', 'Resistance'])
     expect(o.tags).toEqual([{ id: f.ids.smd, name: 'SMD' }])
     expect(o.units.builtin.map((u: any) => u.key)).toEqual(['pcs', 'm', 'g', 'l'])
     expect(o.units.custom).toEqual([])
     expect(o.photos).toEqual({ store: null, folder: f.ctx.config.photosDir })
     expect(o.photos.folder).toBe('/photos')
+  })
+
+  it('tells a list attribute as list, with its options', async () => {
+    const f = await makeContext()
+    const id = newId()
+    await f.apply({ type: 'attribute.create', id, inventoryId: f.inventoryId, name: 'Package', kind: 'enum', options: ['THT', 'SMD'], unit: '', siPrefixes: false })
+    f.source.refresh()
+    const o = (await read.getOverview(f.ctx, {})) as any
+    expect(o.attributes).toContainEqual({ id, name: 'Package', kind: 'list', unit: '', siPrefixes: false, options: ['THT', 'SMD'] })
   })
 
   it('lists the inventories alone when there are several and none is named', async () => {

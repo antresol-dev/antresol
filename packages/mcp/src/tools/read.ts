@@ -44,7 +44,14 @@ export async function getOverview(ctx: ToolContext, args: { inventory?: string }
     inventory: { id: inventory.id, name: inventory.name, currency: inventory.currency },
     rootItems: activeItems(s, null).length,
     folders,
-    attributes: s.attributes.map((a) => ({ id: a.id, name: a.name, kind: a.kind, unit: a.unit, options: a.options })),
+    attributes: s.attributes.map((a) => ({
+      id: a.id,
+      name: a.name,
+      kind: a.kind === 'enum' ? 'list' : a.kind,
+      unit: a.unit,
+      siPrefixes: a.kind === 'number' && a.siPrefixes,
+      options: a.options,
+    })),
     tags: s.tags.map((t) => ({ id: t.id, name: t.name })),
     units: {
       builtin: Object.values(BUILTIN_UNITS).map((u) => ({ key: u.key, symbol: u.symbol, name: u.name })),

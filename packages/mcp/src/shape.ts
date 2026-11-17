@@ -13,13 +13,14 @@ import {
   type DraftNewItem,
   type EntityProblem,
   type Id,
+  type IntakeCreated,
   type IntakeDraftContent,
   type Intake,
   type InventorySnapshot,
   type LineResolution,
   type Quantity,
 } from '@antresol/core'
-import { alreadyInDraft, duplicateWarning, priceText } from '@antresol/kit'
+import { alreadyInDraft, duplicateWarning, folderPathWithDraft, priceText } from '@antresol/kit'
 
 /** Compact forms of the model for tool answers. */
 
@@ -28,20 +29,8 @@ export function folderPath(s: InventorySnapshot, folderId: Id | null): string {
   return folderId === null ? '' : coreFolderPath(s, folderId).map((f) => f.name).join('/')
 }
 
-/** "A/B" of a folder that is in the stock or in the draft (draft folders by their chain); '' for the root or a folder that is gone. */
-export function draftFolderPath(s: InventorySnapshot, draft: IntakeDraftContent, folderId: Id | null): string {
-  const own = new Map((draft.newFolders ?? []).map((f) => [f.id, f] as const))
-  const names: string[] = []
-  const seen = new Set<Id>()
-  let cur = folderId
-  while (cur !== null && own.has(cur) && !seen.has(cur)) {
-    seen.add(cur)
-    names.unshift(own.get(cur)!.name)
-    cur = own.get(cur)!.parentId
-  }
-  const rest = cur === null ? '' : folderPath(s, cur)
-  return [rest, ...names].filter((x) => x !== '').join('/')
-}
+/** "A/B" of a folder that is in the stock or in the draft (draft folders by their chain, archived ones shown); '' for the root or a folder that is gone. */
+export const draftFolderPath = (s: InventorySnapshot, draft: IntakeDraftContent, folderId: Id | null): string => folderPathWithDraft(s, draft, folderId).join('/')
 
 /** Existing attributes and the draft's own, as the app sees them while the draft is open. */
 export function draftAttributes(s: InventorySnapshot, draft: IntakeDraftContent): Attribute[] {
@@ -125,6 +114,14 @@ export interface IntakeView {
   newAttributes: IntakeNewAttributeView[]
   newItems: IntakeNewItemView[]
   lines: IntakeLineView[]
+  /** Committed only, when the commit recorded it: what it made, so the assistant sees what exists now. */
+  created?: IntakeCreatedView
+}
+export interface IntakeCreatedView {
+  folders: { id: Id; path: string }[]
+  attributes: { id: Id; name: string }[]
+  tags: { id: Id; name: string }[]
+  items: { id: Id; name: string; folder: string }[]
 }
 
 export function entityProblemText(p: EntityProblem | null, what: 'folder' | 'attribute' | 'item', nameOf: (id: Id) => string): string | null {
@@ -173,6 +170,18 @@ function lineValues(s: InventorySnapshot, attrs: Attribute[], line: DraftLine, n
   return parts.length > 0 ? parts.join(' / ') : null
 }
 
+/** What a commit made, with the names it had then; folder paths run through the created folders and the stock's. */
+function createdView(s: InventorySnapshot, c: IntakeCreated): IntakeCreatedView {
+  const made: IntakeDraftContent = { newItems: [], lines: [], newFolders: c.folders }
+  const path = (id: Id | null) => draftFolderPath(s, made, id)
+  return {
+    folders: c.folders.map((f) => ({ id: f.id, path: path(f.id) })),
+    attributes: c.attributes.map((a) => ({ id: a.id, name: a.name })),
+    tags: c.tags.map((t) => ({ id: t.id, name: t.name })),
+    items: c.items.map((i) => ({ id: i.id, name: i.name, folder: path(i.folderId) })),
+  }
+}
+
 /** A draft or a committed intake as the tools tell it (a draft with the problems the app would show). */
 export function intakeView(s: InventorySnapshot, intake: Intake): IntakeView {
   const base = {
@@ -201,7 +210,7 @@ export function intakeView(s: InventorySnapshot, intake: Intake): IntakeView {
         alreadyInDraft: false,
       }),
     )
-    return { ...base, ok: true, newFolders: [], newAttributes: [], newItems: [], lines }
+    return { ...base, ok: true, newFolders: [], newAttributes: [], newItems: [], lines, ...(intake.created ? { created: createdView(s, intake.created) } : {}) }
   }
   const draft = intake.draft
   const resolved = resolveIntake(draft, s)

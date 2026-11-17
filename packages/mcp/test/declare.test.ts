@@ -418,7 +418,7 @@ describe('final review fixes', () => {
     expect(u.newAttributes[0].options).toEqual(['S', 'M', 'XL'])
     expect(u.lines[0].values).toEqual(v.lines[0].values)
     const bad = await refused(drafts.updateNewItem(f.ctx, { intake: id, item: v.newItems[0].id, attributes: [{ attribute: 'Size', kind: 'list', options: ['M'], axis: true }] }))
-    expect(bad).toMatch(/line 1/)
+    expect(bad).toMatch(/option "S" is used by a line/)
   })
 
   it('H: a unit the draft made can be corrected by declaring it again', async () => {
@@ -456,5 +456,36 @@ describe('final review fixes', () => {
     const id = await create(f)
     const m = await refused(drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'X', withoutLines: true, attributes: [{ attribute: 'Size', kind: 'text', axis: true, value: 'S' }] }] }))
     expect(m).toMatch(/variant attribute/)
+  })
+})
+
+describe('redeclaring a draft attribute', () => {
+  const shirt = async () => {
+    const f = await ctxOf()
+    const id = await create(f)
+    await drafts.addIntakeLines(f.ctx, {
+      intake: id,
+      newItems: [{ ref: 's', name: 'Shirt', attributes: [{ attribute: 'Size', kind: 'list', options: ['S', 'M'], axis: true, pinned: true }] }],
+      lines: [{ item: 's', values: { Size: 'S' }, amount: '1' }],
+    })
+    return { f, id }
+  }
+  it('another item cannot change its kind, and the message names the declarer', async () => {
+    const { f, id } = await shirt()
+    for (const kind of ['text', 'number'] as const) {
+      const m = await refused(drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'p', name: 'Pants', withoutLines: true, attributes: [{ attribute: 'Size', kind }] }] }))
+      expect(m).toMatch(/Size is already declared by Shirt as a list; use it as it is/)
+    }
+  })
+  it('same kind with an extra option is accepted; omitted pinned is kept', async () => {
+    const { f, id } = await shirt()
+    const v = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'p', name: 'Pants', withoutLines: true, attributes: [{ attribute: 'Size', kind: 'list', options: ['S', 'M', 'L'], axis: true }] }] })) as any
+    expect(v.newAttributes).toHaveLength(1)
+    expect(v.newAttributes[0]).toMatchObject({ options: ['S', 'M', 'L'], pinned: true })
+  })
+  it('an option a line uses cannot be dropped', async () => {
+    const { f, id } = await shirt()
+    const m = await refused(drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'p', name: 'Pants', withoutLines: true, attributes: [{ attribute: 'Size', kind: 'list', options: ['M'], axis: true }] }] }))
+    expect(m).toMatch(/option "S" is used by a line/)
   })
 })

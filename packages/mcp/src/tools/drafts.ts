@@ -474,7 +474,31 @@ function placeItem(a: { s: InventorySnapshot; draft: IntakeDraftContent; base: D
         once(x.attribute ?? '')
         // An attribute this draft declares (same name, no case) is declared again: the same one, changed.
         const mine = (draft.newAttributes ?? []).find((n) => same(n.name, (x.attribute ?? '').trim()))
-        defs.push({ def: newAttributeOf(mine?.id ?? mint(`${a.key}:attr:${k}`), x), axis: x.axis === true, value: field(x.value) })
+        if (!mine) {
+          defs.push({ def: newAttributeOf(mint(`${a.key}:attr:${k}`), x), axis: x.axis === true, value: field(x.value) })
+          return
+        }
+        const kindWas = (Object.keys(KIND) as (keyof typeof KIND)[]).find((key) => KIND[key] === mine.kind)!
+        const declarer = draft.newItems.find((n) => n.id !== item.id && n.attributes.some((y) => y.attributeId === mine.id)) ?? draft.newItems.find((n) => n.attributes.some((y) => y.attributeId === mine.id))
+        const lineUses = draft.lines.some((l) => l.axisValues.some((v) => v.attributeId === mine.id))
+        const elsewhere = draft.newItems.some((n) => n.id !== item.id && n.attributes.some((y) => y.attributeId === mine.id)) || lineUses
+        const who = `${mine.name} is already declared${declarer ? ` by ${declarer.name}` : ''} as ${kindWas === 'list' ? 'a list' : `a ${kindWas}`}`
+        if (x.kind !== kindWas && elsewhere) throw new ToolError(`${who}; use it as it is (without kind) or change it there.`)
+        // What the redeclaration leaves out stays as the draft has it.
+        const merged: AttributeArg = {
+          ...x,
+          unit: x.unit ?? mine.unit,
+          siPrefixes: x.siPrefixes ?? mine.siPrefixes,
+          options: x.options ?? mine.options,
+          pinned: x.pinned ?? mine.pinned ?? false,
+        }
+        const def = newAttributeOf(mine.id, merged)
+        if (def.kind === 'enum') {
+          const used = new Set(draft.lines.flatMap((l) => l.axisValues.filter((v) => v.attributeId === mine.id).map((v) => v.value.trim().toLowerCase())))
+          const lost = mine.options.find((o) => used.has(o.trim().toLowerCase()) && !def.options.some((q) => same(q, o)))
+          if (lost !== undefined) throw new ToolError(`${who}; its option "${lost}" is used by a line, so it stays: keep it in options.`)
+        }
+        defs.push({ def, axis: x.axis === true, value: field(x.value) })
         return
       }
       const found = resolveAttribute(known, x.attribute ?? '')

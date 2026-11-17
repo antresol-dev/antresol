@@ -341,10 +341,10 @@ const existingLink =
       <h3 class="px-1 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.options') }}</h3>
       <ul class="surface-list">
         <li v-for="o in options" :key="o.key" :class="[rowClass, hoverClass]">
-          <button type="button" :class="tapClass" :aria-label="$t('intakes.option.edit', { name: o.name, value: o.value })" :aria-describedby="`${uid}-${o.key}`" :disabled="readOnly" @click="openOption(o)">
+          <button type="button" :class="tapClass" :aria-label="$t('intakes.option.edit', { name: o.name, value: o.value })" :aria-describedby="`${uid}-option-${options.indexOf(o)}`" :disabled="readOnly" @click="openOption(o)">
             <span class="grid min-w-0 gap-0.5">
               <span class="min-w-0 truncate font-semibold">{{ $t('intakes.willCreate.option', { name: o.name, value: o.value }) }}</span>
-              <span :id="`${uid}-${o.key}`" class="min-w-0 truncate text-xs text-muted-foreground">
+              <span :id="`${uid}-option-${options.indexOf(o)}`" class="min-w-0 truncate text-xs text-muted-foreground">
                 {{ $t('intakes.willCreate.optionLines', o.lines) }}<template v-if="o.items > 0"> · {{ $t('intakes.willCreate.optionItems', o.items) }}</template><template v-if="problemOf(o.attributeId)"> · <span class="text-destructive">{{ $t(problemKey(problemOf(o.attributeId)!)) }}</span></template>
               </span>
             </span>

@@ -82,7 +82,7 @@ function key(e: KeyboardEvent): void {
           <TooltipTrigger as-child>
             <button
               type="button"
-              class="pressable grid size-8 shrink-0 place-items-center rounded-chip disabled:pointer-events-none disabled:opacity-50"
+              class="pressable grid size-7 shrink-0 place-items-center rounded-chip disabled:pointer-events-none disabled:opacity-50"
               :aria-label="$t('folderMenu.new')"
               :disabled="locked"
               @click="open({ kind: 'create', parentId: null })"

@@ -124,10 +124,11 @@ const pressHandlers = computed(() =>
       >
         <Boxes v-if="root" class="size-4 shrink-0" aria-hidden="true" />
         <component :is="iconFrom(iconSet, row.icon) ?? Folder" v-else :class="['size-4 shrink-0', row.current ? '' : 'text-accent-ink']" aria-hidden="true" />
-        <span class="min-w-0 flex-1 truncate">{{ row.name }}</span>
+        <!-- On the selected row the floating buttons have no backing of their own: the name gives way to them. -->
+        <span :class="['min-w-0 flex-1 truncate', row.current && !root ? 'group-hover:pr-10 group-focus-within:pr-10' : '']">{{ row.name }}</span>
       </NuxtLink>
       <template v-if="!root">
-        <span class="row-action relative z-10 -mr-1 flex shrink-0 items-center gap-px">
+        <span class="row-action row-action-float relative z-10 -mr-1 flex shrink-0 items-center gap-px">
           <button
             type="button"
             :class="[
@@ -145,7 +146,7 @@ const pressHandlers = computed(() =>
       </template>
       <span
         v-if="row.pieces !== null"
-        class="shrink-0 text-xs font-semibold text-subtle-foreground tabular-nums"
+        :class="['shrink-0 text-xs font-semibold text-subtle-foreground tabular-nums', root ? '' : 'group-hover:opacity-0 group-focus-within:opacity-0']"
       >
         {{ piecesLabel(row.pieces) }}
       </span>

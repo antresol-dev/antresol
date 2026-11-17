@@ -86,16 +86,16 @@ function setAll(next: (s: NonNullable<typeof snapshot.value>) => TreeOpen): void
 const collapse = (): void => setAll(() => collapseAll())
 const expand = (): void => setAll((s) => expandAll(s, showItems.value))
 // Phone: 44 px touch zones; desktop: 32 px.
-const buttonSize = computed(() => (panel.value ? 'size-8 rounded-chip' : 'size-11 rounded-field'))
+const buttonSize = computed(() => (panel.value ? 'size-7 rounded-chip' : 'size-11 rounded-field'))
 </script>
 
 <template>
   <!-- A section of its own: a thin line, the "Folders" header with collapse all / expand all, then the scrolling tree.
        The header sits outside the scroll area; `actions` is for extra buttons in it (the panel's "New folder"). -->
-  <div v-if="root" class="flex min-h-0 flex-1 flex-col border-t border-divider">
+  <div v-if="root" class="flex min-h-0 flex-1 flex-col border-t border-divider" :style="{ '--tree-bg': panel ? 'var(--surface)' : 'var(--rail)' }">
     <div :class="['flex shrink-0 items-center justify-between gap-2', panel ? 'pt-1 pr-3 pb-1 pl-4' : 'pr-1.5 pl-3']">
       <h2 class="text-xs font-semibold tracking-[0.02em] text-muted-foreground uppercase">{{ $t('folder.tree') }}</h2>
-      <div class="flex items-center">
+      <div :class="['flex items-center', panel ? 'gap-1' : 'gap-0.5']">
         <slot name="actions" />
         <Tooltip>
           <TooltipTrigger as-child>

@@ -926,6 +926,60 @@
   }
 }
 
+/* The tree's "+" and "⋯" float over the row's right end instead of taking its width (owner, 2026-11-17): a long name
+   uses the whole row until the pointer comes, then the buttons cover its end and the count, on the row's own colour
+   (the tree's opaque background, --tree-bg, under the row's hover tint), fading out to the left over the name. Hidden, they
+   let clicks through to the row. With no hover (a touch screen from 1024 px) they stay in the row's flow. */
+@media (hover: hover) {
+  .row-action-float {
+    position: absolute;
+    inset-block: 0;
+    right: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    padding-inline: 1.25rem 0.25rem;
+    border-start-end-radius: inherit;
+    border-end-end-radius: inherit;
+    isolation: isolate;
+    pointer-events: none;
+    mask-image: linear-gradient(to right, transparent, currentColor 1rem);
+  }
+  .row-action-float::before,
+  .row-action-float::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+  }
+  .row-action-float::before {
+    z-index: -2;
+    background: var(--tree-bg, var(--surface));
+  }
+  .row-action-float::after {
+    z-index: -1;
+    background: var(--row-tint, transparent);
+  }
+  .group:hover .row-action-float {
+    --row-tint: var(--ghost-hover);
+  }
+  /* A selected row's paint can't be repeated under the buttons (Neumorphism's is a gradient across the row, Acrylic's a
+     bar at its left end): there the buttons sit on the row itself, and the name gives way to them (FolderTreeNode). */
+  .row-selected .row-action-float {
+    padding-inline-start: 0.25rem;
+    mask-image: none;
+  }
+  .row-selected .row-action-float::before,
+  .row-selected .row-action-float::after {
+    display: none;
+  }
+  .group:hover .row-action-float,
+  .group:focus-within .row-action-float,
+  .row-action-float:has([data-state='open']) {
+    pointer-events: auto;
+  }
+}
+
 /* Below 1024 px the dock covers the bottom of the screen (its height and safe area come from MobileDock as --dock-h), so
    toasts sit just above it. */
 @media (max-width: 1023.98px) {

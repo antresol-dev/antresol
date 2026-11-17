@@ -101,6 +101,25 @@ export function withNewAttribute(draft: IntakeDraftContent, s: InventorySnapshot
   return { ...draft, newAttributes: upsert(draft.newAttributes ?? [], { ...attribute, name }) }
 }
 
+/** The draft as an open form sees it: its own attributes and the ones the form made and holds, not written yet. */
+export function withHeldAttributes(draft: IntakeDraftContent, held: readonly DraftNewAttribute[]): IntakeDraftContent {
+  const fresh = held.filter((a) => !(draft.newAttributes ?? []).some((x) => x.id === a.id))
+  return fresh.length === 0 ? draft : { ...draft, newAttributes: [...(draft.newAttributes ?? []), ...fresh] }
+}
+
+/** The draft with the held attributes that something `uses` written, in the order they were made; or what to fix. A held
+ *  attribute nothing uses is dropped: it was made for a form that did not keep it. */
+export function writeHeldAttributes(draft: IntakeDraftContent, s: InventorySnapshot, held: readonly DraftNewAttribute[], uses: ReadonlySet<Id>): IntakeDraftContent | DraftError {
+  let out = draft
+  for (const a of held) {
+    if (!uses.has(a.id)) continue
+    const r = withNewAttribute(out, s, a)
+    if ('errorKey' in r) return r
+    out = r
+  }
+  return out
+}
+
 /** The draft without the attribute; `intakes.attribute.inUse` while a new item uses it. */
 export function withoutNewAttribute(draft: IntakeDraftContent, id: Id): IntakeDraftContent | DraftError {
   if (draft.newItems.some((n) => n.attributes.some((a) => a.attributeId === id))) return { errorKey: 'intakes.attribute.inUse' }

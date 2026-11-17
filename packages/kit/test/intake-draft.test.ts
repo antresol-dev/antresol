@@ -14,7 +14,9 @@ import {
   nameClash,
   restoreNewItem,
   useExisting,
+  withHeldAttributes,
   withNewAttribute,
+  writeHeldAttributes,
   withNewFolder,
   withNewItem,
   withLine,
@@ -147,6 +149,30 @@ describe('draft attributes', () => {
     expect(withoutNewAttribute(d, 'A1')).toEqual({ errorKey: 'intakes.attribute.inUse' })
     d = withNewItem(d, nItem())
     expect(ok(withoutNewAttribute(d, 'A1')).newAttributes).toEqual([])
+  })
+})
+
+describe('attributes a form holds', () => {
+  const att = (id: string, name: string): DraftNewAttribute => ({ id, name, kind: 'text', unit: '', siPrefixes: false, options: [] })
+  const draftWith = ok(withNewAttribute(base, s, att('D0', 'Colour')))
+
+  it('the form sees the draft\'s attributes and its own, and the draft itself is not touched', () => {
+    const seen = withHeldAttributes(draftWith, [att('H1', 'Pack'), att('D0', 'Colour')])
+    expect(seen.newAttributes!.map((a) => a.id)).toEqual(['D0', 'H1'])
+    expect(draftWith.newAttributes!.map((a) => a.id)).toEqual(['D0'])
+    expect(withHeldAttributes(draftWith, [])).toBe(draftWith)
+  })
+
+  it('written with the line only the ones the item uses; the rest is dropped', () => {
+    const held = [att('H1', 'Pack'), att('H2', 'Core')]
+    const out = ok(writeHeldAttributes(draftWith, s, held, new Set(['H2'])))
+    expect(out.newAttributes!.map((a) => a.id)).toEqual(['D0', 'H2'])
+    expect(ok(writeHeldAttributes(draftWith, s, held, new Set())).newAttributes).toEqual(draftWith.newAttributes)
+  })
+
+  it('a name taken meanwhile is refused with the duplicate text and nothing is written', () => {
+    const r = writeHeldAttributes(draftWith, s, [att('H1', ' colour ')], new Set(['H1']))
+    expect(r).toMatchObject({ errorKey: 'intakes.attribute.duplicate', params: { id: 'D0' } })
   })
 })
 

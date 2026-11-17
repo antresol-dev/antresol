@@ -114,12 +114,17 @@ async function removeAttribute(a: DraftNewAttribute): Promise<void> {
   })
 }
 
-const rowClass =
-  "relative flex min-h-11 min-w-0 items-center gap-2 px-3 py-1 not-first:before:absolute not-first:before:top-0 not-first:before:right-3 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
+// A row is the rounded element that carries the hover highlight and fills the list's row edge to edge (like FolderList);
+// its control keeps the padding and the focus ring, side actions sit in the same row.
+const dividerClass =
+  "relative not-first:before:absolute not-first:before:top-0 not-first:before:right-3 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
+const rowClass = `${dividerClass} flex min-h-11 min-w-0 items-center gap-2 rounded-field transition-colors duration-(--dur-fast)`
+const infoRowClass = `${dividerClass} flex min-h-9 min-w-0 items-center gap-2 px-3 py-1`
+const hoverClass = computed(() => (props.readOnly ? '' : 'hover:bg-hover'))
 const tapClass =
-  'flex min-h-11 min-w-0 grow items-center gap-2 rounded-field text-left text-sm transition-colors duration-(--dur-fast) hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none'
+  'flex min-h-11 min-w-0 grow items-center gap-2 rounded-field px-3 text-left text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none'
 const existingLink =
-  'inline-flex min-h-11 max-w-[45%] min-w-0 items-center rounded-chip px-1 text-sm font-semibold underline underline-offset-2 hover:text-accent-ink focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none'
+  'inline-flex min-h-11 mr-2 max-w-[45%] min-w-0 items-center rounded-chip px-1 text-sm font-semibold underline underline-offset-2 hover:text-accent-ink focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none'
 </script>
 
 <template>
@@ -130,12 +135,12 @@ const existingLink =
       <h3 class="px-1 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.folders') }}</h3>
       <ul class="surface-list">
         <template v-for="group in groups" :key="group.parentId ?? 'root'">
-          <li v-if="group.context.length > 0" :class="rowClass" class="min-h-9 text-sm text-muted-foreground">
+          <li v-if="group.context.length > 0" :class="infoRowClass" class="text-sm text-muted-foreground">
             <Folder class="size-4 shrink-0 text-icon" aria-hidden="true" />
             <span class="min-w-0 truncate">{{ group.context.join(' / ') }}</span>
           </li>
-          <li v-for="{ folder, depth } in group.folders" :key="folder.id" :class="rowClass">
-            <button type="button" :class="tapClass" :style="{ paddingLeft: `${Math.min(depth, 4) * 16 + (group.context.length > 0 ? 16 : 0)}px` }" :disabled="readOnly" @click="emit('open-folder', folder.id)">
+          <li v-for="{ folder, depth } in group.folders" :key="folder.id" :class="[rowClass, hoverClass]">
+            <button type="button" :class="tapClass" :style="{ paddingLeft: `${12 + Math.min(depth, 4) * 16 + (group.context.length > 0 ? 16 : 0)}px` }" :disabled="readOnly" @click="emit('open-folder', folder.id)">
               <Folder class="size-4 shrink-0 text-icon" aria-hidden="true" />
               <span class="min-w-0 truncate font-semibold">{{ folder.name }}</span>
               <span v-if="problemOf(folder.id)" class="min-w-0 truncate text-xs text-destructive">{{ $t(problemKey(problemOf(folder.id)!)) }}</span>
@@ -151,9 +156,9 @@ const existingLink =
     <div v-if="attributes.length > 0" class="grid min-w-0 gap-1">
       <h3 class="px-1 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.attributes') }}</h3>
       <ul class="surface-list">
-        <li v-for="a in attributes" :key="a.id" :class="rowClass">
+        <li v-for="a in attributes" :key="a.id" :class="[rowClass, hoverClass]">
           <button type="button" :class="tapClass" :aria-label="$t('intakes.attribute.edit', { name: a.name })" :disabled="readOnly" @click="openAttribute(a)">
-            <span class="grid min-w-0 gap-0.5 px-1">
+            <span class="grid min-w-0 gap-0.5">
               <span class="min-w-0 truncate font-semibold">{{ a.name }}</span>
               <span class="min-w-0 truncate text-xs text-muted-foreground">
                 {{ kindText(a) }}<template v-if="problemOf(a.id)"> · <span class="text-destructive">{{ $t(problemKey(problemOf(a.id)!)) }}</span></template>

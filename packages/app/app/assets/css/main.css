@@ -979,3 +979,13 @@
   box-shadow: inset -1px 0 0 var(--st-sheet-line);
 }
 
+
+/* Row dividers of rounded rows (the ones inset with right-3: rows with a rounded hover or selection) stop where the row's
+   corner begins, so with a large field radius (Liquid glass, Y2K, Retro: 26 px) the line never pokes out past the
+   rounding. Thumbnail rows (left-15) keep their deeper start. Unlayered, to win over the inset utilities. */
+[class*='before:bg-divider'][class*='before:right-3']::before {
+  right: max(0.75rem, var(--radius-field));
+}
+[class*='before:bg-divider'][class*='before:right-3'][class*='before:left-3']::before {
+  left: max(0.75rem, var(--radius-field));
+}

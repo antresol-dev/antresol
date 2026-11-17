@@ -36,7 +36,7 @@ async function save(icon: string | null): Promise<void> {
   <button
     v-if="!state.readOnly"
     type="button"
-    class="colored relative mr-2 -my-1 inline-flex size-8 items-center justify-center rounded-chip align-middle text-(--c) transition-colors duration-(--dur-fast) after:absolute after:-inset-1.5 after:content-[''] hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+    class="colored relative mr-2 inline-flex size-7 items-center justify-center rounded-chip align-middle text-(--c) transition-colors duration-(--dur-fast) after:absolute after:-inset-2 after:content-[''] hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     :style="vars"
     :aria-label="$t('iconPicker.choose')"
     @click="picking = true"

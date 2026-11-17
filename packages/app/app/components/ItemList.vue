@@ -49,7 +49,7 @@ const rows = computed(() =>
 
 <template>
   <section class="grid min-w-0 grid-cols-1 gap-2">
-    <h2 class="section-label text-xs">{{ $t('folder.items', { count: items.length }) }}</h2>
+    <h2 class="section-label px-3 text-xs">{{ $t('folder.items', { count: items.length }) }}</h2>
     <!-- A flat list on the page: rows divided by lines, a row tile tinted under the pointer. -->
     <ul class="surface-list">
       <li

@@ -48,7 +48,7 @@ const crumbLink = 'pressable min-w-0 truncate rounded-chip'
     <div
       :class="[
         'mx-auto grid w-full max-w-[720px] min-w-0 grid-cols-1 px-4 lg:max-w-[760px] lg:px-8',
-        desktop ? 'gap-3 py-4' : 'gap-0.5 pt-1 pb-2',
+        desktop ? 'gap-3 pt-4 pb-2' : 'gap-0.5 pt-1 pb-2',
       ]"
     >
       <template v-if="desktop">

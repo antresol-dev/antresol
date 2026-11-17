@@ -159,7 +159,8 @@
     },
     "unit": {
       "unknown": "This unit doesn’t exist.",
-      "invalid": "A unit needs a symbol.",
+      "invalid": "A unit needs a symbol and valid prefixes.",
+      "symbolTooLong": "This symbol is too long.",
       "duplicate": "There is already a unit called “{name}” or with this symbol."
     },
     "option": {

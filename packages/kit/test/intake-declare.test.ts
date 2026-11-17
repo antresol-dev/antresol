@@ -110,6 +110,46 @@ describe('withItemAttribute', () => {
   })
 })
 
+describe('fix round 1', () => {
+  const def = { id: 'A1', name: 'Tolerance', kind: 'text' as const, unit: '', siPrefixes: false, options: [] as string[] }
+  const dunit = { name: 'Bunch', symbol: 'bn', prefixPowers: [] as number[] }
+
+  it('declaring an attribute again without placement keeps its axis and value', () => {
+    let d = ok(withItemAttribute(withItem(), s, 'N1', def, { axis: true }))
+    d = ok(withItemAttribute(d, s, 'N1', 'A1'))
+    expect(d.newItems[0]!.attributes).toEqual([{ attributeId: 'A1', value: null, axis: true }])
+    let e = ok(withItemAttribute(withItem(), s, 'N1', def, { value: '5%' }))
+    e = ok(withItemAttribute(e, s, 'N1', { ...def, name: 'Tol' }))
+    expect(e.newItems[0]!.attributes).toEqual([{ attributeId: 'A1', value: '5%', axis: false }])
+  })
+
+  it('a unit: bad prefixes, long symbol, the same unit again reuses the draft unit', () => {
+    expect(withItemUnit(withItem(), s, 'N1', { ...dunit, prefixPowers: [7] })).toEqual({ errorKey: 'intakes.unit.invalid' })
+    expect(withItemUnit(withItem(), s, 'N1', { ...dunit, prefixPowers: [3, 6] })).toHaveProperty('newUnits')
+    expect(withItemUnit(withItem(), s, 'N1', { ...dunit, symbol: 'x'.repeat(201) })).toEqual({ errorKey: 'intakes.unit.symbolTooLong' })
+    const d = ok(withItemUnit(withItem(), s, 'N1', dunit))
+    const again = ok(withItemUnit(d, s, 'N1', { ...dunit, name: ' BUNCH ' }))
+    expect(again.newUnits).toHaveLength(1)
+    expect(again.newItems[0]!.unitKey).toBe(d.newItems[0]!.unitKey)
+  })
+
+  it('the variant description stays only on a line that creates a variant', () => {
+    const withAxis = makeSnapshot({ ...s, itemAttributes: [{ itemId: 'P', attributeId: 'pkg', value: null, axisPosition: 0 }], variants: [], items: s.items })
+    const base: LineForm = {
+      lineId: 'L1', ids: { movementId: 'm', variantId: 'v', photoId: 'p' }, itemId: 'P', newItem: null,
+      axisValues: [{ attributeId: 'pkg', value: '0603' }], amount: '1', price: '', url: '', urlPrefix: null, photo: null, newTags: [], variantDescription: 'x',
+    }
+    const creating = buildDraftLine(base, withAxis, emptyIntakeDraft())
+    if ('errorKey' in creating) throw new Error(creating.errorKey)
+    expect(creating.line.variantDescription).toBe('x')
+    // New item without axes: no description.
+    const d = withItem()
+    const plain = buildDraftLine({ ...base, itemId: 'N1', newItem: d.newItems[0]!, axisValues: [] }, s, d)
+    if ('errorKey' in plain) throw new Error(plain.errorKey)
+    expect(plain.line).not.toHaveProperty('variantDescription')
+  })
+})
+
 describe('withItemTag', () => {
   it('declares a new tag with a colour, or reuses one by name or id', () => {
     let d = ok(withItemTag(withItem(), s, 'N1', 'Precision', '#aabbcc'))
@@ -218,11 +258,11 @@ describe('buildDraftLine', () => {
   }
 
   it('carries variantDescription on the line, trimmed, empty as null', () => {
-    const d = withItem()
-    const a = buildDraftLine({ ...f, newItem: d.newItems[0]!, variantDescription: ' tight ' }, s, d)
+    const d = withNewItem(emptyIntakeDraft(), nItem({ attributes: [{ attributeId: 'pkg', value: null, axis: true }] }))
+    const a = buildDraftLine({ ...f, newItem: d.newItems[0]!, axisValues: [{ attributeId: 'pkg', value: '0805' }], variantDescription: ' tight ' }, s, d)
     if ('errorKey' in a) throw new Error(a.errorKey)
     expect(a.line.variantDescription).toBe('tight')
-    const b = buildDraftLine({ ...f, newItem: d.newItems[0]!, variantDescription: '  ' }, s, d)
+    const b = buildDraftLine({ ...f, newItem: d.newItems[0]!, axisValues: [{ attributeId: 'pkg', value: '0805' }], variantDescription: '  ' }, s, d)
     if ('errorKey' in b) throw new Error(b.errorKey)
     expect(b.line.variantDescription).toBeNull()
   })

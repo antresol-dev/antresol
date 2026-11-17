@@ -43,8 +43,12 @@ describe('similarNames', () => {
     expect(why(['Diode'], 'Dxoxe')).toEqual([])
   })
 
-  it('does not report the same name (that is a hard duplicate) or unrelated names', () => {
-    expect(why(['Resistor', ' resistor '], 'Resistor')).toEqual([])
+  it('reports an equal name (a candidate that is no hard duplicate, e.g. another folder) as same, first', () => {
+    expect(why(['Resistor'], 'resistor')).toEqual([['Resistor', 'same']])
+    expect(why(['Resistors', ' resistor '], 'Resistor')).toEqual([[' resistor ', 'same'], ['Resistors', 'plural']])
+  })
+
+  it('does not report unrelated names', () => {
     expect(why(['Capacitor', 'Module'], 'Resistor')).toEqual([])
     expect(why(['Resistors'], '  ')).toEqual([])
     expect(why(['Resistor'], 'Resis')).toEqual([])

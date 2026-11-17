@@ -1,12 +1,14 @@
 import { sameName, type Id } from '@antresol/core'
 
 /** Names that look alike (spec 2026-11-17 §5): advice, never a refusal. The rules, in this order:
+ *  - `same`: equal (trim, no case); the caller passes only candidates that are not hard duplicates (items of other
+ *    folders), so an equal name is reported, not dropped;
  *  - `spacing`: equal once spaces, `-`, `.` and `_` are removed (no case);
  *  - `plural`: equal after folding a final `s` / `es`;
  *  - `typo`: edit distance at most 2 when both are 6+ letters long, at most 1 when shorter;
  *  - `contains`: one holds the other as whole words ("SMD Resistor" holds "Resistor").
- *  A name equal to the typed one (trim, no case) is a hard duplicate, handled elsewhere, and is not listed. */
-export type SimilarWhy = 'spacing' | 'plural' | 'typo' | 'contains'
+ */
+export type SimilarWhy = 'same' | 'spacing' | 'plural' | 'typo' | 'contains'
 export interface SimilarName {
   id: Id
   name: string
@@ -15,7 +17,7 @@ export interface SimilarName {
   why: SimilarWhy
 }
 
-const ORDER: SimilarWhy[] = ['spacing', 'plural', 'typo', 'contains']
+const ORDER: SimilarWhy[] = ['same', 'spacing', 'plural', 'typo', 'contains']
 const compact = (t: string): string => t.toLowerCase().replace(/[\s\-._]+/gu, '')
 const words = (t: string): string[] => t.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w !== '')
 
@@ -45,6 +47,7 @@ function holds(big: string[], small: string[]): boolean {
 }
 
 function whyAlike(a: string, b: string): SimilarWhy | null {
+  if (sameName(a, b)) return 'same'
   const x = compact(a)
   const y = compact(b)
   if (x === '' || y === '') return null
@@ -62,7 +65,6 @@ export function similarNames(candidates: readonly { id: Id; name: string; where?
   if (name.trim() === '') return []
   const out: SimilarName[] = []
   for (const c of candidates) {
-    if (sameName(c.name, name)) continue
     const why = whyAlike(name, c.name)
     if (why) out.push({ id: c.id, name: c.name, ...(c.where !== undefined ? { where: c.where } : {}), why })
   }

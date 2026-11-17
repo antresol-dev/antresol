@@ -427,7 +427,8 @@ export function buildDraftLine(form: LineForm, s: InventorySnapshot, draft: Inta
     }
     linePhoto = null
   }
-  const variantDescription = form.variantDescription === undefined ? undefined : form.variantDescription?.trim() || null
+  // Only a line that creates a variant carries a description: not a top-up, not a new item without axes.
+  const variantDescription = form.variantDescription === undefined || topsUp || axes.length === 0 ? undefined : form.variantDescription?.trim() || null
   return {
     line: { id: form.lineId, itemId: form.itemId, axisValues, quantity, totalPrice, sourceUrl, photo: linePhoto, ids: form.ids, ...(variantDescription !== undefined ? { variantDescription } : {}) },
     newItem,

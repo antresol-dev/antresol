@@ -11,6 +11,7 @@ import {
   pruneDraft,
   resolveUnit,
   sameName as same,
+  SI_PREFIXES,
   unitTwin,
   type DraftLine,
   type DraftNewAttribute,
@@ -291,7 +292,9 @@ export function withItemAttribute(
     out = r
     attributeId = def.id
   }
-  const entry = { attributeId, value: placement.axis ? null : (placement.value?.trim() || null), axis: placement.axis === true }
+  const had = item.attributes.find((a) => a.attributeId === attributeId)
+  const axis = placement.axis ?? had?.axis ?? false
+  const entry = { attributeId, value: axis ? null : placement.value !== undefined ? placement.value?.trim() || null : (had?.value ?? null), axis }
   const attributes = item.attributes.some((a) => a.attributeId === attributeId)
     ? item.attributes.map((a) => (a.attributeId === attributeId ? entry : a))
     : [...item.attributes, entry]
@@ -341,8 +344,12 @@ export function withItemUnit(
   const symbol = unit.symbol.trim()
   const bad = nameError(name)
   if (bad) return bad
-  if (symbol === '' || symbol.length > MAX_NAME_LENGTH) return { errorKey: 'intakes.unit.invalid' }
-  const id = unit.id ?? newId()
+  if (symbol === '') return { errorKey: 'intakes.unit.invalid' }
+  if (symbol.length > MAX_NAME_LENGTH) return { errorKey: 'intakes.unit.symbolTooLong' }
+  if (unit.prefixPowers.some((x) => !Number.isInteger(x) || !Object.hasOwn(SI_PREFIXES, x))) return { errorKey: 'intakes.unit.invalid' }
+  // The same unit declared again without an id is the one the draft has.
+  const again = unit.id === undefined ? (draft.newUnits ?? []).find((u) => same(u.name, name) && u.symbol.trim() === symbol) : undefined
+  const id = unit.id ?? again?.id ?? newId()
   const clash = nameClash(s, draft, { kind: 'unit', name, symbol }, id)
   if (clash) return { errorKey: 'intakes.unit.duplicate', params: { name, id: clash.id } }
   const declared: DraftNewUnit = { id, name, symbol, prefixPowers: [...unit.prefixPowers] }

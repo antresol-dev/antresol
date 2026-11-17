@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { itemAxes, newId, type AttributeKind, type Id } from '@antresol/core'
+import { CircleAlert, CircleCheck } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -104,6 +105,13 @@ const lines = computed(() => (state.snapshot ? planVariantBatch(state.snapshot, 
 const fresh = computed(() => lines.value.filter(isNewLine))
 const hasError = computed(() => lines.value.some((l) => l.error !== null))
 const canSubmit = computed(() => writable.value && !hasError.value && fresh.value.length > 0)
+// The options of each list axis, under the hint: a list axis takes only these values.
+const LIST_SHOWN = 12
+const listAxes = computed(() =>
+  axes.value
+    .filter((a) => a.kind === 'enum')
+    .map((a) => ({ id: a.id, name: a.name, options: a.options.length > LIST_SHOWN ? `${a.options.slice(0, LIST_SHOWN).join(', ')}, …` : a.options.join(', ') })),
+)
 const placeholder = computed(() => (axes.value.length > 1 ? axes.value.map((a) => a.name).join('; ') : ''))
 
 async function submit(): Promise<void> {
@@ -233,18 +241,23 @@ async function restore(archiveId: Id): Promise<void> {
       <p id="variants-hint" class="text-sm text-subtle-foreground">
         {{ axes.length > 1 ? $t('variantsForm.hintMany', { axes: axes.map((a) => a.name).join('; ') }) : $t('variantsForm.hintOne', { axis: axes[0]?.name ?? '' }) }}
       </p>
+      <p v-for="a in listAxes" :key="a.id" class="text-sm text-subtle-foreground">
+        {{ $t('variantsForm.listOptions', { axis: a.name, options: a.options }) }}
+      </p>
     </div>
     <ul id="variants-preview" class="grid gap-1" :aria-label="$t('variantsForm.preview')">
       <li
         v-for="(l, n) in lines"
         :key="n"
-        class="flex min-h-9 flex-wrap items-center justify-between gap-x-3 rounded-field border border-border px-3 py-1.5 text-sm"
-        :class="l.error ? 'border-destructive' : ''"
+        class="flex min-h-9 flex-wrap items-center gap-x-2 text-sm"
       >
-        <span class="min-w-0 truncate" :class="l.error || l.duplicate || l.repeat ? 'text-muted-foreground' : 'font-semibold'">
+        <!-- A line of the result, not a field: a mark, the value as read, and what is wrong or already there. -->
+        <CircleAlert v-if="l.error" class="size-4 shrink-0 text-destructive" aria-hidden="true" />
+        <CircleCheck v-else class="size-4 shrink-0" :class="isNewLine(l) ? 'text-accent-ink' : 'text-subtle-foreground'" aria-hidden="true" />
+        <span class="min-w-0 flex-1 truncate" :class="l.error || l.duplicate || l.repeat ? 'text-muted-foreground' : 'font-semibold'">
           {{ l.label ?? l.raw }}<template v-if="l.quantityLabel"> — {{ l.quantityLabel }}</template>
         </span>
-        <span v-if="l.error" class="text-sm text-destructive">{{ $t(l.error) }}</span>
+        <span v-if="l.error" class="text-sm text-destructive">{{ $t(l.error, { axis: l.errorAxis ?? '' }) }}</span>
         <span v-else-if="l.duplicate" class="flex items-center gap-2 text-sm text-subtle-foreground">
           {{ $t(l.duplicate.archived ? 'variantsForm.inArchive' : 'variantsForm.exists') }}
           <Button

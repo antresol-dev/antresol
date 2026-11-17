@@ -824,8 +824,8 @@ describe('intake.commit', () => {
       expect(ec(nested([nf('B', ' passives ', null)]), withPassives())).toBe('duplicate_name')
       expect(ec(nested([nf('A', 'Inductors', 'PAS'), nf('B', 'INDUCTORS', 'PAS')]), withPassives())).toBe('duplicate_name')
       expect(ec(nested([nf('A', 'Inductors', 'PAS'), nf('B', 'Inductors', 'A')]), withPassives())).toBeNull()
-      // An archived folder with the name does not count.
-      expect(ec(nested([nf('B', 'Old parts', null)]), withPassives())).toBeNull()
+      // An archived folder with the name blocks it too.
+      expect(ec(nested([nf('B', 'Old parts', null)]), withPassives())).toBe('duplicate_archived')
       expect(ec(nested([nf('B', ' ', null)]), withPassives())).toBe('name_required')
     })
 
@@ -864,8 +864,12 @@ describe('intake.commit', () => {
       const n = normalizeCommand({ ...old, newItems: old.newItems.map(({ description: _d, ...rest }) => rest) } as never) as IntakeCommit
       expect(n.newFolders).toEqual([])
       expect(n.newAttributes).toEqual([])
+      expect(n.newUnits).toEqual([])
+      expect(n.appendOptions).toEqual([])
       expect(n.newItems[0]!.description).toBeNull()
-      expect(n.created).toEqual({ folders: [], attributes: [], tags: [], items: [] })
+      expect(n.newItems[0]).toMatchObject({ icon: null, color: null })
+      expect(n.newVariants[0]!.description).toBeNull()
+      expect(n.created).toEqual({ folders: [], attributes: [], tags: [], items: [], units: [], appendedOptions: [] })
       expect(validateCommand(n, electronics())).toBeNull()
     })
 
@@ -875,8 +879,8 @@ describe('intake.commit', () => {
           newAttributes: [inductance, { id: 'K', name: ' Kind ', kind: 'enum', options: [' a ', 'b'], unit: 'x', siPrefixes: true }],
         }),
       ) as IntakeCommit
-      expect(n.newFolders).toEqual([nf('B', 'Shielded', null)])
-      expect(n.newAttributes[1]).toEqual({ id: 'K', name: 'Kind', kind: 'enum', options: ['a', 'b'], unit: '', siPrefixes: false })
+      expect(n.newFolders).toEqual([{ ...nf('B', 'Shielded', null), icon: null }])
+      expect(n.newAttributes[1]).toEqual({ id: 'K', name: 'Kind', kind: 'enum', options: ['a', 'b'], unit: '', siPrefixes: false, pinned: false })
     })
   })
 

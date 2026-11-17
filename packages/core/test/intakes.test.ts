@@ -4,6 +4,7 @@ import type { Photo } from '../src/model'
 import {
   buildIntakeCommit,
   emptyIntakeDraft,
+  pruneDraft,
   pruneNewItems,
   resolveIntake,
   snapshotAfterIntake,
@@ -13,7 +14,10 @@ import {
   type Intake,
   type IntakeDraftContent,
 } from '../src/intakes'
+import { intakeUnits } from '../src/intake-entities'
 import { MAX_NAME_LENGTH } from '../src/limits'
+import type { CustomUnit, Tag } from '../src/model'
+import { customUnitKey, parseAmount, resolveUnit } from '../src/units'
 import { normalizeCommand, validateCommand } from '../src/validate'
 import { ARCHIVED, attribute, axis, electronics, folder, item, makeSnapshot, value, variant } from './fixtures'
 
@@ -216,13 +220,13 @@ describe('buildIntakeCommit', () => {
       { attributeId: 'res', value: null, axisPosition: 0 },
     ]
     expect(c.newItems).toEqual([
-      { id: 'NEW', folderId: null, name: 'Resistor 0.6 W', description: null, unitKey: 'pcs', tagIds: [], attributes },
-      { id: 'UNUSED', folderId: null, name: 'No stock', description: null, unitKey: 'pcs', tagIds: [], attributes },
+      { id: 'NEW', folderId: null, name: 'Resistor 0.6 W', description: null, icon: null, color: null, unitKey: 'pcs', tagIds: [], attributes },
+      { id: 'UNUSED', folderId: null, name: 'No stock', description: null, icon: null, color: null, unitKey: 'pcs', tagIds: [], attributes },
     ])
     expect(c.newVariants).toEqual([
-      { id: lines[0]!.ids.variantId, itemId: 'NEW', values: [{ attributeId: 'res', value: '1000' }] },
-      { id: lines[1]!.ids.variantId, itemId: 'NEW', values: [{ attributeId: 'res', value: '4700' }] },
-      { id: lines[4]!.ids.variantId, itemId: 'R', values: [{ attributeId: 'res', value: '22000' }] },
+      { id: lines[0]!.ids.variantId, itemId: 'NEW', values: [{ attributeId: 'res', value: '1000' }], description: null },
+      { id: lines[1]!.ids.variantId, itemId: 'NEW', values: [{ attributeId: 'res', value: '4700' }], description: null },
+      { id: lines[4]!.ids.variantId, itemId: 'R', values: [{ attributeId: 'res', value: '22000' }], description: null },
     ])
     expect(c.unarchiveVariants).toEqual(['r47k'])
     expect(c.receipts.map((r) => [r.movementId, r.itemId, r.variantId])).toEqual([
@@ -325,7 +329,7 @@ describe('tags of new items', () => {
 
   it('builds newTags and the item tagIds, existing tag first as the item lists them', () => {
     const c = build(tagged(['smd', 'T1'], [{ id: 'T1', name: 'Kit A' }]))
-    expect(c.newTags).toEqual([{ id: 'T1', name: 'Kit A' }])
+    expect(c.newTags).toEqual([{ id: 'T1', name: 'Kit A', color: null }])
     expect(c.newItems[0]!.tagIds).toEqual(['smd', 'T1'])
     expect(validateCommand(normalizeCommand(c), base())).toBeNull()
   })
@@ -338,13 +342,13 @@ describe('tags of new items', () => {
 
   it('two new tags with one name are created once', () => {
     const c = build(tagged(['T1', 'T2'], [{ id: 'T1', name: 'Kit' }, { id: 'T2', name: 'KIT' }]))
-    expect(c.newTags).toEqual([{ id: 'T1', name: 'Kit' }])
+    expect(c.newTags).toEqual([{ id: 'T1', name: 'Kit', color: null }])
     expect(c.newItems[0]!.tagIds).toEqual(['T1'])
   })
 
   it('a new tag no new item references is not created', () => {
     const c = build(tagged(['T1'], [{ id: 'T1', name: 'Kit A' }, { id: 'T2', name: 'Kit B' }], [line('NEW'), line('M')]))
-    expect(c.newTags).toEqual([{ id: 'T1', name: 'Kit A' }])
+    expect(c.newTags).toEqual([{ id: 'T1', name: 'Kit A', color: null }])
     expect(c.newItems.map((n) => n.id)).toEqual(['NEW'])
   })
 
@@ -430,8 +434,8 @@ describe('draft folders, attributes and standalone items', () => {
     ])
     const cmd = build(c)
     expect(cmd.newFolders).toEqual([
-      { id: 'A', parentId: 'PAS', name: 'Inductors' },
-      { id: 'B', parentId: 'A', name: 'Shielded' },
+      { id: 'A', parentId: 'PAS', name: 'Inductors', icon: null },
+      { id: 'B', parentId: 'A', name: 'Shielded', icon: null },
     ])
     expect(cmd.newItems[0]!.folderId).toBe('B')
     expect(validateCommand(normalizeCommand(cmd), base())).toBeNull()
@@ -441,18 +445,23 @@ describe('draft folders, attributes and standalone items', () => {
     const l = line('L1', { IND: '4.7µ' })
     const c = content({ newAttributes: [inductance], newItems: [inductor()], lines: [l] })
     const cmd = build(c)
-    expect(cmd.newAttributes).toEqual([{ id: 'IND', name: 'Inductance', kind: 'number', options: [], unit: 'H', siPrefixes: true }])
+    expect(cmd.newAttributes).toEqual([{ id: 'IND', name: 'Inductance', kind: 'number', options: [], unit: 'H', siPrefixes: true, pinned: false }])
     expect(cmd.newItems[0]!.attributes).toEqual([{ attributeId: 'IND', value: null, axisPosition: 0 }])
-    expect(cmd.newVariants).toEqual([{ id: l.ids.variantId, itemId: 'L1', values: [{ attributeId: 'IND', value: '0.0000047' }] }])
+    expect(cmd.newVariants).toEqual([{ id: l.ids.variantId, itemId: 'L1', values: [{ attributeId: 'IND', value: '0.0000047' }], description: null }])
     expect(cmd.lines[0]!.variantLabel).toBe('4.7 µH')
     expect(validateCommand(normalizeCommand(cmd), base())).toBeNull()
   })
 
   it('the commit carries a draft attribute trimmed: name, unit and options', () => {
-    const c = content({ newAttributes: [{ ...inductance, name: ' Inductance ', unit: ' H ' }], newItems: [plain()] })
-    expect(build(c).newAttributes).toEqual([{ id: 'IND', name: 'Inductance', kind: 'number', options: [], unit: 'H', siPrefixes: true }])
-    const list = content({ newAttributes: [{ id: 'PK', name: ' Pack ', kind: 'enum', unit: '', siPrefixes: false, options: [' A ', 'B '] }], newItems: [plain()] })
-    expect(build(list).newAttributes).toEqual([{ id: 'PK', name: 'Pack', kind: 'enum', options: ['A', 'B'], unit: '', siPrefixes: false }])
+    const uses = (attributeId: string) => plain({ attributes: [{ attributeId, value: null, axis: false }] })
+    const c = content({ newAttributes: [{ ...inductance, name: ' Inductance ', unit: ' H ' }], newItems: [uses('IND')] })
+    expect(build(c).newAttributes).toEqual([{ id: 'IND', name: 'Inductance', kind: 'number', options: [], unit: 'H', siPrefixes: true, pinned: false }])
+    // Options are trimmed; empty ones and repeats (no case) go.
+    const list = content({
+      newAttributes: [{ id: 'PK', name: ' Pack ', kind: 'enum', unit: '', siPrefixes: false, options: [' A ', 'B ', '', 'a'] }],
+      newItems: [uses('PK')],
+    })
+    expect(build(list).newAttributes).toEqual([{ id: 'PK', name: 'Pack', kind: 'enum', options: ['A', 'B'], unit: '', siPrefixes: false, pinned: false }])
   })
 
   it('a shared value on a draft attribute is canonical, and one that does not fit marks the item', () => {
@@ -481,15 +490,20 @@ describe('draft folders, attributes and standalone items', () => {
       { code: 'duplicate_name', existingId: 'X' },
       null,
     ])
-    // An archived folder with the name does not count.
-    expect(entity(content({ newFolders: [{ id: 'D', name: 'Old parts', parentId: null }] }), 'folder', 'D')!.problem).toBeNull()
+    // An archived folder with the name blocks it too.
+    expect(entity(content({ newFolders: [{ id: 'D', name: 'Old parts', parentId: null }] }), 'folder', 'D')!.problem).toEqual({
+      code: 'duplicate_archived',
+      existingId: 'AF',
+    })
   })
 
   it('a draft attribute named as an existing or earlier draft attribute is a duplicate', () => {
-    const dup = content({ newAttributes: [{ ...inductance, name: 'resistance ' }] })
+    // Draft attributes live while a new item uses them.
+    const usingAll = plain({ attributes: [{ attributeId: 'IND', value: null, axis: false }, { attributeId: 'IND2', value: null, axis: false }] })
+    const dup = content({ newAttributes: [{ ...inductance, name: 'resistance ' }], newItems: [usingAll] })
     expect(entity(dup, 'attribute', 'IND')!.problem).toEqual({ code: 'duplicate_name', existingId: 'res' })
     expect(resolveIntake(dup, base()).ok).toBe(false)
-    const twice = content({ newAttributes: [inductance, { ...inductance, id: 'IND2', name: 'INDUCTANCE' }] })
+    const twice = content({ newAttributes: [inductance, { ...inductance, id: 'IND2', name: 'INDUCTANCE' }], newItems: [usingAll] })
     expect(entity(twice, 'attribute', 'IND2')!.problem).toEqual({ code: 'duplicate_name', existingId: 'IND' })
   })
 
@@ -514,11 +528,12 @@ describe('draft folders, attributes and standalone items', () => {
   })
 
   it('a draft folder or attribute with a bad name or kind has an invalid value', () => {
+    const used = [inductor()]
     expect(entity(content({ newFolders: [{ id: 'A', name: '  ', parentId: null }] }), 'folder', 'A')!.problem).toEqual({ code: 'invalid_value' })
-    expect(entity(content({ newAttributes: [{ ...inductance, name: 'x'.repeat(MAX_NAME_LENGTH + 1) }] }), 'attribute', 'IND')!.problem).toEqual({
+    expect(entity(content({ newAttributes: [{ ...inductance, name: 'x'.repeat(MAX_NAME_LENGTH + 1) }], newItems: used }), 'attribute', 'IND')!.problem).toEqual({
       code: 'invalid_value',
     })
-    expect(entity(content({ newAttributes: [{ ...inductance, kind: 'colour' as never }] }), 'attribute', 'IND')!.problem).toEqual({
+    expect(entity(content({ newAttributes: [{ ...inductance, kind: 'colour' as never }], newItems: used }), 'attribute', 'IND')!.problem).toEqual({
       code: 'invalid_value',
     })
   })
@@ -593,6 +608,8 @@ describe('draft folders, attributes and standalone items', () => {
         { id: 'L1', name: 'Inductor 0805', folderId: 'A' },
         { id: 'P', name: 'ESP32', folderId: null },
       ],
+      units: [],
+      appendedOptions: [],
     })
   })
 
@@ -627,7 +644,13 @@ describe('draft folders, attributes and standalone items', () => {
     expect(cmd.newItems[0]!.description).toBeNull()
     expect(cmd.photos).toEqual([])
     expect(cmd.receipts).toHaveLength(2)
-    expect(cmd.created).toEqual({ folders: [], attributes: [], tags: [], items: [{ id: 'NEW', name: 'Resistor 0.6 W', folderId: null }] })
+    expect(cmd.created).toEqual({
+      folders: [], attributes: [], tags: [], items: [{ id: 'NEW', name: 'Resistor 0.6 W', folderId: null }], units: [], appendedOptions: [],
+    })
+    expect(cmd.newUnits).toEqual([])
+    expect(cmd.appendOptions).toEqual([])
+    expect(cmd.newItems[0]).toMatchObject({ icon: null, color: null })
+    expect(cmd.newVariants[0]!.description).toBeNull()
     expect(validateCommand(normalizeCommand(cmd), base())).toBeNull()
   })
 
@@ -640,5 +663,287 @@ describe('draft folders, attributes and standalone items', () => {
     expect(n.newTags).toEqual([])
     expect(n.newItems[0]!.tagIds).toEqual([])
     expect(validateCommand(n, base())).toBeNull()
+  })
+})
+
+describe('full entities: icons, colours, units, pinned attributes, added list values, variant descriptions', () => {
+  const audit = { createdAt: '', updatedAt: '', createdBy: '', updatedBy: '' }
+  const tag = (id: string, name: string): Tag => ({ id, inventoryId: 'inv', name, color: null, ...audit })
+  const unit = (id: string, name: string, symbol: string): CustomUnit => ({ id, inventoryId: 'inv', name, symbol, prefixPowers: [], ...audit })
+  /** Passives (and an archived root folder Old parts); in Passives a Ceramic capacitor with list axis Package (0603, THT;
+   *  no 0805) and an archived item Fuse; a pinned attribute Favourite; a custom unit Milliliters (ml); a tag SMD. */
+  const base = () =>
+    makeSnapshot({
+      folders: [folder('PAS', 'Passives'), folder('AF', 'Old parts', null, ARCHIVED)],
+      items: [item('CAP', 'Ceramic capacitor', 'PAS'), item('OLD', 'Fuse', 'PAS', ARCHIVED)],
+      attributes: [
+        attribute('pkg', 'Package', 'enum', { options: ['0603', 'THT'] }),
+        attribute('res', 'Resistance', 'number', { unit: 'Ω', siPrefixes: true }),
+        attribute('fav', 'Favourite', 'text', { pinned: true }),
+      ],
+      itemAttributes: [axis('CAP', 'pkg', 0)],
+      variants: [variant('c0603', 'CAP')],
+      variantAttributeValues: [value('c0603', 'pkg', '0603')],
+      units: [unit('U1', 'Milliliters', 'ml')],
+      tags: [tag('smd', 'SMD')],
+    })
+  const plain = (over: Partial<DraftNewItem> = {}): DraftNewItem => ({ id: 'P', name: 'Diode', folderId: 'PAS', unitKey: 'pcs', attributes: [], ...over })
+  const content = (parts: Partial<IntakeDraftContent>): IntakeDraftContent => ({ newItems: [], lines: [], ...parts })
+  const build = (c: IntakeDraftContent, s = base()) => buildIntakeCommit(intakeOf(c), resolveIntake(c, s), s, 'rev-1') as IntakeCommit
+  const entity = (c: IntakeDraftContent, kind: string, id: string, s = base()) =>
+    resolveIntake(c, s).entities.find((e) => e.kind === kind && e.id === id)
+  const ec = (c: Command, s = base()) => validateCommand(normalizeCommand(c), s)?.code ?? null
+  const attr = (id: string, name: string, over: Partial<DraftNewAttribute> = {}): DraftNewAttribute => ({
+    id, name, kind: 'text', unit: '', siPrefixes: false, options: [], ...over,
+  })
+  const using = (...attributeIds: string[]) => attributeIds.map((attributeId) => ({ attributeId, value: null, axis: false }))
+
+  it('a new item carries its icon and colour into the command and the copy after it', () => {
+    const cmd = build(content({ newItems: [plain({ icon: 'package', color: '#ff8800' })] }))
+    expect(cmd.newItems[0]).toMatchObject({ icon: 'package', color: '#FF8800' })
+    expect(snapshotAfterIntake(base(), cmd).items.find((i) => i.id === 'P')).toMatchObject({ icon: 'package', color: '#FF8800' })
+    expect(ec(cmd)).toBeNull()
+    expect(entity(content({ newItems: [plain({ icon: 'Not An Icon!' })] }), 'item', 'P')!.problem).toEqual({ code: 'invalid_value' })
+    expect(entity(content({ newItems: [plain({ color: 'red' })] }), 'item', 'P')!.problem).toEqual({ code: 'invalid_value' })
+    expect(ec({ ...cmd, newItems: [{ ...cmd.newItems[0]!, color: 'red' }] })).toBe('invalid_option')
+  })
+
+  it('a draft folder carries its icon', () => {
+    const c = content({ newFolders: [{ id: 'F', name: 'Inductors', parentId: null, icon: 'box' }] })
+    const cmd = build(c)
+    expect(cmd.newFolders).toEqual([{ id: 'F', parentId: null, name: 'Inductors', icon: 'box' }])
+    expect(snapshotAfterIntake(base(), cmd).folders.find((f) => f.id === 'F')!.icon).toBe('box')
+    expect(ec(cmd)).toBeNull()
+    expect(entity(content({ newFolders: [{ id: 'F', name: 'Inductors', parentId: null, icon: 'BOX!' }] }), 'folder', 'F')!.problem).toEqual({
+      code: 'invalid_value',
+    })
+  })
+
+  it('a draft tag carries its colour; a bad colour marks the tag', () => {
+    const c = content({ newTags: [{ id: 'T1', name: 'Kit', color: '#00aa00' }], newItems: [plain({ tagIds: ['T1'] })] })
+    const r = resolveIntake(c, base())
+    expect(r.entities.find((e) => e.kind === 'tag')).toEqual({ kind: 'tag', id: 'T1', problem: null })
+    const cmd = build(c)
+    expect(cmd.newTags).toEqual([{ id: 'T1', name: 'Kit', color: '#00AA00' }])
+    expect(snapshotAfterIntake(base(), cmd).tags.find((t) => t.id === 'T1')!.color).toBe('#00AA00')
+    expect(ec(cmd)).toBeNull()
+    const bad = content({ newTags: [{ id: 'T1', name: 'Kit', color: 'green' }], newItems: [plain({ tagIds: ['T1'] })] })
+    expect(entity(bad, 'tag', 'T1')!.problem).toEqual({ code: 'invalid_value' })
+    expect(resolveIntake(bad, base()).ok).toBe(false)
+  })
+
+  it('a draft unit is the unit of a new item: created first, amounts in it parse', () => {
+    const reels = { id: 'UR', name: 'Reels', symbol: 'reel', prefixPowers: [3] }
+    const c = content({ newUnits: [reels], newItems: [plain({ unitKey: customUnitKey('UR') })], lines: [line('P', {}, { quantity: '2000' })] })
+    const def = resolveUnit(customUnitKey('UR'), intakeUnits(c, base()))!
+    expect(parseAmount('2k', def)).toBe('2000')
+    const r = resolveIntake(c, base())
+    expect(r.ok).toBe(true)
+    expect(r.entities).toContainEqual({ kind: 'unit', id: 'UR', problem: null })
+    const cmd = build(c)
+    expect(cmd.newUnits).toEqual([reels])
+    expect(cmd.newItems[0]!.unitKey).toBe('custom:UR')
+    expect(cmd.lines[0]!.unitKey).toBe('custom:UR')
+    expect(cmd.created.units).toEqual([{ id: 'UR', name: 'Reels', symbol: 'reel' }])
+    const after = snapshotAfterIntake(base(), cmd)
+    expect(after.units.find((u) => u.id === 'UR')).toMatchObject({ name: 'Reels', symbol: 'reel', prefixPowers: [3] })
+    expect(ec(cmd)).toBeNull()
+    expect(ec(cmd, after)).toBeNull()
+    // A unit the copy does not have and the command does not make.
+    expect(ec({ ...cmd, newUnits: [] })).toBe('not_found')
+  })
+
+  it('a draft attribute may be pinned; one pin over the limit is marked and refused', () => {
+    const one = content({ newAttributes: [attr('A1', 'Brand', { pinned: true })], newItems: [plain({ attributes: using('A1') })] })
+    const cmd = build(one)
+    expect(cmd.newAttributes[0]!.pinned).toBe(true)
+    expect(snapshotAfterIntake(base(), cmd).attributes.find((a) => a.id === 'A1')!.pinned).toBe(true)
+    expect(ec(cmd)).toBeNull()
+    // Favourite is pinned already: with a limit of 2, the second pinned draft attribute is the third pin.
+    const two = content({
+      newAttributes: [attr('A1', 'Brand', { pinned: true }), attr('A2', 'Series', { pinned: true })],
+      newItems: [plain({ attributes: using('A1', 'A2') })],
+    })
+    const r = resolveIntake(two, base())
+    expect(r.entities.filter((e) => e.kind === 'attribute')).toEqual([
+      { kind: 'attribute', id: 'A1', problem: null },
+      { kind: 'attribute', id: 'A2', problem: { code: 'pinned_limit' } },
+    ])
+    expect(r.ok).toBe(false)
+    const over = { ...cmd, newAttributes: [...cmd.newAttributes, { ...cmd.newAttributes[0]!, id: 'A2', name: 'Series' }] }
+    expect(ec(over)).toBe('too_many_pinned')
+  })
+
+  it('a value added to an existing list serves a line of an existing item: the list grows, the new variant has its description', () => {
+    const l = line('CAP', { pkg: '0805' }, { variantDescription: ' X7R, 50 V ' })
+    const c = content({ addedOptions: [{ attributeId: 'pkg', values: ['0805'] }], lines: [l] })
+    const r = resolveIntake(c, base())
+    expect(r.ok).toBe(true)
+    expect(r.lines[0]!.resolution).toEqual({ kind: 'newValue', itemId: 'CAP', variantId: l.ids.variantId, sharedWith: null })
+    expect(r.entities).toEqual([{ kind: 'option', id: 'pkg', problem: null }])
+    const cmd = build(c)
+    expect(cmd.appendOptions).toEqual([{ attributeId: 'pkg', values: ['0805'] }])
+    expect(cmd.newVariants).toEqual([{ id: l.ids.variantId, itemId: 'CAP', values: [{ attributeId: 'pkg', value: '0805' }], description: 'X7R, 50 V' }])
+    expect(cmd.created.appendedOptions).toEqual([{ attributeId: 'pkg', name: 'Package', values: ['0805'] }])
+    expect(cmd.lines[0]!.variantLabel).toBe('0805')
+    const after = snapshotAfterIntake(base(), cmd)
+    expect(after.attributes.find((a) => a.id === 'pkg')!.options).toEqual(['0603', 'THT', '0805'])
+    expect(after.variants.find((v) => v.id === l.ids.variantId)!.description).toBe('X7R, 50 V')
+    expect(ec(cmd)).toBeNull()
+    // A retry: the copy holds the value and the variant already; nothing is appended twice.
+    expect(ec(cmd, after)).toBeNull()
+    expect(snapshotAfterIntake(after, cmd).attributes.find((a) => a.id === 'pkg')!.options).toEqual(['0603', 'THT', '0805'])
+    // Without the added value the line does not fit the list.
+    const without = resolveIntake(content({ lines: [l] }), base()).lines[0]!.resolution
+    expect(without).toEqual({ kind: 'problem', code: 'invalid_value' })
+  })
+
+  it('a value the list has already (no case) is not appended again; one list value twice in the command is refused', () => {
+    const c = content({ addedOptions: [{ attributeId: 'pkg', values: ['tht', '0805', '0805 '] }], lines: [line('CAP', { pkg: 'tht' }), line('CAP', { pkg: '0805' })] })
+    const cmd = build(c)
+    expect(cmd.appendOptions).toEqual([{ attributeId: 'pkg', values: ['0805'] }])
+    expect(cmd.newVariants.map((v) => v.values[0]!.value)).toEqual(['THT', '0805'])
+    expect(ec(cmd)).toBeNull()
+    expect(ec({ ...cmd, appendOptions: [{ attributeId: 'pkg', values: ['0805', ' 0805'] }] })).toBe('invalid_option')
+    expect(ec({ ...cmd, appendOptions: [{ attributeId: 'res', values: ['10'] }] })).toBe('invalid_option')
+    expect(ec({ ...cmd, appendOptions: [{ attributeId: 'GONE', values: ['10'] }] })).toBe('not_found')
+  })
+
+  it('an added value on an attribute that is not an existing list is marked', () => {
+    const c = content({
+      addedOptions: [{ attributeId: 'res', values: ['10'] }, { attributeId: 'GONE', values: ['x'] }],
+      lines: [line('CAP', { pkg: '0603', res: '10', GONE: 'x' })],
+    })
+    const r = resolveIntake(c, base())
+    expect(r.entities).toEqual([
+      { kind: 'option', id: 'res', problem: { code: 'invalid_value' } },
+      { kind: 'option', id: 'GONE', problem: { code: 'invalid_value' } },
+    ])
+    expect(r.ok).toBe(false)
+  })
+
+  it('the line creating a new item variant gives it its description; a top-up line gives none', () => {
+    const ind = attr('IND', 'Inductance', { kind: 'number', unit: 'H', siPrefixes: true })
+    const a = line('L1', { IND: '1µ' }, { variantDescription: 'Shielded' })
+    const b = line('CAP', { pkg: '0603' }, { variantDescription: 'ignored' })
+    const cmd = build(content({ newAttributes: [ind], newItems: [plain({ id: 'L1', name: 'Inductor', attributes: [{ attributeId: 'IND', value: null, axis: true }] })], lines: [a, b] }))
+    expect(cmd.newVariants.map((v) => [v.id, v.description])).toEqual([[a.ids.variantId, 'Shielded']])
+    expect(ec(cmd)).toBeNull()
+  })
+
+  describe('hard duplicates inside the draft and against the copy (review focus 2)', () => {
+    it('new items: a living or archived item of the folder, or an earlier new item of the same folder', () => {
+      expect(entity(content({ newItems: [plain({ name: ' ceramic CAPACITOR ' })] }), 'item', 'P')!.problem).toEqual({
+        code: 'duplicate_name',
+        existingId: 'CAP',
+      })
+      expect(entity(content({ newItems: [plain({ name: 'fuse' })] }), 'item', 'P')!.problem).toEqual({ code: 'duplicate_archived', existingId: 'OLD' })
+      expect(entity(content({ newItems: [plain({ name: 'Fuse', folderId: null })] }), 'item', 'P')!.problem).toBeNull()
+      const twice = content({
+        newFolders: [{ id: 'F', name: 'Inductors', parentId: null }],
+        newItems: [plain({ id: 'A', folderId: 'F' }), plain({ id: 'B', folderId: 'F', name: 'DIODE' }), plain({ id: 'C', folderId: null })],
+      })
+      expect(resolveIntake(twice, base()).entities.filter((e) => e.kind === 'item').map((e) => e.problem)).toEqual([
+        null,
+        { code: 'duplicate_name', existingId: 'A' },
+        null,
+      ])
+    })
+
+    it('draft units: built-in and custom units by name (no case) and by symbol (with case)', () => {
+      const u = (id: string, name: string, symbol: string) => ({ id, name, symbol, prefixPowers: [] })
+      const problem = (units: { id: string; name: string; symbol: string; prefixPowers: number[] }[], id: string) =>
+        entity(content({ newUnits: units, newItems: units.map((x) => plain({ id: `I${x.id}`, name: `Item ${x.id}`, unitKey: customUnitKey(x.id) })) }), 'unit', id)!.problem
+      expect(problem([u('X', 'Metres long', 'm')], 'X')).toEqual({ code: 'duplicate_name', existingId: 'm' })
+      expect(problem([u('X', 'Mega', 'M')], 'X')).toBeNull()
+      expect(problem([u('X', ' meters ', 'mtr')], 'X')).toEqual({ code: 'duplicate_name', existingId: 'm' })
+      expect(problem([u('X', 'Cups', 'ml')], 'X')).toEqual({ code: 'duplicate_name', existingId: 'custom:U1' })
+      expect(problem([u('X', 'Microlitres', 'mL')], 'X')).toBeNull()
+      expect(problem([u('X', 'Reels', 'reel'), u('Y', 'Spools', 'reel')], 'Y')).toEqual({ code: 'duplicate_name', existingId: 'custom:X' })
+      expect(problem([u('X', 'Reels', 'reel'), u('Y', 'REELS', 'rl')], 'Y')).toEqual({ code: 'duplicate_name', existingId: 'custom:X' })
+      expect(problem([u('X', ' ', 'x')], 'X')).toEqual({ code: 'invalid_value' })
+      expect(problem([{ ...u('X', 'Reels', 'reel'), prefixPowers: [5] }], 'X')).toEqual({ code: 'invalid_value' })
+    })
+
+    it('the commit refuses names taken in the copy since, archived ones included, and twins inside itself', () => {
+      const cmd = build(content({ newItems: [plain()] }))
+      expect(ec(cmd)).toBeNull()
+      const withTwin = (over: Partial<ReturnType<typeof item>>) => ({ ...base(), items: [...base().items, item('D2', 'diode', 'PAS', over)] })
+      expect(ec(cmd, withTwin({}))).toBe('duplicate_name')
+      expect(ec(cmd, withTwin(ARCHIVED))).toBe('duplicate_archived')
+      expect(ec({ ...cmd, newItems: [cmd.newItems[0]!, { ...cmd.newItems[0]!, id: 'P2', name: 'DIODE ' }], created: { ...cmd.created, items: [] } })).toBe(
+        'duplicate_name',
+      )
+      // Two new folders with one name under one parent; a new folder named as an archived one.
+      const nf = (id: string, name: string) => ({ id, parentId: null, name, icon: null })
+      expect(ec({ ...cmd, newFolders: [nf('F1', 'Inductors'), nf('F2', 'inductors')] })).toBe('duplicate_name')
+      expect(ec({ ...cmd, newFolders: [nf('F1', 'Old parts')] })).toBe('duplicate_archived')
+    })
+
+    it('the commit refuses a new unit with a symbol or name taken, with case for the symbol, and twins inside itself', () => {
+      const reels = { id: 'UR', name: 'Reels', symbol: 'reel', prefixPowers: [] }
+      const cmd = build(content({ newUnits: [reels], newItems: [plain({ unitKey: customUnitKey('UR') })] }))
+      expect(ec(cmd)).toBeNull()
+      expect(ec({ ...cmd, newUnits: [{ ...reels, symbol: 'm' }] })).toBe('duplicate_name')
+      expect(ec({ ...cmd, newUnits: [{ ...reels, symbol: 'M' }] })).toBeNull()
+      expect(ec({ ...cmd, newUnits: [{ ...reels, name: 'GRAMS' }] })).toBe('duplicate_name')
+      expect(ec({ ...cmd, newUnits: [{ ...reels, symbol: 'ml' }] })).toBe('duplicate_name')
+      expect(ec({ ...cmd, newUnits: [{ ...reels, symbol: 'mL' }] })).toBeNull()
+      expect(ec({ ...cmd, newUnits: [reels, { ...reels, id: 'UR2', name: 'Spools' }] })).toBe('duplicate_name')
+      expect(ec({ ...cmd, newUnits: [reels, { ...reels, id: 'UR2', symbol: 'rl', name: 'reels' }] })).toBe('duplicate_name')
+      expect(ec({ ...cmd, newUnits: [{ ...reels, prefixPowers: [5] }] })).toBe('invalid_option')
+      // The same unit already in the copy (a retry) is the command's own.
+      expect(ec(cmd, snapshotAfterIntake(base(), cmd))).toBeNull()
+    })
+  })
+
+  describe('unused parts are pruned (review focus 3)', () => {
+    const full = (): IntakeDraftContent => ({
+      newUnits: [{ id: 'UR', name: 'Reels', symbol: 'reel', prefixPowers: [] }],
+      newAttributes: [attr('A1', 'Brand')],
+      newTags: [{ id: 'T1', name: 'Kit' }],
+      addedOptions: [{ attributeId: 'pkg', values: ['0805', '1206'] }],
+      newItems: [plain({ unitKey: customUnitKey('UR'), tagIds: ['T1'], attributes: using('A1') })],
+      lines: [line('CAP', { pkg: '0805' })],
+    })
+
+    it('keeps what a new item or a line uses; drops added values nothing uses', () => {
+      const pruned = pruneDraft(full())
+      expect(pruned.newUnits).toEqual(full().newUnits)
+      expect(pruned.newAttributes).toEqual(full().newAttributes)
+      expect(pruned.newTags).toEqual(full().newTags)
+      expect(pruned.addedOptions).toEqual([{ attributeId: 'pkg', values: ['0805'] }])
+    })
+
+    it('the last line using an added value gone: the value goes, and the commit does not append it', () => {
+      const d = { ...full(), lines: [] }
+      expect(pruneDraft(d).addedOptions).toEqual([])
+      const cmd = build(d)
+      expect(cmd.appendOptions).toEqual([])
+      expect(resolveIntake(d, base()).entities.some((e) => e.kind === 'option')).toBe(false)
+    })
+
+    it('a new item using the value keeps it; the last new item gone: its unit, attribute and tag go', () => {
+      const shared = { ...full(), lines: [], newItems: [plain({ attributes: [{ attributeId: 'pkg', value: '1206', axis: false }] })] }
+      expect(pruneDraft(shared).addedOptions).toEqual([{ attributeId: 'pkg', values: ['1206'] }])
+      expect(build(shared).newItems[0]!.attributes).toEqual([{ attributeId: 'pkg', value: '1206', axisPosition: null }])
+      const d = { ...full(), newItems: [] }
+      const pruned = pruneDraft(d)
+      expect(pruned.newUnits).toEqual([])
+      expect(pruned.newAttributes).toEqual([])
+      expect(pruned.newTags).toEqual([])
+      const cmd = build(d)
+      expect(cmd.newUnits).toEqual([])
+      expect(cmd.newAttributes).toEqual([])
+      expect(cmd.newTags).toEqual([])
+      // A problem on a part that is not used does not hold the draft back.
+      const bad = { ...d, newAttributes: [attr('A1', 'Package')], newUnits: [{ id: 'UR', name: 'Meters', symbol: 'm', prefixPowers: [] }] }
+      expect(resolveIntake(bad, base()).ok).toBe(true)
+    })
+
+    it('a draft without the new fields prunes to itself', () => {
+      const old = { newItems: [plain()], lines: [line('P')] }
+      expect(pruneDraft(old)).toEqual(old)
+    })
   })
 })

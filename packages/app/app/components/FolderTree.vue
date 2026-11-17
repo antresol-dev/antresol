@@ -3,6 +3,7 @@ import { treeCurrent } from '~/lib/shell'
 import { ChevronsDownUp, ChevronsUpDown, ListTree } from '@lucide/vue'
 import { collapseAll, expandAll, loadTreeItems, loadTreeOpen, openPath, rootItemRows, saveTreeItems, saveTreeOpen, toggleOpen, treeRows, type TreeOpen, type TreeRow } from '~/lib/tree-state'
 import { inventoryPieces } from '~/lib/views'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
 const props = defineProps<{ variant: 'panel' | 'drawer' }>()
 const panel = computed(() => props.variant === 'panel')
@@ -96,30 +97,39 @@ const buttonSize = computed(() => (panel.value ? 'size-8 rounded-chip' : 'size-1
       <h2 class="text-xs font-semibold tracking-[0.02em] text-muted-foreground uppercase">{{ $t('folder.tree') }}</h2>
       <div class="flex items-center">
         <slot name="actions" />
-        <button
-          type="button"
-          :class="[buttonSize, 'pressable grid shrink-0 place-items-center aria-pressed:bg-accent-soft aria-pressed:text-accent-soft-foreground']"
-          :aria-pressed="showItems"
-          :aria-label="$t('tree.showItems')"
-          :title="$t('tree.showItems')"
-          @click="toggleItems"
-        >
-          <ListTree class="size-4" aria-hidden="true" />
-        </button>
-        <button
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <button
+              type="button"
+              :class="[buttonSize, 'pressable grid shrink-0 place-items-center aria-pressed:bg-accent-soft aria-pressed:text-accent-soft-foreground']"
+              :aria-pressed="showItems"
+              :aria-label="$t('tree.showItems')"
+              @click="toggleItems"
+            >
+              <ListTree class="size-4" aria-hidden="true" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>{{ $t('tree.showItems') }}</TooltipContent>
+        </Tooltip>
+        <Tooltip
           v-for="b in [
             { key: 'collapse', icon: ChevronsDownUp, run: collapse },
             { key: 'expand', icon: ChevronsUpDown, run: expand },
           ]"
           :key="b.key"
-          type="button"
-          :class="[buttonSize, 'pressable grid shrink-0 place-items-center']"
-          :aria-label="$t(`tree.${b.key}All`)"
-          :title="$t(`tree.${b.key}All`)"
-          @click="b.run"
         >
-          <component :is="b.icon" class="size-4" aria-hidden="true" />
-        </button>
+          <TooltipTrigger as-child>
+            <button
+              type="button"
+              :class="[buttonSize, 'pressable grid shrink-0 place-items-center']"
+              :aria-label="$t(`tree.${b.key}All`)"
+              @click="b.run"
+            >
+              <component :is="b.icon" class="size-4" aria-hidden="true" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>{{ $t(`tree.${b.key}All`) }}</TooltipContent>
+        </Tooltip>
       </div>
     </div>
     <div :class="['min-h-0 flex-1 overflow-y-auto', panel ? 'px-2 pt-0.5 pb-3' : 'p-1.5']">

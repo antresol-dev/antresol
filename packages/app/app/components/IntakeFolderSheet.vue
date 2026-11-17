@@ -6,10 +6,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { folderChoicesWithDraft } from '@antresol/kit/draft-folders'
 import { nameClash, useExisting, withNewFolder, withoutNewFolder } from '~/lib/intake-draft'
+import { similarFolders } from '~/lib/intake-parts'
 
 // A draft folder of an intake (spec 2026-11-16 §4): its name and where it goes (the inventory's folders and this draft's
 // own). Opened empty it makes a new one ("New folder" in the screen header); opened on a draft folder it renames, moves
-// or removes it. A name the parent already has is not saved: "Use existing" takes the existing folder instead.
+// or removes it, and gives it an icon. A name the parent already has is not saved: "Use existing" takes the existing folder instead.
 const props = defineProps<{
   /** The draft folder to edit; null: a new one. */
   folderId: Id | null
@@ -26,6 +27,8 @@ const { t } = useI18n()
 
 const name = ref('')
 const parentId = ref<Id | null>(null)
+const icon = ref<string | null>(null)
+const pickingIcon = ref(false)
 const busy = ref(false)
 const errorKey = ref<{ key: string; params?: Record<string, string> } | null>(null)
 let formId: Id = newId()
@@ -37,6 +40,8 @@ watch(
     const f = props.folderId ? (props.content.newFolders ?? []).find((x) => x.id === props.folderId) : null
     formId = f?.id ?? newId()
     name.value = f?.name ?? ''
+    icon.value = f?.icon ?? null
+    pickingIcon.value = false
     parentId.value = f ? f.parentId : (props.startParentId ?? null)
     errorKey.value = null
   },
@@ -55,12 +60,13 @@ const existingName = computed(() => {
   const c = clash.value
   return c ? (props.snapshot.folders.find((f) => f.id === c.id)?.name ?? (props.content.newFolders ?? []).find((f) => f.id === c.id)?.name ?? name.value.trim()) : ''
 })
+const alike = computed(() => (clash.value ? [] : similarFolders(props.snapshot, props.content, name.value, parentId.value, formId)))
 const disabled = computed(() => busy.value || props.readOnly)
 const canSave = computed(() => !disabled.value && name.value.trim() !== '' && !clash.value)
 
 async function save(): Promise<void> {
   if (!canSave.value) return
-  const folder = { id: formId, name: name.value, parentId: parentId.value }
+  const folder = { id: formId, name: name.value, parentId: parentId.value, icon: icon.value }
   const next = withNewFolder(props.content, props.snapshot, folder)
   if ('errorKey' in next) {
     errorKey.value = { key: next.errorKey, params: next.params }
@@ -137,7 +143,9 @@ async function remove(): Promise<void> {
             {{ $t('intakes.useExisting', { name: existingName }) }}
           </button>
         </p>
+        <SimilarNote :names="alike" />
       </div>
+      <IconField v-model:picking="pickingIcon" :icon="icon" :disabled="disabled" @pick="icon = $event" />
       <div class="grid gap-2">
         <Label>{{ $t('intakes.folder.parent') }}</Label>
         <FolderPickerList :choices="choices" @select="parentId = $event; errorKey = null" />

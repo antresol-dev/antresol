@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { Attribute, AttributeKind, DraftNewAttribute, Id } from '@antresol/core'
+import type { SimilarName } from '@antresol/kit/similar-names'
 import { MAX_PINNED_ATTRIBUTES, sameName } from '@antresol/core'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,13 +16,17 @@ import { parseNameList } from '~/lib/lists'
 
 // Creates an inventory attribute or edits one: the name, a list's options, a number's unit and SI prefixes. The type can't change afterwards.
 // `draft` (an intake's new attribute, spec 2026-11-16 §4): nothing is written; the form hands the attribute to the
-// parent as `draft` (no "Show in lists", no units made). `attribute` then is the draft attribute being edited (its id is
+// parent as `draft` (with "Show in lists", which counts the draft's other pins: `otherPinned`; no units made). `attribute` then is the draft attribute being edited (its id is
 // kept). While a name is typed `clash` tells whether an attribute of that name exists (or is in the draft): the form
 // offers it as `useExisting` instead of saving a duplicate.
 const props = defineProps<{
   attribute: Attribute | null
   draft?: boolean
   clash?: (name: string) => { id: Id; name: string } | null
+  /** Draft: the attributes the draft already pins (not this one); they count against the limit with the inventory's. */
+  otherPinned?: number
+  /** Draft: names that look like the typed one (advice, not a refusal). */
+  similar?: (name: string) => readonly SimilarName[]
 }>()
 const emit = defineEmits<{ done: [attributeId: Id]; draft: [attribute: DraftNewAttribute]; useExisting: [id: Id] }>()
 
@@ -37,11 +42,10 @@ const siPrefixes = ref(props.attribute?.siPrefixes ?? false)
 const options = ref(props.attribute?.options.join('\n') ?? '')
 // "Show in lists" (spec 4.11): at most MAX_PINNED_ATTRIBUTES per inventory.
 const pinned = ref(props.attribute?.pinned ?? false)
-const pinnedFull = computed(
-  () =>
-    !props.attribute?.pinned &&
-    (state.snapshot?.attributes.filter((a) => a.pinned && a.id !== props.attribute?.id).length ?? 0) >= MAX_PINNED_ATTRIBUTES,
-)
+const pinnedFull = computed(() => {
+  const taken = (state.snapshot?.attributes.filter((a) => a.pinned && a.id !== props.attribute?.id).length ?? 0) + (props.draft ? (props.otherPinned ?? 0) : 0)
+  return (props.draft ? !pinned.value : !props.attribute?.pinned) && taken >= MAX_PINNED_ATTRIBUTES
+})
 // The sheet around the form locks while this is set.
 const busy = defineModel<boolean>('busy', { default: false })
 const errorKey = ref<string | null>(null)
@@ -67,6 +71,7 @@ const changes = computed(() =>
 // The line under the switch, on or off: what prefixes make of "4k7" with this unit.
 const example = computed(() => prefixExample(unit.value))
 const taken = computed(() => (props.draft && props.clash ? props.clash(name.value) : null))
+const alike = computed(() => (props.draft && props.similar && !taken.value ? props.similar(name.value) : []))
 // Saved for real (not a draft): the name must be free among the inventory's attributes; a name left as it was is not checked.
 const nameTaken = computed(() => {
   const n = name.value.trim()
@@ -99,6 +104,7 @@ async function submit(): Promise<void> {
       unit: kind.value === 'number' ? unit.value.trim() : '',
       siPrefixes: kind.value === 'number' ? siPrefixes.value : false,
       options: list,
+      pinned: pinned.value,
     })
     return
   }
@@ -148,6 +154,7 @@ async function submit(): Promise<void> {
         class="h-11"
       />
       <NameTakenNote id="attribute-name-taken" :taken="nameTaken" :name="name" />
+      <SimilarNote :names="alike" />
       <p v-if="taken" class="text-sm">
         {{ $t('intakes.attribute.exists', { name: taken.name }) }}
         <button type="button" class="inline-flex min-h-11 items-center font-semibold underline underline-offset-2 hover:text-accent-ink focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none" @click="emit('useExisting', taken.id)">
@@ -192,7 +199,7 @@ async function submit(): Promise<void> {
         <p v-if="example" class="field-text text-sm text-subtle-foreground">{{ $t('attributeForm.siExample', { example }) }}</p>
       </div>
     </template>
-    <div v-if="!draft" class="grid gap-1">
+    <div class="grid gap-1">
       <label class="field-text flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm font-semibold" :class="pinnedFull && 'cursor-default'">
         {{ $t('attributeForm.showInLists') }}
         <Switch v-model="pinned" :disabled="pinnedFull" aria-describedby="attribute-pinned-hint" />

@@ -14,7 +14,7 @@ const props = defineProps<{
   busy?: boolean
   locked?: boolean
   /** Tags that are not in the snapshot yet (a draft's new tags): shown and searched like the others. */
-  extraTags?: { id: Id; name: string }[]
+  extraTags?: { id: Id; name: string; color?: string | null }[]
 }>()
 const selected = defineModel<Id[]>({ required: true })
 const emit = defineEmits<{ create: [name: string] }>()
@@ -29,8 +29,7 @@ const matches = computed(() => {
   const extra = (props.extraTags ?? []).filter((t) => !known.has(t.name.trim().toLowerCase()))
   if (extra.length === 0) return base
   const q = query.value.trim().toLowerCase()
-  // A draft tag has no colour: it shows like any tag without one (no dot).
-  const own = extra.filter((t) => t.name.toLowerCase().includes(q)).map((t) => ({ ...t, color: null }))
+  const own = extra.filter((t) => t.name.toLowerCase().includes(q)).map((t) => ({ ...t, color: t.color ?? null }))
   return {
     tags: [...base.tags, ...own].sort((a, b) => a.name.localeCompare(b.name, 'en')),
     canCreate: base.canCreate && !extra.some((t) => t.name.toLowerCase() === q),

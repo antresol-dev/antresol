@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { SI_PREFIXES, unitClash, type CustomUnit } from '@antresol/core'
+import { SI_PREFIXES, unitClash, type CustomUnit, type DraftNewUnit } from '@antresol/core'
+import type { SimilarName } from '@antresol/kit/similar-names'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
@@ -9,8 +10,16 @@ import { errorMessageKey } from '~/lib/errors'
 import { prefixNote } from '~/lib/prefixes'
 
 // Creates a custom unit or edits one: name, symbol and the SI prefixes quantities may show with.
-const props = defineProps<{ unit: CustomUnit | null }>()
-const emit = defineEmits<{ done: [] }>()
+// `draft` (an intake's new unit, spec 2026-11-17 §6): nothing is written; the form hands the unit to the parent as
+// `draft`. `unit` then is the draft unit being edited (its id is kept). `taken` tells whether a name or a symbol is a
+// unit's already (built-in, the inventory's or the draft's), `similar` lists names that look like the typed one.
+const props = defineProps<{
+  unit: CustomUnit | DraftNewUnit | null
+  draft?: boolean
+  taken?: (part: { name?: string; symbol?: string }) => boolean
+  similar?: (name: string) => readonly SimilarName[]
+}>()
+const emit = defineEmits<{ done: []; draft: [unit: DraftNewUnit] }>()
 
 const workspace = useWorkspace()
 const { ids } = useCommandIds(['unitId'])
@@ -44,16 +53,22 @@ const changes = computed(() =>
 // Name (no case) and symbol (with case) must be free among built-in and custom units; only a changed part is checked.
 const nameTaken = computed(() => {
   const n = name.value.trim()
+  if (props.draft) return n && props.taken?.({ name: n }) ? ('name' as const) : null
   if (!state.snapshot || !n || (props.unit && changes.value.name === undefined)) return null
   return unitClash(state.snapshot, { name: n }, props.unit?.id) ? ('name' as const) : null
 })
 const symbolTaken = computed(() => {
   const sym = symbol.value.trim()
+  if (props.draft) return sym && props.taken?.({ symbol: sym }) ? ('symbol' as const) : null
   if (!state.snapshot || !sym || (props.unit && changes.value.symbol === undefined)) return null
   return unitClash(state.snapshot, { symbol: sym }, props.unit?.id) ? ('symbol' as const) : null
 })
-const canSubmit = computed(
-  () => !busy.value && !nameTaken.value && !symbolTaken.value && !state.readOnly && !!state.snapshot && (!props.unit || Object.keys(changes.value).length > 0),
+const alike = computed(() => (props.draft && props.similar && !nameTaken.value ? props.similar(name.value) : []))
+// A draft is edited on this device, so it works offline too.
+const canSubmit = computed(() =>
+  props.draft
+    ? !busy.value && !nameTaken.value && !symbolTaken.value && name.value.trim() !== '' && symbol.value.trim() !== '' && (!state.readOnly || state.readOnly === 'offline')
+    : !busy.value && !nameTaken.value && !symbolTaken.value && !state.readOnly && !!state.snapshot && (!props.unit || Object.keys(changes.value).length > 0),
 )
 
 function toggle(power: number, on: boolean): void {
@@ -61,6 +76,11 @@ function toggle(power: number, on: boolean): void {
 }
 
 async function submit(): Promise<void> {
+  if (props.draft) {
+    if (!canSubmit.value) return
+    emit('draft', { id: props.unit?.id ?? ids.unitId, name: name.value.trim(), symbol: symbol.value.trim(), prefixPowers: [...powers.value].sort((a, b) => a - b) })
+    return
+  }
   const snapshot = state.snapshot
   if (!canSubmit.value || !snapshot) return
   busy.value = true
@@ -105,6 +125,7 @@ async function submit(): Promise<void> {
         class="h-11"
       />
       <NameTakenNote id="unit-name-taken" :taken="nameTaken" :name="name" />
+      <SimilarNote :names="alike" />
     </div>
     <div class="grid gap-2">
       <Label for="unit-symbol">{{ $t('unitForm.symbol') }}</Label>
@@ -128,7 +149,7 @@ async function submit(): Promise<void> {
       <template v-if="errorKey">{{ $t(errorKey) }}</template>
     </p>
     <Button type="submit" class="h-11 rounded-field" :disabled="!canSubmit">
-      {{ $t(busy ? 'status.saving' : unit ? 'unitForm.save' : 'unitForm.create') }}
+      {{ $t(busy ? 'status.saving' : unit ? 'unitForm.save' : draft ? 'intakes.unit.add' : 'unitForm.create') }}
     </Button>
   </form>
 </template>

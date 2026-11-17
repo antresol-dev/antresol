@@ -7,6 +7,7 @@ import {
   formatAttributeValue,
   isCanonicalNumber,
   itemStock,
+  intakeUnits,
   resolveUnit,
   type DraftLine,
   type IntakeDraftContent,
@@ -34,7 +35,7 @@ const { t, te } = useI18n()
 const ix = computed(() => snapshotIndex(props.snapshot))
 const newItem = computed(() => props.content.newItems.find((n) => n.id === props.line.itemId) ?? null)
 const item = computed(() => (newItem.value ? null : (ix.value.items.get(props.line.itemId) ?? null)))
-const unit = computed(() => resolveUnit(newItem.value?.unitKey ?? item.value?.unitKey ?? 'pcs', props.snapshot.units) ?? BUILTIN_UNITS.pcs)
+const unit = computed(() => resolveUnit(newItem.value?.unitKey ?? item.value?.unitKey ?? 'pcs', intakeUnits(props.content, props.snapshot)) ?? BUILTIN_UNITS.pcs)
 const name = computed(() => newItem.value?.name ?? item.value?.name ?? t('intakes.problem.unknown_item'))
 
 /** The line's values as the attributes show them: "4.7 kΩ · 50 V". */

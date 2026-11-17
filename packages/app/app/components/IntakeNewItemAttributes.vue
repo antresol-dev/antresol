@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { nameClash, withNewAttribute } from '~/lib/intake-draft'
 import { attributesFrom } from '~/lib/intake-line'
+import { similarAttributes as similarNamesOf } from '~/lib/intake-parts'
 import { byName } from '~/lib/views'
 
 // The attributes of a new item of an intake (spec 2026-11-13 intakes §6, state 4): shared values typed by hand, and
@@ -93,6 +94,9 @@ function clash(name: string): { id: Id; name: string } | null {
   const hit = nameClash(props.snapshot, props.content, { kind: 'attribute', name })
   return hit ? { id: hit.id, name: known.value.get(hit.id)?.name ?? name.trim() } : null
 }
+/** The draft attributes already shown in lists count against the limit with the inventory's. */
+const draftPinned = computed(() => (props.content.newAttributes ?? []).filter((a) => a.pinned).length)
+const similarAttribute = (name: string) => similarNamesOf(props.snapshot, props.content, name)
 const createError = ref<string | null>(null)
 async function createdDraft(a: DraftNewAttribute): Promise<void> {
   const next = withNewAttribute(props.content, props.snapshot, a)
@@ -168,7 +172,7 @@ async function takeExisting(id: Id): Promise<void> {
     </ul>
 
     <InlineCreate v-if="creating" :title="$t('attributeSheet.newTitle')" :close-label="$t('attributeSheet.cancelNew')"  @cancel="cancelNew">
-      <AttributeForm :attribute="null" draft :clash="clash" @draft="createdDraft" @use-existing="takeExisting" />
+      <AttributeForm :attribute="null" draft :clash="clash" :other-pinned="draftPinned" :similar="similarAttribute" @draft="createdDraft" @use-existing="takeExisting" />
       <p v-if="createError" role="alert" class="text-sm text-destructive">{{ createError }}</p>
     </InlineCreate>
     <div v-else class="grid gap-2">

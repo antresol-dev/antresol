@@ -15,6 +15,7 @@ import {
 } from '@antresol/core'
 import { formatMoney } from '~/lib/format'
 import { existingMatches } from '~/lib/quick-add'
+import type { PhotoRef } from '~/lib/photo-url'
 import { snapshotIndex } from '~/lib/views'
 
 // One line of a draft intake (spec 2026-11-13 intakes §5): "+10 · TL072 · have 6 · Op-amps · ADD". A tap opens the line.
@@ -45,6 +46,18 @@ const values = computed(() =>
     })
     .join(' · '),
 )
+
+/** The line's picture: its own photo (a new variant's, or an older draft's), else the new item's photo, else the photo the
+ *  inventory already has for the variant or the item; with none, the item's icon or letters (ItemThumb). */
+const cover = computed<PhotoRef | null>(() => {
+  if (props.line.photo) return props.line.photo
+  if (newItem.value) return newItem.value.photo ?? null
+  const r = props.resolution
+  const variantId = r.kind === 'add' ? r.variantId : null
+  return (variantId !== null ? ix.value.variantCovers.get(variantId) : undefined) ?? ix.value.covers.get(props.line.itemId) ?? null
+})
+const thumbFolderId = computed(() => newItem.value?.folderId ?? item.value?.folderId ?? null)
+const thumbFolder = computed(() => (thumbFolderId.value === null ? null : (ix.value.folders.get(thumbFolderId.value) ?? null)))
 
 const problemCode = computed(() => props.problem ?? (props.resolution.kind === 'problem' ? props.resolution.code : null))
 /** Copy for a problem code; one this version has no words for reads as a general one, never as a raw key. */
@@ -100,6 +113,15 @@ const tag = computed(() => {
     class="flex min-h-14 w-full min-w-0 items-center gap-3 rounded-field px-3 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     @click="$emit('open')"
   >
+    <ItemThumb
+      :id="line.itemId"
+      :folder-name="thumbFolder?.name ?? null"
+      :cover="cover"
+      :icon="item?.icon ?? null"
+      :folder-icon="thumbFolder?.icon ?? null"
+      :color="item?.color ?? null"
+      class="size-9 rounded-thumb text-xs"
+    />
     <span class="amount w-14 shrink-0 text-right text-base tabular-nums">
       <template v-if="kind === 'add'">+</template>{{ amount.number }}
       <span class="block text-xs font-semibold text-muted-foreground">{{ amount.unit }}</span>

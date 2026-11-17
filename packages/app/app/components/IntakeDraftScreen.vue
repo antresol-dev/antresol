@@ -263,7 +263,7 @@ const retryErrorKey = computed(() =>
           <li
             v-for="line in content.lines"
             :key="line.id"
-            class="relative not-first:before:absolute not-first:before:top-0 not-first:before:right-3 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
+            class="relative not-first:before:absolute not-first:before:top-0 not-first:before:right-3 not-first:before:left-15 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
           >
             <IntakeLineRow
               :line="line"

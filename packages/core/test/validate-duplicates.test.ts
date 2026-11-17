@@ -92,6 +92,16 @@ describe('no hard duplicates: folders', () => {
     expect(code({ type: 'folder.move', id: 'F3', parentId: 'F' })).toBe('duplicate_name')
     expect(code({ type: 'folder.move', id: 'F3', parentId: null })).toBeNull()
   })
+  it('a move into a place whose archived twin has the name', () => {
+    const s = snap()
+    s.folders.push(folder('AD', 'Drawer', null, ARCH))
+    s.items.push(item('i7', 'Diode', 'G', ARCH), item('i8', 'Diode', 'G'))
+    expect(code({ type: 'folder.move', id: 'F3', parentId: null }, s)).toBe('duplicate_archived')
+    expect(code({ type: 'item.update', id: 'i8', folderId: 'F' }, s)).toBe('duplicate_archived')
+    expect(code({ type: 'item.update', id: 'i2', name: 'DIODE ', folderId: 'G' }, s)).toBe('duplicate_name')
+    s.items = s.items.filter((i) => i.id !== 'i8')
+    expect(code({ type: 'item.update', id: 'i2', name: 'DIODE ', folderId: 'G' }, s)).toBe('duplicate_archived')
+  })
   it('restore of a folder whose name a living sibling took', () => {
     const s = snap()
     s.folders.push(folder('X', 'Revived', 'F'))
@@ -134,6 +144,7 @@ describe('no hard duplicates: units', () => {
   it('unit.update never clashes with itself', () => {
     expect(code({ type: 'unit.update', id: 'u1', name: 'ROLL', symbol: 'roll' })).toBeNull()
     expect(code({ type: 'unit.update', id: 'u1', name: 'grams' })).toBe('duplicate_name')
+    expect(code({ type: 'unit.update', id: 'u1', name: 'roll' })).toBeNull()
     expect(code({ type: 'unit.update', id: 'u1', symbol: 'mL' })).toBe('duplicate_name')
     expect(code({ type: 'unit.update', id: 'u1', symbol: 'ml' })).toBeNull()
     expect(code({ type: 'unit.update', id: 'u1', prefixPowers: [3] })).toBeNull()

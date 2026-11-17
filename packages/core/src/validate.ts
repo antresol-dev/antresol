@@ -800,7 +800,7 @@ function check(c: Command, s: Snap | null): void {
       checkName(c.symbol)
       checkPrefixes(c.prefixPowers)
       const changed = {
-        name: c.name !== undefined && c.name.trim() !== u.name.trim() ? c.name : undefined,
+        name: c.name !== undefined && !same(c.name, u.name) ? c.name : undefined,
         symbol: c.symbol !== undefined && c.symbol.trim() !== u.symbol.trim() ? c.symbol : undefined,
       }
       if (unitClash(s, changed, c.id)) fail('duplicate_name')

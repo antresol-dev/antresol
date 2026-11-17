@@ -6,13 +6,14 @@ import {
   isCanonicalNumber,
   newId,
   resolveUnit,
+  type DraftLinePhoto,
   type DraftNewItem,
   type EntityProblem,
   type Id,
   type IntakeDraftContent,
   type InventorySnapshot,
 } from '@antresol/core'
-import { ChevronDown, ImagePlus, X } from '@lucide/vue'
+import { ChevronDown, Image as ImageIcon, ImagePlus, X } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -60,16 +61,16 @@ const valueText = (attributeId: Id, value: string | null): string => {
   if (value === null || !a) return value ?? ''
   return a.kind !== 'number' || isCanonicalNumber(value) ? formatAttributeValue(a, value) : value
 }
-/** The variants the lines make, values only: "1 µH / 50 V" per line, each once. */
+/** The variants the lines make: "1 µH / 50 V" per line, each once, with the photo of its line (if any). */
 const variants = computed(() => {
   const seen = new Set<string>()
-  const out: string[] = []
+  const out: { label: string; photo: DraftLinePhoto | null }[] = []
   for (const l of props.content.lines) {
     if (l.itemId !== props.item.id || l.axisValues.length === 0) continue
     const label = l.axisValues.map((v) => valueText(v.attributeId, v.value)).join(' / ')
     if (!seen.has(label)) {
       seen.add(label)
-      out.push(label)
+      out.push({ label, photo: l.photo })
     }
   }
   return out
@@ -77,7 +78,7 @@ const variants = computed(() => {
 const axisNames = computed(() => props.item.attributes.filter((x) => x.axis).map((x) => attributes.value.get(x.attributeId)?.name ?? ''))
 const valuesLine = computed(() => {
   if (variants.value.length === 0) return ''
-  return (axisNames.value.length === 1 ? `${axisNames.value[0]}: ` : '') + variants.value.join(' · ')
+  return (axisNames.value.length === 1 ? `${axisNames.value[0]}: ` : '') + variants.value.map((v) => v.label).join(' · ')
 })
 const summary = computed(() => [path.value, valuesLine.value].filter(Boolean).join(' · '))
 const tagNames = computed(() =>
@@ -266,9 +267,13 @@ const panelId = `intake-item-${props.item.id}`
         <ul v-if="variants.length > 0" class="surface-list">
           <li
             v-for="v in variants"
-            :key="v"
-            class="relative px-3 py-2 text-sm wrap-anywhere not-first:before:absolute not-first:before:top-0 not-first:before:right-3 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
-          >{{ v }}</li>
+            :key="v.label"
+            class="relative flex min-w-0 items-center gap-3 px-3 py-2 text-sm not-first:before:absolute not-first:before:top-0 not-first:before:right-3 not-first:before:left-15 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
+          >
+            <PhotoImg v-if="v.photo" :photo="v.photo" size="thumb" alt="" class="size-9 shrink-0 rounded-thumb object-cover" />
+            <span v-else class="grid size-9 shrink-0 place-items-center rounded-thumb bg-thumb text-thumb-foreground"><ImageIcon class="size-4" aria-hidden="true" /></span>
+            <span class="min-w-0 wrap-anywhere">{{ v.label }}</span>
+          </li>
         </ul>
         <p v-else class="text-sm text-muted-foreground">{{ $t('intakes.item.noVariants') }}</p>
       </div>

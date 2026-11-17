@@ -8,7 +8,8 @@ import { colorVars, itemColor } from '~/lib/item-colors'
 // The item's icon before its name in the header, in the item's colour, like a file type icon before a file name in an
 // editor: so the colour and the icon show even when a photo covers the thumbnail. Its own icon, else its folder's, else
 // the general item icon (no letters here: they would read as part of the name). A tap picks the item's own icon: a
-// plain glyph (no button surface) in a 40 px box beside the title's first line, which ScreenHeader pads to match; the
+// plain glyph (no button surface) in a 40 px box inside the header's column, beside the title's first line, which
+// ScreenHeader pads to match; the
 // box's ::after makes the touch area 44 px.
 const props = defineProps<{ id: string; icon: string | null; folderIcon: string | null; color: string | null }>()
 const { t } = useI18n()
@@ -36,7 +37,7 @@ async function save(icon: string | null): Promise<void> {
   <button
     v-if="!state.readOnly"
     type="button"
-    class="colored relative -ml-2 grid size-10 shrink-0 place-items-center rounded-chip text-(--c) transition-colors duration-(--dur-fast) after:absolute after:-inset-0.5 after:content-[''] hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+    class="colored relative grid size-10 shrink-0 place-items-center rounded-chip text-(--c) transition-colors duration-(--dur-fast) after:absolute after:-inset-0.5 after:content-[''] hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     :style="vars"
     :aria-label="$t('iconPicker.choose')"
     @click="picking = true"

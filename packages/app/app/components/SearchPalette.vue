@@ -483,7 +483,7 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-xs font-semibold text-subtle-
                 :class="[
                   // The selected option is a selected row (spec 4.1): accent gradient, text and icons in its ink.
                   // min-w-0 and the one-column grids above: a long name truncates instead of widening the list past its edge.
-                  'flex min-h-11 min-w-0 cursor-pointer items-center gap-3 rounded-field px-3 select-none',
+                  'flex min-h-11 min-w-0 cursor-pointer items-center gap-3 rounded-row px-3 select-none',
                   desktop ? 'py-1.5' : 'py-2',
                   row.key === selected?.key ? 'row-selected' : '',
                 ]"

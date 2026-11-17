@@ -97,7 +97,7 @@ const tag = computed(() => {
 <template>
   <button
     type="button"
-    class="flex min-h-14 w-full min-w-0 items-center gap-3 rounded-field px-3 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+    class="flex min-h-14 w-full min-w-0 items-center gap-3 rounded-row px-3 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     @click="$emit('open')"
   >
     <span class="amount w-14 shrink-0 text-right text-base tabular-nums">

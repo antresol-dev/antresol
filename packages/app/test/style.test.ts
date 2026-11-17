@@ -630,7 +630,7 @@ describe('components and pages', () => {
   })
 
   it('radii are on the scale: card 20, field 14, chip 10, circle (spec 4.2)', () => {
-    const scale = new Set(['card', 'field', 'chip', 'full', 'none', 'thumb', 'icon', 'fab'])
+    const scale = new Set(['card', 'field', 'chip', 'row', 'full', 'none', 'thumb', 'icon', 'fab'])
     const sides = new Set(['t', 'b', 'l', 'r', 's', 'e', 'tl', 'tr', 'bl', 'br', 'ss', 'se', 'es', 'ee'])
     const onScale = (value: string): boolean => {
       const parts = value.split('-')

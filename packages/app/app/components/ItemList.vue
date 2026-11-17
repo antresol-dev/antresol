@@ -55,11 +55,11 @@ const rows = computed(() =>
       <li
         v-for="item in rows"
         :key="item.id"
-        class="group relative flex items-center rounded-field transition-colors duration-(--dur-fast) hover:bg-hover not-first:before:absolute not-first:before:top-0 not-first:before:right-3 not-first:before:left-15 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
+        class="group relative flex items-center rounded-row transition-colors duration-(--dur-fast) hover:bg-hover not-first:before:absolute not-first:before:top-0 not-first:before:right-3 not-first:before:left-15 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
       >
         <NuxtLink
           :to="`/item/${item.id}`"
-          class="flex h-14 min-w-0 flex-1 items-center gap-3 rounded-field px-3 select-none [-webkit-touch-callout:none]"
+          class="flex h-14 min-w-0 flex-1 items-center gap-3 rounded-row px-3 select-none [-webkit-touch-callout:none]"
           @pointerdown="pointerdown(item.id, $event)"
           @pointermove="press.onPointermove"
           @pointerup="press.onPointerup"

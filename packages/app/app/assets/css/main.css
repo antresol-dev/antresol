@@ -173,6 +173,9 @@
   --radius-thumb: var(--radius-chip);
   --radius-icon: var(--radius-chip);
   --radius-fab: var(--st-prim-r);
+  /* A row inside a list, palette, picker or sheet that lights up on hover: the selected row's radius, which every style
+     fits to the inset of a row in its list, so a highlighted row never sticks out past its container's corner. */
+  --radius-row: var(--st-cur-r);
 }
 
 @theme inline {

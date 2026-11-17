@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
@@ -36,12 +36,12 @@ describe('rows pad their content', () => {
     has('components/FolderTreeNode.vue', /'h-8 px-3' : 'min-h-11 pr-3'/)
   })
   it('palette rows: 12 px, clear of a pill-shaped highlight\'s corners', () => {
-    has('components/SearchPalette.vue', /rounded-field px-3 select-none/)
+    has('components/SearchPalette.vue', /rounded-row px-3 select-none/)
   })
   it('list rows (folders, items): 56 px high, 12 px of padding, dividers from the text (12 + 36 + 12) to 12 px of the edge', () => {
     for (const f of ['FolderList', 'ItemList']) {
       const src = read(`components/${f}.vue`)
-      expect(src).toMatch(/h-14 min-w-0 flex-1 items-center gap-3 rounded-field px-3 /)
+      expect(src).toMatch(/h-14 min-w-0 flex-1 items-center gap-3 rounded-row px-3 /)
       expect(src).toMatch(/before:right-3 not-first:before:left-15/)
       expect(src).toMatch(/size-8"/)
     }
@@ -58,3 +58,25 @@ describe('rows pad their content', () => {
     has('components/InventorySwitcher.vue', /gap-2 px-3 py-1\.5 text-left/)
   })
 })
+
+/*
+ * A row that lights up inside a list, palette, picker or sheet takes the selected row's radius (--radius-row, the
+ * style's curR), not a button's or a chip's: in Liquid, Y2K and Retro those are pills, and a pill-shaped highlight stuck
+ * out past its container's rounder-than-it corners (owner, 2026-11-17). Fields (bordered, bg-field) keep the field radius.
+ */
+describe('highlighted rows fit their container', () => {
+  it('every hover row outside the ui primitives is rounded-row', () => {
+    const dir = fileURLToPath(new URL('../app/components', import.meta.url))
+    const problems: string[] = []
+    for (const name of readdirSync(dir)) {
+      if (!name.endsWith('.vue')) continue
+      for (const m of read(`components/${name}`).matchAll(/class="([^"]*hover:bg-hover[^"]*)"|'([^']*hover:bg-hover[^']*)'/g)) {
+        const cls = m[1] ?? m[2] ?? ''
+        if (/\bbg-field\b/.test(cls)) continue
+        if (/\brounded-(field|chip)\b/.test(cls)) problems.push(`${name}: ${cls.slice(0, 60)}`)
+      }
+    }
+    expect(problems).toEqual([])
+  })
+})
+

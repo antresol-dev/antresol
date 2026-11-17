@@ -178,7 +178,7 @@ async function restore(archiveId: Id): Promise<void> {
           <label
             v-for="k in kinds"
             :key="k"
-            class="flex min-h-11 cursor-pointer items-center gap-2 rounded-chip px-3 text-sm transition-colors duration-(--dur-fast) hover:bg-hover"
+            class="flex min-h-11 cursor-pointer items-center gap-2 rounded-row px-3 text-sm transition-colors duration-(--dur-fast) hover:bg-hover"
           >
             <RadioGroupItem :value="k" />
             {{ $t(kindLabel[k]) }}

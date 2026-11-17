@@ -11,7 +11,7 @@ defineProps<{ rows: IntakeRow[] }>()
     <li
       v-for="row in rows"
       :key="row.id"
-      class="relative rounded-field transition-colors duration-(--dur-fast) hover:bg-hover not-first:before:absolute not-first:before:top-0 not-first:before:right-3 not-first:before:left-15 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
+      class="relative rounded-row transition-colors duration-(--dur-fast) hover:bg-hover not-first:before:absolute not-first:before:top-0 not-first:before:right-3 not-first:before:left-15 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
     >
       <NuxtLink :to="`/intakes/${row.id}`" class="flex min-h-14 min-w-0 items-center gap-3 rounded-field px-3 py-1.5">
         <span class="flex size-9 shrink-0 items-center justify-center rounded-thumb bg-thumb text-thumb-foreground">

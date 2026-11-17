@@ -90,9 +90,9 @@ const pressHandlers = computed(() =>
       :class="[
         'group relative flex items-center gap-1.5 rounded-field text-sm font-semibold transition-colors duration-(--dur-fast)',
         // Clear space from the highlight's edge and its rounded corners: 10 px on the 32 px panel rows, 12 px in the drawer.
-        // The chevron's centre sits on the children's guide line (12 px on the panel, 20 in the drawer): the row's left
-        // padding gives way to it rather than the line moving right, so the names keep their room.
-        panel ? 'h-8 pr-3 pl-0.5' : 'min-h-11 pr-3 -ml-0.5',
+        // The chevron's centre sits on the children's guide line (16 px on the panel, 20 in the drawer). On the panel the
+        // 20 px chevron keeps 6 px from the row's left edge, as from its top and bottom.
+        panel ? 'h-8 pr-3 pl-1.5' : 'min-h-11 pr-3 -ml-0.5',
         row.current ? 'row-selected' : 'text-icon hover:bg-(--ghost-hover) hover:text-foreground',
       ]"
     >
@@ -157,7 +157,7 @@ const pressHandlers = computed(() =>
       v-if="row.open"
       :class="[
         'flex flex-col gap-0.5',
-        indents ? ['border-l border-tree-line pl-1', panel ? 'ml-3' : 'ml-5'] : '',
+        indents ? ['border-l border-tree-line pl-1', panel ? 'ml-4' : 'ml-5'] : '',
       ]"
     >
       <FolderTreeNode

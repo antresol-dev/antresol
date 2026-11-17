@@ -33,7 +33,7 @@ describe('rows pad their content', () => {
     has('components/AppNav.vue', /gap-2 px-3">/)
   })
   it('tree rows: 12 px on the right; on the left the chevron sits on its children\'s guide line', () => {
-    has('components/FolderTreeNode.vue', /'h-8 pr-3 pl-0\.5' : 'min-h-11 pr-3 -ml-0\.5'/)
+    has('components/FolderTreeNode.vue', /'h-8 pr-3 pl-1\.5' : 'min-h-11 pr-3 -ml-0\.5'/)
   })
   it('palette rows: 12 px, clear of a pill-shaped highlight\'s corners', () => {
     has('components/SearchPalette.vue', /rounded-row px-3 select-none/)

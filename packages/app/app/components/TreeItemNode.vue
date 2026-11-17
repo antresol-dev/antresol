@@ -22,7 +22,7 @@ const chevronSize = computed(() => (panel.value ? 'size-5' : 'size-11'))
       :aria-current="row.current ? 'page' : undefined"
       :class="[
         'relative flex items-center gap-1.5 rounded-field text-sm font-medium outline-none transition-colors duration-(--dur-fast) focus-visible:ring-2 focus-visible:ring-ring',
-        panel ? 'h-8 pr-3 pl-0.5' : 'min-h-11 pr-3 -ml-0.5',
+        panel ? 'h-8 pr-3 pl-1.5' : 'min-h-11 pr-3 -ml-0.5',
         row.current ? 'row-selected' : 'text-icon hover:bg-(--ghost-hover) hover:text-foreground',
       ]"
     >

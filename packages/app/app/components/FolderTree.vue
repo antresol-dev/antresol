@@ -95,7 +95,7 @@ const buttonSize = computed(() => (panel.value ? 'size-7 rounded-chip' : 'size-1
   <div v-if="root" class="flex min-h-0 flex-1 flex-col border-t border-divider" :style="{ '--tree-bg': panel ? 'var(--surface)' : 'var(--rail)' }">
     <!-- The same side padding as the tree below: the title starts where the rows' chevrons do, the buttons end where the
          rows do. -->
-    <div :class="['flex shrink-0 items-center justify-between gap-2', panel ? 'px-2 py-1' : 'px-1.5']">
+    <div :class="['flex shrink-0 items-center justify-between gap-2', panel ? 'px-2 py-2' : 'px-1.5 py-1']">
       <h2 :class="['text-xs font-semibold tracking-[0.02em] text-muted-foreground uppercase', panel ? 'pl-1.5' : 'pl-3']">{{ $t('folder.tree') }}</h2>
       <div :class="['flex items-center', panel ? 'gap-1' : 'gap-0.5']">
         <slot name="actions" />

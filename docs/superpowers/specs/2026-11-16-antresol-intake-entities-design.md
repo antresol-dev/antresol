@@ -23,7 +23,7 @@ Nothing in it is real until the person commits the intake. Then it all becomes r
 ### Goals
 1. Draft folders, nestable (a draft folder may sit inside an existing folder or inside another draft folder). Only the draft's items and folders may reference them. They become real folders on commit.
 2. A new item is a first-class entry of the draft with its own photo and description, not a side effect of a line.
-3. Draft attributes (name, kind, unit, list values, SI prefixes), created on commit like draft tags. "New attribute" in the line sheet creates a draft attribute, not a real one (owner, 2026-11-16: drafts are mostly AI content to review).
+3. Draft attributes (name, kind, unit, list values, SI prefixes), created on commit like draft tags. "New attribute" in the line sheet creates a draft attribute, not a real one (owner, 2026-11-16: drafts are mostly AI content to review; owner, 2026-11-17: it is written into the draft only together with the saved line, held in the sheet until then and dropped when the sheet closes without saving; one made from the "Will be created" block is written at once).
 4. The intake screen shows at the top what the commit will create: folders (as a compact tree), attributes, items (expandable cards).
 5. Photo rules (option B, owner's choice): the item photo lives on the new item; a new-variant line may carry its variant's photo; existing items and variants never get or change photos through an intake.
 6. The MCP server can do all of the above.

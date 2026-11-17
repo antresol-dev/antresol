@@ -4,6 +4,7 @@ import { Plus } from '@lucide/vue'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { colorVars } from '~/lib/item-colors'
+import { draftTagAliases, tagPicked, togglePicked } from '~/lib/draft-tags'
 import { tagMatches } from '~/lib/tags'
 
 // A filter field over the inventory's tags as checkboxes. A tag typed in the field that doesn't exist yet can be created
@@ -19,6 +20,8 @@ const selected = defineModel<Id[]>({ required: true })
 const emit = defineEmits<{ create: [name: string] }>()
 
 const query = ref('')
+// A draft tag with the name of a real tag is that tag: the real one shows it checked and unticking drops both ids.
+const aliases = computed(() => draftTagAliases(props.snapshot.tags, props.extraTags ?? []))
 const matches = computed(() => {
   const base = tagMatches(props.snapshot, query.value)
   // A draft tag named like a tag that is now in the snapshot (created meanwhile) is the same tag: shown once.
@@ -35,7 +38,7 @@ const matches = computed(() => {
 })
 
 function toggle(id: Id, on: boolean): void {
-  selected.value = on ? [...selected.value.filter((x) => x !== id), id] : selected.value.filter((x) => x !== id)
+  selected.value = togglePicked(selected.value, id, on, aliases.value)
 }
 
 function create(): void {
@@ -50,7 +53,7 @@ function create(): void {
     <ul class="grid max-h-[28dvh] grid-cols-1 gap-0.5 overflow-x-hidden overflow-y-auto rounded-field border border-input bg-field p-1">
       <li v-for="tag in matches.tags" :key="tag.id" class="min-w-0">
         <label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-chip px-3 text-sm transition-colors duration-(--dur-fast) hover:bg-hover has-focus-visible:ring-2 has-focus-visible:ring-ring">
-          <Checkbox :model-value="selected.includes(tag.id)" @update:model-value="toggle(tag.id, $event === true)" />
+          <Checkbox :model-value="tagPicked(selected, tag.id, aliases)" @update:model-value="toggle(tag.id, $event === true)" />
           <span v-if="tag.color" class="colored size-2 shrink-0 rounded-full bg-(--c)" :style="colorVars(tag.color)" aria-hidden="true" />
           <span class="min-w-0 flex-1 truncate">{{ tag.name }}</span>
         </label>

@@ -11,23 +11,23 @@ import { byName } from '~/lib/views'
 
 // The attributes of a new item of an intake (spec 2026-11-13 intakes §6, state 4): shared values typed by hand, and
 // which of them the variants differ by (an axis: its value goes on each line). A new attribute is a draft attribute
-// (spec 2026-11-16 §4): it goes into the draft through `edit` and is created by the commit; the picker lists the
-// draft's own next to the inventory's, marked new.
+// (spec 2026-11-16 §4) created by the commit. One made here is held by the sheet (`held`) and written into the draft
+// only together with the line; `content` already shows it next to the draft's own and the inventory's, marked new.
 const props = defineProps<{
   snapshot: InventorySnapshot
   content: IntakeDraftContent
-  edit: (change: (c: IntakeDraftContent) => IntakeDraftContent) => Promise<boolean>
   disabled?: boolean
   /** A similar item whose attributes the new one can start from. */
   similar: { itemId: Id; name: string } | null
 }>()
 const attributes = defineModel<DraftNewItem['attributes']>({ required: true })
+/** New attributes made in this form, not in the draft yet. */
+const held = defineModel<DraftNewAttribute[]>('held', { required: true })
 const emit = defineEmits<{ 'update:error': [key: string | null] }>()
 
 const NEW = '\u0000new'
 const choice = ref('')
 const creating = ref(false)
-const formBusy = ref(false)
 
 const { t } = useI18n()
 const known = computed(() => intakeAttributes(props.content, props.snapshot))
@@ -100,20 +100,11 @@ async function createdDraft(a: DraftNewAttribute): Promise<void> {
     createError.value = t(next.errorKey, next.params ?? {})
     return
   }
-  formBusy.value = true
-  try {
-    const ok = await props.edit((c) => {
-      const r = withNewAttribute(c, props.snapshot, a)
-      return 'errorKey' in r ? c : r
-    })
-    if (!ok) return
-    creating.value = false
-    createError.value = null
-    addId(a.id)
-    await focusNew(a.id)
-  } finally {
-    formBusy.value = false
-  }
+  held.value = [...held.value.filter((x) => x.id !== a.id), a]
+  creating.value = false
+  createError.value = null
+  addId(a.id)
+  await focusNew(a.id)
 }
 /** After a new attribute joins the item the form is gone: focus goes to its row's axis switch, or to the add trigger. */
 async function focusNew(id: Id): Promise<void> {
@@ -176,8 +167,8 @@ async function takeExisting(id: Id): Promise<void> {
       </li>
     </ul>
 
-    <InlineCreate v-if="creating" :title="$t('attributeSheet.newTitle')" :close-label="$t('attributeSheet.cancelNew')" :busy="formBusy" @cancel="cancelNew">
-      <AttributeForm v-model:busy="formBusy" :attribute="null" draft :clash="clash" @draft="createdDraft" @use-existing="takeExisting" />
+    <InlineCreate v-if="creating" :title="$t('attributeSheet.newTitle')" :close-label="$t('attributeSheet.cancelNew')"  @cancel="cancelNew">
+      <AttributeForm :attribute="null" draft :clash="clash" @draft="createdDraft" @use-existing="takeExisting" />
       <p v-if="createError" role="alert" class="text-sm text-destructive">{{ createError }}</p>
     </InlineCreate>
     <div v-else class="grid gap-2">

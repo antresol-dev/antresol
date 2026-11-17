@@ -13,6 +13,7 @@ import {
   type DraftLine,
   type DraftLinePhoto,
   type DraftNewItem,
+  type DraftNewAttribute,
   type DraftNewTag,
   type Id,
   type IntakeDraftContent,
@@ -28,7 +29,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { pricePreview, parseMoneyText, unitChoices } from '~/lib/amounts'
 import { parseAttributeInput } from '~/lib/attribute-values'
 import { formatMoney } from '~/lib/format'
-import { folderChoicesWithDraft, folderPathWithDraft } from '~/lib/intake-entities'
+import { folderChoicesWithDraft, folderPathWithDraft } from '@antresol/kit/draft-folders'
+import { withHeldAttributes, writeHeldAttributes } from '~/lib/intake-draft'
 import {
   alreadyInDraft,
   buildDraftLine,
@@ -91,6 +93,8 @@ const attributesOpen = ref(false)
 const tagsOpen = ref(false)
 /** New tags this form made: created by the commit, not now (the source's revision stays as it is). */
 const addedTags = ref<DraftNewTag[]>([])
+/** New attributes this form made: written with the line when it is saved, dropped when the sheet closes without saving. */
+const heldAttributes = ref<DraftNewAttribute[]>([])
 const pickingFolder = ref(false)
 const editingAxis = ref<Id | null>(null)
 const recent = ref<Id[]>([])
@@ -101,7 +105,9 @@ const attributeError = ref<string | null>(null)
 
 const s = computed(() => props.snapshot)
 /** The inventory's attributes and the draft's own: what a new item's attributes and axes read from. */
-const attributeMap = computed(() => intakeAttributes(props.content, props.snapshot))
+/** The draft as this form sees it: its content and the attributes the form holds, not written yet. */
+const formContent = computed(() => withHeldAttributes(props.content, heldAttributes.value))
+const attributeMap = computed(() => intakeAttributes(formContent.value, props.snapshot))
 const ix = computed(() => snapshotIndex(s.value))
 const editing = computed(() => activeLineId.value !== null)
 const busy = computed(() => saving.value || uploading.value)
@@ -136,6 +142,7 @@ function startNew(from: typeof defaults.value): void {
   attributesOpen.value = false
   tagsOpen.value = false
   addedTags.value = []
+  heldAttributes.value = []
   pickingFolder.value = false
   editingAxis.value = null
   error.value = null
@@ -261,7 +268,7 @@ const sharedChips = computed(() => {
   })
 })
 
-const draftForHints = computed(() => (newItem.value ? withNewItem(props.content, newItem.value) : props.content))
+const draftForHints = computed(() => (newItem.value ? withNewItem(formContent.value, newItem.value) : formContent.value))
 function withNewItem(c: IntakeDraftContent, n: DraftNewItem): IntakeDraftContent {
   return { ...c, newItems: [...c.newItems.filter((x) => x.id !== n.id), n] }
 }
@@ -521,6 +528,13 @@ async function save(next: boolean): Promise<void> {
     error.value = { key: attributeError.value }
     return
   }
+  // New attributes made in this form go in with the line, and only those the item still has.
+  const uses = new Set((newItem.value?.attributes ?? []).map((x) => x.attributeId))
+  const written = writeHeldAttributes(props.content, s.value, heldAttributes.value, uses)
+  if ('errorKey' in written) {
+    error.value = { key: written.errorKey, params: written.params }
+    return
+  }
   const built = buildDraftLine(
     {
       lineId: formLineId.value,
@@ -536,7 +550,7 @@ async function save(next: boolean): Promise<void> {
       newTags: draftTags.value,
     },
     s.value,
-    props.content,
+    written,
   )
   if ('errorKey' in built) {
     error.value = { key: built.errorKey, params: built.params }
@@ -546,13 +560,26 @@ async function save(next: boolean): Promise<void> {
   }
   saving.value = true
   try {
-    const applied = await props.edit((c) => withLine(c, built.line, built.newItem, built.newTags))
+    let refused: { errorKey: string; params?: Record<string, string> } | null = null
+    const applied = await props.edit((c) => {
+      const w = writeHeldAttributes(c, s.value, heldAttributes.value, uses)
+      if ('errorKey' in w) {
+        refused = w
+        return c
+      }
+      return withLine(w, built.line, built.newItem, built.newTags)
+    })
+    if (refused) {
+      const r: { errorKey: string; params?: Record<string, string> } = refused
+      error.value = { key: r.errorKey, params: r.params }
+      return
+    }
     if (!applied) return
     if (!next) {
       open.value = false
       return
     }
-    const content = withLine(props.content, built.line, built.newItem, built.newTags)
+    const content = withLine(written, built.line, built.newItem, built.newTags)
     startNew(nextLineDefaults(built.line, content, s.value))
     focusSoon('#intake-line-query')
   } finally {
@@ -799,7 +826,7 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
               <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-(--dur-fast) motion-reduce:transition-none" :class="attributesOpen ? 'rotate-180' : ''" aria-hidden="true" />
             </button>
             <div v-if="attributesOpen" class="py-3">
-              <IntakeNewItemAttributes v-model="attributes" :snapshot="s" :content="content" :edit="edit" :similar="similarItem" :disabled="disabled" @update:error="attributeError = $event" />
+              <IntakeNewItemAttributes v-model="attributes" v-model:held="heldAttributes" :snapshot="s" :content="formContent" :similar="similarItem" :disabled="disabled" @update:error="attributeError = $event" />
             </div>
 
             <button type="button" :class="summaryRow" :aria-expanded="tagsOpen" :disabled="disabled" @click="tagsOpen = !tagsOpen">

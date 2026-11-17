@@ -21,7 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { unitChoices } from '~/lib/amounts'
 import { restoreNewItem, withNewItem, withoutNewItem } from '~/lib/intake-draft'
-import { folderChoicesWithDraft, folderPathWithDraft } from '~/lib/intake-entities'
+import { folderChoicesWithDraft, folderPathWithDraft } from '@antresol/kit/draft-folders'
 import { UNDO_MIN_MS } from '~/lib/undo'
 
 // One new item of an intake (spec 2026-11-16 §4): a row (photo or an empty slot, name, folder path, the values of its

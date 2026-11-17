@@ -4,7 +4,7 @@ import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { folderChoicesWithDraft } from '~/lib/intake-entities'
+import { folderChoicesWithDraft } from '@antresol/kit/draft-folders'
 import { nameClash, useExisting, withNewFolder, withoutNewFolder } from '~/lib/intake-draft'
 
 // A draft folder of an intake (spec 2026-11-16 §4): its name and where it goes (the inventory's folders and this draft's

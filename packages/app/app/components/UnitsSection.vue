@@ -110,7 +110,7 @@ async function remove(): Promise<void> {
       v-model:open="formOpen"
       :title="$t(shown?.kind === 'form' && shown.unit ? 'dictionaries.unitEditTitle' : 'dictionaries.unitNewTitle')"
       :locked="formBusy"
-      initial-focus="#unit-name"
+      initial-focus="[data-field='unit-name']"
     >
       <UnitForm
         v-if="shown?.kind === 'form'"

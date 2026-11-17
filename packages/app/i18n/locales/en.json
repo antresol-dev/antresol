@@ -113,7 +113,8 @@
       "option": "{name}: + {value}",
       "optionLines": "{count} line | {count} lines",
       "unitSymbol": "{name} ({symbol})",
-      "shownInLists": "shown in lists",
+      "optionItems": "{count} item | {count} items",
+      "confirmRemove": "Remove",
       "removeEverywhere": "Remove {name} from all items"
     },
     "similar": {
@@ -173,6 +174,9 @@
       "newSuffix": "{name} (new)",
       "remove": "Remove {name}",
       "removed": "Attribute “{name}” removed",
+      "removedLines": "Attribute “{name}” removed, {count} line changed | Attribute “{name}” removed, {count} lines changed",
+      "confirmTitle": "Remove “{name}” from all items? {count} line loses its value of it. | Remove “{name}” from all items? {count} lines lose their value of it.",
+      "confirmLines": "The variants of the item change and lines may become the same. | The variants of the items change and lines may become the same.",
       "exists": "There is already an attribute called “{name}”.",
       "inUse": "A new item uses this attribute. Remove it from the item first.",
       "invalid": "This attribute’s kind or unit isn’t valid.",
@@ -202,7 +206,10 @@
       "edit": "Edit {name}: {value}",
       "save": "Save",
       "remove": "Remove “{value}” and the lines that use it",
-      "removed": "“{value}” removed"
+      "removed": "“{value}” removed",
+      "removedLines": "“{value}” and {count} line removed | “{value}” and {count} lines removed",
+      "confirmTitle": "Remove “{value}” and {count} line that uses it? | Remove “{value}” and {count} lines that use it?",
+      "confirmLines": "The amount, price, link and photo of the line go with it. | The amount, price, link and photo of these lines go with them."
     },
     "line": {
       "addTitle": "Add line",

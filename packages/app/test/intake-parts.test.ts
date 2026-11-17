@@ -2,6 +2,9 @@ import { customUnitKey, emptyIntakeDraft, newId, type DraftLine, type DraftNewIt
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
 import {
+  itemsUsingValue,
+  linesUsingAttribute,
+  linesUsingValue,
   listHas,
   similarFolders,
   similarItems,
@@ -78,6 +81,27 @@ describe('added list values', () => {
     const r = withoutAddedValue(d, list.id, 'ZZ')
     expect(r.lines).toEqual([])
     expect(r.addedOptions ?? []).toEqual([])
+  })
+  it('removing a value also clears it from the shared values of new items, and they are counted', () => {
+    const n = item({ attributes: [{ attributeId: list.id, value: 'ZZ', axis: false }] })
+    const d = { ...base(), addedOptions: [{ attributeId: list.id, values: ['zz'] }], newItems: [n] }
+    expect(itemsUsingValue(d, list.id, 'zz')).toBe(1)
+    expect(linesUsingValue(d, list.id, 'zz')).toBe(0)
+    const r = withoutAddedValue(d, list.id, 'zz')
+    expect(r.newItems[0]!.attributes).toEqual([{ attributeId: list.id, value: null, axis: false }])
+    expect(itemsUsingValue(r, list.id, 'zz')).toBe(0)
+    expect(r.addedOptions ?? []).toEqual([])
+  })
+  it('counts the lines that lose a variant value when an attribute goes', () => {
+    const line: DraftLine = { id: newId(), itemId: 'x', axisValues: [{ attributeId: 'a1', value: 'S' }], quantity: '1', totalPrice: null, sourceUrl: null, photo: null, ids: { movementId: newId(), variantId: newId(), photoId: newId() } }
+    expect(linesUsingAttribute({ ...base(), lines: [line, { ...line, id: newId() }] }, 'a1')).toBe(2)
+    expect(linesUsingAttribute({ ...base(), lines: [line] }, 'other')).toBe(0)
+  })
+  it('refuses a too long tag name and value name', () => {
+    const t = { id: newId(), name: 'Fresh' }
+    expect(withEditedTag({ ...base(), newTags: [t] }, s, t.id, { name: 'x'.repeat(201), color: null })).toMatchObject({ errorKey: 'errors.domain.name_too_long' })
+    expect(withRenamedAddedValue({ ...base(), addedOptions: [{ attributeId: list.id, values: ['zz'] }] }, s, list.id, 'zz', 'x'.repeat(201))).toMatchObject({ errorKey: 'errors.domain.name_too_long' })
+    expect(writeHeldOptions(base(), s, [{ attributeId: list.id, value: 'x'.repeat(201) }])).toMatchObject({ errorKey: 'errors.domain.name_too_long' })
   })
   it('renames a value on the lines and refuses one that exists', () => {
     const line: DraftLine = { id: newId(), itemId: 'x', axisValues: [{ attributeId: list.id, value: 'zz' }], quantity: '1', totalPrice: null, sourceUrl: null, photo: null, ids: { movementId: newId(), variantId: newId(), photoId: newId() } }

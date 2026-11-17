@@ -874,7 +874,7 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
               @keydown.enter.prevent="editingAxis = axes.find((a) => a.id !== editingAxis && !valueOf(a.id).trim())?.id ?? null; focusSoon(editingAxis ? `#intake-axis-${editingAxis}` : '#intake-line-amount')"
             />
             <div v-if="addableOption">
-              <Button type="button" variant="outline" size="sm" class="h-9 max-w-full" :disabled="disabled" @click="addToList">
+              <Button type="button" variant="outline" size="sm" class="h-9 min-h-11 max-w-full" :disabled="disabled" @click="addToList">
                 <Plus class="size-4 shrink-0" aria-hidden="true" />
                 <span class="min-w-0 truncate">{{ $t('intakes.option.add', { value: addableOption.value }) }}</span>
               </Button>
@@ -920,7 +920,7 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
             <p v-if="unitError" role="alert" class="text-sm text-destructive">{{ unitError }}</p>
           </InlineCreate>
           <div v-else-if="newItem">
-            <Button type="button" variant="ghost" size="sm" class="h-9 text-accent-ink" :disabled="disabled" @click="creatingUnit = true">
+            <Button type="button" variant="ghost" size="sm" class="h-9 min-h-11 text-accent-ink" :disabled="disabled" @click="creatingUnit = true">
               <Plus class="size-4 shrink-0" aria-hidden="true" />{{ $t('intakes.unit.newUnit') }}
             </Button>
           </div>

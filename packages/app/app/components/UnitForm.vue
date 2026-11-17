@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { SI_PREFIXES, unitClash, type CustomUnit, type DraftNewUnit } from '@antresol/core'
+import { MAX_NAME_LENGTH, SI_PREFIXES, unitClash, type CustomUnit, type DraftNewUnit } from '@antresol/core'
 import type { SimilarName } from '@antresol/kit/similar-names'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -21,6 +21,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ done: []; draft: [unit: DraftNewUnit] }>()
 
+const uid = useId()
 const workspace = useWorkspace()
 const { ids } = useCommandIds(['unitId'])
 const { state } = workspace
@@ -57,6 +58,8 @@ const nameTaken = computed(() => {
   if (!state.snapshot || !n || (props.unit && changes.value.name === undefined)) return null
   return unitClash(state.snapshot, { name: n }, props.unit?.id) ? ('name' as const) : null
 })
+/** A draft unit is checked here, before the draft takes it (a saved unit is checked by the core). */
+const symbolTooLong = computed(() => props.draft === true && symbol.value.trim().length > MAX_NAME_LENGTH)
 const symbolTaken = computed(() => {
   const sym = symbol.value.trim()
   if (props.draft) return sym && props.taken?.({ symbol: sym }) ? ('symbol' as const) : null
@@ -67,7 +70,7 @@ const alike = computed(() => (props.draft && props.similar && !nameTaken.value ?
 // A draft is edited on this device, so it works offline too.
 const canSubmit = computed(() =>
   props.draft
-    ? !busy.value && !nameTaken.value && !symbolTaken.value && name.value.trim() !== '' && symbol.value.trim() !== '' && (!state.readOnly || state.readOnly === 'offline')
+    ? !busy.value && !nameTaken.value && !symbolTaken.value && !symbolTooLong.value && name.value.trim() !== '' && symbol.value.trim() !== '' && (!state.readOnly || state.readOnly === 'offline')
     : !busy.value && !nameTaken.value && !symbolTaken.value && !state.readOnly && !!state.snapshot && (!props.unit || Object.keys(changes.value).length > 0),
 )
 
@@ -115,22 +118,24 @@ async function submit(): Promise<void> {
 <template>
   <form class="grid gap-4" novalidate @submit.prevent="submit">
     <div class="grid gap-2">
-      <Label for="unit-name">{{ $t('form.name') }}</Label>
+      <Label :for="`${uid}-name`">{{ $t('form.name') }}</Label>
       <Input
-        id="unit-name"
+        :id="`${uid}-name`"
         v-model="name"
         autocomplete="off"
         :aria-invalid="errorKey ? true : undefined"
-        aria-describedby="unit-name-taken unit-form-error"
+        :aria-describedby="`${uid}-name-taken ${uid}-form-error`"
+        data-field="unit-name"
         class="h-11"
       />
-      <NameTakenNote id="unit-name-taken" :taken="nameTaken" :name="name" />
+      <NameTakenNote :id="`${uid}-name-taken`" :taken="nameTaken" :name="name" />
       <SimilarNote :names="alike" />
     </div>
     <div class="grid gap-2">
-      <Label for="unit-symbol">{{ $t('unitForm.symbol') }}</Label>
-      <Input id="unit-symbol" v-model="symbol" autocomplete="off" aria-describedby="unit-symbol-taken" class="h-11" />
-      <NameTakenNote id="unit-symbol-taken" :taken="symbolTaken" :name="symbol" />
+      <Label :for="`${uid}-symbol`">{{ $t('unitForm.symbol') }}</Label>
+      <Input :id="`${uid}-symbol`" v-model="symbol" autocomplete="off" :aria-invalid="symbolTooLong ? true : undefined" :aria-describedby="`${uid}-symbol-taken ${uid}-symbol-long`" class="h-11" />
+      <p v-if="symbolTooLong" :id="`${uid}-symbol-long`" role="status" class="field-text text-sm text-destructive">{{ $t('intakes.unit.symbolTooLong') }}</p>
+      <NameTakenNote :id="`${uid}-symbol-taken`" :taken="symbolTaken" :name="symbol" />
     </div>
     <fieldset class="grid gap-2">
       <legend class="mb-1.5 text-sm font-medium">{{ $t('unitForm.prefixes') }}</legend>
@@ -145,7 +150,7 @@ async function submit(): Promise<void> {
         </label>
       </div>
     </fieldset>
-    <p id="unit-form-error" role="alert" class="field-text text-sm text-destructive">
+    <p :id="`${uid}-form-error`" role="alert" class="field-text text-sm text-destructive">
       <template v-if="errorKey">{{ $t(errorKey) }}</template>
     </p>
     <Button type="submit" class="h-11 rounded-field" :disabled="!canSubmit">

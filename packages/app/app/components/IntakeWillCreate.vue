@@ -19,6 +19,8 @@ import { colorVars } from '~/lib/item-colors'
 import { nameClash, useExisting, withNewAttribute } from '~/lib/intake-draft'
 import { folderGroups } from '~/lib/intake-entities'
 import {
+  itemsUsingValue,
+  linesUsingAttribute,
   linesUsingValue,
   similarAttributes,
   similarUnits,
@@ -49,6 +51,7 @@ const props = defineProps<{
 const emit = defineEmits<{ 'open-folder': [id: Id] }>()
 
 const { t } = useI18n()
+const uid = useId()
 
 const groups = computed(() => folderGroups(props.snapshot, props.content))
 const attributes = computed(() => props.content.newAttributes ?? [])
@@ -62,6 +65,7 @@ const options = computed(() =>
       value,
       name: props.snapshot.attributes.find((a) => a.id === o.attributeId)?.name ?? '',
       lines: linesUsingValue(props.content, o.attributeId, value),
+      items: itemsUsingValue(props.content, o.attributeId, value),
     })),
   ),
 )
@@ -135,10 +139,33 @@ async function removeEverywhere(next: (c: IntakeDraftContent) => IntakeDraftCont
   if (!(await props.edit(next))) return
   toast(message, { duration: UNDO_MIN_MS, action: { label: t('undo.action'), onClick: () => void props.edit(undoTo(before, after)) } })
 }
-const removeAttribute = (a: DraftNewAttribute) => removeEverywhere((c) => withoutAttributeEverywhere(c, a.id), t('intakes.attribute.removed', { name: a.name }))
+/** What waits for a yes: removing something that takes lines with it asks first, naming how many. */
+const confirm = ref<{ title: string; description: string; run: () => void } | null>(null)
+const confirmOpen = ref(false)
+function ask(title: string, description: string, run: () => void): void {
+  confirm.value = { title, description, run }
+  confirmOpen.value = true
+}
+function confirmed(): void {
+  const c = confirm.value
+  confirmOpen.value = false
+  confirm.value = null
+  c?.run()
+}
+function removeAttribute(a: DraftNewAttribute): void {
+  const lines = linesUsingAttribute(props.content, a.id)
+  const run = () => removeEverywhere((c) => withoutAttributeEverywhere(c, a.id), lines > 0 ? t('intakes.attribute.removedLines', { name: a.name, count: lines }, lines) : t('intakes.attribute.removed', { name: a.name }))
+  if (lines === 0) void run()
+  else ask(t('intakes.attribute.confirmTitle', { name: a.name, count: lines }, lines), t('intakes.attribute.confirmLines', { name: a.name }, lines), () => void run())
+}
 const removeUnit = (u: DraftNewUnit) => removeEverywhere((c) => withoutUnitEverywhere(c, u.id), t('intakes.unit.removed', { name: u.name }))
 const removeTag = (x: DraftNewTag) => removeEverywhere((c) => withoutTagEverywhere(c, x.id), t('intakes.tag.removed', { name: x.name }))
-const removeOption = (o: { attributeId: Id; value: string }) => removeEverywhere((c) => withoutAddedValue(c, o.attributeId, o.value), t('intakes.option.removed', { value: o.value }))
+function removeOption(o: { attributeId: Id; value: string }): void {
+  const lines = linesUsingValue(props.content, o.attributeId, o.value)
+  const run = () => removeEverywhere((c) => withoutAddedValue(c, o.attributeId, o.value), lines > 0 ? t('intakes.option.removedLines', { value: o.value, count: lines }, lines) : t('intakes.option.removed', { value: o.value }))
+  if (lines === 0) void run()
+  else ask(t('intakes.option.confirmTitle', { value: o.value, count: lines }, lines), t('intakes.option.confirmLines', { value: o.value }, lines), () => void run())
+}
 
 // ---- Units: edit in the form's draft mode ----
 const unitEditing = ref<DraftNewUnit | null>(null)
@@ -254,10 +281,10 @@ const existingLink =
       <h3 class="px-1 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.units') }}</h3>
       <ul class="surface-list">
         <li v-for="u in units" :key="u.id" :class="[rowClass, hoverClass]">
-          <button type="button" :class="tapClass" :aria-label="$t('intakes.unit.edit', { name: u.name })" :disabled="readOnly" @click="openUnit(u)">
+          <button type="button" :class="tapClass" :aria-label="$t('intakes.unit.edit', { name: u.name })" :aria-describedby="problemOf(u.id) ? `${uid}-${u.id}` : undefined" :disabled="readOnly" @click="openUnit(u)">
             <span class="grid min-w-0 gap-0.5">
               <span class="min-w-0 truncate font-semibold">{{ $t('intakes.willCreate.unitSymbol', { name: u.name, symbol: u.symbol }) }}</span>
-              <span v-if="problemOf(u.id)" class="min-w-0 truncate text-xs text-destructive">{{ $t(problemKey(problemOf(u.id)!)) }}</span>
+              <span v-if="problemOf(u.id)" :id="`${uid}-${u.id}`" class="min-w-0 truncate text-xs text-destructive">{{ $t(problemKey(problemOf(u.id)!)) }}</span>
             </span>
             <Pencil class="ml-auto size-4 shrink-0 text-icon" aria-hidden="true" />
           </button>
@@ -272,10 +299,10 @@ const existingLink =
       <h3 class="px-1 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.attributes') }}</h3>
       <ul class="surface-list">
         <li v-for="a in attributes" :key="a.id" :class="[rowClass, hoverClass]">
-          <button type="button" :class="tapClass" :aria-label="$t('intakes.attribute.edit', { name: a.name })" :disabled="readOnly" @click="openAttribute(a)">
+          <button type="button" :class="tapClass" :aria-label="$t('intakes.attribute.edit', { name: a.name })" :aria-describedby="`${uid}-${a.id}`" :disabled="readOnly" @click="openAttribute(a)">
             <span class="grid min-w-0 gap-0.5">
               <span class="min-w-0 truncate font-semibold">{{ a.name }}</span>
-              <span class="min-w-0 truncate text-xs text-muted-foreground">
+              <span :id="`${uid}-${a.id}`" class="min-w-0 truncate text-xs text-muted-foreground">
                 {{ kindText(a) }}<template v-if="problemOf(a.id)"> · <span class="text-destructive">{{ $t(problemKey(problemOf(a.id)!)) }}</span></template>
               </span>
             </span>
@@ -295,11 +322,11 @@ const existingLink =
       <h3 class="px-1 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.tags') }}</h3>
       <ul class="surface-list">
         <li v-for="x in tags" :key="x.id" :class="[rowClass, hoverClass]">
-          <button type="button" :class="tapClass" :aria-label="$t('intakes.tag.edit', { name: x.name })" :disabled="readOnly" @click="openTag(x)">
+          <button type="button" :class="tapClass" :aria-label="$t('intakes.tag.edit', { name: x.name })" :aria-describedby="problemOf(x.id) ? `${uid}-${x.id}` : undefined" :disabled="readOnly" @click="openTag(x)">
             <span v-if="x.color" class="colored size-2 shrink-0 rounded-full bg-(--c)" :style="colorVars(x.color)" aria-hidden="true" />
             <span class="grid min-w-0 gap-0.5">
               <span class="min-w-0 truncate font-semibold">{{ x.name }}</span>
-              <span v-if="problemOf(x.id)" class="min-w-0 truncate text-xs text-destructive">{{ $t(problemKey(problemOf(x.id)!)) }}</span>
+              <span v-if="problemOf(x.id)" :id="`${uid}-${x.id}`" class="min-w-0 truncate text-xs text-destructive">{{ $t(problemKey(problemOf(x.id)!)) }}</span>
             </span>
             <Pencil class="ml-auto size-4 shrink-0 text-icon" aria-hidden="true" />
           </button>
@@ -314,11 +341,11 @@ const existingLink =
       <h3 class="px-1 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.options') }}</h3>
       <ul class="surface-list">
         <li v-for="o in options" :key="o.key" :class="[rowClass, hoverClass]">
-          <button type="button" :class="tapClass" :aria-label="$t('intakes.option.edit', { name: o.name, value: o.value })" :disabled="readOnly" @click="openOption(o)">
+          <button type="button" :class="tapClass" :aria-label="$t('intakes.option.edit', { name: o.name, value: o.value })" :aria-describedby="`${uid}-${o.key}`" :disabled="readOnly" @click="openOption(o)">
             <span class="grid min-w-0 gap-0.5">
               <span class="min-w-0 truncate font-semibold">{{ $t('intakes.willCreate.option', { name: o.name, value: o.value }) }}</span>
-              <span class="min-w-0 truncate text-xs text-muted-foreground">
-                {{ $t('intakes.willCreate.optionLines', o.lines) }}<template v-if="problemOf(o.attributeId)"> · <span class="text-destructive">{{ $t(problemKey(problemOf(o.attributeId)!)) }}</span></template>
+              <span :id="`${uid}-${o.key}`" class="min-w-0 truncate text-xs text-muted-foreground">
+                {{ $t('intakes.willCreate.optionLines', o.lines) }}<template v-if="o.items > 0"> · {{ $t('intakes.willCreate.optionItems', o.items) }}</template><template v-if="problemOf(o.attributeId)"> · <span class="text-destructive">{{ $t(problemKey(problemOf(o.attributeId)!)) }}</span></template>
               </span>
             </span>
             <Pencil class="ml-auto size-4 shrink-0 text-icon" aria-hidden="true" />
@@ -339,7 +366,15 @@ const existingLink =
       </ul>
     </div>
   </section>
-  <AppSheet v-model:open="editOpen" :title="$t('intakes.attribute.editTitle')" :locked="formBusy" initial-focus="#attribute-name">
+ <ConfirmSheet
+    v-model:open="confirmOpen"
+    :title="confirm?.title ?? ''"
+    :description="confirm?.description ?? ''"
+    :confirm-label="$t('intakes.willCreate.confirmRemove')"
+    destructive
+    @confirm="confirmed"
+  />
+  <AppSheet v-model:open="editOpen" :title="$t('intakes.attribute.editTitle')" :locked="formBusy" initial-focus="[data-field='attribute-name']">
     <div class="mt-4">
       <AttributeForm
         v-if="editing"
@@ -354,7 +389,7 @@ const existingLink =
       />
     </div>
   </AppSheet>
-  <AppSheet v-model:open="unitOpen" :title="$t('intakes.unit.editTitle')" :locked="unitBusy" initial-focus="#unit-name">
+  <AppSheet v-model:open="unitOpen" :title="$t('intakes.unit.editTitle')" :locked="unitBusy" initial-focus="[data-field='unit-name']">
     <div class="mt-4">
       <UnitForm v-if="unitEditing" :key="unitEditing.id" v-model:busy="unitBusy" :unit="unitEditing" draft :taken="unitIsTaken" :similar="similarUnit" @draft="saveUnit" />
     </div>
@@ -363,10 +398,10 @@ const existingLink =
     <form class="mt-4 grid gap-4" novalidate @submit.prevent="saveTag">
       <div class="grid gap-2">
         <Label for="intake-tag-name">{{ $t('form.name') }}</Label>
-        <Input id="intake-tag-name" v-model="tagName" autocomplete="off" class="h-11" @input="tagError = null" />
+        <Input id="intake-tag-name" v-model="tagName" autocomplete="off" :aria-invalid="tagError ? true : undefined" aria-describedby="intake-tag-error" class="h-11" @input="tagError = null" />
       </div>
       <ColorSwatches :key="tagEditing?.id ?? 'none'" v-model="tagColor" :auto="null" :label="$t('colors.label')" />
-      <p role="alert" class="field-text text-sm text-destructive">{{ tagError }}</p>
+      <p id="intake-tag-error" role="alert" class="field-text text-sm text-destructive">{{ tagError }}</p>
       <Button type="submit" class="h-11 rounded-field" :disabled="tagName.trim() === ''">{{ $t('intakes.tag.save') }}</Button>
     </form>
   </AppSheet>
@@ -374,9 +409,9 @@ const existingLink =
     <form class="mt-4 grid gap-4" novalidate @submit.prevent="saveOption">
       <div class="grid gap-2">
         <Label for="intake-option-value">{{ optionEditing?.name }}</Label>
-        <Input id="intake-option-value" v-model="optionText" autocomplete="off" class="h-11" @input="optionError = null" />
+        <Input id="intake-option-value" v-model="optionText" autocomplete="off" :aria-invalid="optionError ? true : undefined" aria-describedby="intake-option-error" class="h-11" @input="optionError = null" />
       </div>
-      <p role="alert" class="field-text text-sm text-destructive">{{ optionError }}</p>
+      <p id="intake-option-error" role="alert" class="field-text text-sm text-destructive">{{ optionError }}</p>
       <Button type="submit" class="h-11 rounded-field" :disabled="optionText.trim() === ''">{{ $t('intakes.option.save') }}</Button>
     </form>
   </AppSheet>

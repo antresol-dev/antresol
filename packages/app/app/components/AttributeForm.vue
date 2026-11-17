@@ -30,6 +30,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ done: [attributeId: Id]; draft: [attribute: DraftNewAttribute]; useExisting: [id: Id] }>()
 
+const uid = useId()
 const { t } = useI18n()
 const workspace = useWorkspace()
 const { ids } = useCommandIds(['attributeId'])
@@ -144,16 +145,17 @@ async function submit(): Promise<void> {
 <template>
   <form class="grid gap-4" novalidate @submit.prevent="submit">
     <div class="grid gap-2">
-      <Label for="attribute-name">{{ $t('form.name') }}</Label>
+      <Label :for="`${uid}-name`">{{ $t('form.name') }}</Label>
       <Input
-        id="attribute-name"
+        :id="`${uid}-name`"
         v-model="name"
         autocomplete="off"
         :aria-invalid="errorKey ? true : undefined"
-        aria-describedby="attribute-name-taken attribute-form-error"
+        :aria-describedby="`${uid}-name-taken ${uid}-form-error`"
+        data-field="attribute-name"
         class="h-11"
       />
-      <NameTakenNote id="attribute-name-taken" :taken="nameTaken" :name="name" />
+      <NameTakenNote :id="`${uid}-name-taken`" :taken="nameTaken" :name="name" />
       <SimilarNote :names="alike" />
       <p v-if="taken" class="text-sm">
         {{ $t('intakes.attribute.exists', { name: taken.name }) }}
@@ -163,10 +165,10 @@ async function submit(): Promise<void> {
       </p>
     </div>
     <div class="grid gap-2">
-      <Label id="attribute-kind-label">{{ $t('attributeForm.type') }}</Label>
+      <Label :id="`${uid}-kind-label`">{{ $t('attributeForm.type') }}</Label>
       <RadioGroup
         v-model="kind"
-        aria-labelledby="attribute-kind-label"
+        :aria-labelledby="`${uid}-kind-label`"
         :disabled="!!attribute"
         class="grid grid-cols-3 gap-0.5 rounded-field border border-input bg-field p-1"
       >
@@ -181,14 +183,14 @@ async function submit(): Promise<void> {
       </RadioGroup>
     </div>
     <div v-if="kind === 'enum'" class="grid gap-2">
-      <Label for="attribute-options">{{ $t('attributeForm.options') }}</Label>
-      <Textarea id="attribute-options" v-model="options" rows="3" autocomplete="off" />
+      <Label :for="`${uid}-options`">{{ $t('attributeForm.options') }}</Label>
+      <Textarea :id="`${uid}-options`" v-model="options" rows="3" autocomplete="off" />
       <p class="text-sm text-subtle-foreground">{{ $t('attributeForm.hint') }}</p>
     </div>
     <template v-if="kind === 'number'">
       <div class="grid gap-2">
-        <Label for="attribute-unit">{{ $t('attributeForm.unit') }}</Label>
-        <Input id="attribute-unit" v-model="unit" autocomplete="off" :maxlength="MAX_UNIT_LENGTH" class="h-11" />
+        <Label :for="`${uid}-unit`">{{ $t('attributeForm.unit') }}</Label>
+        <Input :id="`${uid}-unit`" v-model="unit" autocomplete="off" :maxlength="MAX_UNIT_LENGTH" class="h-11" />
         <p class="text-sm text-subtle-foreground">{{ $t('attributeForm.unitHint') }}</p>
       </div>
       <div class="grid gap-1">
@@ -202,13 +204,13 @@ async function submit(): Promise<void> {
     <div class="grid gap-1">
       <label class="field-text flex min-h-11 cursor-pointer items-center justify-between gap-3 text-sm font-semibold" :class="pinnedFull && 'cursor-default'">
         {{ $t('attributeForm.showInLists') }}
-        <Switch v-model="pinned" :disabled="pinnedFull" aria-describedby="attribute-pinned-hint" />
+        <Switch v-model="pinned" :disabled="pinnedFull" :aria-describedby="`${uid}-pinned-hint`" />
       </label>
-      <p id="attribute-pinned-hint" class="field-text text-sm text-subtle-foreground">
+      <p :id="`${uid}-pinned-hint`" class="field-text text-sm text-subtle-foreground">
         {{ $t(pinnedFull ? 'attributeForm.pinnedFull' : 'attributeForm.showInListsHint') }}
       </p>
     </div>
-    <p id="attribute-form-error" role="alert" class="field-text text-sm text-destructive">
+    <p :id="`${uid}-form-error`" role="alert" class="field-text text-sm text-destructive">
       <template v-if="errorKey">{{ $t(errorKey) }}</template>
     </p>
     <Button type="submit" class="h-11 rounded-field" :disabled="!canSubmit">

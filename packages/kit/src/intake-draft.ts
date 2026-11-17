@@ -76,7 +76,8 @@ export function nameClash(
   return own ? { id: own.id, draft: true } : null
 }
 
-const nameError = (name: string): DraftError | null =>
+/** A name that is empty or too long, as the draft reports it; null when it is fine. */
+export const nameError = (name: string): DraftError | null =>
   name.trim() === ''
     ? { errorKey: 'errors.domain.name_required' }
     : name.trim().length > MAX_NAME_LENGTH

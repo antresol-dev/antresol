@@ -13,7 +13,7 @@ import {
 } from '@antresol/core'
 import { folderPathWithDraft } from '@antresol/kit/draft-folders'
 import { unitChoices } from '@antresol/kit/amounts'
-import { nameClash, type DraftError } from '@antresol/kit/intake-draft'
+import { nameClash, nameError, type DraftError } from '@antresol/kit/intake-draft'
 import { similarNames, type SimilarName } from '@antresol/kit/similar-names'
 
 // The parts an intake declares under its items (spec 2026-11-17 intake entities §6): units and list values a line sheet
@@ -75,6 +75,8 @@ export function writeHeldOptions(draft: IntakeDraftContent, s: InventorySnapshot
     const attribute = s.attributes.find((a) => a.id === h.attributeId)
     if (!attribute) return { errorKey: 'intakes.attribute.unknown' }
     if (attribute.kind !== 'enum') return { errorKey: 'intakes.option.notList' }
+    const bad = nameError(h.value)
+    if (bad) return bad
     if (attribute.options.some((o) => sameName(o, h.value))) continue
     out = withStagedOption(out, h.attributeId, h.value)
   }
@@ -115,13 +117,29 @@ export function withoutTagEverywhere(draft: IntakeDraftContent, tagId: Id): Inta
   return pruneDraft({ ...draft, newItems: draft.newItems.map((n) => (n.tagIds?.includes(tagId) ? { ...n, tagIds: n.tagIds.filter((x) => x !== tagId) } : n)) })
 }
 
-/** The staged list value goes, and the lines that use it go with it (a line without its value would not read). */
+/** The staged list value goes, the lines that use it go with it (a line without its value would not read) and new items
+ *  that hold it as a shared value lose that value. */
 export function withoutAddedValue(draft: IntakeDraftContent, attributeId: Id, value: string): IntakeDraftContent {
   const uses = (l: IntakeDraftContent['lines'][number]) => l.axisValues.some((v) => v.attributeId === attributeId && sameName(v.value, value))
+  const newItems = draft.newItems.map((n) =>
+    n.attributes.some((x) => x.attributeId === attributeId && x.value !== null && sameName(x.value, value))
+      ? { ...n, attributes: n.attributes.map((x) => (x.attributeId === attributeId && x.value !== null && sameName(x.value, value) ? { ...x, value: null } : x)) }
+      : n,
+  )
   const entries = (draft.addedOptions ?? [])
     .map((o) => (o.attributeId === attributeId ? { ...o, values: o.values.filter((w) => !sameName(w, value)) } : o))
     .filter((o) => o.values.length > 0)
-  return pruneDraft({ ...draft, lines: draft.lines.filter((l) => !uses(l)), ...(draft.addedOptions ? { addedOptions: entries } : {}) })
+  return pruneDraft({ ...draft, newItems, lines: draft.lines.filter((l) => !uses(l)), ...(draft.addedOptions ? { addedOptions: entries } : {}) })
+}
+
+/** How many new items `withoutAddedValue` takes the value off (shared value). */
+export function itemsUsingValue(draft: IntakeDraftContent, attributeId: Id, value: string): number {
+  return draft.newItems.filter((n) => n.attributes.some((x) => x.attributeId === attributeId && x.value !== null && sameName(x.value, value))).length
+}
+
+/** How many lines `withoutAttributeEverywhere` loses a variant value of: the lines of the new items that vary by it. */
+export function linesUsingAttribute(draft: IntakeDraftContent, attributeId: Id): number {
+  return draft.lines.filter((l) => l.axisValues.some((v) => v.attributeId === attributeId)).length
 }
 
 /** How many lines `withoutAddedValue` removes. */
@@ -134,7 +152,8 @@ export function withRenamedAddedValue(draft: IntakeDraftContent, s: InventorySna
   const attribute = s.attributes.find((a) => a.id === attributeId)
   const v = to.trim()
   if (!attribute || attribute.kind !== 'enum') return { errorKey: 'intakes.option.notList' }
-  if (v === '') return { errorKey: 'errors.domain.name_required' }
+  const bad = nameError(v)
+  if (bad) return bad
   const others = (draft.addedOptions ?? []).find((o) => o.attributeId === attributeId)?.values.filter((w) => !sameName(w, from)) ?? []
   if (attribute.options.some((o) => sameName(o, v)) || others.some((w) => sameName(w, v))) return { errorKey: 'intakes.option.exists', params: { value: v } }
   const swap = (x: string): string => (sameName(x, from) ? v : x)
@@ -149,7 +168,8 @@ export function withRenamedAddedValue(draft: IntakeDraftContent, s: InventorySna
 /** A draft tag renamed and recoloured (null: no colour); or what to fix. The name may not be a tag's already. */
 export function withEditedTag(draft: IntakeDraftContent, s: InventorySnapshot, tagId: Id, edit: { name: string; color: string | null }): IntakeDraftContent | DraftError {
   const name = edit.name.trim()
-  if (name === '') return { errorKey: 'errors.domain.name_required' }
+  const bad = nameError(name)
+  if (bad) return bad
   if (s.tags.some((t) => sameName(t.name, name)) || (draft.newTags ?? []).some((t) => t.id !== tagId && sameName(t.name, name))) return { errorKey: 'intakes.tag.duplicate', params: { name } }
   return {
     ...draft,

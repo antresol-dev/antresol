@@ -139,10 +139,12 @@ const nameTaken = computed(() => takenIn(name.value, props.item.folderId))
 const alike = computed(() => (nameTaken.value ? [] : similarItems(props.snapshot, props.content, name.value, props.item.folderId, props.item.id)))
 async function saveName(): Promise<void> {
   const v = name.value.trim()
-  if (v === '' || nameTaken.value) {
+  if (v === '') {
     name.value = props.item.name
     return
   }
+  // A taken name stays as typed, with its note, until it is fixed or Escape puts the old one back.
+  if (nameTaken.value) return
   if (v !== props.item.name) await patch({ name: v })
 }
 async function saveDescription(): Promise<void> {
@@ -250,7 +252,7 @@ const panelId = `intake-item-${props.item.id}`
 
       <div class="grid gap-2">
         <Label :for="`${panelId}-name`">{{ $t('form.name') }}</Label>
-        <Input :id="`${panelId}-name`" v-model="name" autocomplete="off" class="h-11" :disabled="readOnly" :aria-invalid="nameTaken ? true : undefined" :aria-describedby="`${panelId}-name-note`" @change="saveName" />
+        <Input :id="`${panelId}-name`" v-model="name" autocomplete="off" class="h-11" :disabled="readOnly" :aria-invalid="nameTaken ? true : undefined" :aria-describedby="`${panelId}-name-note`" @change="saveName" @keydown.esc="name = item.name" />
         <NameTakenNote :id="`${panelId}-name-note`" :taken="nameTaken" :name="name" />
         <SimilarNote :names="alike" />
       </div>

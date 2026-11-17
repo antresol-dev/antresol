@@ -315,7 +315,7 @@ export interface LineForm {
 export type BuiltLine = { line: DraftLine; newItem: DraftNewItem | null; newTags: DraftNewTag[] } | { errorKey: string; params?: Record<string, string> }
 
 /** A photo without the line's "replace" flag: the item's own photo. */
-function fileOnly(p: DraftLinePhoto): PhotoFile {
+export function fileOnly(p: DraftLinePhoto): PhotoFile {
   const file: Partial<DraftLinePhoto> = { ...p }
   delete file.replace
   return file as PhotoFile

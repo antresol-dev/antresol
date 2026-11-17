@@ -4,6 +4,7 @@ import {
   MAX_NAME_LENGTH,
   newId,
   pruneNewItems,
+  sameName as same,
   type DraftLine,
   type DraftNewAttribute,
   type DraftNewFolder,
@@ -23,7 +24,6 @@ export interface DraftError {
 }
 
 const KINDS = ['text', 'enum', 'number']
-const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
 const upsert = <T extends { id: Id }>(list: readonly T[], x: T): T[] =>
   list.some((y) => y.id === x.id) ? list.map((y) => (y.id === x.id ? x : y)) : [...list, x]
 

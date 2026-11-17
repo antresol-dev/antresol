@@ -1,6 +1,7 @@
 export * from './amounts'
 export * from './attribute-values'
 export * from './connection-key'
+export * from './draft-folders'
 export * from './file-store'
 export * from './intake-draft'
 export * from './intake-line'

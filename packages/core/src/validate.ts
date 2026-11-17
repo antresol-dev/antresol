@@ -1,6 +1,7 @@
 import type { Command, PhotoFile } from './commands'
 import type { Id } from './ids'
 import { snapshotAfterIntake } from './intakes'
+import { folderNameTaken, itemNameTaken, unitClash } from './names'
 import { isColorHex, isIconName, isSourceUrl, MAX_ATTRIBUTE_UNIT_LENGTH, MAX_NAME_LENGTH } from './limits'
 import { CURRENCIES } from './money'
 import {
@@ -48,6 +49,7 @@ export const DOMAIN_ERROR_CODES = [
   'option_in_use',
   'invalid_number',
   'too_many_pinned',
+  'duplicate_archived',
 ] as const
 export type DomainErrorCode = (typeof DOMAIN_ERROR_CODES)[number]
 
@@ -158,6 +160,12 @@ const fail = (code: DomainErrorCode): never => {
   throw new DomainError(code)
 }
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase()
+
+/** A name taken among siblings: a living twin is duplicate_name, an archived one duplicate_archived. */
+function failIfTaken(taken: 'active' | 'archived' | null) {
+  if (taken === 'active') fail('duplicate_name')
+  if (taken === 'archived') fail('duplicate_archived')
+}
 
 function checkName(name: string | undefined) {
   if (name === undefined) return
@@ -557,12 +565,15 @@ function check(c: Command, s: Snap | null): void {
       checkName(c.name)
       checkIcon(c.icon)
       activeFolder(s, c.parentId)
+      if (!s.folders.some((x) => x.id === c.id)) failIfTaken(folderNameTaken(s, c.parentId, c.name))
       return
     case 'folder.update': {
       needFolder(s, c.id)
       if (folderArchived(s, c.id)) fail('archived')
       checkName(c.name)
       checkIcon(c.icon)
+      const f = needFolder(s, c.id)
+      if (c.name !== undefined && !same(c.name, f.name)) failIfTaken(folderNameTaken(s, f.parentId, c.name, c.id))
       return
     }
     case 'folder.move':
@@ -573,6 +584,7 @@ function check(c: Command, s: Snap | null): void {
         if (c.parentId === c.id || isInSubtree(s, c.id, c.parentId)) fail('folder_cycle')
         activeFolder(s, c.parentId)
       }
+      if (c.parentId !== needFolder(s, c.id).parentId) failIfTaken(folderNameTaken(s, c.parentId, needFolder(s, c.id).name, c.id))
       return
     case 'item.create':
       needInventory(s, c.inventoryId)
@@ -582,21 +594,26 @@ function check(c: Command, s: Snap | null): void {
       activeFolder(s, c.folderId)
       if (!resolveUnit(c.unitKey, s.units)) fail('not_found')
       for (const t of c.tagIds) if (!s.tags.some((x) => x.id === t)) fail('not_found')
+      if (!s.items.some((x) => x.id === c.id)) failIfTaken(itemNameTaken(s, c.folderId, c.name))
       if (c.initialReceipt) {
         checkPositive(c.initialReceipt.quantity)
         checkPrice(c.initialReceipt.totalPrice)
         checkUrl(c.initialReceipt.sourceUrl)
       }
       return
-    case 'item.update':
-      activeItem(s, c.id)
+    case 'item.update': {
+      const it = activeItem(s, c.id)
       checkName(c.name)
       checkIcon(c.icon)
       checkColor(c.color)
       if (c.folderId !== undefined) activeFolder(s, c.folderId)
       if (c.unitKey !== undefined && !resolveUnit(c.unitKey, s.units)) fail('not_found')
       for (const t of c.tagIds ?? []) if (!s.tags.some((x) => x.id === t)) fail('not_found')
+      const renamed = c.name !== undefined && !same(c.name, it.name)
+      const moved = c.folderId !== undefined && c.folderId !== it.folderId
+      if (renamed || moved) failIfTaken(itemNameTaken(s, moved ? c.folderId! : it.folderId, c.name ?? it.name, c.id))
       return
+    }
     case 'item.setAttribute': {
       activeItem(s, c.itemId)
       const a = needAttribute(s, c.attributeId)
@@ -676,10 +693,12 @@ function check(c: Command, s: Snap | null): void {
       checkName(c.name)
       if (!ATTRIBUTE_KINDS.includes(c.kind)) fail('invalid_option')
       checkUnit(c.unit)
+      if (!s.attributes.some((x) => x.id === c.id) && s.attributes.some((x) => same(x.name, c.name))) fail('duplicate_name')
       return
     case 'attribute.update': {
       const a = needAttribute(s, c.id)
       checkName(c.name)
+      if (c.name !== undefined && !same(c.name, a.name) && s.attributes.some((x) => x.id !== a.id && same(x.name, c.name!))) fail('duplicate_name')
       checkUnit(c.unit)
       if (a.kind !== 'number' && ((c.unit !== undefined && c.unit.trim() !== '') || c.siPrefixes === true)) fail('invalid_option')
       checkDroppedOptions(s, a, c.options)
@@ -702,13 +721,21 @@ function check(c: Command, s: Snap | null): void {
       checkName(c.name)
       checkName(c.symbol)
       checkPrefixes(c.prefixPowers)
+      if (!s.units.some((u) => u.id === c.id) && unitClash(s, c)) fail('duplicate_name')
       return
-    case 'unit.update':
-      if (!s.units.some((u) => u.id === c.id)) fail('not_found')
+    case 'unit.update': {
+      const u = s.units.find((x) => x.id === c.id)
+      if (!u) return fail('not_found')
       checkName(c.name)
       checkName(c.symbol)
       checkPrefixes(c.prefixPowers)
+      const changed = {
+        name: c.name !== undefined && c.name.trim() !== u.name.trim() ? c.name : undefined,
+        symbol: c.symbol !== undefined && c.symbol.trim() !== u.symbol.trim() ? c.symbol : undefined,
+      }
+      if (unitClash(s, changed, c.id)) fail('duplicate_name')
       return
+    }
     case 'unit.delete':
       if (!s.units.some((u) => u.id === c.id)) fail('not_found')
       if (s.items.some((i) => i.unitKey === customUnitKey(c.id))) fail('unit_in_use')
@@ -789,6 +816,16 @@ function check(c: Command, s: Snap | null): void {
         s.items.some((x) => x.archiveId === id) ||
         s.variants.some((x) => x.archiveId === id)
       if (!found) fail('not_found')
+      for (const f of s.folders) {
+        if (f.archiveId === id && f.archivedAt !== null && s.folders.some((x) => x.id !== f.id && x.parentId === f.parentId && x.archivedAt === null && same(x.name, f.name))) {
+          fail('duplicate_name')
+        }
+      }
+      for (const i of s.items) {
+        if (i.archiveId === id && i.archivedAt !== null && s.items.some((x) => x.id !== i.id && x.folderId === i.folderId && x.archivedAt === null && same(x.name, i.name))) {
+          fail('duplicate_name')
+        }
+      }
       return
     }
     case 'deletePermanently':

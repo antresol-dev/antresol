@@ -18,6 +18,7 @@ export * from './patch'
 export * from './numbers'
 export * from './variants'
 export * from './intakes'
+export * from './names'
 export {
   draftAttribute,
   draftAttributeProblems,

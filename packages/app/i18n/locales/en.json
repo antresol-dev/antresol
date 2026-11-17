@@ -953,6 +953,7 @@
       "name_required": "Enter a name.",
       "name_too_long": "That name is too long.",
       "duplicate_name": "That name is already used here.",
+      "duplicate_archived": "An archived one with this name is here — restore it or choose another name.",
       "invalid_currency": "Choose a valid currency.",
       "invalid_quantity": "Enter a valid quantity.",
       "invalid_price": "Enter a valid price.",

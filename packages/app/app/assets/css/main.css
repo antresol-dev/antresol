@@ -941,7 +941,9 @@
     z-index: 10;
     display: flex;
     align-items: center;
-    padding-inline: 1.25rem 0.25rem;
+    /* 6 px at the right end, as the chevron keeps at the left; no margin (the in-flow -mr-1 is for touch screens). */
+    margin: 0;
+    padding-inline: 1.25rem 0.375rem;
     border-start-end-radius: inherit;
     border-end-end-radius: inherit;
     isolation: isolate;
@@ -969,7 +971,7 @@
   /* A selected row's paint can't be repeated under the buttons (Neumorphism's is a gradient across the row, Acrylic's a
      bar at its left end): there the buttons sit on the row itself, and the name gives way to them (FolderTreeNode). */
   .row-selected .row-action-float {
-    padding-inline-start: 0.25rem;
+    padding-inline-start: 0.375rem;
     mask-image: none;
   }
   .row-selected .row-action-float::before,

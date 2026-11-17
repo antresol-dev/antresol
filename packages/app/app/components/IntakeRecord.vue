@@ -9,6 +9,7 @@ import { snapshotIndex } from '~/lib/views'
 // A committed intake: what was received, as the order listed it. Lines are not edited.
 const props = defineProps<{ intake: Intake; snapshot: InventorySnapshot }>()
 
+const { t } = useI18n()
 const ix = computed(() => snapshotIndex(props.snapshot))
 
 interface LineView {
@@ -61,8 +62,14 @@ const created = computed(() => {
   const alive = (id: string) => ix.value.folders.has(id) && !folderArchived(props.snapshot, id)
   const sections: { key: string; title: string; rows: CreatedRow[] }[] = [
     { key: 'folders', title: 'intakes.created.folders', rows: c.folders.map((f) => ({ key: f.id, text: path(f.id) || f.name, to: alive(f.id) ? `/folder/${f.id}` : null })) },
+    { key: 'units', title: 'intakes.created.units', rows: (c.units ?? []).map((u) => ({ key: u.id, text: `${u.name} (${u.symbol})`, to: null })) },
     { key: 'attributes', title: 'intakes.created.attributes', rows: c.attributes.map((a) => ({ key: a.id, text: a.name, to: null })) },
     { key: 'tags', title: 'intakes.created.tags', rows: c.tags.map((x) => ({ key: x.id, text: x.name, to: null })) },
+    {
+      key: 'options',
+      title: 'intakes.created.options',
+      rows: (c.appendedOptions ?? []).map((o) => ({ key: o.attributeId, text: t('intakes.created.option', { name: o.name, values: o.values.join(', + ') }), to: null })),
+    },
     {
       key: 'items',
       title: 'intakes.created.items',

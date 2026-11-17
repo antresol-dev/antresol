@@ -3,11 +3,13 @@ import {
   BUILTIN_UNITS,
   formatAttributeValue,
   intakeAttributes,
+  intakeUnits,
   isCanonicalNumber,
   newId,
   resolveUnit,
   type DraftLinePhoto,
   type DraftNewItem,
+  type DraftNewUnit,
   type EntityProblem,
   type Id,
   type IntakeDraftContent,
@@ -20,14 +22,17 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { unitChoices } from '~/lib/amounts'
-import { restoreNewItem, withNewItem, withoutNewItem } from '~/lib/intake-draft'
+import { defaultItemColor } from '~/lib/item-colors'
+import { nameClash, restoreNewItem, withItemUnit, withNewItem, withoutNewItem } from '~/lib/intake-draft'
+import { similarItems, similarUnits, unitChoicesWithDraft, unitTaken } from '~/lib/intake-parts'
 import { folderChoicesWithDraft, folderPathWithDraft } from '@antresol/kit/draft-folders'
 import { UNDO_MIN_MS } from '~/lib/undo'
 
 // One new item of an intake (spec 2026-11-16 §4): a row (photo or an empty slot, name, folder path, the values of its
 // variants without amounts) that opens into a card: photo, name, folder, description, unit, tags, attributes and the
-// variants list. Edits go through `edit`, so the device-first save keeps working.
+// variants list; an icon and a colour (as in the item's form), and a unit that may be a new one ("New unit…", a draft
+// unit). Edits go through `edit`, so the device-first save keeps working. A name an item of the folder has is refused
+// (archived ones count); names that only look alike are shown as advice.
 const props = defineProps<{
   item: DraftNewItem
   content: IntakeDraftContent
@@ -53,7 +58,34 @@ watch(() => props.item.description, (v) => (description.value = v ?? ''))
 const disabled = computed(() => props.readOnly || uploading.value)
 const canPhoto = computed(() => !!workspace.state.current && workspace.fileStoreFor(workspace.state.current.sourceId) !== null)
 const attributes = computed(() => intakeAttributes(props.content, props.snapshot))
-const unit = computed(() => resolveUnit(props.item.unitKey, props.snapshot.units) ?? BUILTIN_UNITS.pcs)
+const unit = computed(() => resolveUnit(props.item.unitKey, intakeUnits(props.content, props.snapshot)) ?? BUILTIN_UNITS.pcs)
+const unitList = computed(() => unitChoicesWithDraft(props.snapshot, props.content))
+const pickingIcon = ref(false)
+const shownColor = computed(() => props.item.color ?? defaultItemColor(props.item.id))
+const NEW_UNIT = '\u0000new'
+const creatingUnit = ref(false)
+const unitError = ref<string | null>(null)
+const unitIsTaken = (part: { name?: string; symbol?: string }) => unitTaken(props.snapshot, props.content, part)
+const similarUnit = (n: string) => similarUnits(props.snapshot, props.content, n)
+function pickUnit(key: unknown): void {
+  if (key === NEW_UNIT) {
+    creatingUnit.value = true
+    return
+  }
+  void patch({ unitKey: String(key) })
+}
+async function newUnit(u: DraftNewUnit): Promise<void> {
+  const next = withItemUnit(props.content, props.snapshot, props.item.id, u)
+  if ('errorKey' in next) {
+    unitError.value = t(next.errorKey, next.params ?? {})
+    return
+  }
+  unitError.value = null
+  if (await props.edit((c) => {
+    const r = withItemUnit(c, props.snapshot, props.item.id, u)
+    return 'errorKey' in r ? c : r
+  })) creatingUnit.value = false
+}
 const path = computed(() => folderPathWithDraft(props.snapshot, props.content, props.item.folderId).join(' / ') || props.snapshot.inventory.name)
 
 const valueText = (attributeId: Id, value: string | null): string => {
@@ -97,9 +129,17 @@ async function patch(change: Partial<DraftNewItem>): Promise<void> {
     return cur ? withNewItem(c, { ...cur, ...change }) : c
   })
 }
+/** What the typed name collides with in the item's folder (itself excepted). */
+function takenIn(typed: string, folderId: Id | null): 'active' | 'archived' | null {
+  if (typed.trim() === '') return null
+  const hit = nameClash(props.snapshot, props.content, { kind: 'item', name: typed, folderId }, props.item.id)
+  return hit ? (hit.archived ? 'archived' : 'active') : null
+}
+const nameTaken = computed(() => takenIn(name.value, props.item.folderId))
+const alike = computed(() => (nameTaken.value ? [] : similarItems(props.snapshot, props.content, name.value, props.item.folderId, props.item.id)))
 async function saveName(): Promise<void> {
   const v = name.value.trim()
-  if (v === '') {
+  if (v === '' || nameTaken.value) {
     name.value = props.item.name
     return
   }
@@ -131,6 +171,11 @@ const folderChoices = computed(() =>
 )
 function setFolder(id: Id | null): void {
   pickingFolder.value = false
+  const taken = takenIn(props.item.name, id)
+  if (taken) {
+    toast.error(t(taken === 'archived' ? 'nameTaken.archived' : 'nameTaken.active', { name: props.item.name }))
+    return
+  }
   void patch({ folderId: id })
 }
 
@@ -205,7 +250,9 @@ const panelId = `intake-item-${props.item.id}`
 
       <div class="grid gap-2">
         <Label :for="`${panelId}-name`">{{ $t('form.name') }}</Label>
-        <Input :id="`${panelId}-name`" v-model="name" autocomplete="off" class="h-11" :disabled="readOnly" @change="saveName" />
+        <Input :id="`${panelId}-name`" v-model="name" autocomplete="off" class="h-11" :disabled="readOnly" :aria-invalid="nameTaken ? true : undefined" :aria-describedby="`${panelId}-name-note`" @change="saveName" />
+        <NameTakenNote :id="`${panelId}-name-note`" :taken="nameTaken" :name="name" />
+        <SimilarNote :names="alike" />
       </div>
 
       <div class="grid gap-2">
@@ -225,17 +272,25 @@ const panelId = `intake-item-${props.item.id}`
         <Textarea :id="`${panelId}-description`" v-model="description" rows="3" class="min-h-20" :disabled="readOnly" @change="saveDescription" />
       </div>
 
-      <div class="grid gap-2">
+      <InlineCreate v-if="creatingUnit" :title="$t('intakes.unit.newTitle')" :close-label="$t('intakes.unit.cancelNew')" @cancel="creatingUnit = false">
+        <UnitForm :unit="null" draft :taken="unitIsTaken" :similar="similarUnit" @draft="newUnit" />
+        <p v-if="unitError" role="alert" class="text-sm text-destructive">{{ unitError }}</p>
+      </InlineCreate>
+      <div v-else class="grid gap-2">
         <Label>{{ $t('intakes.item.unit') }}</Label>
-        <Select :model-value="item.unitKey" :disabled="readOnly" @update:model-value="patch({ unitKey: String($event) })">
+        <Select :model-value="item.unitKey" :disabled="readOnly" @update:model-value="pickUnit">
           <SelectTrigger :aria-label="$t('intakes.item.unit')" class="h-11 w-full">
             <SelectValue>{{ unit.name }}</SelectValue>
           </SelectTrigger>
           <SelectContent>
-            <SelectItem v-for="u in unitChoices(snapshot)" :key="u.key" :value="u.key">{{ u.name }}</SelectItem>
+            <SelectItem v-for="u in unitList" :key="u.key" :value="u.key">{{ u.name }}</SelectItem>
+            <SelectItem :value="NEW_UNIT">{{ $t('intakes.unit.newUnit') }}</SelectItem>
           </SelectContent>
         </Select>
       </div>
+
+      <IconField v-model:picking="pickingIcon" :icon="item.icon ?? null" :color="shownColor" :disabled="readOnly" @pick="patch({ icon: $event })" />
+      <ColorSwatches :model-value="item.color ?? null" :auto="defaultItemColor(item.id)" :label="$t('colors.label')" :disabled="readOnly" @update:model-value="patch({ color: $event })" />
 
       <div class="grid gap-2">
         <button type="button" :class="summaryRow" class="border border-input" :aria-expanded="tagsOpen" :disabled="disabled" @click="tagsOpen = !tagsOpen">

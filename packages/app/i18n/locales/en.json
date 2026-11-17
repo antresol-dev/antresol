@@ -79,7 +79,12 @@
       "add": "Add",
       "new": "New",
       "newValue": "New value",
-      "problem": "Fix"
+      "problem": "Fix",
+      "editTitle": "Tag",
+      "edit": "Edit {name}",
+      "save": "Save",
+      "duplicate": "There is already a tag called “{name}”.",
+      "removed": "Tag “{name}” removed"
     },
     "row": {
       "have": "have {amount}",
@@ -100,22 +105,39 @@
     "willCreate": {
       "title": "Will be created",
       "folders": "Folders",
+      "units": "Units",
       "attributes": "Attributes",
-      "items": "Items"
+      "tags": "Tags",
+      "options": "List values",
+      "items": "Items",
+      "option": "{name}: + {value}",
+      "optionLines": "{count} line | {count} lines",
+      "unitSymbol": "{name} ({symbol})",
+      "shownInLists": "shown in lists",
+      "removeEverywhere": "Remove {name} from all items"
+    },
+    "similar": {
+      "note": "Looks similar: {names}",
+      "where": "{name} ({where})"
     },
     "created": {
       "title": "Created",
       "folders": "Folders",
       "attributes": "Attributes",
       "tags": "Tags",
-      "items": "Items"
+      "items": "Items",
+      "units": "Units",
+      "options": "List values",
+      "option": "{name}: + {values}"
     },
     "entity": {
       "problem": {
         "duplicate_name": "Already exists",
         "parent_gone": "Its folder is gone",
         "cycle": "Inside itself",
-        "invalid_value": "Check the name and values"
+        "invalid_value": "Check the name and values",
+        "duplicate_archived": "An archived one has this name",
+        "pinned_limit": "Too many attributes shown in lists"
       }
     },
     "item": {
@@ -155,17 +177,32 @@
       "inUse": "A new item uses this attribute. Remove it from the item first.",
       "invalid": "This attribute’s kind or unit isn’t valid.",
       "duplicate": "There is already an attribute called “{name}”.",
-      "unknown": "This attribute doesn’t exist."
+      "unknown": "This attribute doesn’t exist.",
+      "pinned": "shown in lists"
     },
     "unit": {
       "unknown": "This unit doesn’t exist.",
       "invalid": "A unit needs a symbol and valid prefixes.",
       "symbolTooLong": "This symbol is too long.",
+      "newUnit": "New unit…",
+      "newTitle": "New unit",
+      "editTitle": "Unit",
+      "cancelNew": "Cancel new unit",
+      "removed": "Unit “{name}” removed",
+      "add": "Add unit",
+      "edit": "Edit {name}",
       "duplicate": "There is already a unit called “{name}” or with this symbol."
     },
     "option": {
       "exists": "The list already has “{value}”.",
-      "notList": "Only a list attribute takes added values."
+      "notList": "Only a list attribute takes added values.",
+      "add": "Add “{value}” to the list",
+      "added": "“{value}” will be added to {name}.",
+      "editTitle": "List value",
+      "edit": "Edit {name}: {value}",
+      "save": "Save",
+      "remove": "Remove “{value}” and the lines that use it",
+      "removed": "“{value}” removed"
     },
     "line": {
       "addTitle": "Add line",
@@ -180,6 +217,8 @@
       "have": "have {amount}",
       "newItem": "New item “{name}”",
       "newItemCaption": "new item",
+      "variantDescription": "Variant description",
+      "iconColor": "Icon & colour",
       "change": "Change item",
       "editValue": "Change {name}",
       "valueOf": "{name}",

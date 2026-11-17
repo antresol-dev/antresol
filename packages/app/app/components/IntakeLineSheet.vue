@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import {
   BUILTIN_UNITS,
+  customUnitKey,
   formatAmount,
   formatAttributeValue,
   getCurrency,
   intakeAttributes,
   itemAxes,
   itemStock,
+  MAX_NAME_LENGTH,
   newId,
   resolveUnit,
   type Attribute,
@@ -15,6 +17,7 @@ import {
   type DraftNewItem,
   type DraftNewAttribute,
   type DraftNewTag,
+  type DraftNewUnit,
   type Id,
   type IntakeDraftContent,
   type InventorySnapshot,
@@ -26,11 +29,24 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { pricePreview, parseMoneyText, unitChoices } from '~/lib/amounts'
+import { pricePreview, parseMoneyText } from '~/lib/amounts'
 import { parseAttributeInput } from '~/lib/attribute-values'
 import { formatMoney } from '~/lib/format'
 import { folderChoicesWithDraft, folderPathWithDraft } from '@antresol/kit/draft-folders'
-import { withHeldAttributes, writeHeldAttributes } from '~/lib/intake-draft'
+import { nameClash, withHeldAttributes, writeHeldAttributes } from '~/lib/intake-draft'
+import {
+  listHas,
+  similarItems,
+  similarUnits,
+  unitChoicesWithDraft,
+  unitTaken,
+  withHeldOptions,
+  withHeldUnits,
+  writeHeldOptions,
+  writeHeldUnits,
+  type HeldOption,
+} from '~/lib/intake-parts'
+import { defaultItemColor } from '~/lib/item-colors'
 import {
   alreadyInDraft,
   buildDraftLine,
@@ -52,7 +68,8 @@ import { pathOf, snapshotIndex, type SearchRow } from '~/lib/views'
 // The line sheet of a draft intake (spec 2026-11-13 intakes §6): "what is it" with what the inventory and the draft
 // already have, then the item's card (or a new item) and the amount; price & link, photo, attributes and folder are
 // summary rows that open on tap. Every change goes into the draft through `edit` (the device at once, the database
-// after a pause).
+// after a pause). What the line declares (new attributes, a new unit, a value added to an existing list) is held by the
+// form and written with the line, so closing the sheet without saving declares nothing (spec 2026-11-17 §6).
 const props = defineProps<{
   /** The line to edit; null: a new line. */
   lineId: Id | null
@@ -95,6 +112,15 @@ const tagsOpen = ref(false)
 const addedTags = ref<DraftNewTag[]>([])
 /** New attributes this form made: written with the line when it is saved, dropped when the sheet closes without saving. */
 const heldAttributes = ref<DraftNewAttribute[]>([])
+/** A new unit and values added to existing lists, held the same way. */
+const heldUnits = ref<DraftNewUnit[]>([])
+const heldOptions = ref<HeldOption[]>([])
+const variantDescription = ref('')
+const variantDescriptionOpen = ref(false)
+const iconOpen = ref(false)
+const pickingIcon = ref(false)
+const creatingUnit = ref(false)
+const unitError = ref<string | null>(null)
 const pickingFolder = ref(false)
 const editingAxis = ref<Id | null>(null)
 const recent = ref<Id[]>([])
@@ -106,7 +132,7 @@ const attributeError = ref<string | null>(null)
 const s = computed(() => props.snapshot)
 /** The inventory's attributes and the draft's own: what a new item's attributes and axes read from. */
 /** The draft as this form sees it: its content and the attributes the form holds, not written yet. */
-const formContent = computed(() => withHeldAttributes(props.content, heldAttributes.value))
+const formContent = computed(() => withHeldOptions(withHeldUnits(withHeldAttributes(props.content, heldAttributes.value), heldUnits.value), heldOptions.value))
 const attributeMap = computed(() => intakeAttributes(formContent.value, props.snapshot))
 const ix = computed(() => snapshotIndex(s.value))
 const editing = computed(() => activeLineId.value !== null)
@@ -143,6 +169,14 @@ function startNew(from: typeof defaults.value): void {
   tagsOpen.value = false
   addedTags.value = []
   heldAttributes.value = []
+  heldUnits.value = []
+  heldOptions.value = []
+  variantDescription.value = ''
+  variantDescriptionOpen.value = false
+  iconOpen.value = false
+  pickingIcon.value = false
+  creatingUnit.value = false
+  unitError.value = null
   pickingFolder.value = false
   editingAxis.value = null
   error.value = null
@@ -168,6 +202,7 @@ function load(lineId: Id | null = props.lineId): void {
   amount.value = line.quantity
   price.value = line.totalPrice === null ? '' : priceText(line.totalPrice, s.value.inventory.currency)
   url.value = line.sourceUrl ?? ''
+  variantDescription.value = line.variantDescription ?? ''
   photo.value = line.photo
   query.value = n?.name ?? ix.value.items.get(line.itemId)?.name ?? ''
   mode.value = 'line'
@@ -251,7 +286,8 @@ const axes = computed<Attribute[]>(() => {
     const a = x.axis ? attributeMap.value.get(x.attributeId) : undefined
     return a ? [a] : []
   })
-  return itemId.value ? itemAxes(s.value, itemId.value) : []
+  // Read through the form's attributes, so a value added to a list is one of its options here.
+  return itemId.value ? itemAxes(s.value, itemId.value).map((a) => attributeMap.value.get(a.id) ?? a) : []
 })
 const valueOf = (attributeId: Id): string => axisValues.value.find((x) => x.attributeId === attributeId)?.value ?? ''
 function setValue(attributeId: Id, value: string): void {
@@ -274,6 +310,8 @@ function withNewItem(c: IntakeDraftContent, n: DraftNewItem): IntakeDraftContent
 }
 const hint = computed(() => (itemId.value ? valueHint(s.value, draftForHints.value, itemId.value, axisValues.value) : null))
 const hintUnit = computed(() => resolveUnit(item.value?.unitKey ?? 'pcs', s.value.units) ?? BUILTIN_UNITS.pcs)
+/** The line creates a variant: a new item with axes, or a value the item has not had. */
+const createsVariant = computed(() => (newItem.value ? axes.value.length > 0 : hint.value?.kind === 'new'))
 const nearestText = computed(() => {
   const h = hint.value
   if (h?.kind !== 'new') return null
@@ -343,6 +381,19 @@ const duplicate = computed(() => {
   const twin = props.content.newItems.find((x) => x.id !== n.id && x.name.trim().toLowerCase() === key)
   return key && twin ? { kind: 'draft' as const, twin } : null
 })
+/** A name the item's folder has already (archived ones count) is refused; names that only look alike are advice. */
+const nameTaken = computed<'active' | 'archived' | null>(() => {
+  const n = newItem.value
+  if (!n || n.name.trim() === '') return null
+  const hit = nameClash(s.value, formContent.value, { kind: 'item', name: n.name, folderId: n.folderId }, n.id)
+  return hit ? (hit.archived ? 'archived' : 'active') : null
+})
+const similarList = computed(() => {
+  const n = newItem.value
+  if (!n || nameTaken.value) return []
+  const shownAlready = duplicate.value?.kind === 'inventory' ? duplicate.value.row.itemId : duplicate.value?.kind === 'draft' ? duplicate.value.twin.id : null
+  return similarItems(s.value, formContent.value, typedName.value, n.folderId, n.id).filter((x) => x.id !== shownAlready)
+})
 function useInstead(): void {
   const d = duplicate.value
   if (!d) return
@@ -396,9 +447,56 @@ function setFolder(id: Id | null): void {
 }
 
 const units = computed(() => {
-  if (newItem.value) return unitChoices(s.value)
+  if (newItem.value) return unitChoicesWithDraft(s.value, formContent.value)
   return [resolveUnit(item.value?.unitKey ?? 'pcs', s.value.units) ?? BUILTIN_UNITS.pcs]
 })
+const unitIsTaken = (part: { name?: string; symbol?: string }) => unitTaken(s.value, formContent.value, part)
+const similarUnit = (name: string) => similarUnits(s.value, formContent.value, name)
+/** "New unit…": the unit is held with the form and the item counts in it; written with the line. */
+function newUnit(u: DraftNewUnit): void {
+  if (!newItem.value) return
+  if (unitTaken(s.value, formContent.value, { name: u.name, symbol: u.symbol })) {
+    unitError.value = t('intakes.unit.duplicate', { name: u.name })
+    return
+  }
+  heldUnits.value = [...heldUnits.value.filter((x) => x.id !== u.id), u]
+  newItem.value = { ...newItem.value, unitKey: customUnitKey(u.id) }
+  creatingUnit.value = false
+  unitError.value = null
+}
+
+// ---- Icon and colour of a new item ----
+const shownColor = computed(() => (newItem.value ? (newItem.value.color ?? defaultItemColor(newItem.value.id)) : ''))
+function setIcon(icon: string | null): void {
+  if (newItem.value) newItem.value = { ...newItem.value, icon }
+}
+function setColor(color: string | null): void {
+  if (newItem.value) newItem.value = { ...newItem.value, color }
+}
+
+// ---- A value added to an existing list ----
+/** The list attribute the open value field is for when the typed value is not in it: "Add “0805” to the list". */
+const addableOption = computed(() => {
+  const id = editingAxis.value
+  const a = id ? s.value.attributes.find((x) => x.id === id) : undefined
+  const typedValue = id ? valueOf(id).trim() : ''
+  if (!a || a.kind !== 'enum' || typedValue === '' || typedValue.length > MAX_NAME_LENGTH) return null
+  if (listHas(a.options, formContent.value, a.id, typedValue)) return null
+  return { attribute: a, value: typedValue }
+})
+/** The typed value is one this form or the draft adds to the list: said under the field. */
+const stagedOption = computed(() => {
+  const id = editingAxis.value
+  const a = id ? s.value.attributes.find((x) => x.id === id) : undefined
+  const typedValue = id ? valueOf(id).trim() : ''
+  if (!a || a.kind !== 'enum' || typedValue === '' || a.options.some((o) => o.trim().toLowerCase() === typedValue.toLowerCase())) return null
+  return listHas(a.options, formContent.value, a.id, typedValue) ? { attribute: a, value: typedValue } : null
+})
+function addToList(): void {
+  const o = addableOption.value
+  if (!o) return
+  heldOptions.value = [...heldOptions.value, { attributeId: o.attribute.id, value: o.value }]
+}
 const unitKey = computed({
   get: () => newItem.value?.unitKey ?? item.value?.unitKey ?? 'pcs',
   set: (key: string) => {
@@ -528,9 +626,19 @@ async function save(next: boolean): Promise<void> {
     error.value = { key: attributeError.value }
     return
   }
-  // New attributes made in this form go in with the line, and only those the item still has.
+  if (nameTaken.value) return
+  // What this form declares goes in with the line: new attributes and a new unit only while the item still uses them,
+  // values added to lists (the line's prune keeps those a line uses).
   const uses = new Set((newItem.value?.attributes ?? []).map((x) => x.attributeId))
-  const written = writeHeldAttributes(props.content, s.value, heldAttributes.value, uses)
+  const unitUses = new Set(newItem.value ? [newItem.value.unitKey] : [])
+  const writeHeld = (c: IntakeDraftContent): IntakeDraftContent | { errorKey: string; params?: Record<string, string> } => {
+    const a = writeHeldAttributes(c, s.value, heldAttributes.value, uses)
+    if ('errorKey' in a) return a
+    const u = writeHeldUnits(a, s.value, heldUnits.value, unitUses)
+    if ('errorKey' in u) return u
+    return writeHeldOptions(u, s.value, heldOptions.value)
+  }
+  const written = writeHeld(props.content)
   if ('errorKey' in written) {
     error.value = { key: written.errorKey, params: written.params }
     return
@@ -548,6 +656,7 @@ async function save(next: boolean): Promise<void> {
       urlPrefix: urlPrefix.value,
       photo: photo.value,
       newTags: draftTags.value,
+      ...(createsVariant.value ? { variantDescription: variantDescription.value } : {}),
     },
     s.value,
     written,
@@ -562,7 +671,7 @@ async function save(next: boolean): Promise<void> {
   try {
     let refused: { errorKey: string; params?: Record<string, string> } | null = null
     const applied = await props.edit((c) => {
-      const w = writeHeldAttributes(c, s.value, heldAttributes.value, uses)
+      const w = writeHeld(c)
       if ('errorKey' in w) {
         refused = w
         return c
@@ -706,6 +815,8 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
           </div>
         </div>
 
+        <SimilarNote :names="similarList" />
+
         <div class="grid min-w-0 gap-2 rounded-field border border-input p-3">
           <div class="flex min-w-0 items-start gap-2">
             <div class="min-w-0 grow">
@@ -717,9 +828,12 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
                   autocomplete="off"
                   :disabled="disabled"
                   class="h-10 font-semibold"
+                  :aria-invalid="nameTaken ? true : undefined"
+                  aria-describedby="intake-line-name-taken"
                   @update:model-value="newItem = { ...newItem!, name: String($event) }"
                   @keydown.enter.prevent="save(!editing)"
                 />
+                <NameTakenNote id="intake-line-name-taken" :taken="nameTaken" :name="newItem.name" />
               </template>
               <p v-else class="field-text pt-0.5 text-base font-semibold wrap-anywhere">{{ item?.name }}</p>
             </div>
@@ -759,6 +873,15 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
               @update:model-value="setValue(editingAxis!, String($event))"
               @keydown.enter.prevent="editingAxis = axes.find((a) => a.id !== editingAxis && !valueOf(a.id).trim())?.id ?? null; focusSoon(editingAxis ? `#intake-axis-${editingAxis}` : '#intake-line-amount')"
             />
+            <div v-if="addableOption">
+              <Button type="button" variant="outline" size="sm" class="h-9 max-w-full" :disabled="disabled" @click="addToList">
+                <Plus class="size-4 shrink-0" aria-hidden="true" />
+                <span class="min-w-0 truncate">{{ $t('intakes.option.add', { value: addableOption.value }) }}</span>
+              </Button>
+            </div>
+            <p v-else-if="stagedOption" role="status" class="field-text text-sm text-muted-foreground wrap-anywhere">
+              {{ $t('intakes.option.added', { value: stagedOption.value, name: stagedOption.attribute.name }) }}
+            </p>
           </div>
           <p class="field-text text-xs text-muted-foreground wrap-anywhere">
             <template v-if="newItem">{{ $t('intakes.line.newItemCaption') }}</template>
@@ -792,6 +915,15 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
         <div class="grid gap-1.5" @keydown.enter.prevent="save(!editing)">
           <Label for="intake-line-amount">{{ $t('intakes.line.amount') }}</Label>
           <AmountField id="intake-line-amount" v-model="amount" v-model:unit-key="unitKey" :units="units" />
+          <InlineCreate v-if="newItem && creatingUnit" :title="$t('intakes.unit.newTitle')" :close-label="$t('intakes.unit.cancelNew')" class="mt-2" @cancel="creatingUnit = false; unitError = null">
+            <UnitForm :unit="null" draft :taken="unitIsTaken" :similar="similarUnit" @draft="newUnit" />
+            <p v-if="unitError" role="alert" class="text-sm text-destructive">{{ unitError }}</p>
+          </InlineCreate>
+          <div v-else-if="newItem">
+            <Button type="button" variant="ghost" size="sm" class="h-9 text-accent-ink" :disabled="disabled" @click="creatingUnit = true">
+              <Plus class="size-4 shrink-0" aria-hidden="true" />{{ $t('intakes.unit.newUnit') }}
+            </Button>
+          </div>
         </div>
 
         <div v-if="newItem" class="grid gap-1.5">
@@ -850,6 +982,32 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
             <div v-if="descriptionOpen" class="py-3">
               <Label for="intake-line-description" class="sr-only">{{ $t('form.description') }}</Label>
               <Textarea id="intake-line-description" v-model="description" rows="3" class="min-h-20" :disabled="disabled" />
+            </div>
+
+            <button type="button" :class="summaryRow" :aria-expanded="iconOpen" :disabled="disabled" @click="iconOpen = !iconOpen">
+              <span class="shrink-0 text-sm font-semibold">{{ $t('intakes.line.iconColor') }}</span>
+              <span class="min-w-0 grow truncate text-right text-sm" :class="newItem.icon || newItem.color ? 'text-foreground' : 'text-muted-foreground'">
+                {{ newItem.icon || (newItem.color ? $t('colors.label') : $t('intakes.line.add')) }}
+              </span>
+              <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-(--dur-fast) motion-reduce:transition-none" :class="iconOpen ? 'rotate-180' : ''" aria-hidden="true" />
+            </button>
+            <div v-if="iconOpen" class="grid gap-4 py-3">
+              <IconField v-model:picking="pickingIcon" :icon="newItem.icon ?? null" :color="shownColor" :disabled="disabled" @pick="setIcon" />
+              <ColorSwatches :model-value="newItem.color ?? null" :auto="defaultItemColor(newItem.id)" :label="$t('colors.label')" :disabled="disabled" @update:model-value="setColor" />
+            </div>
+          </template>
+
+          <template v-if="createsVariant">
+            <button type="button" :class="summaryRow" :aria-expanded="variantDescriptionOpen" :disabled="disabled" @click="variantDescriptionOpen = !variantDescriptionOpen">
+              <span class="shrink-0 text-sm font-semibold">{{ $t('intakes.line.variantDescription') }}</span>
+              <span class="min-w-0 grow truncate text-right text-sm" :class="variantDescription ? 'text-foreground' : 'text-muted-foreground'">
+                {{ variantDescription.replace(/\s+/g, ' ').trim() || $t('intakes.line.add') }}
+              </span>
+              <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-(--dur-fast) motion-reduce:transition-none" :class="variantDescriptionOpen ? 'rotate-180' : ''" aria-hidden="true" />
+            </button>
+            <div v-if="variantDescriptionOpen" class="py-3">
+              <Label for="intake-line-variant-description" class="sr-only">{{ $t('intakes.line.variantDescription') }}</Label>
+              <Textarea id="intake-line-variant-description" v-model="variantDescription" rows="3" class="min-h-20" :disabled="disabled" />
             </div>
           </template>
 
@@ -910,16 +1068,16 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
 
     <template v-if="mode === 'line'" #footer>
       <template v-if="editing">
-        <Button type="button" data-primary class="h-11 rounded-field" :disabled="disabled || !!createdBy" @click="save(false)">
+        <Button type="button" data-primary class="h-11 rounded-field" :disabled="disabled || !!createdBy || !!nameTaken" @click="save(false)">
           {{ $t(saving ? 'status.saving' : 'intakes.line.save') }}
         </Button>
         <Button type="button" variant="ghost" class="h-11 text-destructive" :disabled="disabled" @click="remove">{{ $t('intakes.line.remove') }}</Button>
       </template>
       <template v-else>
-        <Button type="button" data-primary class="h-11 rounded-field" :disabled="disabled || !!createdBy" @click="save(true)">
+        <Button type="button" data-primary class="h-11 rounded-field" :disabled="disabled || !!createdBy || !!nameTaken" @click="save(true)">
           {{ $t(saving ? 'status.saving' : 'intakes.line.addNext') }}
         </Button>
-        <Button type="button" variant="outline" class="h-11" :disabled="disabled || !!createdBy" @click="save(false)">{{ $t('intakes.line.addClose') }}</Button>
+        <Button type="button" variant="outline" class="h-11" :disabled="disabled || !!createdBy || !!nameTaken" @click="save(false)">{{ $t('intakes.line.addClose') }}</Button>
       </template>
     </template>
   </AppSheet>

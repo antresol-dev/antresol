@@ -5,7 +5,7 @@ import {
   newId,
   normalizeCommand,
   patchSnapshot,
-  pruneNewItems,
+  pruneDraft,
   resolveIntake,
   StorageError,
   validateCommand,
@@ -1487,7 +1487,7 @@ export function createWorkspace(deps: WorkspaceDeps): Workspace {
   /** The device copy goes; the folders the commit put new items into become recent ones. */
   async function afterCommit(ref: InventoryRef, id: Id, content: IntakeDraftContent | null): Promise<void> {
     await intakeDrafts.forget(id).catch(() => {})
-    const folders = new Set((content ? pruneNewItems(content).newItems : []).flatMap((n) => (n.folderId ? [n.folderId] : [])))
+    const folders = new Set((content ? pruneDraft(content).newItems : []).flatMap((n) => (n.folderId ? [n.folderId] : [])))
     for (const folderId of folders) await db.noteRecentFolder(ref.inventoryId, folderId).catch(() => {})
   }
 

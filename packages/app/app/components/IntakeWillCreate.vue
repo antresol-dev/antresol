@@ -2,6 +2,8 @@
 import {
   draftAttribute,
   type DraftNewAttribute,
+  type DraftNewTag,
+  type DraftNewUnit,
   type EntityProblem,
   type Id,
   type IntakeDraftContent,
@@ -11,12 +13,30 @@ import {
 import { Folder, Pencil, X } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
-import { nameClash, useExisting, withNewAttribute, withoutNewAttribute } from '~/lib/intake-draft'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { colorVars } from '~/lib/item-colors'
+import { nameClash, useExisting, withNewAttribute } from '~/lib/intake-draft'
 import { folderGroups } from '~/lib/intake-entities'
+import {
+  linesUsingValue,
+  similarAttributes,
+  similarUnits,
+  undoTo,
+  unitTaken,
+  withEditedTag,
+  withRenamedAddedValue,
+  withoutAddedValue,
+  withoutAttributeEverywhere,
+  withoutTagEverywhere,
+  withoutUnitEverywhere,
+} from '~/lib/intake-parts'
 import { UNDO_MIN_MS } from '~/lib/undo'
 
-// "Will be created" on a draft intake's screen (spec 2026-11-16 §4): the draft's folders (compact trees under their
-// nearest existing parent), attributes and new items. A block with nothing in it is not shown. A folder or an attribute
+// "Will be created" on a draft intake's screen (spec 2026-11-16 §4, 2026-11-17 §6): the draft's folders (compact trees
+// under their nearest existing parent), units, attributes, tags, values added to lists and new items. A block with
+// nothing in it is not shown. Each row is edited in its own sheet; nothing is created here: a unit, attribute, tag or
+// value goes when no item uses it, and "Remove from all items" takes it off every item at once. A folder or an attribute
 // that the commit would refuse shows why, with "Use existing" where the cause is a name that is taken.
 const props = defineProps<{
   content: IntakeDraftContent
@@ -32,6 +52,19 @@ const { t } = useI18n()
 
 const groups = computed(() => folderGroups(props.snapshot, props.content))
 const attributes = computed(() => props.content.newAttributes ?? [])
+const units = computed(() => props.content.newUnits ?? [])
+const tags = computed(() => props.content.newTags ?? [])
+const options = computed(() =>
+  (props.content.addedOptions ?? []).flatMap((o) =>
+    o.values.map((value) => ({
+      key: `${o.attributeId}:${value}`,
+      attributeId: o.attributeId,
+      value,
+      name: props.snapshot.attributes.find((a) => a.id === o.attributeId)?.name ?? '',
+      lines: linesUsingValue(props.content, o.attributeId, value),
+    })),
+  ),
+)
 const items = computed(() => props.content.newItems)
 const problems = computed(() => new Map(props.resolved.entities.map((e) => [e.id, e.problem] as const)))
 const problemOf = (id: Id): EntityProblem | null => problems.value.get(id) ?? null
@@ -53,7 +86,7 @@ function takeExisting(draftId: Id, existingId: Id): void {
 }
 
 const kindText = (a: DraftNewAttribute): string =>
-  [t(a.kind === 'text' ? 'attributeForm.text' : a.kind === 'enum' ? 'attributeForm.list' : 'attributeForm.number'), a.unit || null, a.siPrefixes ? t('intakes.screen.siPrefixes') : null]
+  [t(a.kind === 'text' ? 'attributeForm.text' : a.kind === 'enum' ? 'attributeForm.list' : 'attributeForm.number'), a.unit || null, a.siPrefixes ? t('intakes.screen.siPrefixes') : null, a.pinned ? t('intakes.attribute.pinned') : null]
     .filter(Boolean)
     .join(', ')
 
@@ -91,27 +124,91 @@ async function useExistingAttribute(existingId: Id): Promise<void> {
   if (!draftId) return
   if (await props.edit((c) => useExisting(c, draftId, existingId))) editOpen.value = false
 }
-async function removeAttribute(a: DraftNewAttribute): Promise<void> {
-  const result = withoutNewAttribute(props.content, a.id)
-  if ('errorKey' in result) {
-    toast.error(t(result.errorKey, result.params ?? {}))
+const otherPinned = computed(() => (props.content.newAttributes ?? []).filter((a) => a.pinned && a.id !== editing.value?.id).length)
+const similarAttribute = (name: string) => similarAttributes(props.snapshot, props.content, name, editing.value?.id)
+
+/** Takes something off every item at once; Undo puts the draft back while nothing else was changed after it. */
+async function removeEverywhere(next: (c: IntakeDraftContent) => IntakeDraftContent, message: string): Promise<void> {
+  if (props.readOnly) return
+  const before = props.content
+  const after = next(before)
+  if (!(await props.edit(next))) return
+  toast(message, { duration: UNDO_MIN_MS, action: { label: t('undo.action'), onClick: () => void props.edit(undoTo(before, after)) } })
+}
+const removeAttribute = (a: DraftNewAttribute) => removeEverywhere((c) => withoutAttributeEverywhere(c, a.id), t('intakes.attribute.removed', { name: a.name }))
+const removeUnit = (u: DraftNewUnit) => removeEverywhere((c) => withoutUnitEverywhere(c, u.id), t('intakes.unit.removed', { name: u.name }))
+const removeTag = (x: DraftNewTag) => removeEverywhere((c) => withoutTagEverywhere(c, x.id), t('intakes.tag.removed', { name: x.name }))
+const removeOption = (o: { attributeId: Id; value: string }) => removeEverywhere((c) => withoutAddedValue(c, o.attributeId, o.value), t('intakes.option.removed', { value: o.value }))
+
+// ---- Units: edit in the form's draft mode ----
+const unitEditing = ref<DraftNewUnit | null>(null)
+const unitOpen = ref(false)
+const unitBusy = ref(false)
+function openUnit(u: DraftNewUnit): void {
+  unitEditing.value = u
+  unitOpen.value = true
+}
+async function saveUnit(u: DraftNewUnit): Promise<void> {
+  unitBusy.value = true
+  try {
+    if (await props.edit((c) => ({ ...c, newUnits: (c.newUnits ?? []).map((x) => (x.id === u.id ? u : x)) }))) unitOpen.value = false
+  } finally {
+    unitBusy.value = false
+  }
+}
+const unitIsTaken = (part: { name?: string; symbol?: string }) => unitTaken(props.snapshot, props.content, part, unitEditing.value?.id)
+const similarUnit = (name: string) => similarUnits(props.snapshot, props.content, name, unitEditing.value?.id)
+
+// ---- Tags: name and colour ----
+const tagEditing = ref<DraftNewTag | null>(null)
+const tagOpen = ref(false)
+const tagName = ref('')
+const tagColor = ref<string | null>(null)
+const tagError = ref<string | null>(null)
+function openTag(x: DraftNewTag): void {
+  tagEditing.value = x
+  tagName.value = x.name
+  tagColor.value = x.color ?? null
+  tagError.value = null
+  tagOpen.value = true
+}
+async function saveTag(): Promise<void> {
+  const x = tagEditing.value
+  if (!x) return
+  const next = withEditedTag(props.content, props.snapshot, x.id, { name: tagName.value, color: tagColor.value })
+  if ('errorKey' in next) {
+    tagError.value = t(next.errorKey, next.params ?? {})
     return
   }
-  if (!(await props.edit((c) => {
-    const r = withoutNewAttribute(c, a.id)
+  if (await props.edit((c) => {
+    const r = withEditedTag(c, props.snapshot, x.id, { name: tagName.value, color: tagColor.value })
     return 'errorKey' in r ? c : r
-  }))) return
-  toast(t('intakes.attribute.removed', { name: a.name }), {
-    duration: UNDO_MIN_MS,
-    action: {
-      label: t('undo.action'),
-      onClick: () =>
-        void props.edit((c) => {
-          const r = withNewAttribute(c, props.snapshot, a)
-          return 'errorKey' in r ? c : r
-        }),
-    },
-  })
+  })) tagOpen.value = false
+}
+
+// ---- Values added to lists ----
+const optionEditing = ref<{ attributeId: Id; value: string; name: string } | null>(null)
+const optionOpen = ref(false)
+const optionText = ref('')
+const optionError = ref<string | null>(null)
+function openOption(o: { attributeId: Id; value: string; name: string }): void {
+  optionEditing.value = o
+  optionText.value = o.value
+  optionError.value = null
+  optionOpen.value = true
+}
+async function saveOption(): Promise<void> {
+  const o = optionEditing.value
+  if (!o) return
+  const next = withRenamedAddedValue(props.content, props.snapshot, o.attributeId, o.value, optionText.value)
+  if ('errorKey' in next) {
+    optionError.value = t(next.errorKey, next.params ?? {})
+    return
+  }
+  if (await props.edit((c) => {
+    const r = withRenamedAddedValue(c, props.snapshot, o.attributeId, o.value, optionText.value)
+    return 'errorKey' in r ? c : r
+  })) optionOpen.value = false
 }
 
 // A row is the rounded element that carries the hover highlight and fills the list's row edge to edge (like FolderList);
@@ -128,7 +225,7 @@ const existingLink =
 </script>
 
 <template>
-  <section v-if="groups.length > 0 || attributes.length > 0 || items.length > 0" class="grid min-w-0 grid-cols-1 gap-3" :aria-label="$t('intakes.willCreate.title')">
+  <section v-if="groups.length > 0 || units.length > 0 || attributes.length > 0 || tags.length > 0 || options.length > 0 || items.length > 0" class="grid min-w-0 grid-cols-1 gap-3" :aria-label="$t('intakes.willCreate.title')">
     <h2 class="section-label px-1 text-xs">{{ $t('intakes.willCreate.title') }}</h2>
 
     <div v-if="groups.length > 0" class="grid min-w-0 gap-1">
@@ -153,6 +250,24 @@ const existingLink =
       </ul>
     </div>
 
+    <div v-if="units.length > 0" class="grid min-w-0 gap-1">
+      <h3 class="px-1 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.units') }}</h3>
+      <ul class="surface-list">
+        <li v-for="u in units" :key="u.id" :class="[rowClass, hoverClass]">
+          <button type="button" :class="tapClass" :aria-label="$t('intakes.unit.edit', { name: u.name })" :disabled="readOnly" @click="openUnit(u)">
+            <span class="grid min-w-0 gap-0.5">
+              <span class="min-w-0 truncate font-semibold">{{ $t('intakes.willCreate.unitSymbol', { name: u.name, symbol: u.symbol }) }}</span>
+              <span v-if="problemOf(u.id)" class="min-w-0 truncate text-xs text-destructive">{{ $t(problemKey(problemOf(u.id)!)) }}</span>
+            </span>
+            <Pencil class="ml-auto size-4 shrink-0 text-icon" aria-hidden="true" />
+          </button>
+          <Button type="button" variant="ghost" size="icon" class="size-11 shrink-0" :aria-label="$t('intakes.willCreate.removeEverywhere', { name: u.name })" :disabled="readOnly" @click="removeUnit(u)">
+            <X class="size-4" aria-hidden="true" />
+          </Button>
+        </li>
+      </ul>
+    </div>
+
     <div v-if="attributes.length > 0" class="grid min-w-0 gap-1">
       <h3 class="px-1 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.attributes') }}</h3>
       <ul class="surface-list">
@@ -169,7 +284,46 @@ const existingLink =
           <button v-if="existingOf(problemOf(a.id))" type="button" :class="existingLink" :disabled="readOnly" @click="takeExisting(a.id, existingOf(problemOf(a.id))!)">
             <span class="min-w-0 truncate">{{ $t('intakes.useExisting', { name: existingName(existingOf(problemOf(a.id))!) }) }}</span>
           </button>
-          <Button type="button" variant="ghost" size="icon" class="size-11 shrink-0" :aria-label="$t('intakes.attribute.remove', { name: a.name })" :disabled="readOnly" @click="removeAttribute(a)">
+          <Button type="button" variant="ghost" size="icon" class="size-11 shrink-0" :aria-label="$t('intakes.willCreate.removeEverywhere', { name: a.name })" :disabled="readOnly" @click="removeAttribute(a)">
+            <X class="size-4" aria-hidden="true" />
+          </Button>
+        </li>
+      </ul>
+    </div>
+
+    <div v-if="tags.length > 0" class="grid min-w-0 gap-1">
+      <h3 class="px-1 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.tags') }}</h3>
+      <ul class="surface-list">
+        <li v-for="x in tags" :key="x.id" :class="[rowClass, hoverClass]">
+          <button type="button" :class="tapClass" :aria-label="$t('intakes.tag.edit', { name: x.name })" :disabled="readOnly" @click="openTag(x)">
+            <span v-if="x.color" class="colored size-2 shrink-0 rounded-full bg-(--c)" :style="colorVars(x.color)" aria-hidden="true" />
+            <span class="grid min-w-0 gap-0.5">
+              <span class="min-w-0 truncate font-semibold">{{ x.name }}</span>
+              <span v-if="problemOf(x.id)" class="min-w-0 truncate text-xs text-destructive">{{ $t(problemKey(problemOf(x.id)!)) }}</span>
+            </span>
+            <Pencil class="ml-auto size-4 shrink-0 text-icon" aria-hidden="true" />
+          </button>
+          <Button type="button" variant="ghost" size="icon" class="size-11 shrink-0" :aria-label="$t('intakes.willCreate.removeEverywhere', { name: x.name })" :disabled="readOnly" @click="removeTag(x)">
+            <X class="size-4" aria-hidden="true" />
+          </Button>
+        </li>
+      </ul>
+    </div>
+
+    <div v-if="options.length > 0" class="grid min-w-0 gap-1">
+      <h3 class="px-1 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.options') }}</h3>
+      <ul class="surface-list">
+        <li v-for="o in options" :key="o.key" :class="[rowClass, hoverClass]">
+          <button type="button" :class="tapClass" :aria-label="$t('intakes.option.edit', { name: o.name, value: o.value })" :disabled="readOnly" @click="openOption(o)">
+            <span class="grid min-w-0 gap-0.5">
+              <span class="min-w-0 truncate font-semibold">{{ $t('intakes.willCreate.option', { name: o.name, value: o.value }) }}</span>
+              <span class="min-w-0 truncate text-xs text-muted-foreground">
+                {{ $t('intakes.willCreate.optionLines', o.lines) }}<template v-if="problemOf(o.attributeId)"> · <span class="text-destructive">{{ $t(problemKey(problemOf(o.attributeId)!)) }}</span></template>
+              </span>
+            </span>
+            <Pencil class="ml-auto size-4 shrink-0 text-icon" aria-hidden="true" />
+          </button>
+          <Button type="button" variant="ghost" size="icon" class="size-11 shrink-0" :aria-label="$t('intakes.option.remove', { value: o.value })" :disabled="readOnly" @click="removeOption(o)">
             <X class="size-4" aria-hidden="true" />
           </Button>
         </li>
@@ -193,9 +347,37 @@ const existingLink =
         :attribute="editingAttribute"
         draft
         :clash="clash"
+        :other-pinned="otherPinned"
+        :similar="similarAttribute"
         @draft="saveAttribute"
         @use-existing="useExistingAttribute"
       />
     </div>
+  </AppSheet>
+  <AppSheet v-model:open="unitOpen" :title="$t('intakes.unit.editTitle')" :locked="unitBusy" initial-focus="#unit-name">
+    <div class="mt-4">
+      <UnitForm v-if="unitEditing" :key="unitEditing.id" v-model:busy="unitBusy" :unit="unitEditing" draft :taken="unitIsTaken" :similar="similarUnit" @draft="saveUnit" />
+    </div>
+  </AppSheet>
+  <AppSheet v-model:open="tagOpen" :title="$t('intakes.tag.editTitle')" initial-focus="#intake-tag-name">
+    <form class="mt-4 grid gap-4" novalidate @submit.prevent="saveTag">
+      <div class="grid gap-2">
+        <Label for="intake-tag-name">{{ $t('form.name') }}</Label>
+        <Input id="intake-tag-name" v-model="tagName" autocomplete="off" class="h-11" @input="tagError = null" />
+      </div>
+      <ColorSwatches :key="tagEditing?.id ?? 'none'" v-model="tagColor" :auto="null" :label="$t('colors.label')" />
+      <p role="alert" class="field-text text-sm text-destructive">{{ tagError }}</p>
+      <Button type="submit" class="h-11 rounded-field" :disabled="tagName.trim() === ''">{{ $t('intakes.tag.save') }}</Button>
+    </form>
+  </AppSheet>
+  <AppSheet v-model:open="optionOpen" :title="$t('intakes.option.editTitle')" initial-focus="#intake-option-value">
+    <form class="mt-4 grid gap-4" novalidate @submit.prevent="saveOption">
+      <div class="grid gap-2">
+        <Label for="intake-option-value">{{ optionEditing?.name }}</Label>
+        <Input id="intake-option-value" v-model="optionText" autocomplete="off" class="h-11" @input="optionError = null" />
+      </div>
+      <p role="alert" class="field-text text-sm text-destructive">{{ optionError }}</p>
+      <Button type="submit" class="h-11 rounded-field" :disabled="optionText.trim() === ''">{{ $t('intakes.option.save') }}</Button>
+    </form>
   </AppSheet>
 </template>

@@ -73,7 +73,7 @@ const crumbLink = 'pressable min-w-0 truncate rounded-chip'
             <span class="sr-only">{{ $t('status.saving') }}</span>
           </span>
         </div>
-        <div class="flex min-w-0 items-end justify-between gap-3">
+        <div class="flex min-w-0 items-center justify-between gap-3">
           <div class="min-w-0 flex-1">
             <div v-if="$slots['before-title']" class="flex min-w-0 items-start gap-1">
           <slot name="before-title" />

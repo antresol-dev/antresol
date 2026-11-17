@@ -406,6 +406,33 @@ describe('parseBackup: intakes', () => {
     expect(parseBackup(JSON.parse(JSON.stringify(file)))).toEqual({ error: 'format' })
   })
 
+  it('keeps units, pinned, colours, icons, appended values and variant descriptions of a draft, and created.units and appendedOptions; absent ones stay absent', async () => {
+    const file = JSON.parse(JSON.stringify(await intakesBackup())) as {
+      inventories: { intakes: { draft: { newUnits?: Rec[]; addedOptions?: Rec[]; newFolders?: Rec[]; newAttributes?: Rec[]; newTags?: Rec[]; newItems: Rec[]; lines: Rec[] } | null; created: Rec | null }[] }[]
+    }
+    const intakes = file.inventories[0]!.intakes
+    const draft = intakes.find((i) => i.draft)!.draft!
+    const [unit, attr, folder, tag] = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()]
+    draft.newUnits = [{ id: unit, name: 'Reel', symbol: 'rl', prefixPowers: [3, -3] }]
+    draft.addedOptions = [{ attributeId: attr, values: ['C', 'D'] }]
+    draft.newFolders = [{ id: folder, name: 'Shelf', parentId: null, icon: 'package' }]
+    draft.newAttributes = [{ id: attr, name: 'Finish', kind: 'enum', unit: '', siPrefixes: false, options: ['Matte'], pinned: true }]
+    draft.newTags = [{ id: tag, name: 'Kit', color: '#aa00bb' }]
+    Object.assign(draft.newItems[0]!, { icon: 'package', color: '#00ff00' })
+    draft.lines[0]!.variantDescription = 'Tape'
+    const committed = intakes.find((i) => i.created)!
+    Object.assign(committed.created!, {
+      units: [{ id: unit, name: 'Reel', symbol: 'rl' }],
+      appendedOptions: [{ attributeId: attr, name: 'Finish', values: ['C'] }],
+    })
+    expect(parseBackup(JSON.parse(JSON.stringify(file)))).toStrictEqual(file)
+    draft.newUnits[0]!.prefixPowers = ['x']
+    expect(parseBackup(JSON.parse(JSON.stringify(file)))).toEqual({ error: 'format' })
+    draft.newUnits[0]!.prefixPowers = []
+    committed.created!.appendedOptions = [{ attributeId: 'nope', name: 'x', values: [] }]
+    expect(parseBackup(JSON.parse(JSON.stringify(file)))).toEqual({ error: 'format' })
+  })
+
   it('reads a file of schemas 6 to 8 (no created, no draft entities): created is null, the rest is unchanged, absent fields stay absent; it restores', async () => {
     const file = JSON.parse(JSON.stringify(await intakesBackup())) as {
       inventories: { intakes: { created?: unknown; draft: { newFolders?: unknown; newAttributes?: unknown; newItems: Rec[] } | null }[] }[]

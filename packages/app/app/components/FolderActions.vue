@@ -80,22 +80,22 @@ const iconButton = 'size-9'
       {{ $t('folderMenu.new') }}
     </Button>
     <div class="flex items-center gap-0.5">
-    <Tooltip v-if="countTo">
-      <TooltipTrigger as-child>
-        <Button variant="outline" size="icon" :class="iconButton" :aria-label="$t('countFolder.menu')" :disabled="!!state.readOnly" @click="navigateTo(countTo)">
-          <ClipboardCheck aria-hidden="true" />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{{ $t('countFolder.menu') }}</TooltipContent>
-    </Tooltip>
-    <Tooltip v-for="a in folderActions" :key="a.key">
-      <TooltipTrigger as-child>
-        <Button variant="outline" size="icon" :class="iconButton" :aria-label="$t(a.label)" :disabled="locked" @click="a.run">
-          <component :is="a.icon" aria-hidden="true" />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{{ $t(a.label) }}</TooltipContent>
-    </Tooltip>
+      <Tooltip v-if="countTo">
+        <TooltipTrigger as-child>
+          <Button variant="outline" size="icon" :class="iconButton" :aria-label="$t('countFolder.menu')" :disabled="!!state.readOnly" @click="navigateTo(countTo)">
+            <ClipboardCheck aria-hidden="true" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{{ $t('countFolder.menu') }}</TooltipContent>
+      </Tooltip>
+      <Tooltip v-for="a in folderActions" :key="a.key">
+        <TooltipTrigger as-child>
+          <Button variant="outline" size="icon" :class="iconButton" :aria-label="$t(a.label)" :disabled="locked" @click="a.run">
+            <component :is="a.icon" aria-hidden="true" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{{ $t(a.label) }}</TooltipContent>
+      </Tooltip>
     </div>
   </div>
 </template>

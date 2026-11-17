@@ -57,14 +57,14 @@ const iconButton = 'size-9'
       {{ $t('itemMenu.edit') }}
     </Button>
     <div class="flex items-center gap-0.5">
-    <Tooltip v-for="a in moveArchive" :key="a.key">
-      <TooltipTrigger as-child>
-        <Button variant="outline" size="icon" :class="iconButton" :aria-label="$t(a.label)" :disabled="locked" @click="run(a.key)">
-          <component :is="a.icon" aria-hidden="true" />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{{ $t(a.label) }}</TooltipContent>
-    </Tooltip>
+      <Tooltip v-for="a in moveArchive" :key="a.key">
+        <TooltipTrigger as-child>
+          <Button variant="outline" size="icon" :class="iconButton" :aria-label="$t(a.label)" :disabled="locked" @click="run(a.key)">
+            <component :is="a.icon" aria-hidden="true" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{{ $t(a.label) }}</TooltipContent>
+      </Tooltip>
     </div>
   </div>
 </template>

@@ -142,14 +142,14 @@ export function registerPhotoTools(server: McpServer, ctx: ToolContext): void {
 const attributeArg = z.object({
   attribute: z.string().describe('An existing attribute (id or name), or the name of a new one when kind is given.'),
   value: z.string().optional().describe('The item\'s own value, shared by all its variants.'),
-  axis: z.boolean().optional().describe('true: variant attribute, each line gives its own value.'),
-  kind: z.enum(['number', 'list', 'text']).optional().describe('Only for a NEW attribute. A name that exists is refused: use the existing attribute without kind.'),
+  axis: z.boolean().optional().describe('true: variant attribute, each line gives its own value (so no value here).'),
+  kind: z.enum(['number', 'list', 'text']).optional().describe('Only for a NEW attribute. A name that exists in stock is refused: use the existing attribute without kind. Declaring again an attribute this draft made (same name) changes it.'),
   unit: z.string().optional().describe('new number: the unit symbol, like "Ω" or "V".'),
   siPrefixes: z.boolean().optional().describe('new number: values may take k, M, µ, ... prefixes.'),
   options: z.array(z.string()).optional().describe('new list: the choices, in order.'),
   pinned: z.boolean().optional().describe('new: show in lists (at most two attributes of an inventory).'),
 })
-const tagArg = z.union([z.string(), z.object({ name: z.string(), color: z.string().optional().describe('#RRGGBB, for a new tag.') })])
+const tagArg = z.union([z.string(), z.object({ name: z.string(), color: z.string().optional().describe('#RRGGBB, for a NEW tag only: a tag that already exists (in stock or in this draft) keeps its colour and this one is ignored.') })])
 const unitArg = z.union([
   z.string(),
   z.object({
@@ -159,7 +159,7 @@ const unitArg = z.union([
   }),
 ])
 const valueArg = z.object({ attribute: z.string().describe('An existing list attribute (id or name).'), value: z.string() })
-const addValues = z.array(valueArg).optional().describe('Values to add to existing list attributes; a line or item must use them. The list may not have them already (any case).')
+const addValues = z.array(valueArg).optional().describe('Values to add to list attributes (existing, or one this draft declares); a line or item must use them. The list may not have them already (any case).')
 const declarations = {
   unit: unitArg.optional().describe('An existing unit (key, symbol or name) or a new one {name, symbol, prefixes}; "pcs" by default.'),
   attributes: z.array(attributeArg).optional().describe('Attributes of the item: existing by id or name, or new with kind.'),

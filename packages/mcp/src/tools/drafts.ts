@@ -37,6 +37,7 @@ import {
   withItemTag,
   withItemUnit,
   withLine,
+  withNewAttribute,
   withNewFolder,
   withNewItem,
   withoutNewFolder,
@@ -206,7 +207,7 @@ function resolveUnitKey(s: InventorySnapshot, draft: IntakeDraftContent, text: s
   if (wanted === '') return 'pcs'
   const choices = [...unitChoices(s), ...(draft.newUnits ?? []).map((u) => ({ key: customUnitKey(u.id), name: u.name, symbol: u.symbol, prefixPowers: u.prefixPowers }))]
   const hit =
-    choices.find((u) => u.key === wanted) ?? choices.find((u) => u.symbol === wanted) ?? choices.find((u) => same(u.key, wanted) || same(u.symbol, wanted) || same(u.name, wanted))
+    choices.find((u) => u.key === wanted) ?? choices.find((u) => u.symbol === wanted) ?? choices.find((u) => (u.key.startsWith('custom:') && same(u.key, wanted)) || same(u.name, wanted))
   if (!hit) throw new ToolError(`No unit "${wanted}". Units: ${choices.map((u) => u.symbol).join(', ')}. A new unit is declared as {name, symbol, prefixes}.`)
   return hit.key
 }
@@ -393,20 +394,32 @@ interface Staged {
   value: string
 }
 
-/** The draft with the values added to the lists of existing attributes; refuses a list that has the value (no case), a non-list and a draft attribute. */
+/** The draft with the values added to lists; a value of an existing list is staged (kept until a line or item uses it), one of a list this draft declares is appended to its options; refuses a list that has the value (no case) and a non-list. */
 function stageValues(s: InventorySnapshot, draft: IntakeDraftContent, list: ValueArg[] | undefined, staged: Staged[], label: string): IntakeDraftContent {
   let out = draft
   for (const v of list ?? []) {
     const a = resolveAttribute(draftAttributes(s, out), v.attribute ?? '')
-    const own = s.attributes.find((x) => x.id === a.id)
-    if (!own) throw new ToolError(`"${a.name}" is made by this draft: give its options when you declare it (kind: "list", options).`)
-    if (own.kind !== 'enum') throw new ToolError(`"${own.name}" is not a list attribute (it is ${own.kind === 'number' ? 'a number' : 'a text'}): values are added to lists only.`)
     const value = String(v.value ?? '').trim()
-    const have = own.options.find((o) => same(o, value))
-    if (have !== undefined) throw new ToolError(`The list "${own.name}" (id ${own.id}) already has "${have}": use it as it is, do not add it.`)
-    out = failed(withAddedOption(out, s, own.id, value), s, out)
-    staged.push({ label, attributeId: own.id, name: own.name, value })
+    const own = s.attributes.find((x) => x.id === a.id)
+    const mine = own ? undefined : (out.newAttributes ?? []).find((x) => x.id === a.id)
+    const target = own ?? mine!
+    if (target.kind !== 'enum') throw new ToolError(`"${target.name}" is not a list attribute (it is ${target.kind === 'number' ? 'a number' : 'a text'}): values are added to lists only.`)
+    const have = target.options.find((o) => same(o, value))
+    if (have !== undefined) throw new ToolError(`The list "${target.name}" (id ${target.id}) already has "${have}": use it as it is, do not add it.`)
+    if (mine) {
+      out = failed(withNewAttribute(out, s, { ...mine, options: [...mine.options, value] }), s, out)
+      continue
+    }
+    out = failed(withAddedOption(out, s, a.id, value), s, out)
+    staged.push({ label, attributeId: a.id, name: a.name, value })
   }
+  return out
+}
+
+/** The staged values put back: building an item or a line prunes the ones no line uses yet, and the next step still needs them. */
+function restage(s: InventorySnapshot, draft: IntakeDraftContent, staged: Staged[]): IntakeDraftContent {
+  let out = draft
+  for (const x of staged) out = failed(withAddedOption(out, s, x.attributeId, x.value), s, out)
   return out
 }
 
@@ -436,9 +449,14 @@ function placeItem(a: { s: InventorySnapshot; draft: IntakeDraftContent; base: D
   if (icon !== undefined) item.icon = icon
   const color = colorOf(decl.color)
   if (color !== undefined) item.color = color
-  let unit: { name: string; symbol: string; prefixPowers: number[] } | null = null
+  let unit: { id?: Id; name: string; symbol: string; prefixPowers: number[] } | null = null
   if (typeof decl.unit === 'string') item.unitKey = resolveUnitKey(s, draft, decl.unit)
-  else if (decl.unit) unit = { name: decl.unit.name ?? '', symbol: decl.unit.symbol ?? '', prefixPowers: prefixPowersOf(decl.unit.prefixes) }
+  else if (decl.unit) {
+    const uname = (decl.unit.name ?? '').trim()
+    // A unit this draft has under that name is the one being declared again (its symbol or prefixes may be corrected).
+    const mine = (draft.newUnits ?? []).find((u) => same(u.name, uname))
+    unit = { ...(mine ? { id: mine.id } : {}), name: decl.unit.name ?? '', symbol: decl.unit.symbol ?? '', prefixPowers: prefixPowersOf(decl.unit.prefixes) }
+  }
 
   const defs: { def: DraftNewAttribute; axis: boolean; value: string | null }[] = []
   if (decl.attributes !== undefined) {
@@ -451,9 +469,12 @@ function placeItem(a: { s: InventorySnapshot; draft: IntakeDraftContent; base: D
         if (seen.has(label.toLowerCase())) throw new ToolError(`Attribute "${label}" is listed twice.`)
         seen.add(label.toLowerCase())
       }
+      if (x.axis === true && field(x.value) !== null) throw new ToolError(`Attribute "${x.attribute ?? ''}" is a variant attribute (axis: true): each line gives its value, so the item has none. Drop value, or drop axis.`)
       if (x.kind !== undefined) {
         once(x.attribute ?? '')
-        defs.push({ def: newAttributeOf(mint(`${a.key}:attr:${k}`), x), axis: x.axis === true, value: field(x.value) })
+        // An attribute this draft declares (same name, no case) is declared again: the same one, changed.
+        const mine = (draft.newAttributes ?? []).find((n) => same(n.name, (x.attribute ?? '').trim()))
+        defs.push({ def: newAttributeOf(mine?.id ?? mint(`${a.key}:attr:${k}`), x), axis: x.axis === true, value: field(x.value) })
         return
       }
       const found = resolveAttribute(known, x.attribute ?? '')
@@ -493,7 +514,7 @@ function placeItem(a: { s: InventorySnapshot; draft: IntakeDraftContent; base: D
   })
   const tagIds = decl.tags === undefined ? placed.tagIds : [...new Set(typedTags)]
   out = { ...out, newItems: out.newItems.map((n) => (n.id === item.id ? { ...placed, attributes, tagIds } : n)) }
-  return stageValues(s, out, decl.addValues, a.staged, a.label)
+  return restage(s, stageValues(s, out, decl.addValues, a.staged, a.label), a.staged)
 }
 
 /** Changes a draft and tells which of its names are new, with the names they look like. */
@@ -571,7 +592,7 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
           if (!existing) throw new ToolError(`No item "${ref}": use an item id from search, the id of a new item of this intake, or the ref of a new item of this call.`)
           if (itemArchived(s, existing)) throw new ToolError(`"${existing.name}" is archived.`)
         }
-        const working = stageValues(s, next, l.addValues, staged, `line ${i + 1}`)
+        const working = stageValues(s, restage(s, next, staged), l.addValues, staged, `line ${i + 1}`)
         const attrs = draftAttributes(s, working)
         const itemId = newItem?.id ?? existing!.id
         const axes = axesOf(s, attrs, newItem, itemId)
@@ -603,7 +624,7 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
         )
         if ('errorKey' in built) throw new ToolError(refusal(built.errorKey, built.params, s, working))
         if (field(l.description) !== null && built.line.variantDescription === undefined) throw new ToolError(NO_VARIANT)
-        next = withLine(working, built.line, built.newItem, built.newTags)
+        next = restage(s, withLine(working, built.line, built.newItem, built.newTags), staged)
       })
     })
     if (errors.length > 0) throw problems(errors)

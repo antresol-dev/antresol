@@ -336,3 +336,125 @@ describe('reading', () => {
     expect(done.created.appendedValues).toEqual([{ attribute: 'Package', values: ['0805'] }])
   })
 })
+
+describe('final review fixes', () => {
+  const lineOf = (item: string, pkg: string) => ({ item, values: { Package: pkg }, amount: '1' })
+
+  it('A: a value added at the item is kept for its lines, also across a second new item', async () => {
+    const f = await ctxOf()
+    const { cap } = await withPackage(f)
+    const id = await create(f)
+    const v = (await drafts.addIntakeLines(f.ctx, {
+      intake: id,
+      newItems: [
+        { ref: 'a', name: 'Cap A', folder: 'Passives', attributes: [{ attribute: 'Package', axis: true }], addValues: [{ attribute: 'Package', value: '0805' }] },
+        { ref: 'b', name: 'Cap B', folder: 'Passives', attributes: [{ attribute: 'Package', axis: true }] },
+      ],
+      lines: [lineOf('a', '0805'), lineOf('b', '0805'), lineOf(cap, '0805')],
+    })) as any
+    expect(v.lines).toHaveLength(3)
+    expect(v.addedValues).toEqual([{ attribute: 'Package', values: ['0805'], problem: null }])
+  })
+
+  it('B: a value added at the item is used by a line after another new item was made', async () => {
+    const f = await ctxOf()
+    await withPackage(f)
+    const id = await create(f)
+    await drafts.addIntakeLines(f.ctx, {
+      intake: id,
+      newItems: [
+        { ref: 'a', name: 'Cap A', folder: 'Passives', attributes: [{ attribute: 'Package', axis: true }], addValues: [{ attribute: 'Package', value: '0805' }] },
+        { ref: 'b', name: 'Cap B', folder: 'Passives', withoutLines: true },
+      ],
+      lines: [lineOf('a', '0805')],
+    })
+    expect((await get(f, id)).lines).toHaveLength(1)
+  })
+
+  it('C: a value declared by line 1 is used by line 2', async () => {
+    const f = await ctxOf()
+    const { cap } = await withPackage(f)
+    const id = await create(f)
+    const v = (await drafts.addIntakeLines(f.ctx, {
+      intake: id,
+      newItems: [{ ref: 'a', name: 'Cap A', folder: 'Passives', attributes: [{ attribute: 'Package', axis: true }] }],
+      lines: [{ ...lineOf(cap, '0805'), addValues: [{ attribute: 'Package', value: '0805' }] }, lineOf('a', '0805')],
+    })) as any
+    expect(v.lines).toHaveLength(2)
+  })
+
+  it('an added value nothing uses is still refused', async () => {
+    const f = await ctxOf()
+    const { cap } = await withPackage(f)
+    const id = await create(f)
+    const m = await refused(drafts.addIntakeLines(f.ctx, { intake: id, lines: [{ item: cap, values: { Package: '0603' }, addValues: [{ attribute: 'Package', value: '0805' }], amount: '1' }] }))
+    expect(m).toMatch(/"0805" was added to the list "Package" but nothing/)
+  })
+
+  it('D: two new items may both declare the same new attribute', async () => {
+    const f = await ctxOf()
+    const id = await create(f)
+    const v = (await drafts.addIntakeLines(f.ctx, {
+      intake: id,
+      newItems: [
+        { ref: 'a', name: 'Res A', withoutLines: true, attributes: [{ attribute: 'Tolerance', kind: 'text' }] },
+        { ref: 'b', name: 'Res B', withoutLines: true, attributes: [{ attribute: 'Tolerance', kind: 'text' }] },
+      ],
+    })) as any
+    expect(v.newAttributes).toHaveLength(1)
+    expect(v.newItems.map((n: any) => n.attributes.map((a: any) => a.name))).toEqual([['Tolerance'], ['Tolerance']])
+  })
+
+  it('E: an attribute the item declared can be declared again with another option while a line uses it', async () => {
+    const f = await ctxOf()
+    const id = await create(f)
+    const v = (await drafts.addIntakeLines(f.ctx, {
+      intake: id,
+      newItems: [{ ref: 'a', name: 'Shirt', attributes: [{ attribute: 'Size', kind: 'list', options: ['S', 'M'], axis: true }] }],
+      lines: [{ item: 'a', values: { Size: 'S' }, amount: '1' }],
+    })) as any
+    const u = (await drafts.updateNewItem(f.ctx, { intake: id, item: v.newItems[0].id, attributes: [{ attribute: 'Size', kind: 'list', options: ['S', 'M', 'XL'], axis: true }] })) as any
+    expect(u.newAttributes).toHaveLength(1)
+    expect(u.newAttributes[0].options).toEqual(['S', 'M', 'XL'])
+    expect(u.lines[0].values).toEqual(v.lines[0].values)
+    const bad = await refused(drafts.updateNewItem(f.ctx, { intake: id, item: v.newItems[0].id, attributes: [{ attribute: 'Size', kind: 'list', options: ['M'], axis: true }] }))
+    expect(bad).toMatch(/line 1/)
+  })
+
+  it('H: a unit the draft made can be corrected by declaring it again', async () => {
+    const f = await ctxOf()
+    const id = await create(f)
+    const v = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Wire', withoutLines: true, unit: { name: 'Reel', symbol: 'rl' } }] })) as any
+    const u = (await drafts.updateNewItem(f.ctx, { intake: id, item: v.newItems[0].id, unit: { name: 'Reel', symbol: 'reel', prefixes: ['k'] } })) as any
+    expect(u.newUnits).toEqual([expect.objectContaining({ name: 'Reel', symbol: 'reel', prefixes: ['k'] })])
+  })
+
+  it('addValues appends to a list attribute the draft declares', async () => {
+    const f = await ctxOf()
+    const id = await create(f)
+    const v = (await drafts.addIntakeLines(f.ctx, {
+      intake: id,
+      newItems: [{ ref: 'a', name: 'Shirt', attributes: [{ attribute: 'Size', kind: 'list', options: ['S'], axis: true }] }],
+      lines: [{ item: 'a', values: { Size: 'L' }, addValues: [{ attribute: 'Size', value: 'L' }], amount: '1' }],
+    })) as any
+    expect(v.newAttributes[0].options).toEqual(['S', 'L'])
+    const m = await refused(drafts.addIntakeLines(f.ctx, { intake: id, lines: [{ item: v.newItems[0].id, values: { Size: 'L' }, addValues: [{ attribute: 'Size', value: 'l' }], amount: '1' }] }))
+    expect(m).toMatch(/already has "L"/)
+  })
+
+  it('M1: a unit symbol matches exactly; key and name match without case', async () => {
+    const f = await ctxOf()
+    const id = await create(f)
+    const unitOf = async (unit: string) => ((await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: `T ${unit}`, withoutLines: true, unit }] })) as any).newItems.at(-1).unit
+    expect(await unitOf('m')).toBe('m')
+    expect(await unitOf('meters')).toBe('m')
+    await refused(drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Bad M', withoutLines: true, unit: 'M' }] }))
+  })
+
+  it('M4: axis with a value is refused', async () => {
+    const f = await ctxOf()
+    const id = await create(f)
+    const m = await refused(drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'X', withoutLines: true, attributes: [{ attribute: 'Size', kind: 'text', axis: true, value: 'S' }] }] }))
+    expect(m).toMatch(/variant attribute/)
+  })
+})

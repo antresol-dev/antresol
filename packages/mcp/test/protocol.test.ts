@@ -32,15 +32,21 @@ describe('protocol', () => {
     const tools = (await client.listTools()).tools
     const names = tools.map((t) => t.name)
     expect(names).toEqual(
-      expect.arrayContaining(['create_folder', 'update_folder', 'remove_folder', 'create_attribute', 'update_attribute', 'remove_attribute', 'remove_new_item', 'update_new_item', 'add_intake_lines']),
+      expect.arrayContaining(['create_folder', 'update_folder', 'remove_folder', 'remove_new_item', 'update_new_item', 'add_intake_lines']),
     )
     const add = tools.find((t) => t.name === 'add_intake_lines')!
     const item = (add.inputSchema.properties as any).newItems.items.properties
     expect(Object.keys(item)).toEqual(expect.arrayContaining(['description', 'photo', 'withoutLines']))
     expect((add.inputSchema as any).required).not.toContain('lines')
     expect(JSON.stringify(tools.map((t) => t.inputSchema))).not.toContain('replacePhoto')
-    const attr = tools.find((t) => t.name === 'create_attribute')!
-    expect((attr.inputSchema.properties as any).kind.enum).toEqual(['number', 'list', 'text'])
+    for (const gone of ['create_attribute', 'update_attribute', 'remove_attribute']) expect(names).not.toContain(gone)
+    expect(Object.keys(item)).toEqual(expect.arrayContaining(['icon', 'color', 'unit', 'attributes', 'tags', 'addValues']))
+    const attr = item.attributes.items.properties
+    expect(attr.kind.enum).toEqual(['number', 'list', 'text'])
+    expect(Object.keys(attr)).toContain('pinned')
+    expect(Object.keys((add.inputSchema.properties as any).lines.items.properties)).toEqual(expect.arrayContaining(['addValues', 'description']))
+    expect(Object.keys(tools.find((t) => t.name === 'create_folder')!.inputSchema.properties as object)).toContain('icon')
+    expect(Object.keys(tools.find((t) => t.name === 'update_folder')!.inputSchema.properties as object)).toContain('icon')
     const result = (await client.callTool({ name: 'create_folder', arguments: { intake: 'nope', name: 'x' } })) as any
     expect(result.isError).toBe(true)
   })
@@ -120,7 +126,7 @@ describe('protocol', () => {
     expect(got.messages).toHaveLength(1)
     expect(got.messages[0]!.role).toBe('user')
     const text = (got.messages[0]!.content as { text: string }).text
-    for (const word of ['/x', 'get_overview', 'list_photos', 'view_photos', 'search', 'add_intake_lines', 'onlyNew: true', '`photo`', 'never carries a photo', 'keep showing as new', 'create_folder', 'create_attribute', 'One photo']) expect(text).toContain(word)
+    for (const word of ['/x', 'get_overview', 'list_photos', 'view_photos', 'search', 'add_intake_lines', 'onlyNew: true', '`photo`', 'never carries a photo', 'keep showing as new', 'create_folder', 'similar', 'addValues', 'only under the item', 'One photo']) expect(text).toContain(word)
     const appended = await client.getPrompt({ name: 'intake_from_photos', arguments: { intake: 'abc' } })
     expect((appended.messages[0]!.content as { text: string }).text).toContain('abc')
   })

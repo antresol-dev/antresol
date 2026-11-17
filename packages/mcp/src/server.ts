@@ -12,7 +12,7 @@ import * as read from './tools/read'
 export const ACTOR_FALLBACK = 'AI · MCP'
 export const SERVER_NAME = 'antresol'
 export const SERVER_INSTRUCTIONS =
-  'Antresol is a home inventory. These tools only read it and prepare intake drafts (receipts of purchased items, with the folders, attributes and items they need); nothing is added to the stock until the person reviews and commits the intake in the Antresol app. Start with get_overview to learn the inventories, folders, attributes and units. Search before proposing a new item, and prefer topping up an existing item or adding a value to it over a new item. Do not guess: put doubts in the chat, not in the draft. The person commits the intake in the app.'
+  'Antresol is a home inventory. These tools only read it and prepare intake drafts (receipts of purchased items, with the folders, items and everything the items need: attributes, tags, units, list values); nothing is added to the stock until the person reviews and commits the intake in the Antresol app. Start with get_overview to learn the inventories, folders, attributes (with their list values), tags and units. Search before proposing a new item, and prefer topping up an existing item or adding a value to it over a new item. Every write answers with `similar`: names that look like each new name; check it, and use the existing one when it is the same thing. An exact duplicate (same name after trimming, any case) is refused. Attributes, tags and units are declared only under the item that needs them. Do not guess: put doubts in the chat, not in the draft. The person commits the intake in the app.'
 
 /** A tool's handler as the SDK calls it: the result as JSON text, an error as `isError` text without secrets. */
 export function handler<A>(
@@ -40,7 +40,7 @@ export function registerReadTools(server: McpServer, ctx: ToolContext): void {
     'get_overview',
     {
       description:
-        'Call first. Lists the inventories (with currency), folders with paths and item counts, attributes with kind (number, list, text), units and number rules, tags, units, and where photos are looked for.',
+        'Call first. Lists the inventories (with currency), folders with paths and item counts, attributes with kind (number, list, text) and the values of list attributes, tags (with colours), units with the prefixes they take, and where photos are looked for.',
       inputSchema: { inventory },
       annotations: READ_ONLY,
     },
@@ -97,7 +97,7 @@ export function registerReadTools(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
     'get_intake',
     {
-      description: 'One intake in full: header, folders, attributes and items it would create (with "looks like" warnings and problems), and lines with their problems. A committed intake also lists what it created.',
+      description: 'One intake in full: header, and what it would create: folders (with icons), units, attributes (pinned or not), tags (with colours), values added to existing lists, and items (with icon and colour, "looks like" warnings and problems), and lines with their problems and variant descriptions. A committed intake also lists what it created.',
       inputSchema: { intake: z.string().describe('Intake id, from list_intakes.') },
       annotations: READ_ONLY,
     },
@@ -139,6 +139,36 @@ export function registerPhotoTools(server: McpServer, ctx: ToolContext): void {
   )
 }
 
+const attributeArg = z.object({
+  attribute: z.string().describe('An existing attribute (id or name), or the name of a new one when kind is given.'),
+  value: z.string().optional().describe('The item\'s own value, shared by all its variants.'),
+  axis: z.boolean().optional().describe('true: variant attribute, each line gives its own value.'),
+  kind: z.enum(['number', 'list', 'text']).optional().describe('Only for a NEW attribute. A name that exists is refused: use the existing attribute without kind.'),
+  unit: z.string().optional().describe('new number: the unit symbol, like "Ω" or "V".'),
+  siPrefixes: z.boolean().optional().describe('new number: values may take k, M, µ, ... prefixes.'),
+  options: z.array(z.string()).optional().describe('new list: the choices, in order.'),
+  pinned: z.boolean().optional().describe('new: show in lists (at most two attributes of an inventory).'),
+})
+const tagArg = z.union([z.string(), z.object({ name: z.string(), color: z.string().optional().describe('#RRGGBB, for a new tag.') })])
+const unitArg = z.union([
+  z.string(),
+  z.object({
+    name: z.string(),
+    symbol: z.string(),
+    prefixes: z.array(z.union([z.string(), z.number()])).optional().describe('Prefixes amounts may take: symbols like "k", "M", "m", "µ" or powers of ten like 3, -3.'),
+  }),
+])
+const valueArg = z.object({ attribute: z.string().describe('An existing list attribute (id or name).'), value: z.string() })
+const addValues = z.array(valueArg).optional().describe('Values to add to existing list attributes; a line or item must use them. The list may not have them already (any case).')
+const declarations = {
+  unit: unitArg.optional().describe('An existing unit (key, symbol or name) or a new one {name, symbol, prefixes}; "pcs" by default.'),
+  attributes: z.array(attributeArg).optional().describe('Attributes of the item: existing by id or name, or new with kind.'),
+  tags: z.array(tagArg).optional().describe('Tag ids or names; an unknown name is a new tag, {name, color} gives it a colour.'),
+  icon: z.string().optional().describe('A Lucide icon name in kebab-case, like "package" or "cable".'),
+  color: z.string().optional().describe('#RRGGBB.'),
+  addValues,
+}
+
 const WRITE = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false } as const
 const intakeId = z.string().describe('Intake id, from list_intakes or create_intake.')
 
@@ -178,7 +208,7 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
     'add_intake_lines',
     {
       description:
-        'Add receipt lines to an intake draft, all or none: if any line is wrong nothing is saved and every problem is listed. Search first (search) and top up what already exists: add a value ("4k7") to an existing item before creating a new item. A line is an item (id from search, or the id or ref of a new item), its values for the item\'s variant attributes (by attribute name or id), an amount and optionally the price paid for the whole line and a link. Write amounts, values and prices as a person would: "10", "4k7", "2.5 m", "35.50". To bring something that is not in the inventory, describe it in newItems (ref, name, folder, unit, attributes, tags) and point lines at its ref; an attribute with axis: true makes each line give its own value. Unknown tag names become new tags. Folders and attributes the items need that are not in stock yet are made first with create_folder and create_attribute (the draft\'s own folders and attributes can then be named in folder paths and attribute names). A new item may carry a description and its own photo (path from list_photos). A line may carry a photo only when it makes a new item or a new variant, not when it tops up stock that exists; a second line that makes the same new variant is refused (edit the first line). Pictures are uploaded before anything is saved.',
+        'Add receipt lines to an intake draft, all or none: if any line is wrong nothing is saved and every problem is listed. Search first (search) and top up what already exists: add a value ("4k7") to an existing item before creating a new item. A line is an item (id from search, or the id or ref of a new item), its values for the item\'s variant attributes (by attribute name or id), an amount and optionally the price paid for the whole line and a link. Write amounts, values and prices as a person would: "10", "4k7", "2.5 m", "35.50". To bring something that is not in the inventory, describe it in newItems (ref, name, folder, icon, color, unit, attributes, tags) and point lines at its ref; an attribute with axis: true makes each line give its own value. Everything a new item needs is declared under it: an existing attribute by name or id, or a new one with kind (list: options; number: unit, siPrefixes; pinned shows it in lists); tags by name (a new one may have a color); a unit by symbol, or a new unit {name, symbol, prefixes}. A line (of an existing item too) may add values to an existing list attribute with addValues [{attribute, value}] and use them at once, and may carry a description of the new variant it creates. Folders are made first with create_folder (then named by path). Check the answer\'s `similar` for each new name and the overview before creating: prefer what exists, never rely on case, spaces or plurals. A name an item of the same folder already has (even an archived one) is refused and the existing one is named. A new item may carry a description and its own photo (path from list_photos). A line may carry a photo only when it makes a new item or a new variant, not when it tops up stock that exists; a second line that makes the same new variant is refused (edit the first line). Pictures are uploaded before anything is saved.',
       inputSchema: {
         intake: intakeId,
         newItems: z
@@ -187,11 +217,7 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
               ref: z.string().describe('A short name for this call; lines use it as "item".'),
               name: z.string(),
               folder: z.string().optional().describe('Folder id or path like "Passives/Resistors"; root when left out.'),
-              unit: z.string().optional().describe('Unit key or symbol, "pcs" by default.'),
-              attributes: z
-                .array(z.object({ attribute: z.string().describe('Attribute id or name.'), value: z.string().optional(), axis: z.boolean().optional() }))
-                .optional(),
-              tags: z.array(z.string()).optional().describe('Tag ids or names.'),
+              ...declarations,
               description: z.string().optional().describe('A line or two about the item.'),
               photo: z.string().optional().describe('The item\'s own picture: a path from list_photos. One per new item; it goes to the item\'s card.'),
               withoutLines: z.boolean().optional().describe('true: make the item with no line, so with no stock yet.'),
@@ -207,6 +233,8 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
             price: z.string().optional().describe('Total price of the line, like "35.50".'),
             url: z.string().optional().describe('Link to the product, https://...'),
             photo: z.string().optional().describe('A picture to attach to the line: a path from list_photos (absolute or relative to the photos folder). It is uploaded once to the photo store, whatever line it is used on.'),
+            addValues,
+            description: z.string().optional().describe('A description of the variant this line creates (not for a line that tops up stock).'),
           }),
           )
           .optional()
@@ -219,7 +247,7 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
     'update_intake_line',
     {
-      description: 'Change one line of an intake draft: only what is passed changes. An empty price or url clears it; photo sets or (empty) removes the line\'s picture.',
+      description: 'Change one line of an intake draft: only what is passed changes. An empty price or url clears it; photo sets or (empty) removes the line\'s picture; addValues adds values to existing list attributes; description sets the description of the variant the line creates.',
       inputSchema: {
         intake: intakeId,
         line: z.string().describe('Line id, from get_intake.'),
@@ -228,6 +256,8 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
         price: z.string().optional(),
         url: z.string().optional(),
         photo: z.string().optional().describe('A picture path from list_photos to attach to the line (uploaded once); an empty text removes the line\'s photo.'),
+        addValues,
+        description: z.string().optional().describe('The description of the variant this line creates; an empty text clears it.'),
       },
       annotations: { ...WRITE, idempotentHint: true },
     },
@@ -246,16 +276,14 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
     'update_new_item',
     {
       description:
-        'Change an item the draft will create (its name, description, photo, folder, unit, attributes or tags). Only what is passed changes; attributes and tags replace the lists; an empty photo removes the picture. Not for items already in stock.',
+        'Change an item the draft will create (its name, description, photo, folder, icon, color, unit, attributes or tags). Only what is passed changes; attributes and tags replace the lists and may declare new ones as in add_intake_lines; an empty photo, icon or color removes it. Refused when the name is taken in the folder. Not for items already in stock.',
       inputSchema: {
         intake: intakeId,
         item: z.string().describe('Id of the new item, from get_intake.'),
         name: z.string().optional(),
         description: z.string().optional().describe('An empty text clears it.'),
         folder: z.string().optional().describe('Folder id or path, also a new folder of the draft.'),
-        unit: z.string().optional(),
-        attributes: z.array(z.object({ attribute: z.string(), value: z.string().optional(), axis: z.boolean().optional() })).optional(),
-        tags: z.array(z.string()).optional(),
+        ...declarations,
         photo: z.string().optional().describe('A picture path from list_photos (uploaded once); an empty text removes the item\'s photo.'),
       },
       annotations: { ...WRITE, idempotentHint: true },
@@ -275,11 +303,12 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
     'create_folder',
     {
       description:
-        'Add a folder to an intake draft; it is made when the person commits. Check get_overview and search first: use a folder that already fits. A name the parent already has is refused and the existing folder is named. Items then use it by path in "folder".',
+        'Add a folder to an intake draft; it is made when the person commits. Check get_overview and search first: use a folder that already fits. A name the parent already has (an archived folder too) is refused and the existing folder is named; the answer lists `similar` folder names. Items then use it by path in "folder".',
       inputSchema: {
         intake: intakeId,
         name: z.string(),
         parent: z.string().optional().describe('Parent folder: id or path, in stock or a new folder of this draft; the root when left out.'),
+        icon: z.string().optional().describe('A Lucide icon name in kebab-case, like "wrench".'),
       },
       annotations: WRITE,
     },
@@ -294,6 +323,7 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
         folder: z.string().describe('The new folder: id or path, from get_intake.'),
         name: z.string().optional(),
         parent: z.string().optional().describe('Id or path of the new parent; empty for the root.'),
+        icon: z.string().optional().describe('A Lucide icon name; an empty text removes it.'),
       },
       annotations: { ...WRITE, idempotentHint: true },
     },
@@ -307,49 +337,6 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
       annotations: { ...WRITE, destructiveHint: true, idempotentHint: true },
     },
     writer(ctx, drafts.removeFolder),
-  )
-  server.registerTool(
-    'create_attribute',
-    {
-      description:
-        'Add an attribute to an intake draft; it is made when the person commits. Check get_overview first: use an attribute that already fits. A name that is taken is refused and the existing attribute is named. New items use it by name (as a shared value or a variant attribute).',
-      inputSchema: {
-        intake: intakeId,
-        name: z.string(),
-        kind: z.enum(['number', 'list', 'text']),
-        unit: z.string().optional().describe('number: the unit symbol, like "Ω" or "V".'),
-        siPrefixes: z.boolean().optional().describe('number: values may take k, M, µ, ... prefixes.'),
-        options: z.array(z.string()).optional().describe('list: the choices, in order.'),
-      },
-      annotations: WRITE,
-    },
-    writer(ctx, drafts.createAttribute),
-  )
-  server.registerTool(
-    'update_attribute',
-    {
-      description: 'Change an attribute the draft will create (not one already in stock). Only what is passed changes.',
-      inputSchema: {
-        intake: intakeId,
-        attribute: z.string().describe('The new attribute: id or name, from get_intake.'),
-        name: z.string().optional(),
-        kind: z.enum(['number', 'list', 'text']).optional(),
-        unit: z.string().optional(),
-        siPrefixes: z.boolean().optional(),
-        options: z.array(z.string()).optional(),
-      },
-      annotations: { ...WRITE, idempotentHint: true },
-    },
-    writer(ctx, drafts.updateAttribute),
-  )
-  server.registerTool(
-    'remove_attribute',
-    {
-      description: 'Remove an attribute the draft will create. Refused while a new item uses it.',
-      inputSchema: { intake: intakeId, attribute: z.string().describe('The new attribute: id or name, from get_intake.') },
-      annotations: { ...WRITE, destructiveHint: true, idempotentHint: true },
-    },
-    writer(ctx, drafts.removeAttribute),
   )
 }
 

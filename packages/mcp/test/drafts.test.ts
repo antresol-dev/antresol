@@ -94,7 +94,7 @@ describe('addIntakeLines', () => {
     const id = await create(f)
     const v = (await drafts.addIntakeLines(f.ctx, {
       intake: id,
-      newItems: [{ ref: 'r', name: 'Resistor 0.25 W', folder: 'Passives/Resistors', attributes: [{ attribute: 'Resistance', axis: true }] }],
+      newItems: [{ ref: 'r', name: 'Resistor 0.25 W', folder: 'Modules', attributes: [{ attribute: 'Resistance', axis: true }] }],
       lines: [
         { item: 'r', values: { Resistance: '100' }, amount: '10' },
         { item: 'r', values: { Resistance: '220' }, amount: '10' },
@@ -336,50 +336,59 @@ describe('draft folders and attributes', () => {
     const full = await drafts.removeFolder(f.ctx, { intake: id, folder: 'Tools' }).catch((e: unknown) => e)
     expect((full as Error).message).toMatch(/Move or remove/)
     expect(((await drafts.removeFolder(f.ctx, { intake: id, folder: 'Tools/Drills' })) as any).newFolders).toHaveLength(1)
-    const a = (await drafts.createAttribute(f.ctx, { intake: id, name: 'resistance', kind: 'number' }).catch((e: unknown) => e)) as Error
+    const a = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Thing', withoutLines: true, attributes: [{ attribute: 'resistance', kind: 'number' }] }] }).catch((e: unknown) => e)) as Error
     expect(a).toBeInstanceOf(ToolError)
     expect(a.message).toContain(f.ids.resistance)
     expect(a.message).toContain('Resistance')
   })
 
-  it('makes attributes of the three kinds; new items use them by name, also as an axis', async () => {
+  it('declares attributes of the three kinds under the item; a later item uses them by name, also as an axis', async () => {
     const f = await ctxOf()
     const id = await create(f)
-    let v = (await drafts.createAttribute(f.ctx, { intake: id, name: 'Voltage', kind: 'number', unit: 'V', siPrefixes: true })) as any
-    v = (await drafts.createAttribute(f.ctx, { intake: id, name: 'Package', kind: 'list', options: ['0603', ' 0805 ', ''] })) as any
-    v = (await drafts.createAttribute(f.ctx, { intake: id, name: 'Maker', kind: 'text', unit: 'ignored' })) as any
-    expect(v.newAttributes).toMatchObject([
-      { name: 'Voltage', kind: 'number', unit: 'V', siPrefixes: true, options: [], problem: null },
-      { name: 'Package', kind: 'list', unit: null, siPrefixes: false, options: ['0603', '0805'] },
-      { name: 'Maker', kind: 'text', unit: null },
-    ])
-    v = (await drafts.addIntakeLines(f.ctx, {
+    let v = (await drafts.addIntakeLines(f.ctx, {
       intake: id,
-      newItems: [{ ref: 'c', name: 'Cap', attributes: [{ attribute: 'Voltage', axis: true }, { attribute: 'Package', value: '0603' }] }],
+      newItems: [
+        {
+          ref: 'c',
+          name: 'Cap',
+          attributes: [
+            { attribute: 'Voltage', kind: 'number', unit: 'V', siPrefixes: true, axis: true },
+            { attribute: 'Package', kind: 'list', options: ['0603', ' 0805 ', ''], value: '0603' },
+            { attribute: 'Maker', kind: 'text', unit: 'ignored' },
+          ],
+        },
+      ],
       lines: [
         { item: 'c', values: { Voltage: '16' }, amount: '5' },
         { item: 'c', values: { Voltage: '25' }, amount: '5' },
       ],
     })) as any
+    expect(v.newAttributes).toMatchObject([
+      { name: 'Voltage', kind: 'number', unit: 'V', siPrefixes: true, options: [], problem: null },
+      { name: 'Package', kind: 'list', unit: null, siPrefixes: false, options: ['0603', '0805'] },
+      { name: 'Maker', kind: 'text', unit: null },
+    ])
     expect(v.lines.map((l: any) => l.values)).toEqual(['16 V', '25 V'])
     expect(v.newItems[0].attributes).toEqual([
       { name: 'Package', value: '0603', axis: false },
+      { name: 'Maker', value: null, axis: false },
       { name: 'Voltage', value: null, axis: true },
     ])
-    const inUse = await drafts.removeAttribute(f.ctx, { intake: id, attribute: 'Voltage' }).catch((e: unknown) => e)
-    expect((inUse as Error).message).toMatch(/uses this attribute/)
-    v = (await drafts.updateAttribute(f.ctx, { intake: id, attribute: 'Maker', name: 'Brand' })) as any
-    expect(v.newAttributes[2].name).toBe('Brand')
-    v = (await drafts.removeAttribute(f.ctx, { intake: id, attribute: 'Brand' })) as any
-    expect(v.newAttributes).toHaveLength(2)
-    await expect(drafts.updateAttribute(f.ctx, { intake: id, attribute: 'Resistance', name: 'x' })).rejects.toBeInstanceOf(ToolError)
+    // another item of the same call or draft uses them by name
+    v = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'd', name: 'Diode', withoutLines: true, attributes: [{ attribute: 'voltage', value: '5' }, { attribute: 'Package' }] }] })) as any
+    expect(v.newAttributes).toHaveLength(3)
+    // an attribute that no item has any more is not kept
+    const removed = (await drafts.removeNewItem(f.ctx, { intake: id, item: v.newItems[1].id })) as any
+    expect(removed.newAttributes).toHaveLength(3)
+    const gone = (await drafts.removeNewItem(f.ctx, { intake: id, item: v.newItems[0].id })) as any
+    expect(gone.newAttributes).toEqual([])
+    await expect(drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'x', name: 'X', withoutLines: true, attributes: [{ attribute: 'Nope' }] }] })).rejects.toBeInstanceOf(ToolError)
   })
 
   it('a second line making the same variant of a new item names the first line; an existing item works the same', async () => {
     const f = await ctxOf()
     const id = await create(f)
-    await drafts.createAttribute(f.ctx, { intake: id, name: 'Inductance', kind: 'number', unit: 'H', siPrefixes: true })
-    const args = { intake: id, newItems: [{ ref: 'l', name: 'Inductor', attributes: [{ attribute: 'Inductance', axis: true }] }] }
+    const args = { intake: id, newItems: [{ ref: 'l', name: 'Inductor', attributes: [{ attribute: 'Inductance', kind: 'number' as const, unit: 'H', siPrefixes: true, axis: true }] }] }
     await drafts.addIntakeLines(f.ctx, { ...args, lines: [{ item: 'l', values: { Inductance: '4.7 µH' }, amount: '3' }] })
     const draft = (await rawIntake(f, id)).draft!
     const err = (await drafts.addIntakeLines(f.ctx, { intake: id, lines: [{ item: draft.newItems[0]!.id, values: { Inductance: '4u7' }, amount: '1' }] }).catch((e: unknown) => e)) as Error
@@ -548,24 +557,22 @@ describe('problems an edit would leave behind', () => {
     const id = await create(f)
     expect(await refused(drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: '  ', withoutLines: true }] }))).toMatch(/Nothing was saved/)
     expect(await refused(drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'x'.repeat(201), withoutLines: true }] }))).toMatch(/Nothing was saved/)
-    await drafts.createAttribute(f.ctx, { intake: id, name: 'Capacity', kind: 'number', unit: 'F' })
+    const capacity = { attribute: 'Capacity', kind: 'number' as const, unit: 'F' }
     expect(
-      await refused(drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Cap', attributes: [{ attribute: 'Capacity', value: 'abc' }], withoutLines: true }] })),
+      await refused(drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Cap', attributes: [{ ...capacity, value: 'abc' }], withoutLines: true }] })),
     ).toMatch(/Nothing was saved/)
     expect((await get(f, id)).newItems).toHaveLength(0)
-    const ok = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Cap', attributes: [{ attribute: 'Capacity', value: '10' }], withoutLines: true }] })) as any
+    const ok = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Cap', attributes: [{ ...capacity, value: '10' }], withoutLines: true }] })) as any
     expect(ok.newItems).toHaveLength(1)
   })
 
-  it('update_new_item on an item with no lines is checked; update_attribute cannot break values in use', async () => {
+  it('update_new_item on an item with no lines is checked; a value that no longer fits is refused', async () => {
     const f = await ctxOf()
     const id = await create(f)
-    await drafts.createAttribute(f.ctx, { intake: id, name: 'Pack', kind: 'list', options: ['A', 'B'] })
-    const v = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Cap', attributes: [{ attribute: 'Pack', value: 'A' }], withoutLines: true }] })) as any
+    const v = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Cap', attributes: [{ attribute: 'Pack', kind: 'list', options: ['A', 'B'], value: 'A' }], withoutLines: true }] })) as any
     const itemId = v.newItems[0].id
     expect(await refused(drafts.updateNewItem(f.ctx, { intake: id, item: itemId, name: '' }))).toMatch(/Nothing was saved/)
-    expect(await refused(drafts.updateAttribute(f.ctx, { intake: id, attribute: 'Pack', options: ['C'] }))).toMatch(/Nothing was saved/)
-    expect(await refused(drafts.updateAttribute(f.ctx, { intake: id, attribute: 'Pack', kind: 'number' }))).toMatch(/Nothing was saved/)
+    expect(await refused(drafts.updateNewItem(f.ctx, { intake: id, item: itemId, attributes: [{ attribute: 'Pack', value: 'Z' }] }))).toMatch(/Nothing was saved/)
     const raw = (await rawIntake(f, id)).draft!
     expect(raw.newAttributes![0]!.options).toEqual(['A', 'B'])
     expect(raw.newItems[0]!.name).toBe('Cap')
@@ -574,8 +581,9 @@ describe('problems an edit would leave behind', () => {
   it('a list attribute needs options; archived folders are not offered', async () => {
     const f = await ctxOf()
     const id = await create(f)
-    expect(await refused(drafts.createAttribute(f.ctx, { intake: id, name: 'Pack', kind: 'list' }))).toMatch(/at least one option/)
-    expect(await refused(drafts.createAttribute(f.ctx, { intake: id, name: 'Pack', kind: 'list', options: [' '] }))).toMatch(/at least one option/)
+    const pack = (options?: string[]) => drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Cap', withoutLines: true, attributes: [{ attribute: 'Pack', kind: 'list', options }] }] })
+    expect(await refused(pack())).toMatch(/at least one option/)
+    expect(await refused(pack([' ']))).toMatch(/at least one option/)
     await f.apply({ type: 'archive', target: 'folder', id: f.ids.modules, archiveId: newId() })
     f.source.refresh()
     expect(await refused(drafts.createFolder(f.ctx, { intake: id, name: 'Sub', parent: 'Modules' }))).toMatch(/No folder "Modules"/)
@@ -643,10 +651,9 @@ describe('a committed intake tells what it created', () => {
     const f = await ctxOf()
     const id = await create(f)
     await drafts.createFolder(f.ctx, { intake: id, name: 'Coils', parent: 'Passives' })
-    await drafts.createAttribute(f.ctx, { intake: id, name: 'Core', kind: 'list', options: ['Air', 'Ferrite'] })
     await drafts.addIntakeLines(f.ctx, {
       intake: id,
-      newItems: [{ ref: 'c', name: 'Choke', folder: 'Passives/Coils', tags: ['magnetic'], attributes: [{ attribute: 'Core', value: 'Air' }] }],
+      newItems: [{ ref: 'c', name: 'Choke', folder: 'Passives/Coils', tags: ['magnetic'], attributes: [{ attribute: 'Core', kind: 'list', options: ['Air', 'Ferrite'], value: 'Air' }] }],
       lines: [{ item: 'c', amount: '3' }],
     })
     const intake = await rawIntake(f, id)

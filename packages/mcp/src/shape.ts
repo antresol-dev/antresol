@@ -1,7 +1,12 @@
 import {
   BUILTIN_UNITS,
+  customUnitKey,
   formatAmount,
   draftAttribute,
+  intakeUnits,
+  SI_PREFIXES,
+  MAX_PINNED_ATTRIBUTES,
+  type CustomUnit,
   formatAttributeValue,
   folderPath as coreFolderPath,
   itemAxes,
@@ -38,15 +43,19 @@ export function draftAttributes(s: InventorySnapshot, draft: IntakeDraftContent)
   return [...s.attributes, ...(draft.newAttributes ?? []).map((a) => draftAttribute(a, s.inventory.id))]
 }
 
-/** The unit's symbol; a unit that no longer resolves shows its key. */
-export function unitSymbol(s: InventorySnapshot, unitKey: string): string {
-  return resolveUnit(unitKey, s.units)?.symbol ?? unitKey
+/** The unit's symbol; a unit that no longer resolves shows its key. `units`: the stock's custom units, or with the draft's own. */
+export function unitSymbol(s: InventorySnapshot, unitKey: string, units: CustomUnit[] = s.units): string {
+  return resolveUnit(unitKey, units)?.symbol ?? unitKey
 }
 
 /** "40 pcs", "1.5 k", "2.5 m": the quantity as the app shows it. */
-export function amountText(s: InventorySnapshot, q: Quantity, unitKey: string): string {
-  return formatAmount(q, resolveUnit(unitKey, s.units) ?? BUILTIN_UNITS.pcs)
+export function amountText(s: InventorySnapshot, q: Quantity, unitKey: string, units: CustomUnit[] = s.units): string {
+  return formatAmount(q, resolveUnit(unitKey, units) ?? BUILTIN_UNITS.pcs)
 }
+
+/** The prefixes a unit takes, as symbols ("k", "m", "µ"), largest first. */
+export const prefixSymbols = (powers: readonly number[]): string[] =>
+  [...powers].sort((a, b) => b - a).map((p) => SI_PREFIXES[p]?.symbol ?? `10^${p}`)
 
 export type IntakeProblem = 'item_archived' | 'missing_axis_value' | 'invalid_value' | 'unknown_item' | 'invalid_link' | 'duplicate_line'
 const PROBLEM_TEXT: Record<IntakeProblem, string> = {
@@ -70,6 +79,8 @@ export interface IntakeLineView {
   amount: string
   price: string | null
   url: string | null
+  /** The description of the variant this line creates; null when it has none. */
+  variantDescription: string | null
   photo: { url: string; replace: boolean } | null
   alreadyInDraft: boolean
 }
@@ -77,6 +88,27 @@ export interface IntakeNewFolderView {
   id: Id
   /** "A/B" from the root, the draft's own parents included. */
   path: string
+  icon: string | null
+  problem: string | null
+}
+export interface IntakeNewUnitView {
+  id: Id
+  name: string
+  symbol: string
+  /** The prefixes it takes, "k", "m", ... */
+  prefixes: string[]
+  problem: string | null
+}
+export interface IntakeNewTagView {
+  id: Id
+  name: string
+  color: string | null
+  problem: string | null
+}
+export interface IntakeAddedValuesView {
+  /** The existing list attribute that gets the values. */
+  attribute: string
+  values: string[]
   problem: string | null
 }
 export interface IntakeNewAttributeView {
@@ -86,12 +118,16 @@ export interface IntakeNewAttributeView {
   unit: string | null
   siPrefixes: boolean
   options: string[]
+  /** Shown in lists ("Show in lists"). */
+  pinned: boolean
   problem: string | null
 }
 export interface IntakeNewItemView {
   id: Id
   name: string
   description: string | null
+  icon: string | null
+  color: string | null
   photo: string | null
   /** What keeps the item from being created; null when nothing does. */
   problem: string | null
@@ -112,7 +148,11 @@ export interface IntakeView {
   /** The draft can be committed as it is: no line, folder, attribute or new item has a problem, and it does something (a line or something to create). Committed: true. */
   ok: boolean
   newFolders: IntakeNewFolderView[]
+  newUnits: IntakeNewUnitView[]
   newAttributes: IntakeNewAttributeView[]
+  newTags: IntakeNewTagView[]
+  /** Values the commit appends to existing list attributes. */
+  addedValues: IntakeAddedValuesView[]
   newItems: IntakeNewItemView[]
   lines: IntakeLineView[]
   /** Committed only, when the commit recorded it: what it made, so the assistant sees what exists now. */
@@ -120,17 +160,45 @@ export interface IntakeView {
 }
 export interface IntakeCreatedView {
   folders: { id: Id; path: string }[]
+  units: { id: Id; name: string; symbol: string }[]
   attributes: { id: Id; name: string }[]
   tags: { id: Id; name: string }[]
+  appendedValues: { attribute: string; values: string[] }[]
   items: { id: Id; name: string; folder: string }[]
 }
 
+const NOUN: Record<ResolvedEntity['kind'], string> = { folder: 'folder', unit: 'unit', attribute: 'attribute', tag: 'tag', option: 'list value', item: 'item' }
+const withArticle = (noun: string): string => (noun === 'item' || noun === 'attribute' ? `an ${noun}` : `a ${noun}`)
+
+/** What an entity problem of the draft says, in the app's words; `nameOf` names the entity it clashes with (a unit by its key). */
 export function entityProblemText(p: EntityProblem | null, what: ResolvedEntity['kind'], nameOf: (id: Id) => string): string | null {
   if (p === null) return null
-  if (p.code === 'duplicate_name') return `a ${what} with this name already exists: ${nameOf(p.existingId)} (id ${p.existingId})`
+  const noun = NOUN[what]
+  const ref = (id: Id) => `${nameOf(id)} (${what === 'unit' ? 'key' : 'id'} ${id})`
+  if (p.code === 'duplicate_name') return `${withArticle(noun)} with this name already exists: ${ref(p.existingId)}; use it, or choose another name`
+  if (p.code === 'duplicate_archived') return `an archived ${noun} with this name is here: ${ref(p.existingId)}; restore it in the app or choose another name`
   if (p.code === 'parent_gone') return 'the folder or item it belongs to is archived or gone'
   if (p.code === 'cycle') return 'the folder would be inside itself'
-  return 'the name, kind, unit, tag, value or attribute does not fit'
+  if (p.code === 'pinned_limit') return `too many attributes are shown in lists (at most ${MAX_PINNED_ATTRIBUTES}); turn "pinned" off on this one or on another`
+  return 'the name, kind, unit, tag, colour, icon, value or attribute does not fit'
+}
+
+/** Names for the ids an entity problem points at: folders (paths), attributes, items ("Name" in "path"), units (by key). */
+export function entityNamer(s: InventorySnapshot, draft: IntakeDraftContent): (id: Id) => string {
+  const attrs = draftAttributes(s, draft)
+  const units = intakeUnits(draft, s)
+  return (id) => {
+    if (s.folders.some((f) => f.id === id) || (draft.newFolders ?? []).some((f) => f.id === id)) return `"${draftFolderPath(s, draft, id)}"`
+    const item = s.items.find((i) => i.id === id) ?? draft.newItems.find((i) => i.id === id)
+    if (item) return `"${item.name}" in "${draftFolderPath(s, draft, item.folderId) || 'the root'}"`
+    const unit = resolveUnit(id, units)
+    if (unit) return `"${unit.name}"`
+    const draftUnit = (draft.newUnits ?? []).find((u) => u.id === id)
+    if (draftUnit) return `"${draftUnit.name}"`
+    const tag = s.tags.find((t) => t.id === id) ?? (draft.newTags ?? []).find((t) => t.id === id)
+    if (tag) return `"${tag.name}"`
+    return `"${attrs.find((a) => a.id === id)?.name ?? id}"`
+  }
 }
 
 /** A typed value as a number attribute shows it ("4k7" -> "4.7 kΩ"); as typed when it does not parse. */
@@ -141,6 +209,7 @@ function valueText(a: Attribute, value: string): string {
 }
 
 function newItemView(s: InventorySnapshot, draft: IntakeDraftContent, attrs: Attribute[], n: DraftNewItem, tagNames: ReadonlyMap<Id, string>, problem: string | null): IntakeNewItemView {
+  const units = intakeUnits(draft, s)
   const attributes = n.attributes.map((x) => {
     const a = attrs.find((y) => y.id === x.attributeId)
     return { name: a?.name ?? '?', value: x.value !== null && x.value.trim() !== '' ? (a ? valueText(a, x.value) : x.value) : null, axis: x.axis }
@@ -150,10 +219,12 @@ function newItemView(s: InventorySnapshot, draft: IntakeDraftContent, attrs: Att
     id: n.id,
     name: n.name,
     description: n.description?.trim() ? n.description : null,
+    icon: n.icon ?? null,
+    color: n.color ?? null,
     photo: n.photo?.url ?? null,
     problem,
     folder: draftFolderPath(s, draft, n.folderId),
-    unit: unitSymbol(s, n.unitKey),
+    unit: unitSymbol(s, n.unitKey, units),
     attributes,
     tags: (n.tagIds ?? []).map((id) => tagNames.get(id)).filter((t): t is string => t !== undefined),
     looksLike: found ? { itemId: found.itemId, name: found.name, variant: found.variantName, have: found.amount } : null,
@@ -177,8 +248,10 @@ function createdView(s: InventorySnapshot, c: IntakeCreated): IntakeCreatedView 
   const path = (id: Id | null) => draftFolderPath(s, made, id)
   return {
     folders: c.folders.map((f) => ({ id: f.id, path: path(f.id) })),
+    units: (c.units ?? []).map((u) => ({ id: u.id, name: u.name, symbol: u.symbol })),
     attributes: c.attributes.map((a) => ({ id: a.id, name: a.name })),
     tags: c.tags.map((t) => ({ id: t.id, name: t.name })),
+    appendedValues: (c.appendedOptions ?? []).map((o) => ({ attribute: o.name, values: o.values })),
     items: c.items.map((i) => ({ id: i.id, name: i.name, folder: path(i.folderId) })),
   }
 }
@@ -207,11 +280,12 @@ export function intakeView(s: InventorySnapshot, intake: Intake): IntakeView {
         amount: amountText(s, l.quantity, l.unitKey),
         price: l.totalPrice === null ? null : priceText(l.totalPrice, currency),
         url: l.sourceUrl,
+        variantDescription: null,
         photo: null,
         alreadyInDraft: false,
       }),
     )
-    return { ...base, ok: true, newFolders: [], newAttributes: [], newItems: [], lines, ...(intake.created ? { created: createdView(s, intake.created) } : {}) }
+    return { ...base, ok: true, newFolders: [], newUnits: [], newAttributes: [], newTags: [], addedValues: [], newItems: [], lines, ...(intake.created ? { created: createdView(s, intake.created) } : {}) }
   }
   const draft = intake.draft
   const resolved = resolveIntake(draft, s)
@@ -220,12 +294,8 @@ export function intakeView(s: InventorySnapshot, intake: Intake): IntakeView {
   const newItems = new Map(draft.newItems.map((n) => [n.id, n]))
   const attrs = draftAttributes(s, draft)
   const problemOf = (id: Id) => resolved.entities.find((e) => e.id === id)?.problem ?? null
-  const nameOf = (id: Id): string => {
-    const folder = s.folders.find((f) => f.id === id)
-    if (folder) return `"${folderPath(s, id)}"`
-    if ((draft.newFolders ?? []).some((f) => f.id === id)) return `"${draftFolderPath(s, draft, id)}"`
-    return `"${attrs.find((a) => a.id === id)?.name ?? id}"`
-  }
+  const nameOf = entityNamer(s, draft)
+  const units = intakeUnits(draft, s)
   const lines = draft.lines.map((line): IntakeLineView => {
     const resolution = resolutions.get(line.id)
     const newItem = newItems.get(line.itemId)
@@ -238,14 +308,15 @@ export function intakeView(s: InventorySnapshot, intake: Intake): IntakeView {
       itemId: line.itemId,
       item: newItem?.name ?? existing?.name ?? null,
       values: lineValues(s, attrs, line, newItem),
-      amount: amountText(s, line.quantity, unitKey),
+      amount: amountText(s, line.quantity, unitKey, units),
       price: line.totalPrice === null ? null : priceText(line.totalPrice, currency),
       url: line.sourceUrl,
+      variantDescription: line.variantDescription?.trim() ? line.variantDescription.trim() : null,
       photo: line.photo ? { url: line.photo.url, replace: line.photo.replace } : null,
       alreadyInDraft: alreadyInDraft(draft, line.itemId, line.axisValues, line.id),
     }
   })
-  const newFolders = (draft.newFolders ?? []).map((f): IntakeNewFolderView => ({ id: f.id, path: draftFolderPath(s, draft, f.id), problem: entityProblemText(problemOf(f.id), 'folder', nameOf) }))
+  const newFolders = (draft.newFolders ?? []).map((f): IntakeNewFolderView => ({ id: f.id, path: draftFolderPath(s, draft, f.id), icon: f.icon ?? null, problem: entityProblemText(problemOf(f.id), 'folder', nameOf) }))
   const newAttributes = (draft.newAttributes ?? []).map(
     (a): IntakeNewAttributeView => ({
       id: a.id,
@@ -254,14 +325,25 @@ export function intakeView(s: InventorySnapshot, intake: Intake): IntakeView {
       unit: a.kind === 'number' && a.unit.trim() !== '' ? a.unit : null,
       siPrefixes: a.kind === 'number' && a.siPrefixes,
       options: a.kind === 'enum' ? a.options : [],
+      pinned: a.pinned === true,
       problem: entityProblemText(problemOf(a.id), 'attribute', nameOf),
     }),
+  )
+  const newUnits = (draft.newUnits ?? []).map(
+    (u): IntakeNewUnitView => ({ id: u.id, name: u.name, symbol: u.symbol, prefixes: prefixSymbols(u.prefixPowers), problem: entityProblemText(problemOf(u.id), 'unit', nameOf) }),
+  )
+  const newTags = (draft.newTags ?? []).map((t): IntakeNewTagView => ({ id: t.id, name: t.name, color: t.color ?? null, problem: entityProblemText(problemOf(t.id), 'tag', nameOf) }))
+  const addedValues = (draft.addedOptions ?? []).map(
+    (o): IntakeAddedValuesView => ({ attribute: s.attributes.find((a) => a.id === o.attributeId)?.name ?? o.attributeId, values: o.values, problem: entityProblemText(problemOf(o.attributeId), 'option', nameOf) }),
   )
   return {
     ...base,
     ok: resolved.ok,
     newFolders,
+    newUnits,
     newAttributes,
+    newTags,
+    addedValues,
     newItems: draft.newItems.map((n) => newItemView(s, draft, attrs, n, tagNames, entityProblemText(problemOf(n.id), 'item', nameOf))),
     lines,
   }

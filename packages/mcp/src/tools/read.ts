@@ -16,7 +16,7 @@ import {
 import { priceText, searchRows, snapshotSearch } from '@antresol/kit'
 import { activeInventories, requireSource, requireStorage, resolveInventory, type ToolContext } from '../context'
 import { ToolError } from '../errors'
-import { amountText, folderPath, intakeView, unitSymbol } from '../shape'
+import { amountText, folderPath, intakeView, prefixSymbols, unitSymbol } from '../shape'
 
 export const SEARCH_DEFAULT_LIMIT = 20
 export const SEARCH_MAX_LIMIT = 50
@@ -51,11 +51,12 @@ export async function getOverview(ctx: ToolContext, args: { inventory?: string }
       unit: a.unit,
       siPrefixes: a.kind === 'number' && a.siPrefixes,
       options: a.options,
+      pinned: a.pinned,
     })),
-    tags: s.tags.map((t) => ({ id: t.id, name: t.name })),
+    tags: s.tags.map((t) => ({ id: t.id, name: t.name, color: t.color })),
     units: {
-      builtin: Object.values(BUILTIN_UNITS).map((u) => ({ key: u.key, symbol: u.symbol, name: u.name })),
-      custom: s.units.map((u) => ({ key: customUnitKey(u.id), symbol: u.symbol, name: u.name })),
+      builtin: Object.values(BUILTIN_UNITS).map((u) => ({ key: u.key, symbol: u.symbol, name: u.name, prefixes: prefixSymbols(u.prefixPowers) })),
+      custom: s.units.map((u) => ({ key: customUnitKey(u.id), symbol: u.symbol, name: u.name, prefixes: prefixSymbols(u.prefixPowers) })),
     },
     photos: { store: ctx.files?.provider ?? null, folder: ctx.config.photosDir },
   }

@@ -33,27 +33,52 @@ function check(c: IntakeCommit): Statement[] {
 }
 
 /** New folders, every parent before its children (the command lists them so, and one statement inserts in `ord`
- *  order); a folder carries no icon, as an item no icon or colour. A replay or a retry finds the ids and adds nothing. */
+ *  order); with their icon. A replay or a retry finds the ids and adds nothing. */
 function newFolders(c: IntakeCommit, by: string): Statement[] {
   if (c.newFolders.length === 0) return []
   return [
-    sql`insert into folders (id, inventory_id, parent_id, name, created_by, updated_by)
-        select f.id, ${c.inventoryId}::uuid, f.parent_id, f.name, ${by}, ${by}
+    sql`insert into folders (id, inventory_id, parent_id, name, icon, created_by, updated_by)
+        select f.id, ${c.inventoryId}::uuid, f.parent_id, f.name, f.icon, ${by}, ${by}
         from unnest(${c.newFolders.map((f) => f.id)}::uuid[], ${c.newFolders.map((f) => f.parentId)}::uuid[],
-                    ${c.newFolders.map((f) => f.name)}::text[]) with ordinality as f(id, parent_id, name, ord)
+                    ${c.newFolders.map((f) => f.name)}::text[], ${c.newFolders.map((f) => f.icon ?? null)}::text[])
+             with ordinality as f(id, parent_id, name, icon, ord)
         where ${PENDING}
         order by f.ord
         on conflict (id) do nothing`,
   ]
 }
 
+/** New custom units, before the items (and attributes) that name them. */
+function newUnits(c: IntakeCommit, by: string): Statement[] {
+  return (c.newUnits ?? []).map(
+    (u) => sql`insert into custom_units (id, inventory_id, name, symbol, prefix_powers, created_by, updated_by)
+        select ${u.id}::uuid, ${c.inventoryId}::uuid, ${u.name}::text, ${u.symbol}::text, ${u.prefixPowers}::smallint[], ${by}, ${by}
+        where ${PENDING}
+        on conflict (id) do nothing`,
+  )
+}
+
+/** Values appended to existing lists, at the end and in order, the ones the list holds already skipped (a retry that
+ *  got past PENDING, or another device's own add, appends nothing twice). */
+function appendOptions(c: IntakeCommit, by: string): Statement[] {
+  return (c.appendOptions ?? []).map(
+    (a) => sql`update attributes
+        set options = options || coalesce((select array_agg(x.v order by x.ord)
+                                           from unnest(${a.values}::text[]) with ordinality as x(v, ord)
+                                           where x.v <> all(attributes.options)), '{}'::text[]),
+            updated_at = now(), updated_by = ${by}
+        where id = ${a.attributeId}::uuid and ${PENDING}
+          and exists (select 1 from unnest(${a.values}::text[]) as y(v) where y.v <> all(attributes.options))`,
+  )
+}
+
 /** New attributes, before the items that use them. */
 function newAttributes(c: IntakeCommit, by: string): Statement[] {
   if (c.newAttributes.length === 0) return []
   return c.newAttributes.map(
-    (a) => sql`insert into attributes (id, inventory_id, name, kind, options, unit, si_prefixes, created_by, updated_by)
+    (a) => sql`insert into attributes (id, inventory_id, name, kind, options, unit, si_prefixes, pinned, created_by, updated_by)
         select ${a.id}::uuid, ${c.inventoryId}::uuid, ${a.name}::text, ${a.kind}::text, ${a.options}::text[], ${a.unit}::text,
-               ${a.siPrefixes}::boolean, ${by}, ${by}
+               ${a.siPrefixes}::boolean, ${a.pinned === true}::boolean, ${by}, ${by}
         where ${PENDING}
         on conflict (id) do nothing`,
   )
@@ -63,9 +88,10 @@ function newAttributes(c: IntakeCommit, by: string): Statement[] {
 function newTags(c: IntakeCommit, by: string): Statement[] {
   if (c.newTags.length === 0) return []
   return [
-    sql`insert into tags (id, inventory_id, name, created_by, updated_by)
-        select t.id, ${c.inventoryId}::uuid, t.name, ${by}, ${by}
-        from unnest(${c.newTags.map((t) => t.id)}::uuid[], ${c.newTags.map((t) => t.name)}::text[]) as t(id, name)
+    sql`insert into tags (id, inventory_id, name, color, created_by, updated_by)
+        select t.id, ${c.inventoryId}::uuid, t.name, t.color, ${by}, ${by}
+        from unnest(${c.newTags.map((t) => t.id)}::uuid[], ${c.newTags.map((t) => t.name)}::text[],
+                    ${c.newTags.map((t) => t.color ?? null)}::text[]) as t(id, name, color)
         where ${PENDING}
         on conflict (id) do nothing`,
   ]
@@ -78,12 +104,13 @@ function newItems(c: IntakeCommit, by: string): Statement[] {
   const tags = c.newItems.flatMap((n) => [...new Set(n.tagIds)].map((tagId) => ({ itemId: n.id, tagId })))
   return [
     sql`with ins as (
-          insert into items (id, inventory_id, folder_id, name, description, unit_key, created_by, updated_by)
-          select n.id, ${c.inventoryId}::uuid, n.folder_id, n.name, n.description, n.unit_key, ${by}, ${by}
+          insert into items (id, inventory_id, folder_id, name, description, icon, color, unit_key, created_by, updated_by)
+          select n.id, ${c.inventoryId}::uuid, n.folder_id, n.name, n.description, n.icon, n.color, n.unit_key, ${by}, ${by}
           from unnest(${c.newItems.map((n) => n.id)}::uuid[], ${c.newItems.map((n) => n.folderId)}::uuid[],
                       ${c.newItems.map((n) => n.name)}::text[], ${c.newItems.map((n) => n.description)}::text[],
+                      ${c.newItems.map((n) => n.icon ?? null)}::text[], ${c.newItems.map((n) => n.color ?? null)}::text[],
                       ${c.newItems.map((n) => n.unitKey)}::text[])
-               with ordinality as n(id, folder_id, name, description, unit_key, ord)
+               with ordinality as n(id, folder_id, name, description, icon, color, unit_key, ord)
           where ${PENDING}
           order by n.ord
           on conflict (id) do nothing
@@ -113,13 +140,14 @@ function newVariants(c: IntakeCommit, by: string): Statement[] {
   const values = c.newVariants.flatMap((v) => v.values.map((x) => ({ variantId: v.id, ...x })))
   return [
     sql`with ins as (
-          insert into variants (id, item_id, position, created_by, updated_by)
+          insert into variants (id, item_id, position, description, created_by, updated_by)
           select n.id, n.item_id,
                  (select coalesce(max(position), -1) from variants where item_id = n.item_id)
                    + (row_number() over (partition by n.item_id order by n.ord))::int,
-                 ${by}, ${by}
-          from unnest(${c.newVariants.map((v) => v.id)}::uuid[], ${c.newVariants.map((v) => v.itemId)}::uuid[])
-               with ordinality as n(id, item_id, ord)
+                 n.description, ${by}, ${by}
+          from unnest(${c.newVariants.map((v) => v.id)}::uuid[], ${c.newVariants.map((v) => v.itemId)}::uuid[],
+                      ${c.newVariants.map((v) => v.description ?? null)}::text[])
+               with ordinality as n(id, item_id, description, ord)
           where ${PENDING}
           order by n.ord
           on conflict (id) do nothing
@@ -163,8 +191,8 @@ function committed(c: IntakeCommit, by: string): Statement {
 }
 
 /**
- * intake.commit in one batch (spec 2026-11-13 intakes §7), in order: the check (see `check`), new folders (parents first), new attributes, new tags, new items with
- * their description, tags and attributes, new variants with their values, archived variants back, photos (as photo.add and photo.replace), the
+ * intake.commit in one batch (spec 2026-11-13 intakes §7), in order: the check (see `check`), new folders (parents first, with icons), new units, new attributes (pinned), new tags (coloured), values appended to existing lists, new items with icon, colour,
+ * their description, tags and attributes, new variants with their description and values, archived variants back, photos (as photo.add and photo.replace), the
  * intake row committed, one receipt per line marked with the intake, a new intakes revision. Every write after the check
  * waits on PENDING, and every insert is `on conflict (id) do nothing`.
  */
@@ -173,8 +201,10 @@ export function intakeStatements(c: IntakeCommit, actor: Actor): Statement[] {
   return [
     ...check(c),
     ...newFolders(c, by),
+    ...newUnits(c, by),
     ...newAttributes(c, by),
     ...newTags(c, by),
+    ...appendOptions(c, by),
     ...newItems(c, by),
     ...newVariants(c, by),
     ...unarchive(c, by),

@@ -91,11 +91,16 @@ async function seedIntakes(
   const fresh = newId()
   const [committed, draft] = [newId(), newId()]
   const ohm = (value: string) => [{ attributeId: x.ohm, value }]
-  const [drawer, volt] = [newId(), newId()]
+  const [drawer, volt, reel, tape] = [newId(), newId(), newId(), newId()]
   const content: IntakeDraftContent = {
     newFolders: [{ id: drawer, name: 'Drawer', parentId: x.folder }],
-    newAttributes: [{ id: volt, name: 'Voltage', kind: 'number', unit: 'V', siPrefixes: false, options: [] }],
+    newAttributes: [{ id: volt, name: 'Voltage', kind: 'number', unit: 'V', siPrefixes: false, options: [], pinned: true }],
+    newUnits: [{ id: reel, name: 'Reel', symbol: 'rl', prefixPowers: [] }],
+    addedOptions: [{ attributeId: x.size, values: ['XXL'] }],
     newItems: [{
+      id: tape, name: 'Tape', folderId: drawer, unitKey: customUnitKey(reel),
+      attributes: [],
+    }, {
       id: fresh, name: 'Capacitor', folderId: drawer, unitKey: customUnitKey(x.unit), description: 'Ceramic', photoId: newId(),
       photo: { provider: 'imgbb', fileId: 'cap', url: 'https://i.ibb.co/cap/full.jpg', ...RENDITION_FIELDS },
       attributes: [{ attributeId: x.ohm, value: null, axis: true }, { attributeId: volt, value: '50', axis: false }],
@@ -105,6 +110,7 @@ async function seedIntakes(
       draftLine(x.resistor, [...ohm('1000'), { attributeId: x.size, value: 'S' }], '10', { totalPrice: 100, sourceUrl: 'https://shop.example/r' }),
       draftLine(x.resistor, [...ohm('2200'), { attributeId: x.size, value: 'M' }], '3'),
       draftLine(x.wire, [], '2.5'),
+      draftLine(x.resistor, [...ohm('1000'), { attributeId: x.size, value: 'XXL' }], '2', { variantDescription: 'Reel of 100' }),
     ],
   }
   const saved = await storage.saveIntakeDraft({ id: committed, inventoryId: inv, header, content }, null, TEST_ACTOR)
@@ -116,16 +122,20 @@ async function seedIntakes(
   await storage.apply(buildIntakeCommit(intake, resolved, snapshot, rev), TEST_ACTOR)
 
   const later = newId()
-  const [shelf, box, amp] = [newId(), newId(), newId()]
+  const [shelf, box, amp, pack, washer] = [newId(), newId(), newId(), newId(), newId()]
   const open: IntakeDraftContent = {
     newFolders: [{ id: box, name: 'Box', parentId: shelf }, { id: shelf, name: 'Shelf', parentId: x.folder }],
     newAttributes: [{ id: amp, name: 'Current', kind: 'text', unit: '', siPrefixes: false, options: [] }],
+    newUnits: [{ id: pack, name: 'Pack', symbol: 'pk', prefixPowers: [3] }],
+    addedOptions: [{ attributeId: x.size, values: ['XXS'] }],
     newItems: [{
+      id: washer, name: 'Washer', folderId: box, unitKey: customUnitKey(pack), attributes: [],
+    }, {
       id: later, name: 'Inductor', folderId: box, unitKey: customUnitKey(x.unit), description: null, photoId: newId(),
       photo: { provider: 'uploadcare', fileId: 'ind', url: 'https://u.example/ind' },
       attributes: [{ attributeId: amp, value: '2 A', axis: false }],
     }],
-    lines: [draftLine(later, [], '7'), draftLine(x.resistor, [...ohm('4700'), { attributeId: x.size, value: 'M' }], '1', { totalPrice: null })],
+    lines: [draftLine(later, [], '7'), draftLine(x.resistor, [...ohm('4700'), { attributeId: x.size, value: 'M' }], '1', { totalPrice: null }), draftLine(x.resistor, [...ohm('4700'), { attributeId: x.size, value: 'XXS' }], '1')],
   }
   const second = await storage.saveIntakeDraft({ id: draft, inventoryId: inv, header: { ...header, shop: null, note: null }, content: open }, null, TEST_ACTOR)
   if (!second.saved) throw new Error('seed: second draft not saved')

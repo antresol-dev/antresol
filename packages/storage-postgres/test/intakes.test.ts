@@ -1,5 +1,6 @@
 import {
   buildIntakeCommit,
+  customUnitKey,
   newId,
   patchSnapshot,
   resolveIntake,
@@ -310,7 +311,7 @@ describe('intake.commit', () => {
     const { snapshot, rev } = await w.storage.loadInventoryWithRev(w.inv)
     const intake = await intakeOf(w.storage, w.inv, id)
     const command = buildIntakeCommit(intake, resolveIntake(intake.draft!, snapshot), snapshot, rev) as IntakeCommit
-    expect(command.newTags).toEqual([{ id: kit, name: 'Kit A' }])
+    expect(command.newTags).toEqual([{ id: kit, name: 'Kit A', color: null }])
 
     const r = await w.storage.apply(command, TEST_ACTOR)
 
@@ -391,6 +392,85 @@ describe('intake.commit', () => {
     expect(again.itemAttributes).toEqual(before.itemAttributes)
     expect(normSnapshot(again)).toEqual(normSnapshot(before))
     expect(await intakeOf(w.storage, w.inv, w.id)).toEqual(intake)
+  })
+
+  /** A draft with every new part: a unit, a pinned list attribute, a coloured tag, an icon on the folder and the item,
+   *  a variant description and two values appended to an existing list the new item's variants use. */
+  async function fullBuilt() {
+    const w = await workshop()
+    const [grade, unit, shelf, tag, newAttr, id] = [newId(), newId(), newId(), newId(), newId(), newId()]
+    await w.storage.apply(attributeCreate(w.inv, grade, 'Grade', 'enum', { options: ['A', 'B'] }), TEST_ACTOR)
+    const content = draftFor(w)
+    content.newUnits = [{ id: unit, name: 'Reel', symbol: 'rl', prefixPowers: [] }]
+    content.newFolders = [{ id: shelf, name: 'Shelf', parentId: null, icon: 'package' }]
+    content.newAttributes = [{ id: newAttr, name: 'Finish', kind: 'enum', unit: '', siPrefixes: false, options: ['Matte'], pinned: true }]
+    content.newTags = [{ id: tag, name: 'Kit', color: '#aa00bb' }]
+    content.addedOptions = [{ attributeId: grade, values: ['C', 'D'] }]
+    const item = content.newItems[0]!
+    item.folderId = shelf
+    item.unitKey = customUnitKey(unit)
+    item.icon = 'package'
+    item.color = '#00ff00'
+    item.tagIds = [tag]
+    item.attributes.push({ attributeId: newAttr, value: 'Matte', axis: false }, { attributeId: grade, value: 'C', axis: false })
+    content.newItems.push({
+      id: newId(), name: 'Diode', folderId: shelf, unitKey: 'pcs', attributes: [{ attributeId: grade, value: 'D', axis: false }],
+    })
+    content.lines[0]!.variantDescription = 'Tape'
+    expect((await w.storage.saveIntakeDraft({ id, inventoryId: w.inv, header: HEADER, content }, null, TEST_ACTOR)).saved).toBe(true)
+    const { snapshot, rev } = await w.storage.loadInventoryWithRev(w.inv)
+    const intake = await intakeOf(w.storage, w.inv, id)
+    const resolved = resolveIntake(intake.draft!, snapshot)
+    expect(resolved.ok).toBe(true)
+    expect(resolved.ok).toBe(true)
+    const command = buildIntakeCommit(intake, resolved, snapshot, rev) as IntakeCommit
+    return { ...w, id, grade, unit, shelf, tag, newAttr, snapshot, rev, command, resistor: item.id }
+  }
+
+  it('writes units, pinned attributes, colours, icons, variant descriptions and appended list values; the patch equals a fresh load', async () => {
+    const w = await fullBuilt()
+    expect(w.command.newUnits).toHaveLength(1)
+    expect(w.command.appendOptions).toEqual([{ attributeId: w.grade, values: ['C', 'D'] }])
+
+    const r = await w.storage.apply(w.command, TEST_ACTOR)
+
+    const after = await w.storage.loadInventory(w.inv)
+    expect(after.units.find((u) => u.id === w.unit)).toMatchObject({ name: 'Reel', symbol: 'rl' })
+    expect(after.attributes.find((a) => a.id === w.newAttr)).toMatchObject({ pinned: true, options: ['Matte'] })
+    expect(after.attributes.find((a) => a.id === w.grade)!.options).toEqual(['A', 'B', 'C', 'D'])
+    expect(after.tags.find((t) => t.id === w.tag)!.color).toBe('#AA00BB')
+    expect(after.folders.find((f) => f.id === w.shelf)!.icon).toBe('package')
+    expect(after.items.find((i) => i.id === w.resistor)).toMatchObject({ icon: 'package', color: '#00FF00', unitKey: customUnitKey(w.unit) })
+    expect(after.variants.filter((v) => v.itemId === w.resistor).map((v) => v.description ?? '').sort()).toEqual(['', '', 'Tape'])
+    const intake = await intakeOf(w.storage, w.inv, w.id)
+    expect(intake.created!.units).toEqual([{ id: w.unit, name: 'Reel', symbol: 'rl' }])
+    expect(intake.created!.appendedOptions).toEqual([{ attributeId: w.grade, name: 'Grade', values: ['C', 'D'] }])
+    expect(normSnapshot(patchSnapshot(w.snapshot, r.patch!))).toEqual(normSnapshot(after))
+  })
+
+  it('a replay after the revision moved on appends nothing a second time and adds no unit (Review Focus 4)', async () => {
+    const w = await fullBuilt()
+    await w.storage.apply(w.command, TEST_ACTOR)
+    await w.storage.apply({ type: 'folder.create', id: newId(), inventoryId: w.inv, parentId: null, name: 'Other', description: null }, TEST_ACTOR)
+    const before = await w.storage.loadInventory(w.inv)
+
+    await w.storage.apply(w.command, TEST_ACTOR)
+
+    const again = await w.storage.loadInventory(w.inv)
+    expect(again.attributes.find((a) => a.id === w.grade)!.options).toEqual(['A', 'B', 'C', 'D'])
+    expect(normSnapshot(again)).toEqual(normSnapshot(before))
+  })
+
+  it('values the list holds already are skipped, the rest appended in order', async () => {
+    const w = await fullBuilt()
+    // Another device added D between the build and the commit (the revision check is skipped by a direct attribute write
+    // only when the revision matches, so go through the command with the new rev).
+    await w.storage.apply({ type: 'attribute.update', id: w.grade, name: 'Grade', options: ['A', 'B', 'D'], unit: '', siPrefixes: false }, TEST_ACTOR)
+    const { rev } = await w.storage.loadInventoryWithRev(w.inv)
+
+    await w.storage.apply({ ...w.command, baseRev: rev }, TEST_ACTOR)
+
+    expect((await w.storage.loadInventory(w.inv)).attributes.find((a) => a.id === w.grade)!.options).toEqual(['A', 'B', 'D', 'C'])
   })
 
   it('a committed intake with no created record (committed before it existed) reads created as null', async () => {

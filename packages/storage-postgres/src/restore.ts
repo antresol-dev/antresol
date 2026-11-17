@@ -291,6 +291,8 @@ export function renameIntakeIds(intake: Intake, rename: (id: Id) => Id): Intake 
     draft: draft && {
       ...draft,
       ...(draft.newFolders ? { newFolders: draft.newFolders.map((f) => ({ ...f, id: rename(f.id), parentId: opt(f.parentId) })) } : {}),
+      ...(draft.newUnits ? { newUnits: draft.newUnits.map((u) => ({ ...u, id: rename(u.id) })) } : {}),
+      ...(draft.addedOptions ? { addedOptions: draft.addedOptions.map((o) => ({ ...o, attributeId: rename(o.attributeId) })) } : {}),
       ...(draft.newAttributes ? { newAttributes: draft.newAttributes.map((a) => ({ ...a, id: rename(a.id) })) } : {}),
       ...(draft.newTags ? { newTags: draft.newTags.map((t) => ({ ...t, id: rename(t.id) })) } : {}),
       newItems: draft.newItems.map((n) => ({
@@ -314,6 +316,8 @@ export function renameIntakeIds(intake: Intake, rename: (id: Id) => Id): Intake 
       folders: created.folders.map((f) => ({ ...f, id: rename(f.id), parentId: opt(f.parentId) })),
       attributes: created.attributes.map((a) => ({ ...a, id: rename(a.id) })),
       tags: created.tags.map((t) => ({ ...t, id: rename(t.id) })),
+      ...(created.units ? { units: created.units.map((u) => ({ ...u, id: rename(u.id) })) } : {}),
+      ...(created.appendedOptions ? { appendedOptions: created.appendedOptions.map((o) => ({ ...o, attributeId: rename(o.attributeId) })) } : {}),
       items: created.items.map((i) => ({ ...i, id: rename(i.id), folderId: opt(i.folderId) })),
     },
     lines: lines && lines.map((l) => ({

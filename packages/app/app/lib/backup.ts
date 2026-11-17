@@ -10,6 +10,9 @@ import {
   type DraftLinePhoto,
   type DraftNewAttribute,
   type DraftNewFolder,
+  type DraftNewTag,
+  type DraftNewUnit,
+  type IntakeDraftContent,
   type IntakeCreated,
   type PhotoFile,
   type Intake,
@@ -149,6 +152,13 @@ const time: Check = (v) => typeof v === 'string' && !Number.isNaN(Date.parse(v))
 const int: Check = (v) => Number.isSafeInteger(v)
 const iconName: Check = (v) => typeof v === 'string' && isIconName(v)
 const colorHex: Check = (v) => typeof v === 'string' && isColorHex(v)
+/** A draft colour: #RRGGBB in either case (the commit writes capitals). */
+const draftColor: Check = (v) => typeof v === 'string' && isColorHex(v.toUpperCase())
+/** A field that may be absent (drafts saved before it existed); `dropUndefined` keeps it absent. */
+const optional =
+  (check: Check): Check =>
+  (v) =>
+    v === undefined || check(v)
 const bool: Check = (v) => typeof v === 'boolean'
 const quantity: Check = (v) => typeof v === 'string' && parseQuantity(v) === v
 const nullable =
@@ -212,20 +222,30 @@ const DRAFT_NEW_ITEM: Shape = {
   description: (v) => v === undefined || nullable(str)(v),
   photo: (v) => v === undefined || nullable((p) => record(p, ITEM_PHOTO, PHOTO_DEFAULTS) !== null)(v),
   photoId: (v) => v === undefined || uuid(v),
+  /** Absent in drafts saved before icons and colours. */
+  icon: optional(nullable(iconName)),
+  color: optional(nullable(draftColor)),
 }
-const DRAFT_NEW_FOLDER: Shape = { id: uuid, name: str, parentId: nullable(uuid) }
+const DRAFT_NEW_FOLDER: Shape = { id: uuid, name: str, parentId: nullable(uuid), icon: optional(nullable(iconName)) }
+const DRAFT_NEW_UNIT: Shape = { id: uuid, name: str, symbol: str, prefixPowers: listOf(int) }
+const DRAFT_ADDED_OPTION: Shape = { attributeId: uuid, values: listOf(str) }
 const DRAFT_NEW_ATTRIBUTE: Shape = {
   id: uuid, name: str, kind: oneOf('text', 'enum', 'number'), unit: str, siPrefixes: bool, options: listOf(str),
+  pinned: optional(bool),
 }
 /** What a commit created (spec 2026-11-16 intake entities §7); null on a draft and on intakes committed before it. */
 const CREATED_NAMED: Shape = { id: uuid, name: str }
+const CREATED_APPENDED: Shape = { attributeId: uuid, name: str, values: listOf(str) }
 const CREATED: Shape = {
   folders: (v) => records(v, { id: uuid, name: str, parentId: nullable(uuid) }) !== null,
   attributes: (v) => records(v, CREATED_NAMED) !== null,
   tags: (v) => records(v, CREATED_NAMED) !== null,
   items: (v) => records(v, { id: uuid, name: str, folderId: nullable(uuid) }) !== null,
+  /** Absent on intakes committed before draft units and appended list values. */
+  units: (v) => v === undefined || records(v, { id: uuid, name: str, symbol: str }) !== null,
+  appendedOptions: (v) => v === undefined || records(v, CREATED_APPENDED) !== null,
 }
-const DRAFT_NEW_TAG: Shape = { id: uuid, name: str }
+const DRAFT_NEW_TAG: Shape = { id: uuid, name: str, color: optional(nullable(draftColor)) }
 /** A draft line's photo: the stored file as a photo has it (renditions, size and delete handle absent from drafts saved
  *  before schema 5's photos) and `replace`. Rebuilt by `draftPhoto`. */
 const DRAFT_PHOTO: Shape = {
@@ -242,6 +262,8 @@ const DRAFT_LINE: Shape = {
   totalPrice: nullable(int), sourceUrl: nullable(str),
   photo: nullable((v) => record(v, DRAFT_PHOTO, PHOTO_DEFAULTS) !== null),
   ids: (v) => record(v, { movementId: uuid, variantId: uuid, photoId: uuid }) !== null,
+  /** Absent in drafts saved before variant descriptions. */
+  variantDescription: optional(nullable(str)),
 }
 const COMMITTED_LINE: Shape = {
   lineId: uuid, kind: oneOf('add', 'newValue', 'newItem'), itemId: uuid, variantId: nullable(uuid), movementId: uuid,
@@ -303,6 +325,11 @@ const MOVEMENT_DEFAULTS = { intakeId: null }
 /** `created` of intakes: migration 0006, absent from older files. */
 const INTAKE_DEFAULTS = { created: null }
 
+/** The record without the keys whose value is undefined: a field absent from the file stays absent. */
+function dropUndefined<T extends object>(value: T): T {
+  return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as T
+}
+
 /** The photos of a file, each rendition rebuilt as parseRendition reads it: a key it does not know is left behind, as
  *  for every record, and `type` absent is null. */
 function photos(value: unknown): Photo[] | null {
@@ -333,15 +360,18 @@ function intakeRecord(value: unknown): Intake | null {
     const raw = row.draft as unknown as Record<string, unknown>
     const newItems = records<NonNullable<Intake['draft']>['newItems'][number]>(raw.newItems, DRAFT_NEW_ITEM)
     const lines = records<NonNullable<Intake['draft']>['lines'][number]>(raw.lines, DRAFT_LINE)
-    const newTags = raw.newTags === undefined ? undefined : records<{ id: string; name: string }>(raw.newTags, DRAFT_NEW_TAG)
-    const newFolders = raw.newFolders === undefined ? undefined : records<DraftNewFolder>(raw.newFolders, DRAFT_NEW_FOLDER)
+    const newTags = raw.newTags === undefined ? undefined : records<DraftNewTag>(raw.newTags, DRAFT_NEW_TAG)?.map(dropUndefined) ?? null
+    const newFolders = raw.newFolders === undefined ? undefined : records<DraftNewFolder>(raw.newFolders, DRAFT_NEW_FOLDER)?.map(dropUndefined) ?? null
     const newAttributes =
-      raw.newAttributes === undefined ? undefined : records<DraftNewAttribute>(raw.newAttributes, DRAFT_NEW_ATTRIBUTE)
-    if (newItems === null || lines === null || newTags === null || newFolders === null || newAttributes === null) return null
+      raw.newAttributes === undefined ? undefined : records<DraftNewAttribute>(raw.newAttributes, DRAFT_NEW_ATTRIBUTE)?.map(dropUndefined) ?? null
+    const newUnits = raw.newUnits === undefined ? undefined : records<DraftNewUnit>(raw.newUnits, DRAFT_NEW_UNIT)
+    const addedOptions =
+      raw.addedOptions === undefined ? undefined : records<NonNullable<IntakeDraftContent['addedOptions']>[number]>(raw.addedOptions, DRAFT_ADDED_OPTION)
+    if (newItems === null || lines === null || newTags === null || newFolders === null || newAttributes === null || newUnits === null || addedOptions === null) return null
     const cleanItems = newItems.map((n) => {
       const { tagIds, description, photo, photoId, ...rest } = n
       return {
-        ...rest,
+        ...dropUndefined(rest),
         ...(tagIds !== undefined ? { tagIds } : {}),
         ...(description !== undefined ? { description } : {}),
         ...(photo !== undefined ? { photo: photo ? itemPhoto(photo) : photo } : {}),
@@ -351,9 +381,11 @@ function intakeRecord(value: unknown): Intake | null {
     draft = {
       ...(newFolders ? { newFolders } : {}),
       ...(newAttributes ? { newAttributes } : {}),
+      ...(newUnits ? { newUnits } : {}),
       ...(newTags ? { newTags } : {}),
+      ...(addedOptions ? { addedOptions } : {}),
       newItems: cleanItems,
-      lines: lines.map((l) => (l.photo ? { ...l, photo: draftPhoto(l.photo) } : l)),
+      lines: lines.map((l) => dropUndefined(l.photo ? { ...l, photo: draftPhoto(l.photo) } : l)),
     }
   }
   let lines: Intake['lines'] = null
@@ -370,6 +402,10 @@ function intakeRecord(value: unknown): Intake | null {
       attributes: records<IntakeCreated['attributes'][number]>(raw.attributes, CREATED_NAMED)!,
       tags: records<IntakeCreated['tags'][number]>(raw.tags, CREATED_NAMED)!,
       items: records<IntakeCreated['items'][number]>(raw.items, { id: uuid, name: str, folderId: nullable(uuid) })!,
+      ...(raw.units !== undefined ? { units: records<NonNullable<IntakeCreated['units']>[number]>(raw.units, { id: uuid, name: str, symbol: str })! } : {}),
+      ...(raw.appendedOptions !== undefined
+        ? { appendedOptions: records<NonNullable<IntakeCreated['appendedOptions']>[number]>(raw.appendedOptions, CREATED_APPENDED)! }
+        : {}),
     }
   }
   if ((row.status === 'draft') !== (draft !== null) || (row.status === 'committed') !== (lines !== null)) return null

@@ -110,9 +110,9 @@ describe('draft folders', () => {
     })
     const d = ok(withNewFolder(base, s, { id: 'F1', name: 'Coils', parentId: null }))
     expect(withNewFolder(d, s, { id: 'F2', name: 'COILS', parentId: null })).toMatchObject({ errorKey: 'intakes.folder.duplicate', params: { id: 'F1' } })
-    // Same name under another parent, or the archived namesake, is fine.
+    // Same name under another parent is fine; an archived namesake is not (spec 2026-11-17 §3).
     expect(failed(withNewFolder(d, s, { id: 'F2', name: 'Coils', parentId: 'PASS' }))).toBe(false)
-    expect(failed(withNewFolder(base, s, { id: 'F3', name: 'Old', parentId: null }))).toBe(false)
+    expect(failed(withNewFolder(base, s, { id: 'F3', name: 'Old', parentId: null }))).toBe(true)
   })
 
   it('Review Focus 1: a folder with a draft folder or a new item in it cannot be removed', () => {
@@ -208,7 +208,7 @@ describe('nameClash', () => {
   it('Review Focus 2: finds the existing Passives, ignoring case and the archive', () => {
     expect(nameClash(s, base, { kind: 'folder', name: ' passives ', parentId: null })).toEqual({ id: 'PASS', draft: false })
     expect(nameClash(s, base, { kind: 'folder', name: 'Passives', parentId: 'R' })).toBeNull()
-    expect(nameClash(s, base, { kind: 'folder', name: 'Old', parentId: null })).toBeNull()
+    expect(nameClash(s, base, { kind: 'folder', name: 'Old', parentId: null })).toEqual({ id: 'OLD', draft: false, archived: true })
     expect(nameClash(s, base, { kind: 'folder', name: 'Passives', parentId: null }, 'PASS')).toBeNull()
   })
 
@@ -346,7 +346,7 @@ describe('fix round 1', () => {
   const rich = (): IntakeDraftContent => {
     let d = ok(withNewFolder(base, s, { id: 'DF', name: 'Coils', parentId: null }))
     d = ok(withNewAttribute(d, s, { id: 'DA', name: 'Tolerance', kind: 'text', unit: '', siPrefixes: false, options: [] }))
-    return { ...d, newTags: [{ id: 'T1', name: 'Kit' }], newItems: [nItem({ tagIds: ['T1'] })] }
+    return { ...d, newTags: [{ id: 'T1', name: 'Kit' }], newItems: [nItem({ tagIds: ['T1'], attributes: [{ attributeId: 'DA', value: null, axis: false }] })] }
   }
   const keeps = (d: IntakeDraftContent) => {
     expect(d.newFolders?.map((f) => f.id)).toEqual(['DF'])

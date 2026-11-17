@@ -4,6 +4,9 @@
 /** The longest name of an item, folder, tag, attribute, unit or inventory, trimmed. */
 export const MAX_NAME_LENGTH = 200
 
+/** Attributes of one inventory shown in lists ("Show in lists"). */
+export const MAX_PINNED_ATTRIBUTES = 2
+
 /** The longest unit of a number attribute, trimmed. */
 export const MAX_ATTRIBUTE_UNIT_LENGTH = 16
 

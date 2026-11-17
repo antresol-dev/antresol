@@ -139,10 +139,11 @@ export type Command =
   | ({ type: 'photo.replace'; variantId: Id; id: Id; itemId: Id; replaces: Id | null } & PhotoFile)
   | { type: 'photo.remove'; id: Id }
   | { type: 'photo.reorder'; itemId: Id; orderedIds: Id[] }
-  /** Commits an intake draft in one write (spec 2026-11-13 intakes §7, 2026-11-16 intake entities §7): new folders
-   *  (parents first), new attributes, new tags, new items before their variants, archived variants back from the
-   *  archive, photos, one `receipt` per line marked with the intake, and the intake row becomes committed with `lines`,
-   *  `header` and `created`. New folders and items carry no icon or colour. `baseRev`: the source revision the draft was resolved against; storage refuses
+  /** Commits an intake draft in one write (spec 2026-11-13 intakes §7, 2026-11-16 intake entities §7, 2026-11-17 full
+   *  entities §8): new folders (parents first), new units, new attributes, new tags, values appended to existing lists,
+   *  new items before their variants, archived variants back from the archive, photos, one `receipt` per line marked
+   *  with the intake, and the intake row becomes committed with `lines`, `header` and `created`. Fields added later
+   *  (icons, colours, pins, descriptions, `newUnits`, `appendOptions`) may be absent in older commands: none. `baseRev`: the source revision the draft was resolved against; storage refuses
    *  a stale one, except that a retry of an intake already committed writes nothing. `baseDraftRev`: the draft's
    *  `draftRev` the command was built from; storage refuses it when the draft was saved since (another device's edits
    *  are never dropped silently). `axisPosition`: null for a shared attribute. `replaces`: undefined adds the photo; otherwise as photo.replace. */
@@ -155,21 +156,30 @@ export type Command =
       header: IntakeHeader
       /** Folders the commit creates, every parent before its children; `parentId` an existing folder or an earlier one
        *  of this list. A folder the copy holds already is this command's own. */
-      newFolders: { id: Id; parentId: Id | null; name: string }[]
-      /** Attributes the commit creates (`newItems[].attributes` may name them), as attribute.create. */
-      newAttributes: { id: Id; name: string; kind: AttributeKind; options: string[]; unit: string; siPrefixes: boolean }[]
+      newFolders: { id: Id; parentId: Id | null; name: string; icon?: string | null }[]
+      /** Custom units the commit creates, as unit.create (`newItems[].unitKey` may be `custom:<id>` of one); unique by
+       *  name and symbol among the built-in and custom units and each other. A unit the copy holds is this command's own. */
+      newUnits?: { id: Id; name: string; symbol: string; prefixPowers: number[] }[]
+      /** Attributes the commit creates (`newItems[].attributes` may name them), as attribute.create, plus "Show in lists":
+       *  the pins may not take the inventory over MAX_PINNED_ATTRIBUTES (refused, not skipped). */
+      newAttributes: { id: Id; name: string; kind: AttributeKind; options: string[]; unit: string; siPrefixes: boolean; pinned?: boolean }[]
       /** Tags the commit creates (`newItems[].tagIds` may name them); a tag the copy holds already is this command's own. */
-      newTags: { id: Id; name: string }[]
+      newTags: { id: Id; name: string; color?: string | null }[]
+      /** Values appended to existing list attributes, at the end, in order; a value the list holds already (a retry) is
+       *  skipped. Each attribute once; no value twice (no case). Lines and new items may use them. */
+      appendOptions?: { attributeId: Id; values: string[] }[]
       newItems: {
         id: Id
         folderId: Id | null
         name: string
         description: string | null
+        icon?: string | null
+        color?: string | null
         unitKey: string
         tagIds: Id[]
         attributes: { attributeId: Id; value: string | null; axisPosition: number | null }[]
       }[]
-      newVariants: { id: Id; itemId: Id; values: { attributeId: Id; value: string }[] }[]
+      newVariants: { id: Id; itemId: Id; values: { attributeId: Id; value: string }[]; description?: string | null }[]
       unarchiveVariants: Id[]
       receipts: { movementId: Id; itemId: Id; variantId: Id | null; quantity: Quantity; totalPrice: number | null; sourceUrl: string | null }[]
       photos: ({ id: Id; itemId: Id; variantId: Id | null; replaces: Id | null | undefined } & PhotoFile)[]

@@ -12,6 +12,7 @@ import {
   type DraftLine,
   type DraftNewItem,
   type EntityProblem,
+  type ResolvedEntity,
   type Id,
   type IntakeCreated,
   type IntakeDraftContent,
@@ -124,9 +125,9 @@ export interface IntakeCreatedView {
   items: { id: Id; name: string; folder: string }[]
 }
 
-export function entityProblemText(p: EntityProblem | null, what: 'folder' | 'attribute' | 'item', nameOf: (id: Id) => string): string | null {
+export function entityProblemText(p: EntityProblem | null, what: ResolvedEntity['kind'], nameOf: (id: Id) => string): string | null {
   if (p === null) return null
-  if (p.code === 'duplicate_name') return `a ${what === 'folder' ? 'folder' : 'attribute'} with this name already exists: ${nameOf(p.existingId)} (id ${p.existingId})`
+  if (p.code === 'duplicate_name') return `a ${what} with this name already exists: ${nameOf(p.existingId)} (id ${p.existingId})`
   if (p.code === 'parent_gone') return 'the folder or item it belongs to is archived or gone'
   if (p.code === 'cycle') return 'the folder would be inside itself'
   return 'the name, kind, unit, tag, value or attribute does not fit'

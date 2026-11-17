@@ -20,10 +20,16 @@ export * from './variants'
 export * from './intakes'
 export * from './names'
 export {
+  addedOptionProblems,
+  addedOptionValues,
   draftAttribute,
   draftAttributeProblems,
   draftFolderProblems,
+  draftTagProblems,
+  draftUnit,
+  draftUnitProblems,
   foldersParentsFirst,
   intakeAttributes,
-  sameName,
+  intakeUnits,
+  withAddedOptions,
 } from './intake-entities'

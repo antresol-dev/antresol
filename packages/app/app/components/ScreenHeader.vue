@@ -17,7 +17,7 @@ const props = defineProps<{
 defineSlots<{
   /** compact = below 1024 px: icon-only buttons in the top bar. */
   actions?: (props: { compact: boolean }) => unknown
-  /** Inline before the title's text (an item's coloured icon), wrapping with it. */
+  /** Before the title, a 40 px control aligned with its first line (an item's coloured icon). */
   'before-title'?: () => unknown
   /** One line of chips right under the title (an item's list values); the caller keeps it to one clipped row. */
   'below-title'?: () => unknown
@@ -75,7 +75,11 @@ const crumbLink = 'pressable min-w-0 truncate rounded-chip'
         </div>
         <div class="flex min-w-0 items-end justify-between gap-3">
           <div class="min-w-0 flex-1">
-            <h1 tabindex="-1" :class="[heading, wrapTitle ? 'wrap-anywhere' : 'truncate']"><slot name="before-title" />{{ title }}</h1>
+            <div v-if="$slots['before-title']" class="flex min-w-0 items-start gap-1">
+          <slot name="before-title" />
+          <h1 tabindex="-1" :class="[heading, 'min-w-0 py-1', wrapTitle ? 'wrap-anywhere' : 'truncate']">{{ title }}</h1>
+        </div>
+        <h1 v-else tabindex="-1" :class="[heading, wrapTitle ? 'wrap-anywhere' : 'truncate']">{{ title }}</h1>
             <slot name="below-title" />
             <p v-if="subtitle" class="mt-0.5 truncate text-sm font-semibold text-muted-foreground">{{ subtitle }}</p>
           </div>
@@ -132,7 +136,11 @@ const crumbLink = 'pressable min-w-0 truncate rounded-chip'
             </NuxtLink>
           </template>
         </nav>
-        <h1 tabindex="-1" :class="[heading, wrapTitle ? 'wrap-anywhere' : 'truncate']"><slot name="before-title" />{{ title }}</h1>
+        <div v-if="$slots['before-title']" class="flex min-w-0 items-start gap-1">
+          <slot name="before-title" />
+          <h1 tabindex="-1" :class="[heading, 'min-w-0 py-1', wrapTitle ? 'wrap-anywhere' : 'truncate']">{{ title }}</h1>
+        </div>
+        <h1 v-else tabindex="-1" :class="[heading, wrapTitle ? 'wrap-anywhere' : 'truncate']">{{ title }}</h1>
         <slot name="below-title" />
       </template>
 

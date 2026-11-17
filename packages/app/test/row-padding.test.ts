@@ -62,7 +62,8 @@ describe('rows pad their content', () => {
 /*
  * A row that lights up inside a list, palette, picker or sheet takes the selected row's radius (--radius-row, the
  * style's curR), not a button's or a chip's: in Liquid, Y2K and Retro those are pills, and a pill-shaped highlight stuck
- * out past its container's rounder-than-it corners (owner, 2026-11-17). Fields (bordered, bg-field) keep the field radius.
+ * out past its container's rounder-than-it corners (owner, 2026-11-17). Fields (bordered, bg-field) keep the field radius;
+ * square controls (size-*) are buttons, not rows.
  */
 describe('highlighted rows fit their container', () => {
   it('every hover row outside the ui primitives is rounded-row', () => {
@@ -73,6 +74,8 @@ describe('highlighted rows fit their container', () => {
       for (const m of read(`components/${name}`).matchAll(/class="([^"]*hover:bg-hover[^"]*)"|'([^']*hover:bg-hover[^']*)'/g)) {
         const cls = m[1] ?? m[2] ?? ''
         if (/\bbg-field\b/.test(cls)) continue
+        // A square control (size-10 and the like) is a button, not a row.
+        if (/(^|\s)size-\d/.test(cls)) continue
         if (/\brounded-(field|chip)\b/.test(cls)) problems.push(`${name}: ${cls.slice(0, 60)}`)
       }
     }

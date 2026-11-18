@@ -257,7 +257,7 @@ const retryErrorKey = computed(() =>
       <IntakeWillCreate :content="content" :snapshot="snapshot" :resolved="resolved" :read-only="readOnly" :edit="edit" @open-folder="openFolder" />
 
       <section class="grid min-w-0 grid-cols-1 gap-2">
-        <h2 class="section-label px-1 text-xs">{{ $t('intakes.lines', lineCount) }}</h2>
+        <h2 class="section-label px-3 text-xs">{{ $t('intakes.lines', lineCount) }}</h2>
         <EmptyState v-if="lineCount === 0" :text="$t('intakes.screen.noLines')" />
         <ul v-else class="surface-list">
           <li

@@ -10,7 +10,7 @@ import {
   type InventorySnapshot,
   type ResolvedIntake,
 } from '@antresol/core'
-import { Folder, Pencil, X } from '@lucide/vue'
+import { ChevronDown, Folder, Pencil, X } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -39,7 +39,8 @@ import { UNDO_MIN_MS } from '~/lib/undo'
 // under their nearest existing parent), units, attributes, tags, values added to lists and new items. A block with
 // nothing in it is not shown. Each row is edited in its own sheet; nothing is created here: a unit, attribute, tag or
 // value goes when no item uses it, and "Remove from all items" takes it off every item at once. A folder or an attribute
-// that the commit would refuse shows why, with "Use existing" where the cause is a name that is taken.
+// that the commit would refuse shows why, with "Use existing" where the cause is a name that is taken. Folders and new
+// items fold behind their title when there are more than three.
 const props = defineProps<{
   content: IntakeDraftContent
   snapshot: InventorySnapshot
@@ -73,6 +74,19 @@ const items = computed(() => props.content.newItems)
 const problems = computed(() => new Map(props.resolved.entities.map((e) => [e.id, e.problem] as const)))
 const problemOf = (id: Id): EntityProblem | null => problems.value.get(id) ?? null
 const problemKey = (p: EntityProblem): string => `intakes.entity.problem.${p.code}`
+const folderCount = computed(() => groups.value.reduce((n, g) => n + g.folders.length, 0))
+
+/** Folders and new items fold when there are more than COLLAPSE_AFTER of them; a block with a problem in it starts open. */
+const COLLAPSE_AFTER = 3
+const foldersOpen = ref<boolean | null>(null)
+const itemsOpen = ref<boolean | null>(null)
+/** What a folded block holds, in a line: "Anchors, Cables, Fasteners…". */
+const folderNames = computed(() => groups.value.flatMap((g) => g.folders.map(({ folder }) => folder.name)).join(', '))
+const itemNames = computed(() => items.value.map((i) => i.name).join(', '))
+const foldersFold = computed(() => folderCount.value > COLLAPSE_AFTER)
+const itemsFold = computed(() => items.value.length > COLLAPSE_AFTER)
+const foldersShown = computed(() => !foldersFold.value || (foldersOpen.value ?? groups.value.some((g) => g.folders.some(({ folder }) => problemOf(folder.id)))))
+const itemsShown = computed(() => !itemsFold.value || (itemsOpen.value ?? items.value.some((i) => problemOf(i.id))))
 
 const existingName = (id: Id): string =>
   props.snapshot.folders.find((f) => f.id === id)?.name ??
@@ -247,17 +261,28 @@ const infoRowClass = `${dividerClass} flex min-h-9 min-w-0 items-center gap-2 px
 const hoverClass = computed(() => (props.readOnly ? '' : 'hover:bg-hover'))
 const tapClass =
   'flex min-h-11 min-w-0 grow items-center gap-2 rounded-field px-3 text-left text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none'
+/** A block's title that folds it: the title's own inset, a 44 px target. */
+const foldTitle =
+  'flex min-h-11 w-full min-w-0 items-center gap-2 rounded-field px-3 text-left text-sm font-semibold text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none'
 const existingLink =
   'inline-flex min-h-11 mr-2 max-w-[45%] min-w-0 items-center rounded-chip px-1 text-sm font-semibold underline underline-offset-2 hover:text-accent-ink focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none'
 </script>
 
 <template>
   <section v-if="groups.length > 0 || units.length > 0 || attributes.length > 0 || tags.length > 0 || options.length > 0 || items.length > 0" class="grid min-w-0 grid-cols-1 gap-3" :aria-label="$t('intakes.willCreate.title')">
-    <h2 class="section-label px-1 text-xs">{{ $t('intakes.willCreate.title') }}</h2>
+    <h2 class="section-label px-3 text-xs">{{ $t('intakes.willCreate.title') }}</h2>
 
     <div v-if="groups.length > 0" class="grid min-w-0 gap-1">
-      <h3 class="px-1 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.folders') }}</h3>
-      <ul class="surface-list">
+      <h3 v-if="!foldersFold" class="px-3 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.folders') }}</h3>
+      <h3 v-else>
+        <button type="button" :class="foldTitle" :aria-expanded="foldersShown" :aria-controls="`${uid}-folders`" @click="foldersOpen = !foldersShown">
+          <span class="shrink-0">{{ $t('intakes.willCreate.folders') }}</span>
+          <span class="shrink-0 font-normal tabular-nums">{{ folderCount }}</span>
+          <span v-if="!foldersShown" class="min-w-0 truncate font-normal">{{ folderNames }}</span>
+          <ChevronDown class="ml-auto size-4 shrink-0 text-icon transition-transform duration-(--dur-fast) motion-reduce:transition-none" :class="foldersShown ? 'rotate-180' : ''" aria-hidden="true" />
+        </button>
+      </h3>
+      <ul v-if="foldersShown" :id="`${uid}-folders`" class="surface-list">
         <template v-for="group in groups" :key="group.parentId ?? 'root'">
           <li v-if="group.context.length > 0" :class="infoRowClass" class="text-sm text-muted-foreground">
             <Folder class="size-4 shrink-0 text-icon" aria-hidden="true" />
@@ -278,7 +303,7 @@ const existingLink =
     </div>
 
     <div v-if="units.length > 0" class="grid min-w-0 gap-1">
-      <h3 class="px-1 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.units') }}</h3>
+      <h3 class="px-3 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.units') }}</h3>
       <ul class="surface-list">
         <li v-for="u in units" :key="u.id" :class="[rowClass, hoverClass]">
           <button type="button" :class="tapClass" :aria-label="$t('intakes.unit.edit', { name: u.name })" :aria-describedby="problemOf(u.id) ? `${uid}-${u.id}` : undefined" :disabled="readOnly" @click="openUnit(u)">
@@ -296,7 +321,7 @@ const existingLink =
     </div>
 
     <div v-if="attributes.length > 0" class="grid min-w-0 gap-1">
-      <h3 class="px-1 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.attributes') }}</h3>
+      <h3 class="px-3 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.attributes') }}</h3>
       <ul class="surface-list">
         <li v-for="a in attributes" :key="a.id" :class="[rowClass, hoverClass]">
           <button type="button" :class="tapClass" :aria-label="$t('intakes.attribute.edit', { name: a.name })" :aria-describedby="`${uid}-${a.id}`" :disabled="readOnly" @click="openAttribute(a)">
@@ -319,7 +344,7 @@ const existingLink =
     </div>
 
     <div v-if="tags.length > 0" class="grid min-w-0 gap-1">
-      <h3 class="px-1 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.tags') }}</h3>
+      <h3 class="px-3 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.tags') }}</h3>
       <ul class="surface-list">
         <li v-for="x in tags" :key="x.id" :class="[rowClass, hoverClass]">
           <button type="button" :class="tapClass" :aria-label="$t('intakes.tag.edit', { name: x.name })" :aria-describedby="problemOf(x.id) ? `${uid}-${x.id}` : undefined" :disabled="readOnly" @click="openTag(x)">
@@ -338,7 +363,7 @@ const existingLink =
     </div>
 
     <div v-if="options.length > 0" class="grid min-w-0 gap-1">
-      <h3 class="px-1 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.options') }}</h3>
+      <h3 class="px-3 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.options') }}</h3>
       <ul class="surface-list">
         <li v-for="o in options" :key="o.key" :class="[rowClass, hoverClass]">
           <button type="button" :class="tapClass" :aria-label="$t('intakes.option.edit', { name: o.name, value: o.value })" :aria-describedby="`${uid}-option-${options.indexOf(o)}`" :disabled="readOnly" @click="openOption(o)">
@@ -358,8 +383,16 @@ const existingLink =
     </div>
 
     <div v-if="items.length > 0" class="grid min-w-0 gap-1">
-      <h3 class="px-1 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.items') }}</h3>
-      <ul class="surface-list">
+      <h3 v-if="!itemsFold" class="px-3 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.items') }}</h3>
+      <h3 v-else>
+        <button type="button" :class="foldTitle" :aria-expanded="itemsShown" :aria-controls="`${uid}-items`" @click="itemsOpen = !itemsShown">
+          <span class="shrink-0">{{ $t('intakes.willCreate.items') }}</span>
+          <span class="shrink-0 font-normal tabular-nums">{{ items.length }}</span>
+          <span v-if="!itemsShown" class="min-w-0 truncate font-normal">{{ itemNames }}</span>
+          <ChevronDown class="ml-auto size-4 shrink-0 text-icon transition-transform duration-(--dur-fast) motion-reduce:transition-none" :class="itemsShown ? 'rotate-180' : ''" aria-hidden="true" />
+        </button>
+      </h3>
+      <ul v-if="itemsShown" :id="`${uid}-items`" class="surface-list">
         <li v-for="item in items" :key="item.id" class="relative not-first:before:absolute not-first:before:top-0 not-first:before:right-3 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']">
           <IntakeNewItemCard :item="item" :content="content" :snapshot="snapshot" :problem="problemOf(item.id)" :read-only="readOnly" :edit="edit" />
         </li>

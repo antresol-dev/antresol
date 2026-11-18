@@ -19,7 +19,8 @@ import { existingMatches } from '~/lib/quick-add'
 import type { PhotoRef } from '~/lib/photo-url'
 import { snapshotIndex } from '~/lib/views'
 
-// One line of a draft intake (spec 2026-11-13 intakes §5): "+10 · TL072 · have 6 · Op-amps · ADD". A tap opens the line.
+// One line of a draft intake (spec 2026-11-13 intakes §5): the picture, "TL072 · 4.7 kΩ" over "have 6 · Op-amps", and on the
+// right "+10 pcs" over the ADD/NEW tag. A tap opens the line.
 const props = defineProps<{
   line: DraftLine
   resolution: LineResolution
@@ -123,19 +124,20 @@ const tag = computed(() => {
       :color="item?.color ?? null"
       class="size-9 rounded-thumb text-xs"
     />
-    <span class="amount w-14 shrink-0 text-right text-base tabular-nums">
-      <template v-if="kind === 'add'">+</template>{{ amount.number }}
-      <span class="block text-xs font-semibold text-muted-foreground">{{ amount.unit }}</span>
-    </span>
     <span class="flex min-w-0 grow flex-col gap-0.5">
       <span class="min-w-0 text-base font-semibold wrap-anywhere">
-        {{ name }}<span v-if="values" class="font-semibold text-muted-foreground"> · {{ values }}</span>
+        {{ name }}<span v-if="values" class="font-normal text-muted-foreground"> · {{ values }}</span>
       </span>
       <span v-if="problemCode" class="text-sm font-semibold text-destructive wrap-anywhere">{{ problemText }}</span>
       <span v-else class="truncate text-sm text-muted-foreground">{{ caption }}</span>
     </span>
-    <span class="shrink-0 rounded-chip px-1.5 py-px text-xs font-semibold tracking-[0.04em] uppercase" :class="tag.class">
-      {{ $t(tag.label) }}
+    <span class="flex shrink-0 flex-col items-end gap-1">
+      <span class="amount text-base whitespace-nowrap tabular-nums">
+        <template v-if="kind === 'add'">+</template>{{ amount.number }}<span v-if="amount.unit" class="ml-1 text-sm font-normal text-muted-foreground">{{ amount.unit }}</span>
+      </span>
+      <span class="rounded-chip px-1.5 py-px text-xs font-semibold tracking-[0.04em] uppercase" :class="tag.class">
+        {{ $t(tag.label) }}
+      </span>
     </span>
   </button>
 </template>

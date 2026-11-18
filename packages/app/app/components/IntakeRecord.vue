@@ -100,9 +100,9 @@ const meta = computed(() => {
     </div>
 
     <section v-if="created.length > 0" class="grid min-w-0 grid-cols-1 gap-3" :aria-label="$t('intakes.created.title')">
-      <h2 class="section-label px-1 text-xs">{{ $t('intakes.created.title') }}</h2>
+      <h2 class="section-label px-3 text-xs">{{ $t('intakes.created.title') }}</h2>
       <div v-for="sec in created" :key="sec.key" class="grid min-w-0 gap-1">
-        <h3 class="px-1 text-sm font-semibold text-muted-foreground">{{ $t(sec.title) }}</h3>
+        <h3 class="px-3 text-sm font-semibold text-muted-foreground">{{ $t(sec.title) }}</h3>
         <ul class="surface-list">
           <li
             v-for="row in sec.rows"
@@ -121,7 +121,7 @@ const meta = computed(() => {
     </section>
 
     <section class="grid min-w-0 grid-cols-1 gap-2">
-      <h2 class="section-label px-1 text-xs">{{ $t('intakes.record.lines', lines.length) }}</h2>
+      <h2 class="section-label px-3 text-xs">{{ $t('intakes.record.lines', lines.length) }}</h2>
       <EmptyState v-if="lines.length === 0" :text="$t('intakes.record.noLines')" />
       <ul v-else class="surface-list">
         <li

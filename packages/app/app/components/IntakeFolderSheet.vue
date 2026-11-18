@@ -49,12 +49,7 @@ watch(
 )
 
 const editing = computed(() => !!props.folderId)
-const choices = computed(() =>
-  folderChoicesWithDraft(props.snapshot, props.content, parentId.value, editing.value ? formId : undefined).map((c) => ({
-    ...c,
-    name: c.draft ? t('intakes.folder.newSuffix', { name: c.name }) : c.name,
-  })),
-)
+const choices = computed(() => folderChoicesWithDraft(props.snapshot, props.content, parentId.value, editing.value ? formId : undefined))
 const clash = computed(() => (name.value.trim() === '' ? null : nameClash(props.snapshot, props.content, { kind: 'folder', name: name.value, parentId: parentId.value }, formId)))
 const existingName = computed(() => {
   const c = clash.value

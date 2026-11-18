@@ -208,12 +208,7 @@ async function removePhoto(id: Id): Promise<void> {
   })
 }
 
-const folderChoices = computed(() =>
-  folderChoicesWithDraft(props.snapshot, props.content, props.item.folderId).map((c) => ({
-    ...c,
-    name: c.draft ? t('intakes.folder.newSuffix', { name: c.name }) : c.name,
-  })),
-)
+const folderChoices = computed(() => folderChoicesWithDraft(props.snapshot, props.content, props.item.folderId))
 function setFolder(id: Id | null): void {
   pickingFolder.value = false
   const taken = takenIn(props.item.name, id)
@@ -347,7 +342,7 @@ const panelId = `intake-item-${props.item.id}`
           <span class="min-w-0 grow truncate text-right text-sm" :class="tagNames ? 'text-foreground' : 'text-muted-foreground'">{{ tagNames || $t('intakes.line.add') }}</span>
           <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-(--dur-fast) motion-reduce:transition-none" :class="tagsOpen ? 'rotate-180' : ''" aria-hidden="true" />
         </button>
-        <TagPicker v-if="tagsOpen" v-model="tagIds" :snapshot="snapshot" :extra-tags="content.newTags ?? []" :locked="disabled" @create="addTag" />
+        <TagPicker v-if="tagsOpen" v-model="tagIds" class="ml-3 min-w-0 border-l-2 border-input py-1 pl-3" :snapshot="snapshot" :extra-tags="content.newTags ?? []" :locked="disabled" @create="addTag" />
       </div>
 
       <div class="grid gap-2">

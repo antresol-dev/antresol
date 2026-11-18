@@ -439,7 +439,7 @@ const folderChips = computed(() => {
 })
 const folderList = computed(() =>
   newItem.value
-    ? folderChoicesWithDraft(s.value, props.content, newItem.value.folderId).map((c) => ({ ...c, name: c.draft ? t('intakes.folder.newSuffix', { name: c.name }) : c.name }))
+    ? folderChoicesWithDraft(s.value, props.content, newItem.value.folderId)
     : [],
 )
 function setFolder(id: Id | null): void {
@@ -719,6 +719,8 @@ const title = computed(() => t(editing.value ? 'intakes.line.editTitle' : 'intak
 // 12 px in, like a field's text), and an inset divider between rows instead of a full-width border.
 const summaryRow =
   "relative flex min-h-11 min-w-0 items-center gap-3 rounded-field px-3 py-2 text-left transition-colors duration-(--dur-fast) not-first:before:absolute not-first:before:top-0 not-first:before:right-3 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-[''] hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none"
+/** What a section row opens: inset under the row's title with a rule on its left, so it reads as inside that section. */
+const panel = 'mb-2 ml-3 min-w-0 border-l-2 border-input py-2 pl-3'
 const matchRow =
   'flex min-h-11 w-full min-w-0 items-center gap-3 rounded-field px-3 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none'
 const banner = 'grid gap-1 rounded-field px-3 py-3 text-sm'
@@ -882,10 +884,7 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
               {{ $t('intakes.option.added', { value: stagedOption.value, name: stagedOption.attribute.name }) }}
             </p>
           </div>
-          <p class="field-text text-xs text-muted-foreground wrap-anywhere">
-            <template v-if="newItem">{{ $t('intakes.line.newItemCaption') }}</template>
-            <template v-else>{{ haveText }}</template>
-          </p>
+          <p v-if="!newItem" class="field-text text-xs text-muted-foreground wrap-anywhere">{{ haveText }}</p>
           <div>
             <Button type="button" variant="ghost" size="sm" class="h-9 text-accent-ink" :disabled="disabled" @click="changeItem">{{ $t('intakes.line.change') }}</Button>
           </div>
@@ -956,7 +955,7 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
               </span>
               <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-(--dur-fast) motion-reduce:transition-none" :class="attributesOpen ? 'rotate-180' : ''" aria-hidden="true" />
             </button>
-            <div v-if="attributesOpen" class="py-3">
+            <div v-if="attributesOpen" :class="panel">
               <IntakeNewItemAttributes v-model="attributes" v-model:held="heldAttributes" :snapshot="s" :content="formContent" :similar="similarItem" :disabled="disabled" @update:error="attributeError = $event" />
             </div>
 
@@ -967,7 +966,7 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
               </span>
               <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-(--dur-fast) motion-reduce:transition-none" :class="tagsOpen ? 'rotate-180' : ''" aria-hidden="true" />
             </button>
-            <div v-if="tagsOpen" class="py-3">
+            <div v-if="tagsOpen" :class="panel">
               <TagPicker v-model="tagIds" :snapshot="s" :extra-tags="draftTags" :locked="disabled" @create="addTag" />
             </div>
 
@@ -978,7 +977,7 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
               </span>
               <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-(--dur-fast) motion-reduce:transition-none" :class="descriptionOpen ? 'rotate-180' : ''" aria-hidden="true" />
             </button>
-            <div v-if="descriptionOpen" class="py-3">
+            <div v-if="descriptionOpen" :class="panel">
               <Label for="intake-line-description" class="sr-only">{{ $t('form.description') }}</Label>
               <Textarea id="intake-line-description" v-model="description" rows="3" class="min-h-20" :disabled="disabled" />
             </div>
@@ -990,7 +989,7 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
               </span>
               <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-(--dur-fast) motion-reduce:transition-none" :class="iconOpen ? 'rotate-180' : ''" aria-hidden="true" />
             </button>
-            <div v-if="iconOpen" class="grid gap-4 py-3">
+            <div v-if="iconOpen" :class="[panel, 'grid gap-4']">
               <IconField v-model:picking="pickingIcon" :icon="newItem.icon ?? null" :color="shownColor" :disabled="disabled" @pick="setIcon" />
               <ColorSwatches :model-value="newItem.color ?? null" :auto="defaultItemColor(newItem.id)" :label="$t('colors.label')" :disabled="disabled" @update:model-value="setColor" />
             </div>
@@ -1004,7 +1003,7 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
               </span>
               <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-(--dur-fast) motion-reduce:transition-none" :class="variantDescriptionOpen ? 'rotate-180' : ''" aria-hidden="true" />
             </button>
-            <div v-if="variantDescriptionOpen" class="py-3">
+            <div v-if="variantDescriptionOpen" :class="panel">
               <Label for="intake-line-variant-description" class="sr-only">{{ $t('intakes.line.variantDescription') }}</Label>
               <Textarea id="intake-line-variant-description" v-model="variantDescription" rows="3" class="min-h-20" :disabled="disabled" />
             </div>
@@ -1017,7 +1016,7 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
             </span>
             <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-(--dur-fast) motion-reduce:transition-none" :class="priceOpen ? 'rotate-180' : ''" aria-hidden="true" />
           </button>
-          <div v-if="priceOpen" class="grid gap-3 py-3" @keydown.enter.prevent="save(!editing)">
+          <div v-if="priceOpen" :class="[panel, 'grid gap-3']" @keydown.enter.prevent="save(!editing)">
             <div class="grid gap-1.5">
               <Label for="intake-line-price">{{ $t('quickAdd.price') }}</Label>
               <div class="relative">
@@ -1041,7 +1040,7 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
               </span>
               <ChevronDown class="size-4 shrink-0 text-icon transition-transform duration-(--dur-fast) motion-reduce:transition-none" :class="photoOpen ? 'rotate-180' : ''" aria-hidden="true" />
             </button>
-            <div v-if="photoOpen" class="grid gap-2 py-3">
+            <div v-if="photoOpen" :class="[panel, 'grid gap-2']">
               <p v-if="photoMode !== 'legacy'" class="text-sm text-subtle-foreground">{{ $t(photoMode === 'item' ? 'intakes.line.photoOfItem' : 'intakes.line.photoOfVariant') }}</p>
               <div v-if="lineHasPhoto && photo" class="flex items-center gap-3">
                 <PhotoImg :photo="photo" size="thumb" alt="" class="size-10 shrink-0 rounded-thumb object-cover" />

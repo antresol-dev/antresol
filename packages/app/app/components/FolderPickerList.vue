@@ -5,8 +5,9 @@ import type { MoveTarget } from '~/lib/views'
 
 // The folders of the inventory as an indented list inside a form: root first, the chosen one a selected row. The box is a
 // field (14) with 4 px padding, so its rows are 10.
-// `taken` marks folders where the name being placed already exists: those rows can't be chosen.
-defineProps<{ choices: MoveTarget[]; disableCurrent?: boolean; taken?: (id: Id | null) => 'active' | 'archived' | null }>()
+// `taken` marks folders where the name being placed already exists: those rows can't be chosen. A choice marked `draft` (a
+// folder an intake will create) carries the NEW chip.
+defineProps<{ choices: (MoveTarget & { draft?: boolean })[]; disableCurrent?: boolean; taken?: (id: Id | null) => 'active' | 'archived' | null }>()
 const emit = defineEmits<{ select: [id: Id | null] }>()
 </script>
 
@@ -25,6 +26,7 @@ const emit = defineEmits<{ select: [id: Id | null] }>()
         <span class="flex min-w-0 flex-1 items-center gap-1.5">
           <span class="min-w-0 truncate">{{ choice.name }}</span>
           <RootMark v-if="choice.id === null" />
+          <span v-if="choice.draft" class="shrink-0 rounded-chip bg-accent-soft px-1.5 py-px text-xs font-semibold tracking-[0.04em] text-accent-soft-foreground uppercase">{{ $t('intakes.tag.new') }}</span>
         </span>
         <span v-if="taken?.(choice.id)" class="shrink-0 text-xs text-destructive">
           {{ $t(taken(choice.id) === 'archived' ? 'nameTaken.inListArchived' : 'nameTaken.inList') }}

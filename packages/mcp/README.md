@@ -102,4 +102,4 @@ pnpm --filter @antresol/mcp build          # packages/mcp/dist/server.mjs and th
 pnpm --filter @antresol/mcp run pack:mcpb  # also dist/antresol.mcpb and dist/antresol-mcp-node.zip
 ```
 
-(`pnpm pack` is a pnpm command of its own, hence `run pack:mcpb`.) A release is made by pushing a tag `mcp-v<version>`, where the version is the one in `packages/mcp/package.json` and `packages/mcp/mcpb/manifest.json`.
+(`pnpm pack` is a pnpm command of its own, hence `run pack:mcpb`.) A local pack stamps the bundle as a pre-release of the next patch (`0.1.0` → `0.1.1-dev.202611181015`, UTC), because Claude Desktop silently ignores a `.mcpb` whose version is already installed; only the tag build keeps the plain version. A release is made by pushing a tag `mcp-v<version>`, where the version is the one in `packages/mcp/package.json` and `packages/mcp/mcpb/manifest.json`.

@@ -253,14 +253,14 @@ async function saveOption(): Promise<void> {
 }
 
 // A row is the rounded element that carries the hover highlight and fills the list's row edge to edge (like FolderList);
-// its control keeps the padding and the focus ring, side actions sit in the same row, 4 px off the row's right edge.
+// its control keeps the padding and the focus ring, side actions sit in the same row, 6 px off the row's right edge; a two-line row keeps 8 px above and below its text.
 const dividerClass =
   "relative not-first:before:absolute not-first:before:top-0 not-first:before:right-3 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
-const rowClass = `${dividerClass} flex min-h-11 min-w-0 items-center gap-2 rounded-field pr-1 transition-colors duration-(--dur-fast)`
+const rowClass = `${dividerClass} flex min-h-11 min-w-0 items-center gap-2 rounded-field pr-1.5 transition-colors duration-(--dur-fast)`
 const infoRowClass = `${dividerClass} flex min-h-9 min-w-0 items-center gap-2 px-3 py-1`
 const hoverClass = computed(() => (props.readOnly ? '' : 'hover:bg-hover'))
 const tapClass =
-  'flex min-h-11 min-w-0 grow items-center gap-2 rounded-field px-3 text-left text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none'
+  'flex min-h-11 min-w-0 grow items-center gap-2 rounded-field px-3 py-2 text-left text-sm focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none'
 /** A block's title that folds it: the title's own inset, a 44 px target. */
 const foldTitle =
   'flex min-h-11 w-full min-w-0 items-center gap-2 rounded-field px-3 text-left text-sm font-semibold text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none'

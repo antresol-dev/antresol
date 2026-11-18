@@ -251,5 +251,13 @@ export function withItemPhotoAdded(photos: readonly DraftItemPhoto[] | undefined
   return [...list, { ...file, id: newId() }]
 }
 
+/** Undo of a removal: `photo` back at `index` (or the end when the gallery got shorter); not again when it is there, not into a full gallery. */
+export function withItemPhotoRestored(photos: readonly DraftItemPhoto[] | undefined, photo: DraftItemPhoto, index: number): DraftItemPhoto[] {
+  const list = [...(photos ?? [])]
+  if (list.length >= MAX_DRAFT_ITEM_PHOTOS || list.some((p) => p.id === photo.id)) return list
+  list.splice(Math.max(0, Math.min(index, list.length)), 0, photo)
+  return list
+}
+
 /** The gallery without the photo `id` (the others keep their order and ids). */
 export const withItemPhotoRemoved = (photos: readonly DraftItemPhoto[] | undefined, id: Id): DraftItemPhoto[] => (photos ?? []).filter((p) => p.id !== id)

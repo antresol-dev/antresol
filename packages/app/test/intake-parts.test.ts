@@ -16,6 +16,7 @@ import {
   withHeldUnits,
   withItemPhotoAdded,
   withItemPhotoRemoved,
+  withItemPhotoRestored,
   withoutAddedValue,
   withoutAttributeEverywhere,
   withoutTagEverywhere,
@@ -182,5 +183,15 @@ describe('a new item gallery', () => {
   it('removes one photo by id', () => {
     expect(withItemPhotoRemoved(g, 'p2' as Id).map((p) => p.id)).toEqual(['p1'])
     expect(withItemPhotoRemoved(undefined, 'p2' as Id)).toEqual([])
+  })
+  it('puts a removed photo back at its place with its id (Undo), once, into a gallery with room', () => {
+    const p2 = g[1]!
+    const rest = withItemPhotoRemoved(g, 'p2' as Id)
+    expect(withItemPhotoRestored(rest, p2, 1).map((p) => p.id)).toEqual(['p1', 'p2'])
+    expect(withItemPhotoRestored(withItemPhotoRemoved(g, 'p1' as Id), g[0]!, 0).map((p) => p.id)).toEqual(['p1', 'p2'])
+    expect(withItemPhotoRestored(g, p2, 0)).toHaveLength(2)
+    expect(withItemPhotoRestored([], p2, 5).map((p) => p.id)).toEqual(['p2'])
+    const full = Array.from({ length: 20 }, (_, i) => ({ ...file(`f${i}`), id: `i${i}` as Id }))
+    expect(withItemPhotoRestored(full, p2, 0)).toHaveLength(20)
   })
 })

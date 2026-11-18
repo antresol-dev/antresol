@@ -26,7 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { defaultItemColor } from '~/lib/item-colors'
 import { nameClash, restoreNewItem, withItemUnit, withNewItem, withoutNewItem } from '~/lib/intake-draft'
-import { similarItems, similarUnits, unitChoicesWithDraft, unitTaken, withItemPhotoAdded, withItemPhotoRemoved } from '~/lib/intake-parts'
+import { similarItems, similarUnits, unitChoicesWithDraft, unitTaken, withItemPhotoAdded, withItemPhotoRemoved, withItemPhotoRestored } from '~/lib/intake-parts'
 import { folderChoicesWithDraft, folderPathWithDraft } from '@antresol/kit/draft-folders'
 import { UNDO_MIN_MS } from '~/lib/undo'
 
@@ -160,26 +160,51 @@ const galleryFull = computed(() => photoCount.value >= MAX_DRAFT_ITEM_PHOTOS)
 async function upload(files: File[]): Promise<void> {
   if (files.length === 0) return
   uploading.value = true
+  const picked = files.slice(0, Math.max(0, MAX_DRAFT_ITEM_PHOTOS - photoCount.value))
+  const stored: PhotoFile[] = []
+  let failed = false
   try {
-    const stored: PhotoFile[] = []
-    for (const file of files.slice(0, Math.max(0, MAX_DRAFT_ITEM_PHOTOS - photoCount.value))) stored.push(await intakes.uploadPhoto(file))
-    await props.edit((c) => {
-      const cur = c.newItems.find((x) => x.id === props.item.id)
-      if (!cur) return c
-      return withNewItem(c, { ...cur, photos: stored.reduce((list, f) => withItemPhotoAdded(list, f), cur.photos ?? []) })
-    })
+    for (const file of picked) stored.push(await intakes.uploadPhoto(file))
+  } catch {
+    // The ones that went up are kept (below); the failure is told after.
+    failed = true
+  }
+  try {
+    if (stored.length > 0) {
+      await props.edit((c) => {
+        const cur = c.newItems.find((x) => x.id === props.item.id)
+        if (!cur) return c
+        return withNewItem(c, { ...cur, photos: stored.reduce((list, f) => withItemPhotoAdded(list, f), cur.photos ?? []) })
+      })
+    }
+    if (failed) toast.error(stored.length > 0 ? t('intakes.item.photosPartial', { saved: stored.length, total: picked.length }) : t('intakes.line.photoFailed'))
   } catch {
     toast.error(t('intakes.line.photoFailed'))
   } finally {
     uploading.value = false
   }
 }
-/** Removes one photo of the gallery by its id. */
+/** Removes one photo of the gallery by its id; Undo puts it back at its place with the same id. */
 async function removePhoto(id: Id): Promise<void> {
   if (props.readOnly) return
-  await props.edit((c) => {
+  const index = (props.item.photos ?? []).findIndex((p) => p.id === id)
+  const photo = props.item.photos?.[index]
+  if (!photo) return
+  const done = await props.edit((c) => {
     const cur = c.newItems.find((x) => x.id === props.item.id)
     return cur ? withNewItem(c, { ...cur, photos: withItemPhotoRemoved(cur.photos, id) }) : c
+  })
+  if (!done) return
+  toast(t('intakes.item.photoRemoved', { n: index + 1 }), {
+    duration: UNDO_MIN_MS,
+    action: {
+      label: t('undo.action'),
+      onClick: () =>
+        void props.edit((c) => {
+          const cur = c.newItems.find((x) => x.id === props.item.id)
+          return cur ? withNewItem(c, { ...cur, photos: withItemPhotoRestored(cur.photos, photo, index) }) : c
+        }),
+    },
   })
 }
 
@@ -262,9 +287,10 @@ const panelId = `intake-item-${props.item.id}`
           <li v-for="(p, i) in item.photos" :key="p.id" class="relative grid gap-1">
             <PhotoImg :photo="p" size="thumb" alt="" class="size-16 rounded-thumb object-cover" />
             <span v-if="i === 0" class="text-xs text-subtle-foreground">{{ $t('intakes.item.cover') }}</span>
-            <Button type="button" variant="ghost" size="icon" class="absolute -top-3 -right-3 size-11" :aria-label="$t('intakes.item.removePhotoN', { n: i + 1 })" :disabled="disabled" @click="removePhoto(p.id)">
-              <X class="size-4" aria-hidden="true" />
-            </Button>
+            <!-- The 44 px target sits over the corner of the photo; the chip in it is what shows (controls over a photo, as in PhotoViewer). -->
+            <button type="button" class="absolute -top-3 -right-3 grid size-11 place-items-center rounded-full focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50" :aria-label="$t('intakes.item.removePhotoN', { n: i + 1 })" :disabled="disabled" @click="removePhoto(p.id)">
+              <span class="raised-sm pressable grid size-7 place-items-center rounded-full"><X class="size-4" aria-hidden="true" /></span>
+            </button>
           </li>
         </ul>
         <p v-if="canPhoto && galleryFull" class="text-sm text-subtle-foreground">{{ $t('intakes.item.photosFull', { max: MAX_DRAFT_ITEM_PHOTOS }) }}</p>

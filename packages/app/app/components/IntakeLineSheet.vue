@@ -8,6 +8,7 @@ import {
   intakeAttributes,
   itemAxes,
   itemStock,
+  MAX_DRAFT_ITEM_PHOTOS,
   MAX_NAME_LENGTH,
   newId,
   resolveUnit,
@@ -673,7 +674,7 @@ async function save(next: boolean): Promise<void> {
         refused = w
         return c
       }
-      return withLine(w, built.line, built.newItem, built.newTags)
+      return withLine(w, built.line, built.newItem, built.newTags, built.addedPhoto)
     })
     if (refused) {
       const r: { errorKey: string; params?: Record<string, string> } = refused
@@ -681,11 +682,12 @@ async function save(next: boolean): Promise<void> {
       return
     }
     if (!applied) return
+    if (built.galleryFull) toast(t('intakes.item.photoNotAdded', { max: MAX_DRAFT_ITEM_PHOTOS }))
     if (!next) {
       open.value = false
       return
     }
-    const content = withLine(written, built.line, built.newItem, built.newTags)
+    const content = withLine(written, built.line, built.newItem, built.newTags, built.addedPhoto)
     startNew(nextLineDefaults(built.line, content, s.value))
     focusSoon('#intake-line-query')
   } finally {

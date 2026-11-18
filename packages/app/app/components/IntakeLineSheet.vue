@@ -838,11 +838,13 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
               </template>
               <p v-else class="field-text pt-0.5 text-base font-semibold wrap-anywhere">{{ item?.name }}</p>
             </div>
-            <span
-              v-if="tag"
-              class="mt-1.5 shrink-0 rounded-chip px-1.5 py-px text-xs font-semibold tracking-[0.04em] uppercase"
-              :class="tag === 'add' ? 'tag-add' : 'bg-accent-soft text-accent-soft-foreground'"
-            >{{ $t(`intakes.tag.${tag}`) }}</span>
+            <!-- As tall as the name's first line (the 40 px field, or the name's 26 px text): the chip sits on its middle. -->
+            <span v-if="tag" class="flex shrink-0 items-center" :class="newItem ? 'h-10' : 'h-6.5'">
+              <span
+                class="rounded-chip px-1.5 py-px text-xs font-semibold tracking-[0.04em] uppercase"
+                :class="tag === 'add' ? 'tag-add' : 'bg-accent-soft text-accent-soft-foreground'"
+              >{{ $t(`intakes.tag.${tag}`) }}</span>
+            </span>
           </div>
           <div v-if="sharedChips.length + axes.length > 0" class="flex flex-wrap gap-1.5">
             <span v-for="c in sharedChips" :key="c" :class="[chip, 'border-input text-foreground']">{{ c }}</span>

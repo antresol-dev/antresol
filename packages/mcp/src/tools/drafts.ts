@@ -102,6 +102,8 @@ export interface NewItemArgs extends ItemDeclarations {
   description?: string
   /** Picture paths from list_photos: the item's own photos, in order; the first is the cover. */
   photos?: string[]
+  /** Not a field any more: refused with a pointer to `photos`. */
+  photo?: unknown
   /** The item is made with no line (and no stock). */
   withoutLines?: boolean
 }
@@ -559,6 +561,14 @@ const STAND_IN_FILE: PhotoFile = { provider: 'dry', fileId: 'dry', url: 'dry', u
 /** Stand-ins for a list of paths: each its own file, so the checks see as many photos as will be uploaded. */
 const standIns = (paths: string[]): PhotoFile[] => paths.map((_, j) => ({ ...STAND_IN_FILE, fileId: `dry${j}` }))
 
+/** The old single `photo` of a new item is gone: say so instead of letting the schema drop it unseen. */
+function refuseOldPhoto(label: string, photo: unknown): void {
+  if (photo !== undefined) throw new ToolError(`${label}: a new item has no "photo" field; use photos: [paths] (the first is the cover).`)
+}
+
+/** What a line photo that does not fit a full gallery is refused with. */
+const GALLERY_FULL = `the item already has ${MAX_DRAFT_ITEM_PHOTOS} photos; this photo does not fit. Remove one with update_new_item (photos) first.`
+
 /** The paths of an item's `photos`, trimmed. More than the draft holds, or a blank path, is refused here, before anything is uploaded. */
 function photoPaths(label: string, photos: string[] | undefined): string[] {
   const paths = (photos ?? []).map((p) => (typeof p === 'string' ? p.trim() : ''))
@@ -599,6 +609,7 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
   // The ids are fixed here: editDraft may run its callback twice, and neither may mint new ones. Uploads happen after the dry run below.
   const lineIds = lines.map(() => newId())
   const itemIds = newItems.map(() => newId())
+  newItems.forEach((n, i) => refuseOldPhoto(`new item ${i + 1}`, n.photo))
   const itemPhotoPaths = newItems.map((n, i) => photoPaths(`new item ${i + 1}`, n.photos))
   const itemPhotoIds = itemPhotoPaths.map((paths) => paths.map(() => newId()))
   const mint = minter()
@@ -665,7 +676,8 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
         )
         if ('errorKey' in built) throw new ToolError(refusal(built.errorKey, built.params, s, working))
         if (field(l.description) !== null && built.line.variantDescription === undefined) throw new ToolError(NO_VARIANT)
-        next = restage(s, withLine(working, built.line, built.newItem, built.newTags), staged)
+        if (built.galleryFull) throw new ToolError(GALLERY_FULL)
+        next = restage(s, withLine(working, built.line, built.newItem, built.newTags, built.addedPhoto), staged)
       })
     })
     if (errors.length > 0) throw problems(errors)
@@ -783,7 +795,8 @@ export async function updateIntakeLine(
       totalPrice: args.price === undefined ? old.totalPrice : built.line.totalPrice,
       sourceUrl: args.url === undefined ? old.sourceUrl : built.line.sourceUrl,
     }
-    const next = pruneDraft(withLine(working, line, built.newItem, built.newTags))
+    if (built.galleryFull) throw new ToolError(`line: ${GALLERY_FULL}`)
+    const next = pruneDraft(withLine(working, line, built.newItem, built.newTags, built.addedPhoto))
     const idle = unusedStaged(next, staged)
     if (idle.length > 0) throw problems(idle)
     return { draft: next, header }
@@ -820,8 +833,11 @@ export async function updateNewItem(
     folder?: string
     /** Picture paths from list_photos, in order (the first is the cover): replaces the whole list; [] removes all; left out: unchanged. */
     photos?: string[]
+    /** Not a field any more: refused with a pointer to `photos`. */
+    photo?: unknown
   },
 ) {
+  refuseOldPhoto('item', args.photo)
   const paths = args.photos === undefined ? null : photoPaths('item', args.photos)
   const photoIds = (paths ?? []).map(() => newId())
   const mint = minter()

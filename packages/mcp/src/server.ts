@@ -220,6 +220,7 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
               ...declarations,
               description: z.string().optional().describe('A line or two about the item.'),
               photos: z.array(z.string()).optional().describe('The item\'s own pictures: paths from list_photos, in order; the first is the cover. Several photos of one item go here. At most 20; each file is uploaded once.'),
+              photo: z.string().optional().describe('Not used: refused. Give the item\'s pictures in `photos`.'),
               withoutLines: z.boolean().optional().describe('true: make the item with no line, so with no stock yet.'),
             }),
           )
@@ -247,7 +248,7 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
     'update_intake_line',
     {
-      description: 'Change one line of an intake draft: only what is passed changes. An empty price or url clears it; photo sets or (empty) removes the line\'s picture; addValues adds values to existing list attributes; description sets the description of the variant the line creates.',
+      description: 'Change one line of an intake draft: only what is passed changes. An empty price or url clears it; photo sets or (empty) removes the line\'s picture (for a line of a new item without variant attributes the photo is added to the item\'s photos instead, and an empty value removes nothing); addValues adds values to existing list attributes; description sets the description of the variant the line creates.',
       inputSchema: {
         intake: intakeId,
         line: z.string().describe('Line id, from get_intake.'),
@@ -255,7 +256,7 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
         amount: z.string().optional(),
         price: z.string().optional(),
         url: z.string().optional(),
-        photo: z.string().optional().describe('A picture path from list_photos to attach to the line (uploaded once); an empty text removes the line\'s photo.'),
+        photo: z.string().optional().describe('A picture path from list_photos to attach to the line (uploaded once); an empty text removes the line\'s photo (not for a line of a new item without variant attributes: its photo joins the item\'s photos).'),
         addValues,
         description: z.string().optional().describe('The description of the variant this line creates; an empty text clears it.'),
       },
@@ -276,7 +277,7 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
     'update_new_item',
     {
       description:
-        'Change an item the draft will create (its name, description, photo, folder, icon, color, unit, attributes or tags). Only what is passed changes; attributes and tags replace the lists and may declare new ones as in add_intake_lines; an empty photo, icon or color removes it. Refused when the name is taken in the folder. Not for items already in stock.',
+        'Change an item the draft will create (its name, description, photos, folder, icon, color, unit, attributes or tags). Only what is passed changes; attributes and tags replace the lists and may declare new ones as in add_intake_lines; photos is a list of paths that replaces the item\'s photos ([] removes them all); an empty icon or color removes it. Refused when the name is taken in the folder. Not for items already in stock.',
       inputSchema: {
         intake: intakeId,
         item: z.string().describe('Id of the new item, from get_intake.'),
@@ -284,6 +285,7 @@ export function registerDraftTools(server: McpServer, ctx: ToolContext): void {
         description: z.string().optional().describe('An empty text clears it.'),
         folder: z.string().optional().describe('Folder id or path, also a new folder of the draft.'),
         ...declarations,
+        photo: z.string().optional().describe('Not used: refused. Give the item\'s pictures in `photos`.'),
         photos: z.array(z.string()).optional().describe('Picture paths from list_photos, in order (the first is the cover; at most 20; each file is uploaded once). The list replaces all of the item\'s photos; an empty list removes them all; leave it out to keep them as they are.'),
       },
       annotations: { ...WRITE, idempotentHint: true },

@@ -503,6 +503,37 @@ describe('item photos', () => {
     expect(uploads).toHaveLength(3)
   })
 
+  it('a leftover `photo` on a new item is refused and names `photos`', async () => {
+    const { f, uploads, id } = await photoSetup()
+    const add = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Saw', photo: 'a.png', withoutLines: true } as any] }).catch((e: unknown) => e)) as Error
+    expect(add).toBeInstanceOf(ToolError)
+    expect(add.message).toMatch(/photos/)
+    const made = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Saw', withoutLines: true }] })) as any
+    const upd = (await drafts.updateNewItem(f.ctx, { intake: id, item: made.newItems[0].id, photo: 'a.png' } as any).catch((e: unknown) => e)) as Error
+    expect(upd).toBeInstanceOf(ToolError)
+    expect(upd.message).toMatch(/photos/)
+    expect(uploads).toHaveLength(0)
+  })
+
+  it('a line photo is refused, before any upload, when the new item already holds 20 photos', async () => {
+    const { f, uploads, id, photosDir } = await photoSetup()
+    const png = await readFile(path.join(__dirname, 'fixtures', 'gradient.png'))
+    const names: string[] = []
+    for (let i = 0; i < 20; i++) {
+      names.push(`m${i}.png`)
+      await writeFile(path.join(photosDir, `m${i}.png`), Buffer.concat([png, Buffer.from([100 + i])]))
+    }
+    const refused = (await drafts.addIntakeLines(f.ctx, {
+      intake: id,
+      newItems: [{ ref: 'a', name: 'Saw', photos: names }],
+      lines: [{ item: 'a', amount: '1', photo: 'a.png' }],
+    }).catch((e: unknown) => e)) as Error
+    expect(refused).toBeInstanceOf(ToolError)
+    expect(refused.message).toMatch(/20 photos/)
+    expect(uploads).toHaveLength(0)
+    expect((await get(f, id)).newItems).toHaveLength(0)
+  })
+
   it('a file given twice in one list is kept once', async () => {
     const { f, id } = await photoSetup()
     const v = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Saw', photos: ['a.png', 'b.png', 'a.png'], withoutLines: true }] })) as any

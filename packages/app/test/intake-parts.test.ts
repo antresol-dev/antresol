@@ -14,6 +14,8 @@ import {
   withEditedTag,
   withHeldOptions,
   withHeldUnits,
+  withItemPhotoAdded,
+  withItemPhotoRemoved,
   withoutAddedValue,
   withoutAttributeEverywhere,
   withoutTagEverywhere,
@@ -160,5 +162,25 @@ describe('similar names', () => {
     expect(similarFolders(s, base(), `${f.name}s`, f.parentId).some((o) => o.id === f.id)).toBe(true)
     const d = { ...base(), newItems: [item({ name: 'Capacitor' })] }
     expect(similarItems(s, d, 'Capacitors', null).some((o) => o.name === 'Capacitor')).toBe(true)
+  })
+})
+
+describe('a new item gallery', () => {
+  const file = (n: string) => ({ provider: 'imgbb', fileId: n, url: `https://x/${n}`, width: 1, height: 1 })
+  const g = [{ ...file('a'), id: 'p1' as Id }, { ...file('b'), id: 'p2' as Id }]
+  it('appends a photo with a fresh id, once per file', () => {
+    const next = withItemPhotoAdded(g, file('c'))
+    expect(next.map((p) => p.fileId)).toEqual(['a', 'b', 'c'])
+    expect(next[2]!.id).not.toBe('p1')
+    expect(withItemPhotoAdded(next, file('b'))).toHaveLength(3)
+    expect(withItemPhotoAdded(undefined, file('a'))).toHaveLength(1)
+  })
+  it('takes no more than the limit', () => {
+    const full = Array.from({ length: 20 }, (_, i) => ({ ...file(`f${i}`), id: `i${i}` as Id }))
+    expect(withItemPhotoAdded(full, file('x'))).toHaveLength(20)
+  })
+  it('removes one photo by id', () => {
+    expect(withItemPhotoRemoved(g, 'p2' as Id).map((p) => p.id)).toEqual(['p1'])
+    expect(withItemPhotoRemoved(undefined, 'p2' as Id)).toEqual([])
   })
 })

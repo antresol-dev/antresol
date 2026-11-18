@@ -1,5 +1,9 @@
 import {
   customUnitKey,
+  MAX_DRAFT_ITEM_PHOTOS,
+  newId,
+  type DraftItemPhoto,
+  type PhotoFile,
   intakeUnits,
   itemArchived,
   pruneDraft,
@@ -237,3 +241,15 @@ export function similarTags(s: InventorySnapshot, draft: IntakeDraftContent, nam
 export function similarUnits(s: InventorySnapshot, draft: IntakeDraftContent, name: string, exceptId?: Id): SimilarName[] {
   return similarNames(unitChoicesWithDraft(s, draft).filter((u) => u.key !== (exceptId ? customUnitKey(exceptId) : '')).map((u) => ({ id: u.key, name: u.name })), name)
 }
+
+// ---- The gallery of a new item ----
+
+/** The gallery with `file` appended (a fresh id); the same file (provider + fileId) is not added twice, and a full gallery takes no more. */
+export function withItemPhotoAdded(photos: readonly DraftItemPhoto[] | undefined, file: PhotoFile): DraftItemPhoto[] {
+  const list = photos ?? []
+  if (list.length >= MAX_DRAFT_ITEM_PHOTOS || list.some((p) => p.provider === file.provider && p.fileId === file.fileId)) return [...list]
+  return [...list, { ...file, id: newId() }]
+}
+
+/** The gallery without the photo `id` (the others keep their order and ids). */
+export const withItemPhotoRemoved = (photos: readonly DraftItemPhoto[] | undefined, id: Id): DraftItemPhoto[] => (photos ?? []).filter((p) => p.id !== id)

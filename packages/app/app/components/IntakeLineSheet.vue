@@ -595,9 +595,10 @@ const photoMode = computed<'item' | 'variant' | 'legacy' | null>(() => {
   return photo.value ? 'legacy' : null
 })
 const shownPhoto = computed(() => (photoMode.value === 'item' ? (photo.value ?? newItem.value?.photos?.[0] ?? null) : photo.value))
+/** This line's own photo only: the item's gallery (edited on its card) is never cleared from here. */
+const lineHasPhoto = computed(() => photo.value !== null)
 function removePhoto(): void {
   photo.value = null
-  if (photoMode.value === 'item' && newItem.value) newItem.value = { ...newItem.value, photos: [] }
 }
 async function upload(files: File[]): Promise<void> {
   const file = files[0]
@@ -606,12 +607,8 @@ async function upload(files: File[]): Promise<void> {
   error.value = null
   try {
     const stored = await intakes.uploadPhoto(file)
-    if (photoMode.value === 'item' && newItem.value) {
-      photo.value = null
-      newItem.value = { ...newItem.value, photos: [{ ...stored, id: newId() }] }
-    } else {
-      photo.value = { ...stored, replace: false }
-    }
+    // A new item's line without axes: saving the line appends this photo to the item's gallery (kit's buildDraftLine).
+    photo.value = { ...stored, replace: false }
   } catch {
     error.value = { key: 'intakes.line.photoFailed' }
   } finally {
@@ -1044,8 +1041,8 @@ const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py
             </button>
             <div v-if="photoOpen" class="grid gap-2 py-3">
               <p v-if="photoMode !== 'legacy'" class="text-sm text-subtle-foreground">{{ $t(photoMode === 'item' ? 'intakes.line.photoOfItem' : 'intakes.line.photoOfVariant') }}</p>
-              <div v-if="shownPhoto" class="flex items-center gap-3">
-                <PhotoImg :photo="shownPhoto" size="thumb" alt="" class="size-10 shrink-0 rounded-thumb object-cover" />
+              <div v-if="lineHasPhoto && photo" class="flex items-center gap-3">
+                <PhotoImg :photo="photo" size="thumb" alt="" class="size-10 shrink-0 rounded-thumb object-cover" />
                 <span class="min-w-0 flex-1 text-sm text-muted-foreground">{{ $t('intakes.line.photoSet') }}</span>
                 <Button type="button" variant="ghost" size="icon" class="size-11 shrink-0" :aria-label="$t('quickAdd.removePhoto')" :disabled="disabled" @click="removePhoto">
                   <X class="size-4" aria-hidden="true" />

@@ -5,6 +5,7 @@ import {
   intakeAttributes,
   intakeUnits,
   isCanonicalNumber,
+  MAX_DRAFT_ITEM_PHOTOS,
   newId,
   resolveUnit,
   type DraftLinePhoto,
@@ -14,6 +15,7 @@ import {
   type Id,
   type IntakeDraftContent,
   type InventorySnapshot,
+  type PhotoFile,
 } from '@antresol/core'
 import { ChevronDown, Image as ImageIcon, ImagePlus, X } from '@lucide/vue'
 import { toast } from 'vue-sonner'
@@ -24,7 +26,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { defaultItemColor } from '~/lib/item-colors'
 import { nameClash, restoreNewItem, withItemUnit, withNewItem, withoutNewItem } from '~/lib/intake-draft'
-import { similarItems, similarUnits, unitChoicesWithDraft, unitTaken } from '~/lib/intake-parts'
+import { similarItems, similarUnits, unitChoicesWithDraft, unitTaken, withItemPhotoAdded, withItemPhotoRemoved } from '~/lib/intake-parts'
 import { folderChoicesWithDraft, folderPathWithDraft } from '@antresol/kit/draft-folders'
 import { UNDO_MIN_MS } from '~/lib/undo'
 
@@ -152,17 +154,33 @@ async function saveDescription(): Promise<void> {
   if (v !== (props.item.description ?? null)) await patch({ description: v })
 }
 
+const photoCount = computed(() => props.item.photos?.length ?? 0)
+const galleryFull = computed(() => photoCount.value >= MAX_DRAFT_ITEM_PHOTOS)
+/** Appends the picked photos to the item's gallery (the draft as it is when the edit runs); the gallery is never replaced. */
 async function upload(files: File[]): Promise<void> {
-  const file = files[0]
-  if (!file) return
+  if (files.length === 0) return
   uploading.value = true
   try {
-    await patch({ photos: [{ ...(await intakes.uploadPhoto(file)), id: newId() }] })
+    const stored: PhotoFile[] = []
+    for (const file of files.slice(0, Math.max(0, MAX_DRAFT_ITEM_PHOTOS - photoCount.value))) stored.push(await intakes.uploadPhoto(file))
+    await props.edit((c) => {
+      const cur = c.newItems.find((x) => x.id === props.item.id)
+      if (!cur) return c
+      return withNewItem(c, { ...cur, photos: stored.reduce((list, f) => withItemPhotoAdded(list, f), cur.photos ?? []) })
+    })
   } catch {
     toast.error(t('intakes.line.photoFailed'))
   } finally {
     uploading.value = false
   }
+}
+/** Removes one photo of the gallery by its id. */
+async function removePhoto(id: Id): Promise<void> {
+  if (props.readOnly) return
+  await props.edit((c) => {
+    const cur = c.newItems.find((x) => x.id === props.item.id)
+    return cur ? withNewItem(c, { ...cur, photos: withItemPhotoRemoved(cur.photos, id) }) : c
+  })
 }
 
 const folderChoices = computed(() =>
@@ -238,16 +256,19 @@ const panelId = `intake-item-${props.item.id}`
     <div v-if="expanded" :id="panelId" class="grid min-w-0 gap-4 px-3 pt-2 pb-4">
       <p v-if="problemKey" role="alert" class="text-sm text-destructive">{{ $t(problemKey) }}</p>
 
-      <div v-if="canPhoto || item.photos?.length" class="grid gap-2">
+      <div v-if="canPhoto || photoCount" class="grid gap-2">
         <Label>{{ $t('intakes.line.photo') }}</Label>
-        <div v-if="item.photos?.[0]" class="flex items-center gap-3">
-          <PhotoImg :photo="item.photos[0]" size="thumb" alt="" class="size-16 shrink-0 rounded-thumb object-cover" />
-          <PhotoPicker v-if="canPhoto" :disabled="disabled" @pick="upload" />
-          <Button type="button" variant="ghost" size="icon" class="size-11 shrink-0" :aria-label="$t('quickAdd.removePhoto')" :disabled="disabled" @click="patch({ photos: [] })">
-            <X class="size-4" aria-hidden="true" />
-          </Button>
-        </div>
-        <PhotoPicker v-else-if="canPhoto" :disabled="disabled" @pick="upload" />
+        <ul v-if="photoCount" class="flex flex-wrap gap-3">
+          <li v-for="(p, i) in item.photos" :key="p.id" class="relative grid gap-1">
+            <PhotoImg :photo="p" size="thumb" alt="" class="size-16 rounded-thumb object-cover" />
+            <span v-if="i === 0" class="text-xs text-subtle-foreground">{{ $t('intakes.item.cover') }}</span>
+            <Button type="button" variant="ghost" size="icon" class="absolute -top-3 -right-3 size-11" :aria-label="$t('intakes.item.removePhotoN', { n: i + 1 })" :disabled="disabled" @click="removePhoto(p.id)">
+              <X class="size-4" aria-hidden="true" />
+            </Button>
+          </li>
+        </ul>
+        <p v-if="canPhoto && galleryFull" class="text-sm text-subtle-foreground">{{ $t('intakes.item.photosFull', { max: MAX_DRAFT_ITEM_PHOTOS }) }}</p>
+        <PhotoPicker v-else-if="canPhoto" multiple :disabled="disabled" @pick="upload" />
       </div>
 
       <div class="grid gap-2">

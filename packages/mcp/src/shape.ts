@@ -128,7 +128,8 @@ export interface IntakeNewItemView {
   description: string | null
   icon: string | null
   color: string | null
-  photo: string | null
+  /** The item's gallery as urls, in order; the first is the cover. */
+  photos: string[]
   /** What keeps the item from being created; null when nothing does. */
   problem: string | null
   folder: string
@@ -221,7 +222,7 @@ function newItemView(s: InventorySnapshot, draft: IntakeDraftContent, attrs: Att
     description: n.description?.trim() ? n.description : null,
     icon: n.icon ?? null,
     color: n.color ?? null,
-    photo: n.photos?.[0]?.url ?? null,
+    photos: (n.photos ?? []).map((p) => p.url),
     problem,
     folder: draftFolderPath(s, draft, n.folderId),
     unit: unitSymbol(s, n.unitKey, units),

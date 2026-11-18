@@ -12,10 +12,12 @@ import {
   pruneDraft,
   resolveIntake,
   sameName as same,
+  MAX_DRAFT_ITEM_PHOTOS,
   SI_PREFIXES,
   type Attribute,
   type AttributeKind,
   type DraftLine,
+  type DraftItemPhoto,
   type DraftLinePhoto,
   type DraftNewAttribute,
   type DraftNewFolder,
@@ -50,7 +52,7 @@ import { ToolError } from '../errors'
 import { messageFor } from '../messages'
 import { similarOf, type SimilarEntry } from '../similar'
 import { draftAttributes, draftFolderPath, entityNamer, entityProblemText, problemText, unitSymbol } from '../shape'
-import { attachPhoto, markPhotosUsed } from './photos'
+import { attachPhoto, checkPhoto, markPhotosUsed } from './photos'
 
 /** An attribute under a new item: an existing one (id or name; `value` shared, `axis` per line), or a new one when `kind` is given. */
 export interface AttributeArg {
@@ -98,8 +100,8 @@ export interface NewItemArgs extends ItemDeclarations {
   /** Folder id or path. */
   folder?: string
   description?: string
-  /** A picture path from list_photos: the item's own photo. */
-  photo?: string
+  /** Picture paths from list_photos: the item's own photos, in order; the first is the cover. */
+  photos?: string[]
   /** The item is made with no line (and no stock). */
   withoutLines?: boolean
 }
@@ -554,6 +556,27 @@ async function editAdvised(ctx: ToolContext, intakeId: Id, edit: Parameters<type
 
 /** A picture that stands in for the upload while an edit is only being checked. */
 const STAND_IN_FILE: PhotoFile = { provider: 'dry', fileId: 'dry', url: 'dry', urls: null, deleteHandle: null, width: 1, height: 1 }
+/** Stand-ins for a list of paths: each its own file, so the checks see as many photos as will be uploaded. */
+const standIns = (paths: string[]): PhotoFile[] => paths.map((_, j) => ({ ...STAND_IN_FILE, fileId: `dry${j}` }))
+
+/** The paths of an item's `photos`, trimmed. More than the draft holds, or a blank path, is refused here, before anything is uploaded. */
+function photoPaths(label: string, photos: string[] | undefined): string[] {
+  const paths = (photos ?? []).map((p) => (typeof p === 'string' ? p.trim() : ''))
+  if (paths.length > MAX_DRAFT_ITEM_PHOTOS) throw new ToolError(`${label}: at most ${MAX_DRAFT_ITEM_PHOTOS} photos per new item (got ${paths.length}).`)
+  if (paths.some((p) => !p)) throw new ToolError(`${label}: a photo path is empty.`)
+  return paths
+}
+
+/** The files as the item's gallery: in order, a file given twice kept once; a file the item already has keeps its id (`old`). */
+function gallery(files: PhotoFile[], ids: Id[], old: DraftItemPhoto[] = []): DraftItemPhoto[] {
+  const out: DraftItemPhoto[] = []
+  files.forEach((file, j) => {
+    if (out.some((p) => p.provider === file.provider && p.fileId === file.fileId)) return
+    const had = old.find((p) => p.provider === file.provider && p.fileId === file.fileId)
+    out.push({ ...file, id: had?.id ?? ids[j]! })
+  })
+  return out
+}
 const STAND_IN: DraftLinePhoto = { ...STAND_IN_FILE, replace: false }
 
 /** Runs `edit` against the draft as the database holds it now, writing nothing: the refusals that need no I/O, before an upload. */
@@ -576,9 +599,10 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
   // The ids are fixed here: editDraft may run its callback twice, and neither may mint new ones. Uploads happen after the dry run below.
   const lineIds = lines.map(() => newId())
   const itemIds = newItems.map(() => newId())
-  const itemPhotoIds = newItems.map(() => newId())
+  const itemPhotoPaths = newItems.map((n, i) => photoPaths(`new item ${i + 1}`, n.photos))
+  const itemPhotoIds = itemPhotoPaths.map((paths) => paths.map(() => newId()))
   const mint = minter()
-  const build = (photos: (DraftLinePhoto | null)[], itemPhotos: (PhotoFile | null)[]) => (draft: IntakeDraftContent, header: IntakeHeader, s: InventorySnapshot) => {
+  const build = (photos: (DraftLinePhoto | null)[], itemPhotos: PhotoFile[][]) => (draft: IntakeDraftContent, header: IntakeHeader, s: InventorySnapshot) => {
     const errors: string[] = []
     const staged: Staged[] = []
     const fresh = new Map<string, { id: Id; withoutLines: boolean }>()
@@ -588,7 +612,7 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
         const ref = n.ref?.trim()
         if (!ref) throw new ToolError('"ref" is required: the name lines use to point at this new item.')
         if (fresh.has(ref)) throw new ToolError(`ref "${ref}" is used twice.`)
-        const photo = itemPhotos[i] ?? null
+        const own = gallery(itemPhotos[i] ?? [], itemPhotoIds[i]!)
         const base: DraftNewItem = {
           id: itemIds[i]!,
           name: n.name ?? '',
@@ -597,7 +621,7 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
           attributes: [],
           tagIds: [],
           description: field(n.description),
-          ...(photo ? { photos: [{ ...photo, id: itemPhotoIds[i]! }] } : {}),
+          ...(own.length > 0 ? { photos: own } : {}),
         }
         next = placeItem({ s, draft: next, base, decl: n, key: `item${i}`, label: `new item ${i + 1}`, mint, staged, check: true })
         fresh.set(ref, { id: itemIds[i]!, withoutLines: n.withoutLines === true })
@@ -620,13 +644,6 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
         const attrs = draftAttributes(s, working)
         const itemId = newItem?.id ?? existing!.id
         const axes = axesOf(s, attrs, newItem, itemId)
-        if (newItem?.photos?.length && photos[i] && axes.length === 0) {
-          throw new ToolError(
-            made
-              ? 'give the photo once: this new item has its own photo and the line has one too (the line\'s photo would be lost). Use the item\'s photo.'
-              : 'the item already has a photo and the line passes another (it would replace the item\'s photo): change the item\'s photo with update_new_item.',
-          )
-        }
         const axisValues = resolveValues(attrs, axes, l.values)
         const built = buildDraftLine(
           {
@@ -663,14 +680,26 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
     return { draft: next, header }
   }
   // Refusals that need no I/O come before any upload: the same checks, run on stand-in photos against what the database holds now.
-  if (lines.some((l) => l.photo?.trim()) || newItems.some((n) => n.photo?.trim())) {
+  if (lines.some((l) => l.photo?.trim()) || itemPhotoPaths.some((p) => p.length > 0)) {
     await dryRun(ctx, args.intake, build(
       lines.map((l) => (l.photo?.trim() ? STAND_IN : null)),
-      newItems.map((n) => (n.photo?.trim() ? STAND_IN_FILE : null)),
+      itemPhotoPaths.map(standIns),
     ))
   }
+  const check = async (label: string, path: string | undefined) => {
+    if (!path?.trim()) return
+    try {
+      await checkPhoto(ctx, path.trim())
+    } catch (e) {
+      if (e instanceof ToolError) throw new ToolError(`${label}: ${e.message}`)
+      throw e
+    }
+  }
+  // Every file is looked at before the first upload: a bad later path refuses with nothing uploaded.
+  for (const [i, paths] of itemPhotoPaths.entries()) for (const [j, path] of paths.entries()) await check(`new item ${i + 1} photo ${j + 1}`, path)
+  for (const [i, l] of lines.entries()) await check(`line ${i + 1}`, l.photo)
   const photos: (DraftLinePhoto | null)[] = []
-  const itemPhotos: (PhotoFile | null)[] = []
+  const itemPhotos: PhotoFile[][] = []
   const upload = async (label: string, path: string | undefined): Promise<DraftLinePhoto | null> => {
     const file = path?.trim()
     if (!file) return null
@@ -681,9 +710,10 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
       throw e
     }
   }
-  for (const [i, n] of newItems.entries()) {
-    const p = await upload(`new item ${i + 1}`, n.photo)
-    itemPhotos.push(p ? fileOnly(p) : null)
+  for (const [i, paths] of itemPhotoPaths.entries()) {
+    const files: PhotoFile[] = []
+    for (const [j, path] of paths.entries()) files.push(fileOnly((await upload(`new item ${i + 1} photo ${j + 1}`, path))!))
+    itemPhotos.push(files)
   }
   for (const [i, l] of lines.entries()) {
     const p = await upload(`line ${i + 1}`, l.photo)
@@ -693,7 +723,11 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
   // Only a saved line or item makes its picture "used".
   const warning = markPhotosUsed(ctx, [
     ...lines.flatMap((l, i) => (photos[i] ? [{ file: l.photo!.trim(), intakeId: args.intake.trim(), lineId: lineIds[i]! }] : [])),
-    ...newItems.flatMap((n, i) => (itemPhotos[i] ? [{ file: n.photo!.trim(), intakeId: args.intake.trim(), lineId: itemPhotoIds[i]! }] : [])),
+    // Each gallery photo is marked with its own id; a file given twice in a list is one photo.
+    ...newItems.flatMap((_, i) => {
+      const placed = gallery(itemPhotos[i]!, itemPhotoIds[i]!)
+      return placed.map((p) => ({ file: itemPhotoPaths[i]![itemPhotos[i]!.findIndex((f) => f.provider === p.provider && f.fileId === p.fileId)]!, intakeId: args.intake.trim(), lineId: p.id }))
+    }),
   ])
   return warning ? { ...view, warning } : view
 }
@@ -784,23 +818,25 @@ export async function updateNewItem(
     name?: string
     description?: string
     folder?: string
-    /** A picture path from list_photos; an empty text removes the item's photo. */
-    photo?: string
+    /** Picture paths from list_photos, in order (the first is the cover): replaces the whole list; [] removes all; left out: unchanged. */
+    photos?: string[]
   },
 ) {
-  const path = args.photo?.trim()
-  const photoId = newId()
+  const paths = args.photos === undefined ? null : photoPaths('item', args.photos)
+  const photoIds = (paths ?? []).map(() => newId())
   const mint = minter()
-  const build = (photo: PhotoFile | null) => (draft: IntakeDraftContent, header: IntakeHeader, s: InventorySnapshot) => {
+  let seenPhotos: DraftItemPhoto[] = []
+  const build = (files: PhotoFile[] | null) => (draft: IntakeDraftContent, header: IntakeHeader, s: InventorySnapshot) => {
     const id = args.item.trim()
     const old = findNewItem(draft, id)
     const { photos: oldPhotos, ...rest } = old
+    seenPhotos = oldPhotos ?? []
     const base: DraftNewItem = {
       ...rest,
       name: args.name === undefined ? old.name : args.name,
       description: args.description === undefined ? old.description : field(args.description),
       folderId: args.folder === undefined ? old.folderId : resolveFolder(s, draft, args.folder),
-      ...(photo ? { photos: [{ ...photo, id: photoId }] } : args.photo === undefined && oldPhotos?.length ? { photos: oldPhotos } : {}),
+      ...(files === null ? (oldPhotos?.length ? { photos: oldPhotos } : {}) : files.length > 0 ? { photos: gallery(files, photoIds, oldPhotos) } : {}),
     }
     const staged: Staged[] = []
     const errors: string[] = []
@@ -844,11 +880,31 @@ export async function updateNewItem(
     return { draft: next, header }
   }
   // Refusals that need no I/O come before the upload: the same edit, run with a stand-in photo on what the database holds now.
-  if (path) await dryRun(ctx, args.intake, build(STAND_IN_FILE))
-  const up = path ? await attachPhoto(ctx, path) : null
-  const photo: PhotoFile | null = up ? fileOnly(up) : null
-  const view = await editAdvised(ctx, args.intake, build(photo))
-  const warning = path && photo ? markPhotosUsed(ctx, [{ file: path, intakeId: args.intake.trim(), lineId: photoId }]) : null
+  if (paths && paths.length > 0) await dryRun(ctx, args.intake, build(standIns(paths)))
+  for (const [j, path] of (paths ?? []).entries()) {
+    try {
+      await checkPhoto(ctx, path)
+    } catch (e) {
+      if (e instanceof ToolError) throw new ToolError(`photo ${j + 1}: ${e.message}`)
+      throw e
+    }
+  }
+  let files: PhotoFile[] | null = null
+  if (paths) {
+    files = []
+    for (const [j, path] of paths.entries()) {
+      try {
+        files.push(fileOnly(await attachPhoto(ctx, path)))
+      } catch (e) {
+        if (e instanceof ToolError) throw new ToolError(`photo ${j + 1}: ${e.message}`)
+        throw e
+      }
+    }
+  }
+  const view = await editAdvised(ctx, args.intake, build(files))
+  const warning = paths && files && files.length > 0
+    ? markPhotosUsed(ctx, gallery(files, photoIds, seenPhotos).map((p) => ({ file: paths[files.findIndex((f) => f.provider === p.provider && f.fileId === p.fileId)]!, intakeId: args.intake.trim(), lineId: p.id })))
+    : null
   return warning ? { ...view, warning } : view
 }
 

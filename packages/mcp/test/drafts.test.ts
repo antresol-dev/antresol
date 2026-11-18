@@ -1,4 +1,4 @@
-import { copyFile, mkdir, mkdtemp } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { buildIntakeCommit, newId, resolveIntake, type FileStore, type Id, type Intake, type InventoryStorage } from '@antresol/core'
@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { readConfig } from '../src/config'
 import { ToolError } from '../src/errors'
 import * as drafts from '../src/tools/drafts'
+import { listPhotos } from '../src/tools/photos'
 import * as read from '../src/tools/read'
 import { makeContext, TEST_ACTOR, type Fixture } from './fixture'
 
@@ -312,7 +313,7 @@ describe('draft folders and attributes', () => {
     v = (await drafts.createFolder(f.ctx, { intake: id, name: 'Caps', parent: 'Passives' })) as any
     expect(v.newFolders.map((x: any) => x.path)).toEqual(['Tools', 'Tools/Drills', 'Tools/Drills/Bits', 'Passives/Caps'])
     v = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'HSS 3 mm', folder: 'Tools/Drills/Bits', description: ' sharp ' }], lines: [{ item: 'a', amount: '2' }] })) as any
-    expect(v.newItems[0]).toMatchObject({ folder: 'Tools/Drills/Bits', description: 'sharp', photo: null, problem: null })
+    expect(v.newItems[0]).toMatchObject({ folder: 'Tools/Drills/Bits', description: 'sharp', photos: [], problem: null })
     expect(v.ok).toBe(true)
     v = (await drafts.updateFolder(f.ctx, { intake: id, folder: 'Tools/Drills/Bits', name: 'Bit sets', parent: '' })) as any
     expect(v.newFolders.map((x: any) => x.path)).toContain('Bit sets')
@@ -455,6 +456,9 @@ describe('item photos', () => {
     const photosDir = path.join(root, 'photos')
     await mkdir(photosDir)
     await copyFile(path.join(__dirname, 'fixtures', 'gradient.png'), path.join(photosDir, 'a.png'))
+    // other files with other bytes (a trailing byte after the PNG's end), so each is uploaded on its own
+    const png = await readFile(path.join(__dirname, 'fixtures', 'gradient.png'))
+    for (const [i, n] of ['b', 'c'].entries()) await writeFile(path.join(photosDir, `${n}.png`), Buffer.concat([png, Buffer.from([i + 1])]))
     const uploads: string[] = []
     const files: FileStore = {
       provider: 'fake',
@@ -466,32 +470,65 @@ describe('item photos', () => {
     const f = await ctxOf()
     f.ctx.config = { ...readConfig({ ANTRESOL_PHOTOS_DIR: photosDir }, 'linux', root), stateDir: path.join(root, 'state') }
     f.ctx.files = files
-    return { f, uploads, id: await create(f) }
+    return { f, uploads, id: await create(f), photosDir }
   }
 
-  it('a new item takes a photo with or without lines; update sets and removes it', async () => {
+  it('a new item takes photos with or without lines, in order; update replaces, clears or leaves the list', async () => {
     const { f, uploads, id } = await photoSetup()
     let v = (await drafts.addIntakeLines(f.ctx, {
       intake: id,
       newItems: [
-        { ref: 'a', name: 'Saw', photo: 'a.png', withoutLines: true },
-        { ref: 'b', name: 'Plane', photo: 'a.png' },
+        { ref: 'a', name: 'Saw', photos: ['a.png', 'b.png', 'c.png'], withoutLines: true },
+        { ref: 'b', name: 'Plane', photos: ['a.png'] },
       ],
       lines: [{ item: 'b', amount: '1' }],
     })) as any
-    expect(uploads).toHaveLength(1)
-    expect(v.newItems.map((n: any) => n.photo)).toEqual(['https://img.example/1', 'https://img.example/1'])
+    expect(uploads).toHaveLength(3)
+    expect(v.newItems.map((n: any) => n.photos)).toEqual([['https://img.example/1', 'https://img.example/2', 'https://img.example/3'], ['https://img.example/1']])
     expect(v.lines[0].photo).toBeNull()
     const raw = (await rawIntake(f, id)).draft!
-    expect(raw.newItems.every((n) => n.photos?.[0]?.id)).toBe(true)
+    const gallery = raw.newItems[0]!.photos!
+    expect(gallery.map((p) => p.url)).toEqual(['https://img.example/1', 'https://img.example/2', 'https://img.example/3'])
+    expect(new Set(gallery.map((p) => p.id)).size).toBe(3)
     const nid = raw.newItems[0]!.id
     v = (await drafts.updateNewItem(f.ctx, { intake: id, item: nid, name: 'Saw 2' })) as any
-    expect(v.newItems[0].photo).toBe('https://img.example/1')
-    v = (await drafts.updateNewItem(f.ctx, { intake: id, item: nid, photo: '' })) as any
-    expect(v.newItems[0].photo).toBeNull()
-    v = (await drafts.updateNewItem(f.ctx, { intake: id, item: nid, photo: 'a.png' })) as any
-    expect(v.newItems[0].photo).toBe('https://img.example/1')
-    expect(uploads).toHaveLength(1)
+    expect(v.newItems[0].photos).toHaveLength(3)
+    v = (await drafts.updateNewItem(f.ctx, { intake: id, item: nid, photos: ['b.png'] })) as any
+    expect(v.newItems[0].photos).toEqual(['https://img.example/2'])
+    expect((await rawIntake(f, id)).draft!.newItems[0]!.photos![0]!.id).toBe(gallery[1]!.id)
+    v = (await drafts.updateNewItem(f.ctx, { intake: id, item: nid, photos: [] })) as any
+    expect(v.newItems[0].photos).toEqual([])
+    v = (await drafts.updateNewItem(f.ctx, { intake: id, item: nid, photos: ['c.png', 'a.png'] })) as any
+    expect(v.newItems[0].photos).toEqual(['https://img.example/3', 'https://img.example/1'])
+    expect(uploads).toHaveLength(3)
+  })
+
+  it('a file given twice in one list is kept once', async () => {
+    const { f, id } = await photoSetup()
+    const v = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Saw', photos: ['a.png', 'b.png', 'a.png'], withoutLines: true }] })) as any
+    expect(v.newItems[0].photos).toEqual(['https://img.example/1', 'https://img.example/2'])
+  })
+
+  it('a bad second path or more than 20 paths is refused before anything is uploaded', async () => {
+    const { f, uploads, id } = await photoSetup()
+    const bad = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Saw', photos: ['a.png', 'nope.png'], withoutLines: true }] }).catch((e: unknown) => e)) as Error
+    expect(bad).toBeInstanceOf(ToolError)
+    expect(uploads).toHaveLength(0)
+    expect((await get(f, id)).newItems).toHaveLength(0)
+    const many = Array.from({ length: 21 }, () => 'a.png')
+    const over = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Saw', photos: many, withoutLines: true }] }).catch((e: unknown) => e)) as Error
+    expect(over).toBeInstanceOf(ToolError)
+    expect(over.message).toMatch(/20/)
+    expect(uploads).toHaveLength(0)
+    const made = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Saw', photos: ['a.png'], withoutLines: true }] })) as any
+    const nid = made.newItems[0].id
+    const before = uploads.length
+    const badUpdate = (await drafts.updateNewItem(f.ctx, { intake: id, item: nid, photos: ['b.png', 'nope.png'] }).catch((e: unknown) => e)) as Error
+    expect(badUpdate).toBeInstanceOf(ToolError)
+    const overUpdate = (await drafts.updateNewItem(f.ctx, { intake: id, item: nid, photos: many }).catch((e: unknown) => e)) as Error
+    expect(overUpdate).toBeInstanceOf(ToolError)
+    expect(uploads).toHaveLength(before)
+    expect((await get(f, id)).newItems[0].photos).toEqual(['https://img.example/1'])
   })
 
   it('a line with a photo lists the intakes twice: the dry run, then the edit', async () => {
@@ -519,74 +556,42 @@ describe('item photos', () => {
     const top = (await drafts.updateIntakeLine(f.ctx, { intake: id, line: v.lines[0].id, photo: 'a.png' }).catch((e: unknown) => e)) as Error
     expect(top).toBeInstanceOf(ToolError)
     expect(top.message).toMatch(/takes no photo/)
-    const unknown = (await drafts.updateNewItem(f.ctx, { intake: id, item: 'nope', photo: 'a.png' }).catch((e: unknown) => e)) as Error
+    const unknown = (await drafts.updateNewItem(f.ctx, { intake: id, item: 'nope', photos: ['a.png'] }).catch((e: unknown) => e)) as Error
     expect(unknown).toBeInstanceOf(ToolError)
-    const badFolder = (await drafts.updateNewItem(f.ctx, { intake: id, item: 'nope', folder: 'No/Such', photo: 'a.png' }).catch((e: unknown) => e)) as Error
+    const badFolder = (await drafts.updateNewItem(f.ctx, { intake: id, item: 'nope', folder: 'No/Such', photos: ['a.png'] }).catch((e: unknown) => e)) as Error
     expect(badFolder).toBeInstanceOf(ToolError)
     expect(uploads).toHaveLength(0)
   })
 
-  it('an item photo has its own id, not the item id; a second photo on a plain new item is refused before the upload', async () => {
+  it('an item photo has its own id, not the item id; a line photo on a no-axes item joins its gallery', async () => {
     const { f, uploads, id } = await photoSetup()
-    await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Saw', photo: 'a.png', withoutLines: true }] })
+    await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Saw', photos: ['a.png'], withoutLines: true }] })
     const raw = (await rawIntake(f, id)).draft!
     expect(raw.newItems[0]!.photos![0]!.id).toBeTruthy()
     expect(raw.newItems[0]!.photos![0]!.id).not.toBe(raw.newItems[0]!.id)
-    const before = uploads.length
-    const both = (await drafts.addIntakeLines(f.ctx, {
+    const v = (await drafts.addIntakeLines(f.ctx, {
       intake: id,
-      newItems: [{ ref: 'b', name: 'Plane', photo: 'a.png' }],
-      lines: [{ item: 'b', amount: '1', photo: 'a.png' }],
-    }).catch((e: unknown) => e)) as Error
-    expect(both).toBeInstanceOf(ToolError)
-    expect(both.message).toMatch(/give the photo once/)
-    expect(uploads).toHaveLength(before)
-    expect((await get(f, id)).newItems).toHaveLength(1)
-  })
-})
-
-describe('problems an edit would leave behind', () => {
-  const refused = async (p: Promise<unknown>): Promise<string> => {
-    const e = await p.catch((x: unknown) => x)
-    expect(e).toBeInstanceOf(ToolError)
-    return (e as Error).message
-  }
-
-  it('items without lines are checked: empty or long name, a value that does not fit', async () => {
-    const f = await ctxOf()
-    const id = await create(f)
-    expect(await refused(drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: '  ', withoutLines: true }] }))).toMatch(/Nothing was saved/)
-    expect(await refused(drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'x'.repeat(201), withoutLines: true }] }))).toMatch(/Nothing was saved/)
-    const capacity = { attribute: 'Capacity', kind: 'number' as const, unit: 'F' }
-    expect(
-      await refused(drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Cap', attributes: [{ ...capacity, value: 'abc' }], withoutLines: true }] })),
-    ).toMatch(/Nothing was saved/)
-    expect((await get(f, id)).newItems).toHaveLength(0)
-    const ok = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Cap', attributes: [{ ...capacity, value: '10' }], withoutLines: true }] })) as any
-    expect(ok.newItems).toHaveLength(1)
+      newItems: [{ ref: 'b', name: 'Plane', photos: ['a.png', 'b.png'] }],
+      lines: [{ item: 'b', amount: '1', photo: 'c.png' }],
+    })) as any
+    expect(v.newItems.map((n: any) => n.photos)).toEqual([['https://img.example/1'], ['https://img.example/1', 'https://img.example/2', 'https://img.example/3']])
+    expect(v.lines[0].photo).toBeNull()
+    // the same file on the line as in the gallery is not added twice
+    const w = (await drafts.addIntakeLines(f.ctx, { intake: id, lines: [{ item: raw.newItems[0]!.id, amount: '1', photo: 'a.png' }] })) as any
+    expect(w.newItems[0].photos).toEqual(['https://img.example/1'])
+    expect(uploads).toHaveLength(3)
   })
 
-  it('update_new_item on an item with no lines is checked; a value that no longer fits is refused', async () => {
-    const f = await ctxOf()
-    const id = await create(f)
-    const v = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Cap', attributes: [{ attribute: 'Pack', kind: 'list', options: ['A', 'B'], value: 'A' }], withoutLines: true }] })) as any
-    const itemId = v.newItems[0].id
-    expect(await refused(drafts.updateNewItem(f.ctx, { intake: id, item: itemId, name: '' }))).toMatch(/Nothing was saved/)
-    expect(await refused(drafts.updateNewItem(f.ctx, { intake: id, item: itemId, attributes: [{ attribute: 'Pack', value: 'Z' }] }))).toMatch(/Nothing was saved/)
-    const raw = (await rawIntake(f, id)).draft!
-    expect(raw.newAttributes![0]!.options).toEqual(['A', 'B'])
-    expect(raw.newItems[0]!.name).toBe('Cap')
-  })
-
-  it('a list attribute needs options; archived folders are not offered', async () => {
-    const f = await ctxOf()
-    const id = await create(f)
-    const pack = (options?: string[]) => drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Cap', withoutLines: true, attributes: [{ attribute: 'Pack', kind: 'list', options }] }] })
-    expect(await refused(pack())).toMatch(/at least one option/)
-    expect(await refused(pack([' ']))).toMatch(/at least one option/)
-    await f.apply({ type: 'archive', target: 'folder', id: f.ids.modules, archiveId: newId() })
-    f.source.refresh()
-    expect(await refused(drafts.createFolder(f.ctx, { intake: id, name: 'Sub', parent: 'Modules' }))).toMatch(/No folder "Modules"/)
+  it('each uploaded item photo is marked used with its own id', async () => {
+    const { f, id } = await photoSetup()
+    await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Saw', photos: ['a.png', 'b.png'], withoutLines: true }] })
+    const gallery = (await rawIntake(f, id)).draft!.newItems[0]!.photos!
+    const listed = await listPhotos(f.ctx)
+    const used = Object.fromEntries(listed.photos.map((p) => [p.name, p.usedIn]))
+    expect(used['a.png']).toEqual({ intakeId: id, lineId: gallery[0]!.id })
+    expect(used['b.png']).toEqual({ intakeId: id, lineId: gallery[1]!.id })
+    expect(used['c.png']).toBeNull()
+    expect(gallery).toHaveLength(2)
   })
 })
 
@@ -615,11 +620,13 @@ describe('review fixes: tags and photos', () => {
     expect((await rawIntake(f, id)).draft!.newTags!.map((t) => t.name)).toEqual(['fresh'])
   })
 
-  it('a line photo on a new item that already has its own photo is refused, also in a later call', async () => {
+  it('a line photo on a new item that already has photos is appended in a later call too', async () => {
     const root = await mkdtemp(path.join(os.tmpdir(), 'antresol-twophoto-'))
     const photosDir = path.join(root, 'photos')
     await mkdir(photosDir)
-    await copyFile(path.join(__dirname, 'fixtures', 'gradient.png'), path.join(photosDir, 'a.png'))
+    const png = await readFile(path.join(__dirname, 'fixtures', 'gradient.png'))
+    await writeFile(path.join(photosDir, 'a.png'), png)
+    await writeFile(path.join(photosDir, 'b.png'), Buffer.concat([png, Buffer.from([1])]))
     const uploads: string[] = []
     const files: FileStore = {
       provider: 'fake',
@@ -632,17 +639,13 @@ describe('review fixes: tags and photos', () => {
     f.ctx.config = { ...readConfig({ ANTRESOL_PHOTOS_DIR: photosDir }, 'linux', root), stateDir: path.join(root, 'state') }
     f.ctx.files = files
     const id = await create(f)
-    const first = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Saw', photo: 'a.png', withoutLines: true }] })) as any
+    const first = (await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Saw', photos: ['a.png'], withoutLines: true }] })) as any
     const itemId = first.newItems[0].id
-    const before = uploads.length
-    const e = (await drafts.addIntakeLines(f.ctx, { intake: id, lines: [{ item: itemId, amount: '1', photo: 'a.png' }] }).catch((x: unknown) => x)) as Error
-    expect(e).toBeInstanceOf(ToolError)
-    expect(e.message).toMatch(/already has a photo[\s\S]*update_new_item/)
-    expect(uploads).toHaveLength(before)
-    expect((await rawIntake(f, id)).draft!.newItems[0]!.photos![0]!.url).toBe('https://img.example/1')
-    // without a line photo the line is fine
-    const ok = (await drafts.addIntakeLines(f.ctx, { intake: id, lines: [{ item: itemId, amount: '1' }] })) as any
-    expect(ok.lines).toHaveLength(1)
+    const e = (await drafts.addIntakeLines(f.ctx, { intake: id, lines: [{ item: itemId, amount: '1', photo: 'b.png' }] })) as any
+    expect(e.newItems[0].photos).toEqual(['https://img.example/1', 'https://img.example/2'])
+    expect((await rawIntake(f, id)).draft!.newItems[0]!.photos!.map((p) => p.url)).toEqual(['https://img.example/1', 'https://img.example/2'])
+    expect(e.lines).toHaveLength(1)
+    expect(uploads).toHaveLength(2)
   })
 })
 

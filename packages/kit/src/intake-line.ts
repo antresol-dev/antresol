@@ -420,11 +420,10 @@ export function buildDraftLine(form: LineForm, s: InventorySnapshot, draft: Inta
   }
   let linePhoto: DraftLinePhoto | null = topsUp ? form.photo : form.photo ? { ...form.photo, replace: false } : null
   if (newItem && axes.length === 0) {
-    const file = form.photo ? fileOnly(form.photo) : newItem.photos?.[0]
-    if (file) {
-      const own = newItem.photos?.[0]
-      newItem.photos = [{ ...file, id: own?.id ?? newId() }]
-    }
+    // The line's photo joins the item's gallery (once); the gallery is never replaced from here.
+    const file = form.photo ? fileOnly(form.photo) : null
+    const gallery = newItem.photos ?? []
+    if (file && !gallery.some((p) => p.provider === file.provider && p.fileId === file.fileId)) newItem.photos = [...gallery, { ...file, id: newId() }]
     linePhoto = null
   }
   // Only a line that creates a variant carries a description: not a top-up, not a new item without axes.

@@ -91,12 +91,12 @@ export interface DraftNewAttribute {
   /** "Show in lists"; absent: no. The commit refuses a pin over MAX_PINNED_ATTRIBUTES. */
   pinned?: boolean
 }
-/** An item the draft creates; lines reference it by `id`. It lives until removed from the draft: a new item without
- *  lines is created with no stock. */
 /** A photo of a new item: the stored file and its id in the gallery. */
 export interface DraftItemPhoto extends PhotoFile {
   id: Id
 }
+/** An item the draft creates; lines reference it by `id`. It lives until removed from the draft: a new item without
+ *  lines is created with no stock. */
 export interface DraftNewItem {
   id: Id
   name: string

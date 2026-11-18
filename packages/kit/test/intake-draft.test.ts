@@ -329,6 +329,25 @@ describe('buildDraftLine: one line per created variant and photos', () => {
     expect(again).toMatchObject({ newItem: { photos: built.newItem!.photos }, line: { photo: null } })
   })
 
+  it('a new item without axes keeps its whole gallery; a line photo is appended once, never replacing', () => {
+    const g = (n: number) => ({ provider: 'uploadcare', fileId: `g${n}`, url: `https://ucarecdn.com/g${n}/`, id: `gid${n}` })
+    const gallery = [g(1), g(2), g(3)]
+    const item = nItem({ photos: gallery })
+    const none = buildDraftLine(form({ itemId: 'N1', newItem: item }), s, base)
+    if (!('line' in none)) throw new Error(none.errorKey)
+    expect(none.newItem!.photos).toEqual(gallery)
+    const same = buildDraftLine(form({ itemId: 'N1', newItem: item, photo: { ...gallery[1]!, replace: false } }), s, base)
+    if (!('line' in same)) throw new Error(same.errorKey)
+    expect(same.newItem!.photos).toEqual(gallery)
+    const added = buildDraftLine(form({ itemId: 'N1', newItem: item, photo: { ...photo, replace: false } }), s, base)
+    if (!('line' in added)) throw new Error(added.errorKey)
+    expect(added.newItem!.photos).toEqual([...gallery, { ...photo, id: expect.any(String) }])
+    expect(item.photos).toEqual(gallery)
+    const again = buildDraftLine(form({ itemId: 'N1', newItem: added.newItem, photo: { ...photo, replace: false } }), s, base)
+    if (!('line' in again)) throw new Error(again.errorKey)
+    expect(again.newItem!.photos).toHaveLength(4)
+  })
+
   it('a new variant keeps its photo on the line; the folder and attribute of a new item may be the draft’s', () => {
     let d = ok(withNewAttribute(base, s, { id: 'DA', name: 'Tolerance', kind: 'number', unit: '%', siPrefixes: false, options: [] }))
     d = ok(withNewFolder(d, s, { id: 'DF', name: 'Coils', parentId: null }))

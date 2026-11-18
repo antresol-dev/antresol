@@ -92,6 +92,12 @@ async function readPhoto(ctx: ToolContext, file: string): Promise<{ full: string
   return { full, bytes: await readFile(full) }
 }
 
+/** Refuses what attachPhoto would refuse before it uploads (no photo store, a missing or too large file), without uploading: the dry check before any upload. */
+export async function checkPhoto(ctx: ToolContext, file: string): Promise<void> {
+  if (!ctx.files) throw new ToolError('no photo store: the connection key has no photo store settings. Set up photos in the app and copy the key again.')
+  await readPhoto(ctx, file)
+}
+
 /** A photo path as the tools accept it, resolved against the photos folder. */
 export const resolvePhotoPath = (ctx: ToolContext, file: string): string => path.resolve(ctx.config.photosDir, file)
 

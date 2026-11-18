@@ -36,7 +36,7 @@ describe('protocol', () => {
     )
     const add = tools.find((t) => t.name === 'add_intake_lines')!
     const item = (add.inputSchema.properties as any).newItems.items.properties
-    expect(Object.keys(item)).toEqual(expect.arrayContaining(['description', 'photo', 'withoutLines']))
+    expect(Object.keys(item)).toEqual(expect.arrayContaining(['description', 'photos', 'withoutLines']))
     expect((add.inputSchema as any).required).not.toContain('lines')
     expect(JSON.stringify(tools.map((t) => t.inputSchema))).not.toContain('replacePhoto')
     for (const gone of ['create_attribute', 'update_attribute', 'remove_attribute']) expect(names).not.toContain(gone)
@@ -126,7 +126,7 @@ describe('protocol', () => {
     expect(got.messages).toHaveLength(1)
     expect(got.messages[0]!.role).toBe('user')
     const text = (got.messages[0]!.content as { text: string }).text
-    for (const word of ['/x', 'get_overview', 'list_photos', 'view_photos', 'search', 'add_intake_lines', 'onlyNew: true', '`photo`', 'never carries a photo', 'keep showing as new', 'create_folder', 'similar', 'addValues', 'only under the item', 'One photo']) expect(text).toContain(word)
+    for (const word of ['/x', 'get_overview', 'list_photos', 'view_photos', 'search', 'add_intake_lines', 'onlyNew: true', '`photo`', 'never carries a photo', 'keep showing as new', 'create_folder', 'similar', 'addValues', 'only under the item', 'several photos', 'the first']) expect(text).toContain(word)
     const appended = await client.getPrompt({ name: 'intake_from_photos', arguments: { intake: 'abc' } })
     expect((appended.messages[0]!.content as { text: string }).text).toContain('abc')
   })

@@ -253,10 +253,10 @@ async function saveOption(): Promise<void> {
 }
 
 // A row is the rounded element that carries the hover highlight and fills the list's row edge to edge (like FolderList);
-// its control keeps the padding and the focus ring, side actions sit in the same row.
+// its control keeps the padding and the focus ring, side actions sit in the same row, 4 px off the row's right edge.
 const dividerClass =
   "relative not-first:before:absolute not-first:before:top-0 not-first:before:right-3 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-['']"
-const rowClass = `${dividerClass} flex min-h-11 min-w-0 items-center gap-2 rounded-field transition-colors duration-(--dur-fast)`
+const rowClass = `${dividerClass} flex min-h-11 min-w-0 items-center gap-2 rounded-field pr-1 transition-colors duration-(--dur-fast)`
 const infoRowClass = `${dividerClass} flex min-h-9 min-w-0 items-center gap-2 px-3 py-1`
 const hoverClass = computed(() => (props.readOnly ? '' : 'hover:bg-hover'))
 const tapClass =
@@ -272,9 +272,9 @@ const existingLink =
   <section v-if="groups.length > 0 || units.length > 0 || attributes.length > 0 || tags.length > 0 || options.length > 0 || items.length > 0" class="grid min-w-0 grid-cols-1 gap-3" :aria-label="$t('intakes.willCreate.title')">
     <h2 class="section-label px-3 text-xs">{{ $t('intakes.willCreate.title') }}</h2>
 
-    <div v-if="groups.length > 0" class="grid min-w-0 gap-1">
+    <div v-if="groups.length > 0" class="grid min-w-0 grid-cols-1 gap-1">
       <h3 v-if="!foldersFold" class="px-3 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.folders') }}</h3>
-      <h3 v-else>
+      <h3 v-else class="min-w-0">
         <button type="button" :class="foldTitle" :aria-expanded="foldersShown" :aria-controls="`${uid}-folders`" @click="foldersOpen = !foldersShown">
           <span class="shrink-0">{{ $t('intakes.willCreate.folders') }}</span>
           <span class="shrink-0 font-normal tabular-nums">{{ folderCount }}</span>
@@ -302,7 +302,7 @@ const existingLink =
       </ul>
     </div>
 
-    <div v-if="units.length > 0" class="grid min-w-0 gap-1">
+    <div v-if="units.length > 0" class="grid min-w-0 grid-cols-1 gap-1">
       <h3 class="px-3 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.units') }}</h3>
       <ul class="surface-list">
         <li v-for="u in units" :key="u.id" :class="[rowClass, hoverClass]">
@@ -320,7 +320,7 @@ const existingLink =
       </ul>
     </div>
 
-    <div v-if="attributes.length > 0" class="grid min-w-0 gap-1">
+    <div v-if="attributes.length > 0" class="grid min-w-0 grid-cols-1 gap-1">
       <h3 class="px-3 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.attributes') }}</h3>
       <ul class="surface-list">
         <li v-for="a in attributes" :key="a.id" :class="[rowClass, hoverClass]">
@@ -343,7 +343,7 @@ const existingLink =
       </ul>
     </div>
 
-    <div v-if="tags.length > 0" class="grid min-w-0 gap-1">
+    <div v-if="tags.length > 0" class="grid min-w-0 grid-cols-1 gap-1">
       <h3 class="px-3 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.tags') }}</h3>
       <ul class="surface-list">
         <li v-for="x in tags" :key="x.id" :class="[rowClass, hoverClass]">
@@ -362,7 +362,7 @@ const existingLink =
       </ul>
     </div>
 
-    <div v-if="options.length > 0" class="grid min-w-0 gap-1">
+    <div v-if="options.length > 0" class="grid min-w-0 grid-cols-1 gap-1">
       <h3 class="px-3 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.options') }}</h3>
       <ul class="surface-list">
         <li v-for="o in options" :key="o.key" :class="[rowClass, hoverClass]">
@@ -382,9 +382,9 @@ const existingLink =
       </ul>
     </div>
 
-    <div v-if="items.length > 0" class="grid min-w-0 gap-1">
+    <div v-if="items.length > 0" class="grid min-w-0 grid-cols-1 gap-1">
       <h3 v-if="!itemsFold" class="px-3 text-sm font-semibold text-muted-foreground">{{ $t('intakes.willCreate.items') }}</h3>
-      <h3 v-else>
+      <h3 v-else class="min-w-0">
         <button type="button" :class="foldTitle" :aria-expanded="itemsShown" :aria-controls="`${uid}-items`" @click="itemsOpen = !itemsShown">
           <span class="shrink-0">{{ $t('intakes.willCreate.items') }}</span>
           <span class="shrink-0 font-normal tabular-nums">{{ items.length }}</span>

@@ -384,8 +384,10 @@ describe('parseBackup: intakes', () => {
     draft.newAttributes = [{ id: attr, name: 'Voltage', kind: 'number', unit: 'V', siPrefixes: false, options: [] }]
     Object.assign(draft.newItems[0]!, {
       description: 'Smoothing',
-      photo: { provider: 'uploadcare', fileId: 'f', url: 'https://u.example/f', urls: null, width: null, height: null, deleteHandle: null },
-      photoId: crypto.randomUUID(),
+      photos: [
+        { id: crypto.randomUUID(), provider: 'uploadcare', fileId: 'f', url: 'https://u.example/f', urls: null, width: null, height: null, deleteHandle: null },
+        { id: crypto.randomUUID(), provider: 'uploadcare', fileId: 'g', url: 'https://u.example/g', urls: null, width: null, height: null, deleteHandle: null },
+      ],
     })
     const committed = intakes.find((i) => i.lines)!
     committed.created = {
@@ -393,6 +395,11 @@ describe('parseBackup: intakes', () => {
       items: [{ id: crypto.randomUUID(), name: 'Resistor', folderId: shelf }],
     }
     expect(parseBackup(JSON.parse(JSON.stringify(file)))).toStrictEqual(file)
+    // A photo without its id is a malformed record.
+    const photos = draft.newItems[0]!.photos as Rec[]
+    const { id: _id, ...noId } = photos[1]!
+    photos[1] = noId
+    expect(parseBackup(JSON.parse(JSON.stringify(file)))).toEqual({ error: 'format' })
     const leaky = JSON.parse(JSON.stringify(file)) as typeof file
     leaky.inventories[0]!.intakes.find((i) => i.draft)!.draft!.newFolders![0]!.secret = 'postgres://x'
     expect(JSON.stringify(parseBackup(leaky))).not.toContain('postgres://')
@@ -441,7 +448,7 @@ describe('parseBackup: intakes', () => {
     expect(entry!.intakes.some((i) => i.created)).toBe(true)
     for (const i of entry!.intakes) {
       Reflect.deleteProperty(i, 'created')
-      for (const n of i.draft?.newItems ?? []) for (const k of ['description', 'photo', 'photoId']) Reflect.deleteProperty(n, k)
+      for (const n of i.draft?.newItems ?? []) for (const k of ['description', 'photos']) Reflect.deleteProperty(n, k)
       if (i.draft) {
         Reflect.deleteProperty(i.draft, 'newFolders')
         Reflect.deleteProperty(i.draft, 'newAttributes')
@@ -455,7 +462,7 @@ describe('parseBackup: intakes', () => {
     expect(JSON.parse(JSON.stringify(withoutCreated))).toEqual(entry!.intakes.map(({ created: _c, ...rest }) => rest))
     const draft = intakes.find((i) => i.draft)!.draft!
     for (const k of ['newFolders', 'newAttributes']) expect(draft).not.toHaveProperty(k)
-    for (const n of draft.newItems) for (const k of ['description', 'photo', 'photoId']) expect(n).not.toHaveProperty(k)
+    for (const n of draft.newItems) for (const k of ['description', 'photos']) expect(n).not.toHaveProperty(k)
 
     const { storage } = await emptyStorage()
     await storage.restore(parsed, 'same-ids', newId())

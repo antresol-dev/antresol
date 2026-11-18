@@ -19,7 +19,7 @@ import {
   sameName,
   withAddedOptions,
 } from './intake-entities'
-import { isSourceUrl } from './limits'
+import { isSourceUrl, MAX_DRAFT_ITEM_PHOTOS } from './limits'
 import type {
   Attribute,
   AttributeKind,
@@ -93,6 +93,10 @@ export interface DraftNewAttribute {
 }
 /** An item the draft creates; lines reference it by `id`. It lives until removed from the draft: a new item without
  *  lines is created with no stock. */
+/** A photo of a new item: the stored file and its id in the gallery. */
+export interface DraftItemPhoto extends PhotoFile {
+  id: Id
+}
 export interface DraftNewItem {
   id: Id
   name: string
@@ -105,10 +109,9 @@ export interface DraftNewItem {
   tagIds?: Id[]
   /** Absent in drafts saved before item descriptions. */
   description?: string | null
-  /** The item photo (goes to the item's gallery on commit); absent in older drafts. */
-  photo?: PhotoFile | null
-  /** Minted with the item; the id of its photo in the gallery, reused on every commit attempt. */
-  photoId?: Id
+  /** The item's gallery, in order (the first is the cover; goes to the gallery on commit). Each photo has its own id,
+   *  minted when it is added and reused on every commit attempt; at most MAX_DRAFT_ITEM_PHOTOS. */
+  photos?: DraftItemPhoto[]
   /** An icon name (isIconName); absent or null: none. */
   icon?: string | null
   /** #RRGGBB (either case; the commit writes capitals); absent or null: the item takes a colour by its id. */
@@ -355,7 +358,7 @@ function newItemContext(draft: IntakeDraftContent, s: InventorySnapshot): NewIte
 /** The axes of a new item of the draft, in order; or what keeps it from being created: its folder archived or gone
  *  (item_archived; a draft folder is fine), an empty or too long name, a bad icon or colour, a unit gone (a draft unit
  *  is fine), a tag that is neither in the copy nor a new tag of the draft (or a new tag with a bad name), an attribute
- *  gone, a shared value that does not fit, a photo without its id. */
+ *  gone, a shared value that does not fit, a photo without its id or twice the same id, too many photos. */
 function newItemAxes(n: DraftNewItem, s: InventorySnapshot, ctx: NewItemContext): Attribute[] | Problem {
   if (
     n.folderId !== null &&
@@ -366,7 +369,10 @@ function newItemAxes(n: DraftNewItem, s: InventorySnapshot, ctx: NewItemContext)
   }
   if (!goodName(n.name) || !goodIcon(n.icon) || !goodColor(n.color) || !resolveUnit(n.unitKey, ctx.units)) return 'invalid_value'
   if ((n.tagIds ?? []).some((id) => !ctx.tags.has(id) || ctx.badTags.has(id))) return 'invalid_value'
-  if (n.photo && !n.photoId) return 'invalid_value'
+  const photos = n.photos ?? []
+  if (photos.length > MAX_DRAFT_ITEM_PHOTOS || new Set(photos.map((p) => p.id)).size !== photos.length || photos.some((p) => !p.id)) {
+    return 'invalid_value'
+  }
   const axes: Attribute[] = []
   for (const x of n.attributes) {
     const a = ctx.attributes.get(x.attributeId)
@@ -548,7 +554,7 @@ export function buildIntakeCommit(intake: Intake, resolved: ResolvedIntake, s: I
   const receipts: IntakeCommit['receipts'] = []
   const photos: IntakeCommit['photos'] = []
   for (const n of draft.newItems) {
-    if (n.photo && n.photoId) photos.push({ id: n.photoId, itemId: n.id, variantId: null, replaces: undefined, ...fileOf(n.photo) })
+    for (const p of n.photos ?? []) photos.push({ id: p.id, itemId: n.id, variantId: null, replaces: undefined, ...fileOf(p) })
   }
   const photographed = new Set<Id>()
   for (const line of draft.lines) {
@@ -575,8 +581,7 @@ export function buildIntakeCommit(intake: Intake, resolved: ResolvedIntake, s: I
     if (line.photo) {
       const file = fileOf(line.photo)
       const add = (replaces: Id | undefined) => photos.push({ id: line.ids.photoId, itemId, variantId, replaces, ...file })
-      const own = draftItems.get(itemId)?.photo
-      const isItemPhoto = !!own && own.provider === file.provider && own.fileId === file.fileId
+      const isItemPhoto = !!draftItems.get(itemId)?.photos?.some((p) => p.provider === file.provider && p.fileId === file.fileId)
       if (variantId === null) {
         if (!isItemPhoto) add(undefined)
       } else if (!photographed.has(variantId)) {

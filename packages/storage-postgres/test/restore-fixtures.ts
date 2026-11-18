@@ -101,8 +101,8 @@ async function seedIntakes(
       id: tape, name: 'Tape', folderId: drawer, unitKey: customUnitKey(reel),
       attributes: [],
     }, {
-      id: fresh, name: 'Capacitor', folderId: drawer, unitKey: customUnitKey(x.unit), description: 'Ceramic', photoId: newId(),
-      photo: { provider: 'imgbb', fileId: 'cap', url: 'https://i.ibb.co/cap/full.jpg', ...RENDITION_FIELDS },
+      id: fresh, name: 'Capacitor', folderId: drawer, unitKey: customUnitKey(x.unit), description: 'Ceramic',
+      photos: [{ id: newId(), provider: 'imgbb', fileId: 'cap', url: 'https://i.ibb.co/cap/full.jpg', ...RENDITION_FIELDS }],
       attributes: [{ attributeId: x.ohm, value: null, axis: true }, { attributeId: volt, value: '50', axis: false }],
     }],
     lines: [
@@ -131,8 +131,8 @@ async function seedIntakes(
     newItems: [{
       id: washer, name: 'Washer', folderId: box, unitKey: customUnitKey(pack), attributes: [],
     }, {
-      id: later, name: 'Inductor', folderId: box, unitKey: customUnitKey(x.unit), description: null, photoId: newId(),
-      photo: { provider: 'uploadcare', fileId: 'ind', url: 'https://u.example/ind' },
+      id: later, name: 'Inductor', folderId: box, unitKey: customUnitKey(x.unit), description: null,
+      photos: [{ id: newId(), provider: 'uploadcare', fileId: 'ind', url: 'https://u.example/ind' }],
       attributes: [{ attributeId: amp, value: '2 A', axis: false }],
     }],
     lines: [draftLine(later, [], '7'), draftLine(x.resistor, [...ohm('4700'), { attributeId: x.size, value: 'M' }], '1', { totalPrice: null }), draftLine(x.resistor, [...ohm('4700'), { attributeId: x.size, value: 'XXS' }], '1')],

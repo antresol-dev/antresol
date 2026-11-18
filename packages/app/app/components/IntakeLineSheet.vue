@@ -594,10 +594,10 @@ const photoMode = computed<'item' | 'variant' | 'legacy' | null>(() => {
   if (hint.value?.kind === 'new') return 'variant'
   return photo.value ? 'legacy' : null
 })
-const shownPhoto = computed(() => (photoMode.value === 'item' ? (photo.value ?? newItem.value?.photo ?? null) : photo.value))
+const shownPhoto = computed(() => (photoMode.value === 'item' ? (photo.value ?? newItem.value?.photos?.[0] ?? null) : photo.value))
 function removePhoto(): void {
   photo.value = null
-  if (photoMode.value === 'item' && newItem.value) newItem.value = { ...newItem.value, photo: null }
+  if (photoMode.value === 'item' && newItem.value) newItem.value = { ...newItem.value, photos: [] }
 }
 async function upload(files: File[]): Promise<void> {
   const file = files[0]
@@ -608,7 +608,7 @@ async function upload(files: File[]): Promise<void> {
     const stored = await intakes.uploadPhoto(file)
     if (photoMode.value === 'item' && newItem.value) {
       photo.value = null
-      newItem.value = { ...newItem.value, photo: stored }
+      newItem.value = { ...newItem.value, photos: [{ ...stored, id: newId() }] }
     } else {
       photo.value = { ...stored, replace: false }
     }

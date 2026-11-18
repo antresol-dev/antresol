@@ -339,8 +339,7 @@ describe('intake.commit', () => {
     const item = content.newItems[0]!
     item.folderId = box
     item.description = 'Thick film'
-    item.photoId = photoId
-    item.photo = { provider: 'uploadcare', fileId: 'item-photo', url: 'https://u.example/item-photo' }
+    item.photos = [{ id: photoId, provider: 'uploadcare', fileId: 'item-photo', url: 'https://u.example/item-photo' }]
     item.attributes.push({ attributeId: volt, value: '50', axis: false })
     expect((await w.storage.saveIntakeDraft({ id, inventoryId: w.inv, header: HEADER, content }, null, TEST_ACTOR)).saved).toBe(true)
     const { snapshot, rev } = await w.storage.loadInventoryWithRev(w.inv)

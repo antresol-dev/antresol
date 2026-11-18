@@ -299,7 +299,7 @@ export function renameIntakeIds(intake: Intake, rename: (id: Id) => Id): Intake 
         ...n,
         id: rename(n.id),
         ...(n.tagIds ? { tagIds: n.tagIds.map(rename) } : {}),
-        ...(n.photoId ? { photoId: rename(n.photoId) } : {}),
+        ...(n.photos ? { photos: n.photos.map((p) => ({ ...p, id: rename(p.id) })) } : {}),
         folderId: opt(n.folderId),
         unitKey: renameUnitKey(n.unitKey, rename),
         attributes: n.attributes.map((a) => ({ ...a, attributeId: rename(a.attributeId) })),

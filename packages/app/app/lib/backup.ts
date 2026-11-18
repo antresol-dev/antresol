@@ -218,10 +218,9 @@ const DRAFT_NEW_ITEM: Shape = {
   attributes: (v) => records(v, { attributeId: uuid, value: nullable(str), axis: bool }) !== null,
   /** Absent in drafts saved before tags; stays absent (see `intakeRecord`). */
   tagIds: (v) => v === undefined || listOf(uuid)(v),
-  /** Absent in drafts saved before descriptions, item photos and photo ids; each stays absent (see `intakeRecord`). */
+  /** Absent in drafts saved before descriptions and item photos; each stays absent (see `intakeRecord`). */
   description: (v) => v === undefined || nullable(str)(v),
-  photo: (v) => v === undefined || nullable((p) => record(p, ITEM_PHOTO, PHOTO_DEFAULTS) !== null)(v),
-  photoId: (v) => v === undefined || uuid(v),
+  photos: (v) => v === undefined || records(v, DRAFT_ITEM_PHOTO, PHOTO_DEFAULTS) !== null,
   /** Absent in drafts saved before icons and colours. */
   icon: optional(nullable(iconName)),
   color: optional(nullable(draftColor)),
@@ -257,6 +256,8 @@ const ITEM_PHOTO: Shape = {
   provider: str, fileId: str, url: str, urls: nullable(renditions), width: nullable(isPhotoSide), height: nullable(isPhotoSide),
   deleteHandle: nullable(isDeleteHandle),
 }
+/** A photo of a new item: the stored file and its id. */
+const DRAFT_ITEM_PHOTO: Shape = { id: uuid, ...ITEM_PHOTO }
 const DRAFT_LINE: Shape = {
   id: uuid, itemId: uuid, axisValues: (v) => records(v, { attributeId: uuid, value: str }) !== null, quantity,
   totalPrice: nullable(int), sourceUrl: nullable(str),
@@ -369,13 +370,12 @@ function intakeRecord(value: unknown): Intake | null {
       raw.addedOptions === undefined ? undefined : records<NonNullable<IntakeDraftContent['addedOptions']>[number]>(raw.addedOptions, DRAFT_ADDED_OPTION)
     if (newItems === null || lines === null || newTags === null || newFolders === null || newAttributes === null || newUnits === null || addedOptions === null) return null
     const cleanItems = newItems.map((n) => {
-      const { tagIds, description, photo, photoId, ...rest } = n
+      const { tagIds, description, photos, ...rest } = n
       return {
         ...dropUndefined(rest),
         ...(tagIds !== undefined ? { tagIds } : {}),
         ...(description !== undefined ? { description } : {}),
-        ...(photo !== undefined ? { photo: photo ? itemPhoto(photo) : photo } : {}),
-        ...(photoId !== undefined ? { photoId } : {}),
+        ...(photos !== undefined ? { photos: photos.map((p) => ({ ...itemPhoto(p), id: p.id })) } : {}),
       }
     })
     draft = {

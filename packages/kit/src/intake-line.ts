@@ -420,10 +420,10 @@ export function buildDraftLine(form: LineForm, s: InventorySnapshot, draft: Inta
   }
   let linePhoto: DraftLinePhoto | null = topsUp ? form.photo : form.photo ? { ...form.photo, replace: false } : null
   if (newItem && axes.length === 0) {
-    const file = form.photo ? fileOnly(form.photo) : newItem.photo
+    const file = form.photo ? fileOnly(form.photo) : newItem.photos?.[0]
     if (file) {
-      newItem.photo = file
-      newItem.photoId ??= newId()
+      const own = newItem.photos?.[0]
+      newItem.photos = [{ ...file, id: own?.id ?? newId() }]
     }
     linePhoto = null
   }

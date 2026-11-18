@@ -504,7 +504,8 @@ describe('restore', () => {
     const m = (id: Id) => `m:${id}`
     const base = { id: 'i', inventoryId: 'v', status: 'draft', header: { shop: null, orderNumber: null, purchasedOn: '2026-11-13', note: null },
       lines: null, created: null, draftRev: 'r', createdAt: '', createdBy: '', updatedAt: '', updatedBy: '', committedAt: null } as const
-    const item = { id: 'n1', name: 'X', folderId: 'f2', unitKey: 'pcs', attributes: [{ attributeId: 'a1', value: '5', axis: false }], photoId: 'p1' }
+    const item = { id: 'n1', name: 'X', folderId: 'f2', unitKey: 'pcs', attributes: [{ attributeId: 'a1', value: '5', axis: false }],
+      photos: [{ id: 'p1', provider: 'x', fileId: 'f1', url: 'u1' }, { id: 'p2', provider: 'x', fileId: 'f2', url: 'u2' }] }
     const draft = renameIntakeIds({
       ...base,
       draft: {
@@ -519,7 +520,7 @@ describe('restore', () => {
       { id: 'm:f2', name: 'Box', parentId: 'm:f1' }, { id: 'm:f1', name: 'Shelf', parentId: null }, { id: 'm:f3', name: 'Z', parentId: 'm:old' },
     ])
     expect(draft.newAttributes![0]!.id).toBe('m:a1')
-    expect(draft.newItems[0]).toMatchObject({ id: 'm:n1', folderId: 'm:f2', photoId: 'm:p1', attributes: [{ attributeId: 'm:a1' }] })
+    expect(draft.newItems[0]).toMatchObject({ id: 'm:n1', folderId: 'm:f2', photos: [{ id: 'm:p1', fileId: 'f1' }, { id: 'm:p2', fileId: 'f2' }], attributes: [{ attributeId: 'm:a1' }] })
     expect(draft.lines[0]!.axisValues[0]!.attributeId).toBe('m:a1')
 
     const committed = renameIntakeIds({
@@ -534,7 +535,7 @@ describe('restore', () => {
       attributes: [{ id: 'm:a1', name: 'V' }], tags: [{ id: 'm:t1', name: 'Kit' }], items: [{ id: 'm:n1', name: 'X', folderId: 'm:f2' }],
     })
 
-    const plain = renameIntakeIds({ ...base, draft: { newItems: [{ ...item, photoId: undefined }], lines: [] } }, m)
+    const plain = renameIntakeIds({ ...base, draft: { newItems: [{ ...item, photos: undefined }], lines: [] } }, m)
     expect(plain.draft).not.toHaveProperty('newFolders')
     expect(plain.draft).not.toHaveProperty('newAttributes')
     expect(plain.created).toBeNull()

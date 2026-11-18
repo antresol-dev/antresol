@@ -178,13 +178,13 @@ describe('attributes a form holds', () => {
 
 describe('new items', () => {
   it('live on their own, and get the photo id once', () => {
-    let d = withNewItem(base, nItem({ photo }))
-    const id = d.newItems[0]!.photoId
+    let d = withNewItem(base, nItem({ photos: [{ ...photo, id: '' }] }))
+    const id = d.newItems[0]!.photos![0]!.id
     expect(id).toBeTruthy()
     d = withNewItem(d, { ...d.newItems[0]!, name: 'Inductor' })
     expect(d.newItems).toHaveLength(1)
-    expect(d.newItems[0]).toMatchObject({ name: 'Inductor', photoId: id })
-    expect(withNewItem(base, nItem()).newItems[0]!.photoId).toBeUndefined()
+    expect(d.newItems[0]).toMatchObject({ name: 'Inductor', photos: [{ id }] })
+    expect(withNewItem(base, nItem()).newItems[0]!.photos).toBeUndefined()
   })
 
   it('withoutNewItem removes the item and its lines; restoreNewItem puts them back in place', () => {
@@ -322,11 +322,11 @@ describe('buildDraftLine: one line per created variant and photos', () => {
     const built = buildDraftLine(form({ itemId: 'N1', newItem: nItem(), photo: { ...photo, replace: true } }), s, base)
     if (!('line' in built)) throw new Error(built.errorKey)
     expect(built.line.photo).toBeNull()
-    expect(built.newItem!.photo).toEqual(photo)
-    expect(built.newItem!.photoId).toBeTruthy()
+    expect(built.newItem!.photos).toEqual([{ ...photo, id: expect.any(String) }])
+    expect(built.newItem!.photos![0]!.id).toBeTruthy()
     // The card's photo stays when the form has none.
     const again = buildDraftLine(form({ itemId: 'N1', newItem: built.newItem }), s, base)
-    expect(again).toMatchObject({ newItem: { photo, photoId: built.newItem!.photoId }, line: { photo: null } })
+    expect(again).toMatchObject({ newItem: { photos: built.newItem!.photos }, line: { photo: null } })
   })
 
   it('a new variant keeps its photo on the line; the folder and attribute of a new item may be the draft’s', () => {

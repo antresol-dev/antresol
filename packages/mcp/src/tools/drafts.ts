@@ -597,7 +597,7 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
           attributes: [],
           tagIds: [],
           description: field(n.description),
-          ...(photo ? { photo, photoId: itemPhotoIds[i]! } : {}),
+          ...(photo ? { photos: [{ ...photo, id: itemPhotoIds[i]! }] } : {}),
         }
         next = placeItem({ s, draft: next, base, decl: n, key: `item${i}`, label: `new item ${i + 1}`, mint, staged, check: true })
         fresh.set(ref, { id: itemIds[i]!, withoutLines: n.withoutLines === true })
@@ -620,7 +620,7 @@ export async function addIntakeLines(ctx: ToolContext, args: { intake: string; n
         const attrs = draftAttributes(s, working)
         const itemId = newItem?.id ?? existing!.id
         const axes = axesOf(s, attrs, newItem, itemId)
-        if (newItem?.photo && photos[i] && axes.length === 0) {
+        if (newItem?.photos?.length && photos[i] && axes.length === 0) {
           throw new ToolError(
             made
               ? 'give the photo once: this new item has its own photo and the line has one too (the line\'s photo would be lost). Use the item\'s photo.'
@@ -794,13 +794,13 @@ export async function updateNewItem(
   const build = (photo: PhotoFile | null) => (draft: IntakeDraftContent, header: IntakeHeader, s: InventorySnapshot) => {
     const id = args.item.trim()
     const old = findNewItem(draft, id)
-    const { photo: oldPhoto, photoId: oldPhotoId, ...rest } = old
+    const { photos: oldPhotos, ...rest } = old
     const base: DraftNewItem = {
       ...rest,
       name: args.name === undefined ? old.name : args.name,
       description: args.description === undefined ? old.description : field(args.description),
       folderId: args.folder === undefined ? old.folderId : resolveFolder(s, draft, args.folder),
-      ...(photo ? { photo, photoId } : args.photo === undefined && oldPhoto ? { photo: oldPhoto, ...(oldPhotoId ? { photoId: oldPhotoId } : {}) } : {}),
+      ...(photo ? { photos: [{ ...photo, id: photoId }] } : args.photo === undefined && oldPhotos?.length ? { photos: oldPhotos } : {}),
     }
     const staged: Staged[] = []
     const errors: string[] = []

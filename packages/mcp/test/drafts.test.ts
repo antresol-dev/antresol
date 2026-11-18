@@ -483,7 +483,7 @@ describe('item photos', () => {
     expect(v.newItems.map((n: any) => n.photo)).toEqual(['https://img.example/1', 'https://img.example/1'])
     expect(v.lines[0].photo).toBeNull()
     const raw = (await rawIntake(f, id)).draft!
-    expect(raw.newItems.every((n) => n.photoId)).toBe(true)
+    expect(raw.newItems.every((n) => n.photos?.[0]?.id)).toBe(true)
     const nid = raw.newItems[0]!.id
     v = (await drafts.updateNewItem(f.ctx, { intake: id, item: nid, name: 'Saw 2' })) as any
     expect(v.newItems[0].photo).toBe('https://img.example/1')
@@ -530,8 +530,8 @@ describe('item photos', () => {
     const { f, uploads, id } = await photoSetup()
     await drafts.addIntakeLines(f.ctx, { intake: id, newItems: [{ ref: 'a', name: 'Saw', photo: 'a.png', withoutLines: true }] })
     const raw = (await rawIntake(f, id)).draft!
-    expect(raw.newItems[0]!.photoId).toBeTruthy()
-    expect(raw.newItems[0]!.photoId).not.toBe(raw.newItems[0]!.id)
+    expect(raw.newItems[0]!.photos![0]!.id).toBeTruthy()
+    expect(raw.newItems[0]!.photos![0]!.id).not.toBe(raw.newItems[0]!.id)
     const before = uploads.length
     const both = (await drafts.addIntakeLines(f.ctx, {
       intake: id,
@@ -639,7 +639,7 @@ describe('review fixes: tags and photos', () => {
     expect(e).toBeInstanceOf(ToolError)
     expect(e.message).toMatch(/already has a photo[\s\S]*update_new_item/)
     expect(uploads).toHaveLength(before)
-    expect((await rawIntake(f, id)).draft!.newItems[0]!.photo!.url).toBe('https://img.example/1')
+    expect((await rawIntake(f, id)).draft!.newItems[0]!.photos![0]!.url).toBe('https://img.example/1')
     // without a line photo the line is fine
     const ok = (await drafts.addIntakeLines(f.ctx, { intake: id, lines: [{ item: itemId, amount: '1' }] })) as any
     expect(ok.lines).toHaveLength(1)

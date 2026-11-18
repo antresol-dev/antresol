@@ -157,7 +157,7 @@ async function upload(files: File[]): Promise<void> {
   if (!file) return
   uploading.value = true
   try {
-    await patch({ photo: await intakes.uploadPhoto(file) })
+    await patch({ photos: [{ ...(await intakes.uploadPhoto(file)), id: newId() }] })
   } catch {
     toast.error(t('intakes.line.photoFailed'))
   } finally {
@@ -223,7 +223,7 @@ const panelId = `intake-item-${props.item.id}`
       :aria-controls="panelId"
       @click="expanded = !expanded"
     >
-      <PhotoImg v-if="item.photo" :photo="item.photo" size="thumb" alt="" class="size-9 shrink-0 rounded-thumb object-cover" />
+      <PhotoImg v-if="item.photos?.[0]" :photo="item.photos[0]" size="thumb" alt="" class="size-9 shrink-0 rounded-thumb object-cover" />
       <span v-else class="grid size-9 shrink-0 place-items-center rounded-thumb bg-thumb text-thumb-foreground"><ImagePlus class="size-4" aria-hidden="true" /></span>
       <span class="grid min-w-0 grow gap-0.5">
         <span class="flex min-w-0 items-center gap-2">
@@ -238,12 +238,12 @@ const panelId = `intake-item-${props.item.id}`
     <div v-if="expanded" :id="panelId" class="grid min-w-0 gap-4 px-3 pt-2 pb-4">
       <p v-if="problemKey" role="alert" class="text-sm text-destructive">{{ $t(problemKey) }}</p>
 
-      <div v-if="canPhoto || item.photo" class="grid gap-2">
+      <div v-if="canPhoto || item.photos?.length" class="grid gap-2">
         <Label>{{ $t('intakes.line.photo') }}</Label>
-        <div v-if="item.photo" class="flex items-center gap-3">
-          <PhotoImg :photo="item.photo" size="thumb" alt="" class="size-16 shrink-0 rounded-thumb object-cover" />
+        <div v-if="item.photos?.[0]" class="flex items-center gap-3">
+          <PhotoImg :photo="item.photos[0]" size="thumb" alt="" class="size-16 shrink-0 rounded-thumb object-cover" />
           <PhotoPicker v-if="canPhoto" :disabled="disabled" @pick="upload" />
-          <Button type="button" variant="ghost" size="icon" class="size-11 shrink-0" :aria-label="$t('quickAdd.removePhoto')" :disabled="disabled" @click="patch({ photo: null })">
+          <Button type="button" variant="ghost" size="icon" class="size-11 shrink-0" :aria-label="$t('quickAdd.removePhoto')" :disabled="disabled" @click="patch({ photos: [] })">
             <X class="size-4" aria-hidden="true" />
           </Button>
         </div>

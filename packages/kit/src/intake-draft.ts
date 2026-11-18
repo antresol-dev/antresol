@@ -156,10 +156,10 @@ export function withoutNewAttribute(draft: IntakeDraftContent, id: Id): IntakeDr
 }
 
 /** The draft with the new item put in (in its place when it is there already). It lives on its own, with no line. An
- *  item with a photo gets the photo's id here, once, so a retried commit makes the photo once. */
+ *  item's photo without an id gets one here, once, so a retried commit makes the photo once. */
 export function withNewItem(draft: IntakeDraftContent, item: DraftNewItem): IntakeDraftContent {
   const named = item.name.trim() === item.name ? item : { ...item, name: item.name.trim() }
-  const placed = named.photo && !named.photoId ? { ...named, photoId: newId() } : named
+  const placed = named.photos?.some((p) => !p.id) ? { ...named, photos: named.photos.map((p) => (p.id ? p : { ...p, id: newId() })) } : named
   return pruneDraft({ ...draft, newItems: upsert(draft.newItems, placed) })
 }
 

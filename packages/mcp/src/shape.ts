@@ -221,7 +221,7 @@ function newItemView(s: InventorySnapshot, draft: IntakeDraftContent, attrs: Att
     description: n.description?.trim() ? n.description : null,
     icon: n.icon ?? null,
     color: n.color ?? null,
-    photo: n.photo?.url ?? null,
+    photo: n.photos?.[0]?.url ?? null,
     problem,
     folder: draftFolderPath(s, draft, n.folderId),
     unit: unitSymbol(s, n.unitKey, units),

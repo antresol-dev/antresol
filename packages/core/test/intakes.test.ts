@@ -15,7 +15,7 @@ import {
   type IntakeDraftContent,
 } from '../src/intakes'
 import { intakeUnits } from '../src/intake-entities'
-import { MAX_NAME_LENGTH } from '../src/limits'
+import { MAX_DRAFT_ITEM_PHOTOS, MAX_NAME_LENGTH } from '../src/limits'
 import type { CustomUnit, Tag } from '../src/model'
 import { customUnitKey, parseAmount, resolveUnit } from '../src/units'
 import { normalizeCommand, validateCommand } from '../src/validate'
@@ -575,21 +575,32 @@ describe('draft folders, attributes and standalone items', () => {
     expect(resolveIntake(content({ newFolders: [{ id: 'A', name: 'Inductors', parentId: null }] }), base()).ok).toBe(true)
   })
 
-  it('the photo and description of a new item go to its gallery and its row', () => {
-    const file = { provider: 'imgbb', fileId: 'f1', url: 'https://i.ibb.co/f1/full.jpg', urls: null, width: 1600, height: 1200, deleteHandle: null }
-    const cmd = build(content({ newItems: [plain({ description: 'Wi-Fi module', photo: file, photoId: 'IPH' })] }))
+  it('the photos and description of a new item go to its gallery and its row, in order', () => {
+    const f = (n: number) => ({ provider: 'imgbb', fileId: `f${n}`, url: `https://i.ibb.co/f${n}/full.jpg`, urls: null, width: 1600, height: 1200, deleteHandle: null })
+    const photos = [{ id: 'I1', ...f(1) }, { id: 'I2', ...f(2) }, { id: 'I3', ...f(3) }]
+    const cmd = build(content({ newItems: [plain({ description: 'Wi-Fi module', photos })] }))
     expect(cmd.newItems[0]!.description).toBe('Wi-Fi module')
-    expect(cmd.photos).toEqual([{ id: 'IPH', itemId: 'P', variantId: null, replaces: undefined, ...file }])
+    expect(cmd.photos).toEqual(photos.map((p) => ({ itemId: 'P', variantId: null, replaces: undefined, ...p })))
     expect(validateCommand(normalizeCommand(cmd), base())).toBeNull()
-    // A photo without its id cannot be committed twice safely: the item is marked.
-    expect(entity(content({ newItems: [plain({ photo: file })] }), 'item', 'P')!.problem).toEqual({ code: 'invalid_value' })
+    // A committed copy already holds the photos: the same commit again is valid and adds nothing.
+    const held = { ...base(), photos: photos.map((p) => photoRow(p.id, 'P', null)) }
+    expect(validateCommand(normalizeCommand(cmd), held)).toBeNull()
+    // A photo without its id cannot be committed twice safely; nor can two share one id; nor can there be too many.
+    const noId = [{ ...f(1) }] as unknown as typeof photos
+    expect(entity(content({ newItems: [plain({ photos: noId })] }), 'item', 'P')!.problem).toEqual({ code: 'invalid_value' })
+    expect(entity(content({ newItems: [plain({ photos: [photos[0]!, { ...photos[1]!, id: 'I1' }] })] }), 'item', 'P')!.problem).toEqual({ code: 'invalid_value' })
+    const many = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `M${i}`, ...f(i) }))
+    expect(entity(content({ newItems: [plain({ photos: many(21) })] }), 'item', 'P')!.problem).toEqual({ code: 'invalid_value' })
+    expect(entity(content({ newItems: [plain({ photos: many(MAX_DRAFT_ITEM_PHOTOS) })] }), 'item', 'P')!.problem).toBeNull()
   })
 
-  it('a line of a new item without axes carrying the item photo adds it once', () => {
-    const file = { provider: 'imgbb', fileId: 'f1', url: 'https://i.ibb.co/f1/full.jpg' }
-    const l = line('P', {}, { photo: { ...file, replace: false } })
-    const cmd = build(content({ newItems: [plain({ photo: file, photoId: 'IPH' })], lines: [l] }))
-    expect(cmd.photos.map((p) => p.id)).toEqual(['IPH'])
+  it('a line of a new item without axes adds its photo to the gallery unless the item has that file', () => {
+    const f = (n: number) => ({ provider: 'imgbb', fileId: `f${n}`, url: `https://i.ibb.co/f${n}/full.jpg` })
+    const photos = [{ id: 'I1', ...f(1) }, { id: 'I2', ...f(2) }, { id: 'I3', ...f(3) }]
+    const same = line('P', {}, { photo: { ...f(2), replace: false } })
+    expect(build(content({ newItems: [plain({ photos })], lines: [same] })).photos.map((p) => p.id)).toEqual(['I1', 'I2', 'I3'])
+    const other = line('P', {}, { photo: { ...f(4), replace: false } })
+    expect(build(content({ newItems: [plain({ photos })], lines: [other] })).photos.map((p) => p.id)).toEqual(['I1', 'I2', 'I3', other.ids.photoId])
   })
 
   it('created names the folders, attributes, new tags and items the commit makes', () => {

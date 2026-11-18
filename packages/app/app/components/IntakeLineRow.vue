@@ -52,7 +52,7 @@ const values = computed(() =>
  *  inventory already has for the variant or the item; with none, the item's icon or letters (ItemThumb). */
 const cover = computed<PhotoRef | null>(() => {
   if (props.line.photo) return props.line.photo
-  if (newItem.value) return newItem.value.photo ?? null
+  if (newItem.value) return newItem.value.photos?.[0] ?? null
   const r = props.resolution
   const variantId = r.kind === 'add' ? r.variantId : null
   return (variantId !== null ? ix.value.variantCovers.get(variantId) : undefined) ?? ix.value.covers.get(props.line.itemId) ?? null

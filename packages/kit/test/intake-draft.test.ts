@@ -1,5 +1,6 @@
 import {
   emptyIntakeDraft,
+  MAX_DRAFT_ITEM_PHOTOS,
   resolveIntake,
   type DraftLine,
   type DraftNewAttribute,
@@ -346,6 +347,35 @@ describe('buildDraftLine: one line per created variant and photos', () => {
     const again = buildDraftLine(form({ itemId: 'N1', newItem: added.newItem, photo: { ...photo, replace: false } }), s, base)
     if (!('line' in again)) throw new Error(again.errorKey)
     expect(again.newItem!.photos).toHaveLength(4)
+  })
+
+  it('withLine keeps the draft\'s own gallery: a photo added elsewhere after the form was built survives the save', () => {
+    const g = (n: number) => ({ provider: 'uploadcare', fileId: `g${n}`, url: `https://ucarecdn.com/g${n}/`, id: `gid${n}` })
+    const stale = nItem({ photos: [g(1)] })
+    const built = buildDraftLine(form({ itemId: 'N1', newItem: stale, photo: { ...photo, replace: false } }), s, base)
+    if (!('line' in built)) throw new Error(built.errorKey)
+    // Meanwhile the draft got two more photos (another writer).
+    const current = withNewItem(base, nItem({ photos: [g(1), g(2), g(3)] }))
+    const saved = withLine(current, built.line, built.newItem, built.newTags, built.addedPhoto)
+    expect(saved.newItems[0]!.photos!.map((p) => p.fileId)).toEqual(['g1', 'g2', 'g3', 'f1'])
+    // Saving again with the same result appends nothing twice.
+    const twice = withLine(saved, built.line, built.newItem, built.newTags, built.addedPhoto)
+    expect(twice.newItems[0]!.photos).toHaveLength(4)
+    // A photo that was removed meanwhile stays removed.
+    const emptied = withNewItem(base, nItem())
+    expect(withLine(emptied, built.line, built.newItem, built.newTags).newItems[0]!.photos).toBeUndefined()
+  })
+
+  it('a full gallery takes no line photo: nothing is appended and the build says so', () => {
+    const full = Array.from({ length: MAX_DRAFT_ITEM_PHOTOS }, (_, n) => ({ provider: 'uploadcare', fileId: `g${n}`, url: `https://ucarecdn.com/g${n}/`, id: `gid${n}` }))
+    const item = nItem({ photos: full })
+    const built = buildDraftLine(form({ itemId: 'N1', newItem: item, photo: { ...photo, replace: false } }), s, base)
+    if (!('line' in built)) throw new Error(built.errorKey)
+    expect(built.galleryFull).toBe(true)
+    expect(built.newItem!.photos).toEqual(full)
+    // A photo the gallery already has is not "too many".
+    const same = buildDraftLine(form({ itemId: 'N1', newItem: item, photo: { ...full[3]!, replace: false } }), s, base)
+    expect(same).not.toHaveProperty('galleryFull')
   })
 
   it('a new variant keeps its photo on the line; the folder and attribute of a new item may be the draft’s', () => {

@@ -7,6 +7,8 @@ import {
   isSourceUrl,
   newId,
   MAX_NAME_LENGTH,
+  MAX_DRAFT_ITEM_PHOTOS,
+  type DraftItemPhoto,
   intakeUnits,
   pruneDraft,
   resolveUnit,
@@ -321,7 +323,11 @@ export interface LineForm {
    *  when this line is the one creating the variant. */
   variantDescription?: string | null
 }
-export type BuiltLine = { line: DraftLine; newItem: DraftNewItem | null; newTags: DraftNewTag[] } | { errorKey: string; params?: Record<string, string> }
+/** `addedPhoto`: the line's photo that joined the new item's gallery (withLine re-applies it to the draft's own gallery).
+ *  `galleryFull`: the line has a photo the gallery would take, but already holds MAX_DRAFT_ITEM_PHOTOS; it was not added. */
+export type BuiltLine =
+  | { line: DraftLine; newItem: DraftNewItem | null; newTags: DraftNewTag[]; addedPhoto?: DraftItemPhoto; galleryFull?: true }
+  | { errorKey: string; params?: Record<string, string> }
 
 /** A photo without the line's "replace" flag: the item's own photo. */
 export function fileOnly(p: DraftLinePhoto): PhotoFile {
@@ -418,12 +424,20 @@ export function buildDraftLine(form: LineForm, s: InventorySnapshot, draft: Inta
   if (topsUp && form.photo && !(kept && kept.fileId === form.photo.fileId && kept.provider === form.photo.provider)) {
     return { errorKey: 'intakes.line.noPhotoOnTopUp' }
   }
+  let addedPhoto: DraftItemPhoto | undefined
+  let galleryFull = false
   let linePhoto: DraftLinePhoto | null = topsUp ? form.photo : form.photo ? { ...form.photo, replace: false } : null
   if (newItem && axes.length === 0) {
     // The line's photo joins the item's gallery (once); the gallery is never replaced from here.
     const file = form.photo ? fileOnly(form.photo) : null
     const gallery = newItem.photos ?? []
-    if (file && !gallery.some((p) => p.provider === file.provider && p.fileId === file.fileId)) newItem.photos = [...gallery, { ...file, id: newId() }]
+    if (file && !gallery.some((p) => p.provider === file.provider && p.fileId === file.fileId)) {
+      if (gallery.length >= MAX_DRAFT_ITEM_PHOTOS) galleryFull = true
+      else {
+        addedPhoto = { ...file, id: newId() }
+        newItem.photos = [...gallery, addedPhoto]
+      }
+    }
     linePhoto = null
   }
   // Only a line that creates a variant carries a description: not a top-up, not a new item without axes.
@@ -432,18 +446,38 @@ export function buildDraftLine(form: LineForm, s: InventorySnapshot, draft: Inta
     line: { id: form.lineId, itemId: form.itemId, axisValues, quantity, totalPrice, sourceUrl, photo: linePhoto, ids: form.ids, ...(variantDescription !== undefined ? { variantDescription } : {}) },
     newItem,
     newTags: newItem ? form.newTags.filter((t) => newItem.tagIds?.includes(t.id)) : [],
+    ...(addedPhoto ? { addedPhoto } : {}),
+    ...(galleryFull ? { galleryFull: true as const } : {}),
   }
 }
 
 /** The draft with the line put in (in its place when it is there already) and its new item put in or updated. New items
  *  live on their own: one left without lines stays (withoutNewItem removes it). */
-export function withLine(draft: IntakeDraftContent, line: DraftLine, newItem: DraftNewItem | null, newTags: DraftNewTag[] = []): IntakeDraftContent {
+export function withLine(
+  draft: IntakeDraftContent,
+  line: DraftLine,
+  newItem: DraftNewItem | null,
+  newTags: DraftNewTag[] = [],
+  addedPhoto?: DraftItemPhoto,
+): IntakeDraftContent {
   const replace = <T extends { id: Id }>(list: T[], x: T): T[] =>
     list.some((y) => y.id === x.id) ? list.map((y) => (y.id === x.id ? x : y)) : [...list, x]
   const tags = newTags.reduce((list, t) => replace(list, t), draft.newTags ?? [])
+  // The gallery is the draft's own, not the copy the form was built from (another writer may have changed it since):
+  // only the line's photo (`addedPhoto`) is added, once, and not past the limit.
+  let item = newItem
+  if (newItem) {
+    const have = draft.newItems.find((x) => x.id === newItem.id)
+    let photos = have ? (have.photos ?? []) : (newItem.photos ?? [])
+    if (addedPhoto && photos.length < MAX_DRAFT_ITEM_PHOTOS && !photos.some((p) => p.id === addedPhoto.id || (p.provider === addedPhoto.provider && p.fileId === addedPhoto.fileId))) {
+      photos = [...photos, addedPhoto]
+    }
+    const { photos: _old, ...rest } = newItem
+    item = photos.length > 0 ? { ...rest, photos } : rest
+  }
   return pruneDraft({
     ...draft,
-    newItems: newItem ? replace(draft.newItems, newItem) : draft.newItems,
+    newItems: item ? replace(draft.newItems, item) : draft.newItems,
     lines: replace(draft.lines, line),
     ...(tags.length > 0 || draft.newTags ? { newTags: tags } : {}),
   })

@@ -37,7 +37,8 @@ function choose(value: unknown): void {
       >
         <span v-if="auto" class="size-4 rounded-full bg-(--swatch)" :style="{ '--swatch': auto }" aria-hidden="true" />
         {{ auto ? $t('colors.auto') : $t('colors.none') }}
-        <RadioGroupIndicator>
+        <!-- Always there, hidden while unchecked: the check never shifts the label or the swatches after it. -->
+        <RadioGroupIndicator force-mount class="data-[state=unchecked]:invisible">
           <Check class="size-4" :stroke-width="3" aria-hidden="true" />
         </RadioGroupIndicator>
       </RadioGroupItem>

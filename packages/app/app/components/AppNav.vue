@@ -21,7 +21,8 @@ const linkState = (key: Section): string => (section.value === key ? 'row-select
 </script>
 
 <template>
-  <div :class="['flex flex-col gap-4 px-3 py-4', props.variant === 'drawer' ? 'h-full min-h-0' : 'min-h-full']">
+  <!-- On the desktop rail the logo row starts 8 px down, level with the tree's search button and a screen's header. -->
+  <div :class="['flex flex-col gap-4 px-3', props.variant === 'drawer' ? 'h-full min-h-0 py-4' : 'min-h-full pt-2 pb-4']">
     <!-- A row like the nav rows below (width, height, radius, states): the whole row is the link home. -->
     <NuxtLink to="/" class="pressable flex min-h-11 shrink-0 items-center gap-2 px-3">
       <AppLogo class="size-6 shrink-0" />

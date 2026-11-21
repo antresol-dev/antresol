@@ -85,8 +85,11 @@ export default defineNuxtConfig({
       short_name: 'Antresol',
       description: 'Personal inventory of anything',
       display: 'standalone',
-      background_color: '#F4F5F7',
-      theme_color: '#F4F5F7',
+      // Android paints an installed app's bottom system bar (and its launch splash) from these, one colour for every
+      // theme: a neutral dark grey (Base's dark surface) instead of a white strip. The top bar follows the style through
+      // the theme-color metas (lib/shell.ts).
+      background_color: '#1E2026',
+      theme_color: '#1E2026',
       start_url: '.',
       scope: '.',
       // Relative to the manifest, so they work under /antresol/ too. The layout reads and clears `action`.

@@ -206,6 +206,9 @@ const linkClass =
 
 <template>
   <ScreenHeader :title="title" :crumbs="crumbs" wrap-title>
+    <template v-if="view" #before-title>
+      <ItemTitleIcon :id="itemId" :icon="view.item.icon" :folder-icon="folderIcon" :color="view.item.color" />
+    </template>
     <template v-if="view" #actions="{ compact }">
       <ItemActions :item-id="itemId" :compact="compact" />
     </template>
@@ -222,7 +225,7 @@ const linkClass =
     <template v-if="view && snapshot">
       <StockSheet :view="view" :target="stockTarget" @close="stockTarget = null" />
       <!-- Without photos the description and tags sit beside the 64 px photo tile (design system F1). -->
-      <ItemGallery :item-id="itemId" :photos="view.photos" :icon="view.item.icon" :color="view.item.color" :folder-icon="folderIcon">
+      <ItemGallery :item-id="itemId" :photos="view.photos">
         <template v-if="hasAbout && view.photos.length === 0" #beside>
           <ItemAbout :description="view.item.description" :tags="view.tags" />
         </template>

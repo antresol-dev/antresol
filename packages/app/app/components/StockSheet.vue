@@ -175,7 +175,7 @@ function settle(outcome: SendOutcome): void {
             <label
               v-for="d in destinations"
               :key="d.key"
-              class="flex min-h-11 cursor-pointer items-center gap-3 rounded-chip px-3 text-sm transition-colors duration-(--dur-fast) hover:bg-hover"
+              class="flex min-h-11 cursor-pointer items-center gap-3 rounded-row px-3 text-sm transition-colors duration-(--dur-fast) hover:bg-hover"
             >
               <RadioGroupItem :value="d.key" />
               <span class="min-w-0 flex-1 truncate">{{ d.name || $t('item.noVariant') }}</span>

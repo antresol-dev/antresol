@@ -95,7 +95,9 @@ watch(
 // The chip is for two or more inventories; with one, a remembered "on" searches nothing more.
 const crossing = computed(() => allInventories.value && state.inventories.length >= 2)
 const shownOthers = computed(() => others.value.filter((o) => !sameRef(o.entry.ref, state.current)))
-const skipped = computed(() => (crossing.value && text.value ? shownOthers.value.filter((o) => !o.snapshot).length : 0))
+// The other inventories with no copy on this device, by name: not searched until opened here once.
+const skippedNames = computed(() => (crossing.value && text.value ? shownOthers.value.filter((o) => !o.snapshot).map((o) => o.entry.inventory.name) : []))
+const skipped = computed(() => skippedNames.value.length)
 
 // Built once per snapshot object (snapshots are replaced whole), on the first search; shared with quick add.
 const search = computed(() => (state.snapshot ? snapshotSearch(state.snapshot) : null))
@@ -458,7 +460,7 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-xs font-semibold text-subtle-
         >
           <!-- On the phone the scroller is reversed: first in the DOM is the bottom, so the note sits under the results. -->
           <p v-if="!desktop && skipped > 0" class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground">
-            {{ $t('search.notOnDevice', skipped) }}
+            {{ $t('search.notOnDevice', { names: skippedNames.join(', ') }, skipped) }}
           </p>
           <div v-if="shownRows.length > 0" :id="listId" role="listbox" :aria-label="$t('search.results')" class="grid min-w-0 grid-cols-1 gap-0.5">
             <div
@@ -483,7 +485,7 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-xs font-semibold text-subtle-
                 :class="[
                   // The selected option is a selected row (spec 4.1): accent gradient, text and icons in its ink.
                   // min-w-0 and the one-column grids above: a long name truncates instead of widening the list past its edge.
-                  'flex min-h-11 min-w-0 cursor-pointer items-center gap-3 rounded-field px-3 select-none',
+                  'flex min-h-11 min-w-0 cursor-pointer items-center gap-3 rounded-row px-3 select-none',
                   desktop ? 'py-1.5' : 'py-2',
                   row.key === selected?.key ? 'row-selected' : '',
                 ]"
@@ -569,7 +571,7 @@ const kbdClass = 'rounded-chip bg-chip px-1.5 text-xs font-semibold text-subtle-
             {{ $t('search.nothing', { q: text }) }}
           </p>
           <p v-if="desktop && skipped > 0" class="px-3 py-2 text-center text-xs font-semibold text-muted-foreground">
-            {{ $t('search.notOnDevice', skipped) }}
+            {{ $t('search.notOnDevice', { names: skippedNames.join(', ') }, skipped) }}
           </p>
         </div>
 

@@ -17,6 +17,8 @@ const props = defineProps<{
 defineSlots<{
   /** compact = below 1024 px: icon-only buttons in the top bar. */
   actions?: (props: { compact: boolean }) => unknown
+  /** Before the title, a 40 px control aligned with its first line (an item's coloured icon). */
+  'before-title'?: () => unknown
   /** One line of chips right under the title (an item's list values); the caller keeps it to one clipped row. */
   'below-title'?: () => unknown
 }>()
@@ -45,8 +47,8 @@ const crumbLink = 'pressable min-w-0 truncate rounded-chip'
   <header class="surface-header sticky top-0 z-20 border-b">
     <div
       :class="[
-        'mx-auto grid w-full max-w-[720px] min-w-0 grid-cols-1 px-4 lg:max-w-[760px] lg:px-8',
-        desktop ? 'gap-3 py-4' : 'gap-0.5 pt-1 pb-2',
+        'mx-auto grid w-full max-w-[720px] min-w-0 grid-cols-1 px-4 lg:max-w-[760px] lg:px-5',
+        desktop ? 'gap-2 py-2' : 'gap-0.5 pt-1 pb-2',
       ]"
     >
       <template v-if="desktop">
@@ -71,9 +73,13 @@ const crumbLink = 'pressable min-w-0 truncate rounded-chip'
             <span class="sr-only">{{ $t('status.saving') }}</span>
           </span>
         </div>
-        <div class="flex min-w-0 items-end justify-between gap-3">
+        <div class="flex min-w-0 items-center justify-between gap-3">
           <div class="min-w-0 flex-1">
-            <h1 tabindex="-1" :class="[heading, wrapTitle ? 'wrap-anywhere' : 'truncate']">{{ title }}</h1>
+            <div v-if="$slots['before-title']" class="flex min-w-0 items-start gap-1">
+          <slot name="before-title" />
+          <h1 tabindex="-1" :class="[heading, 'min-w-0 py-1', wrapTitle ? 'wrap-anywhere' : 'truncate']">{{ title }}</h1>
+        </div>
+        <h1 v-else tabindex="-1" :class="[heading, wrapTitle ? 'wrap-anywhere' : 'truncate']">{{ title }}</h1>
             <slot name="below-title" />
             <p v-if="subtitle" class="mt-0.5 truncate text-sm font-semibold text-muted-foreground">{{ subtitle }}</p>
           </div>
@@ -130,7 +136,11 @@ const crumbLink = 'pressable min-w-0 truncate rounded-chip'
             </NuxtLink>
           </template>
         </nav>
-        <h1 tabindex="-1" :class="[heading, wrapTitle ? 'wrap-anywhere' : 'truncate']">{{ title }}</h1>
+        <div v-if="$slots['before-title']" class="flex min-w-0 items-start gap-1">
+          <slot name="before-title" />
+          <h1 tabindex="-1" :class="[heading, 'min-w-0 py-1', wrapTitle ? 'wrap-anywhere' : 'truncate']">{{ title }}</h1>
+        </div>
+        <h1 v-else tabindex="-1" :class="[heading, wrapTitle ? 'wrap-anywhere' : 'truncate']">{{ title }}</h1>
         <slot name="below-title" />
       </template>
 

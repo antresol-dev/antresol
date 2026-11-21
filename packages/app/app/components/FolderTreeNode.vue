@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Archive, Boxes, ChevronRight, Folder, FolderInput, FolderPlus, Pencil, Plus } from '@lucide/vue'
+import { iconFrom } from '~/lib/item-icons'
 import { treeAriaCurrent } from '~/lib/shell'
 import { longPressExpands, rowClickAction, type TreeRow } from '~/lib/tree-state'
 import { piecesLabel } from '~/lib/views'
@@ -14,6 +15,7 @@ const props = defineProps<{
   level?: number
 }>()
 const MAX_INDENT = 6
+const iconSet = useItemIconSet()
 const emit = defineEmits<{ toggle: [id: string] }>()
 
 const { t } = useI18n()
@@ -88,7 +90,9 @@ const pressHandlers = computed(() =>
       :class="[
         'group relative flex items-center gap-1.5 rounded-field text-sm font-semibold transition-colors duration-(--dur-fast)',
         // Clear space from the highlight's edge and its rounded corners: 10 px on the 32 px panel rows, 12 px in the drawer.
-        panel ? 'h-8 px-3' : 'min-h-11 pr-3',
+        // The chevron's centre sits on the children's guide line (16 px on the panel, 20 in the drawer). On the panel the
+        // 20 px chevron keeps 6 px from the row's left edge, as from its top and bottom.
+        panel ? 'h-8 pr-3 pl-1.5' : 'min-h-11 pr-3 -ml-0.5',
         row.current ? 'row-selected' : 'text-icon hover:bg-(--ghost-hover) hover:text-foreground',
       ]"
     >
@@ -121,11 +125,12 @@ const pressHandlers = computed(() =>
         @click="click"
       >
         <Boxes v-if="root" class="size-4 shrink-0" aria-hidden="true" />
-        <Folder v-else :class="['size-4 shrink-0', row.current ? '' : 'text-accent-ink']" aria-hidden="true" />
-        <span class="min-w-0 flex-1 truncate">{{ row.name }}</span>
+        <component :is="iconFrom(iconSet, row.icon) ?? Folder" v-else :class="['size-4 shrink-0', row.current ? '' : 'text-accent-ink']" aria-hidden="true" />
+        <!-- On the selected row the floating buttons have no backing of their own: the name gives way to them. -->
+        <span :class="['min-w-0 flex-1 truncate', row.current && !root ? 'group-hover:pr-10 group-focus-within:pr-10' : '']">{{ row.name }}</span>
       </NuxtLink>
       <template v-if="!root">
-        <span class="row-action relative z-10 -mr-1 flex shrink-0 items-center gap-px">
+        <span class="row-action row-action-float relative z-10 -mr-1 flex shrink-0 items-center gap-px">
           <button
             type="button"
             :class="[
@@ -143,7 +148,7 @@ const pressHandlers = computed(() =>
       </template>
       <span
         v-if="row.pieces !== null"
-        class="shrink-0 text-xs font-semibold text-subtle-foreground tabular-nums"
+        :class="['shrink-0 text-xs font-semibold text-subtle-foreground tabular-nums', root ? '' : 'group-hover:opacity-0 group-focus-within:opacity-0']"
       >
         {{ piecesLabel(row.pieces) }}
       </span>
@@ -152,7 +157,7 @@ const pressHandlers = computed(() =>
       v-if="row.open"
       :class="[
         'flex flex-col gap-0.5',
-        indents ? ['border-l border-tree-line pl-1', panel ? 'ml-3' : 'ml-5'] : '',
+        indents ? ['border-l border-tree-line pl-1', panel ? 'ml-4' : 'ml-5'] : '',
       ]"
     >
       <FolderTreeNode
@@ -163,6 +168,7 @@ const pressHandlers = computed(() =>
         :level="(level ?? 0) + 1"
         @toggle="emit('toggle', $event)"
       />
+      <TreeItemNode v-for="item in row.items" :key="`item:${item.id}`" :row="item" :variant="variant" />
     </ul>
   </li>
 </template>

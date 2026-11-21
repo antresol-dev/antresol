@@ -69,7 +69,8 @@ const iconButton = 'size-9'
     <HeaderMenu v-if="menu.length > 0" :actions="menu" />
   </template>
 
-  <template v-else>
+  <!-- The labelled buttons 6 px apart, the icon buttons 4 px apart: the header's room goes to the title. -->
+  <div v-else class="flex items-center gap-1.5">
     <Button class="h-9 gap-2 px-3 btn-label" :disabled="locked" @click="quickAdd.open()">
       <Plus aria-hidden="true" />
       {{ $t('quickAdd.title') }}
@@ -78,21 +79,23 @@ const iconButton = 'size-9'
       <FolderPlus aria-hidden="true" />
       {{ $t('folderMenu.new') }}
     </Button>
-    <Tooltip v-if="countTo">
-      <TooltipTrigger as-child>
-        <Button variant="outline" size="icon" :class="iconButton" :aria-label="$t('countFolder.menu')" :disabled="!!state.readOnly" @click="navigateTo(countTo)">
-          <ClipboardCheck aria-hidden="true" />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{{ $t('countFolder.menu') }}</TooltipContent>
-    </Tooltip>
-    <Tooltip v-for="a in folderActions" :key="a.key">
-      <TooltipTrigger as-child>
-        <Button variant="outline" size="icon" :class="iconButton" :aria-label="$t(a.label)" :disabled="locked" @click="a.run">
-          <component :is="a.icon" aria-hidden="true" />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{{ $t(a.label) }}</TooltipContent>
-    </Tooltip>
-  </template>
+    <div class="flex items-center gap-1">
+      <Tooltip v-if="countTo">
+        <TooltipTrigger as-child>
+          <Button variant="outline" size="icon" :class="iconButton" :aria-label="$t('countFolder.menu')" :disabled="!!state.readOnly" @click="navigateTo(countTo)">
+            <ClipboardCheck aria-hidden="true" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{{ $t('countFolder.menu') }}</TooltipContent>
+      </Tooltip>
+      <Tooltip v-for="a in folderActions" :key="a.key">
+        <TooltipTrigger as-child>
+          <Button variant="outline" size="icon" :class="iconButton" :aria-label="$t(a.label)" :disabled="locked" @click="a.run">
+            <component :is="a.icon" aria-hidden="true" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{{ $t(a.label) }}</TooltipContent>
+      </Tooltip>
+    </div>
+  </div>
 </template>

@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import type { Photo } from '@antresol/core'
 import { FileError } from '@antresol/core'
-import { Ban, ImagePlus, Plus, Shapes } from '@lucide/vue'
-import { iconFrom } from '~/lib/item-icons'
+import { ImagePlus, Plus } from '@lucide/vue'
 import { toast } from 'vue-sonner'
 import { errorMessageKey } from '~/lib/errors'
 
-const props = defineProps<{ itemId: string; photos: Photo[]; icon?: string | null; folderIcon?: string | null; color?: string | null }>()
+const props = defineProps<{ itemId: string; photos: Photo[] }>()
 defineSlots<{
   /** Without photos: what stands beside the 64 px photo tile (the item's description and tags). */
   beside?: () => unknown
@@ -69,30 +68,6 @@ async function upload(files: File[]): Promise<void> {
 
 const addOpen = ref(false)
 
-// Without photos the 64 px tile shows the item's icon (own, else its folder's) on the item's tone; a tap offers a photo or an icon.
-const iconSet = useItemIconSet()
-const shownIcon = computed(() => iconFrom(iconSet.value, props.icon) ?? iconFrom(iconSet.value, props.folderIcon))
-const tileOpen = ref(false)
-const iconOpen = ref(false)
-function tilePhoto(): void {
-  tileOpen.value = false
-  addOpen.value = true
-}
-function tileIcon(): void {
-  tileOpen.value = false
-  iconOpen.value = true
-}
-async function saveIcon(icon: string | null): Promise<void> {
-  if (readOnly.value || state.saving) {
-    toast.error(t(readOnly.value ? 'errors.storage.read_only' : 'photos.busy'))
-    return
-  }
-  try {
-    await workspace.apply({ type: 'item.update', id: props.itemId, icon })
-  } catch (e) {
-    toast.error(t(errorMessageKey(e)))
-  }
-}
 function pickedFromSheet(files: File[]): void {
   addOpen.value = false
   void upload(files)
@@ -202,26 +177,16 @@ const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thu
       >
         {{ $t('photos.progress', { n: progress.done + 1, total: progress.total }) }}
       </div>
-      <ItemThumb
-        v-else-if="readOnly && shownIcon"
-        :id="itemId"
-        :folder-name="null"
-        :icon="icon"
-        :folder-icon="folderIcon"
-        :cover="null"
-        :color="color ?? null"
-        :class="[tile, 'photo-thumb']"
-      />
+      <!-- The item's icon stands before its name in the header; the tile only adds a photo. -->
       <button
         v-else-if="!readOnly"
         type="button"
-        :class="[tile, 'pressable', shownIcon ? 'photo-thumb' : 'add-tile grid place-items-center text-icon']"
-        :aria-label="$t(shownIcon ? 'iconPicker.tileTitle' : 'photos.add')"
+        :class="[tile, 'pressable add-tile grid place-items-center text-icon']"
+        :aria-label="$t('photos.add')"
         :disabled="busy"
-        @click="shownIcon ? (tileOpen = true) : (addOpen = true)"
+        @click="addOpen = true"
       >
-        <ItemThumb v-if="shownIcon" :id="itemId" :folder-name="null" :icon="icon" :folder-icon="folderIcon" :cover="null" :color="color ?? null" class="size-full" style="border-radius: inherit" />
-        <ImagePlus v-else class="size-6" aria-hidden="true" />
+        <ImagePlus class="size-6" aria-hidden="true" />
       </button>
       <div class="min-w-0 flex-1 self-center">
         <slot name="beside">
@@ -253,23 +218,6 @@ const pending = 'grid place-items-center bg-thumb text-xs font-semibold text-thu
         </NuxtLink>
       </div>
     </AppSheet>
-    <AppSheet v-model:open="tileOpen" :title="$t('iconPicker.tileTitle')">
-      <div class="grid gap-2 py-2">
-        <button type="button" class="pressable flex min-h-11 items-center gap-2 rounded-field bg-field px-3 text-left text-sm" @click="tilePhoto">
-          <ImagePlus class="size-5 text-icon" aria-hidden="true" />
-          {{ $t('iconPicker.photo') }}
-        </button>
-        <button type="button" class="pressable flex min-h-11 items-center gap-2 rounded-field bg-field px-3 text-left text-sm" @click="tileIcon">
-          <Shapes class="size-5 text-icon" aria-hidden="true" />
-          {{ $t('iconPicker.icon') }}
-        </button>
-        <button v-if="icon" type="button" class="pressable flex min-h-11 items-center gap-2 rounded-field bg-field px-3 text-left text-sm" @click="tileOpen = false; void saveIcon(null)">
-          <Ban class="size-5 text-icon" aria-hidden="true" />
-          {{ $t('iconPicker.remove') }}
-        </button>
-      </div>
-    </AppSheet>
-    <IconPicker v-model:open="iconOpen" :current="icon ?? null" @pick="saveIcon" />
     <PhotoViewer v-model:open="viewerOpen" v-model:index="viewerIndex" :item-id="itemId" :photos="photos" :locked="progress !== null" />
   </section>
 </template>

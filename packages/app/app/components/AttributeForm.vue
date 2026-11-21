@@ -128,7 +128,7 @@ async function submit(): Promise<void> {
         <label
           v-for="k in ['text', 'enum', 'number'] as const"
           :key="k"
-          class="flex min-h-11 cursor-pointer items-center gap-3 rounded-chip px-3 text-sm transition-colors duration-(--dur-fast) hover:bg-hover"
+          class="flex min-h-11 cursor-pointer items-center gap-3 rounded-row px-3 text-sm transition-colors duration-(--dur-fast) hover:bg-hover"
         >
           <RadioGroupItem :value="k" />
           {{ $t(k === 'text' ? 'attributeForm.text' : k === 'enum' ? 'attributeForm.list' : 'attributeForm.number') }}

@@ -34,6 +34,14 @@ describe('planVariantBatch', () => {
     expect(line!.duplicate).toEqual({ variantId: 'r4k7', archived: true, archiveId: 'arch' })
   })
 
+  it('names the list a value is missing from, on a list axis', () => {
+    const s = axisSnapshot()
+    s.itemAttributes.push({ itemId: 'M', attributeId: 'pkg', value: null, axisPosition: 0 })
+    const [bad, good] = planVariantBatch(s, 'M', '1, THT')
+    expect([bad!.error, bad!.errorAxis, bad!.values]).toEqual(['variantsForm.notInList', 'Package', null])
+    expect([good!.error, good!.errorAxis, good!.label]).toEqual([null, null, 'THT'])
+  })
+
   it('reports a number that does not parse', () => {
     const [line] = planVariantBatch(axisSnapshot(), 'R', 'abc')
     expect(line!.error).toBe('errors.domain.invalid_number')

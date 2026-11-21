@@ -69,7 +69,8 @@ async function choose(value: unknown): Promise<void> {
       >
         <template v-if="choice === null">
           {{ $t('settings.appearance.styleDefault') }}
-          <RadioGroupIndicator>
+          <!-- Always there, hidden while unchecked: the check never shifts the label or the swatches after it. -->
+          <RadioGroupIndicator force-mount class="data-[state=unchecked]:invisible">
             <Check class="size-4" :stroke-width="3" aria-hidden="true" />
           </RadioGroupIndicator>
         </template>

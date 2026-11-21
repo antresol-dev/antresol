@@ -176,7 +176,6 @@
       "add": "Add attribute",
       "editTitle": "New attribute",
       "edit": "Edit {name}",
-      "newSuffix": "{name} (new)",
       "remove": "Remove {name}",
       "removed": "Attribute “{name}” removed",
       "removedLines": "Attribute “{name}” removed, {count} line changed | Attribute “{name}” removed, {count} lines changed",

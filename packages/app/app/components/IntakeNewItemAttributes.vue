@@ -41,7 +41,7 @@ const choices = computed(() =>
   [...known.value.values()]
     .filter((a) => !attributes.value.some((x) => x.attributeId === a.id))
     .sort(byName)
-    .map((a) => ({ id: a.id, name: isDraft(a.id) ? t('intakes.attribute.newSuffix', { name: a.name }) : a.name })),
+    .map((a) => ({ id: a.id, name: a.name, draft: isDraft(a.id) })),
 )
 const similarAttributes = computed(() => (props.similar ? attributesFrom(props.snapshot, props.similar.itemId) : []))
 
@@ -181,7 +181,7 @@ async function takeExisting(id: Id): Promise<void> {
           <SelectValue :placeholder="$t('intakes.line.addAttribute')" />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem v-for="a in choices" :key="a.id" :value="a.id">{{ a.name }}</SelectItem>
+          <SelectItem v-for="a in choices" :key="a.id" :value="a.id">{{ a.name }}<span v-if="a.draft" class="shrink-0 rounded-chip bg-accent-soft px-1.5 py-px text-xs font-semibold tracking-[0.04em] text-accent-soft-foreground uppercase">{{ $t('intakes.tag.new') }}</span></SelectItem>
           <SelectItem :value="NEW">{{ $t('attributeSheet.newAttribute') }}</SelectItem>
         </SelectContent>
       </Select>

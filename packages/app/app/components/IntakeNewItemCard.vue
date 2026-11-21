@@ -277,7 +277,6 @@ const panelId = `intake-item-${props.item.id}`
       <p v-if="problemKey" role="alert" class="text-sm text-destructive">{{ $t(problemKey) }}</p>
 
       <div v-if="canPhoto || photoCount" class="grid gap-2">
-        <Label>{{ $t('intakes.line.photo') }}</Label>
         <ul v-if="photoCount" class="flex flex-wrap gap-3">
           <li v-for="(p, i) in item.photos" :key="p.id" class="relative grid gap-1">
             <PhotoImg :photo="p" size="thumb" alt="" class="size-16 rounded-thumb object-cover" />

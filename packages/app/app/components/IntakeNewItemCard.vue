@@ -248,7 +248,7 @@ async function remove(): Promise<void> {
 }
 
 const summaryRow =
-  "relative flex min-h-11 min-w-0 items-center gap-3 rounded-field px-3 py-2 text-left transition-colors duration-(--dur-fast) not-first:before:absolute not-first:before:top-0 not-first:before:right-3 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-[''] hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none"
+  "relative flex min-h-11 min-w-0 items-center gap-3 rounded-row px-3 py-2 text-left transition-colors duration-(--dur-fast) not-first:before:absolute not-first:before:top-0 not-first:before:right-3 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-[''] hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none"
 const panelId = `intake-item-${props.item.id}`
 </script>
 
@@ -256,7 +256,7 @@ const panelId = `intake-item-${props.item.id}`
   <div class="min-w-0">
     <button
       type="button"
-      class="flex min-h-14 w-full min-w-0 items-center gap-3 rounded-field px-3 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      class="flex min-h-14 w-full min-w-0 items-center gap-3 rounded-row px-3 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
       :aria-expanded="expanded"
       :aria-controls="panelId"
       @click="expanded = !expanded"

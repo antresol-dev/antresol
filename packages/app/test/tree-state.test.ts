@@ -1,7 +1,7 @@
 import { newId, type InventorySnapshot, type InventoryStorage } from '@antresol/core'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createDemoDriver } from '../app/lib/dev/demo-source'
-import { collapseAll, expandAll, longPressExpands, loadTreeOpen, openPath, rowClickAction, saveTreeOpen, toggleOpen, treeRows } from '../app/lib/tree-state'
+import { collapseAll, expandAll, loadTreeItems, longPressExpands, loadTreeOpen, openPath, rootItemRows, rowClickAction, saveTreeItems, saveTreeOpen, toggleOpen, treeRows } from '../app/lib/tree-state'
 import type { SourceConfig } from '../app/lib/types'
 
 const cfg: SourceConfig = {
@@ -174,5 +174,51 @@ describe('tree state on the device', () => {
     vi.stubGlobal('localStorage', undefined)
     expect(loadTreeOpen('inv-a')).toEqual({})
     expect(() => saveTreeOpen('inv-a', {})).not.toThrow()
+  })
+})
+
+describe('items in the tree ("Show items")', () => {
+  const active = (folderId: string | null) =>
+    snap.items
+      .filter((i) => i.folderId === folderId && i.archivedAt === null)
+      .map((i) => i.name)
+      .sort((a, b) => a.localeCompare(b, 'en'))
+
+  it('without the option the rows carry no items and a folder of items only has no chevron', () => {
+    const rows = treeRows(snap, { [ics]: true }, null)
+    const op = rows.find((r) => r.id === ics)!.children.find((r) => r.id === opamps)!
+    expect(op.items).toEqual([])
+    expect(op.hasChildren).toBe(false)
+  })
+
+  it('a folder with items opens on them: its items by name after its folders, the current item marked', () => {
+    const itemId = snap.items.find((i) => i.folderId === opamps && i.archivedAt === null)!.id
+    const closed = treeRows(snap, { [ics]: true }, null, { currentItem: null })
+    const op = closed.find((r) => r.id === ics)!.children.find((r) => r.id === opamps)!
+    expect([op.hasChildren, op.items]).toEqual([true, []])
+    const rows = treeRows(snap, { [ics]: true, [opamps]: true }, opamps, { currentItem: itemId })
+    const open = rows.find((r) => r.id === ics)!.children.find((r) => r.id === opamps)!
+    expect(open.items.map((i) => i.name)).toEqual(active(opamps))
+    expect(open.items.filter((i) => i.current).map((i) => i.id)).toEqual([itemId])
+  })
+
+  it('items at the root come by name; expand all opens folders that hold only items', () => {
+    expect(rootItemRows(snap, null).map((i) => i.name)).toEqual(active(null))
+    expect(expandAll(snap)[opamps]).toBeUndefined()
+    expect(expandAll(snap, true)[opamps]).toBe(true)
+  })
+
+  it('the option is kept on the device, and off when the storage is empty, broken or throws', () => {
+    vi.stubGlobal('localStorage', memoryStorage())
+    expect(loadTreeItems()).toBe(false)
+    saveTreeItems(true)
+    expect(loadTreeItems()).toBe(true)
+    saveTreeItems(false)
+    expect(loadTreeItems()).toBe(false)
+    localStorage.setItem('antresol-tree-items', 'yes')
+    expect(loadTreeItems()).toBe(false)
+    vi.stubGlobal('localStorage', { getItem: () => { throw new Error('blocked') }, setItem: () => { throw new Error('blocked') } })
+    expect(loadTreeItems()).toBe(false)
+    expect(() => saveTreeItems(true)).not.toThrow()
   })
 })

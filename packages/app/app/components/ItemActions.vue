@@ -50,18 +50,21 @@ const iconButton = 'size-9'
     <HeaderMenu :actions="menu" />
   </template>
 
-  <template v-else>
+  <!-- The labelled button 6 px from the icon buttons, the icon buttons 4 px apart (as FolderActions). -->
+  <div v-else class="flex items-center gap-1.5">
     <Button variant="outline" class="h-9 gap-2 px-3 btn-label" :disabled="locked" @click="run('edit')">
       <Pencil aria-hidden="true" />
       {{ $t('itemMenu.edit') }}
     </Button>
-    <Tooltip v-for="a in moveArchive" :key="a.key">
-      <TooltipTrigger as-child>
-        <Button variant="outline" size="icon" :class="iconButton" :aria-label="$t(a.label)" :disabled="locked" @click="run(a.key)">
-          <component :is="a.icon" aria-hidden="true" />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{{ $t(a.label) }}</TooltipContent>
-    </Tooltip>
-  </template>
+    <div class="flex items-center gap-1">
+      <Tooltip v-for="a in moveArchive" :key="a.key">
+        <TooltipTrigger as-child>
+          <Button variant="outline" size="icon" :class="iconButton" :aria-label="$t(a.label)" :disabled="locked" @click="run(a.key)">
+            <component :is="a.icon" aria-hidden="true" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{{ $t(a.label) }}</TooltipContent>
+      </Tooltip>
+    </div>
+  </div>
 </template>

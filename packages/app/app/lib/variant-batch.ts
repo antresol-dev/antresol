@@ -11,6 +11,8 @@ export interface BatchLine {
   label: string | null
   /** An i18n key. */
   error: string | null
+  /** The axis the error is about, for `variantsForm.notInList` ("not in Package's list"); null otherwise. */
+  errorAxis: string | null
   /** An existing variant of the item (archived ones included) with these values. */
   duplicate: { variantId: Id; archived: boolean; archiveId: Id | null } | null
   /** The same values appear on an earlier line of the list. */
@@ -46,7 +48,7 @@ export function planVariantBatch(s: InventorySnapshot, itemId: Id, input: string
   const accepted: Map<Id, string>[] = []
   return rows.map((all): BatchLine => {
     const raw = all.join('; ')
-    const fail = (error: string): BatchLine => ({ raw, values: null, label: null, error, duplicate: null, repeat: false, quantity: null, quantityLabel: null })
+    const fail = (error: string, errorAxis: string | null = null): BatchLine => ({ raw, values: null, label: null, error, errorAxis, duplicate: null, repeat: false, quantity: null, quantityLabel: null })
     const row = all.slice(0, axes.length)
     const tail = all.slice(axes.length)
     if (row.length !== axes.length || row.some((part) => part === '')) return fail('errors.domain.axis_value_required')
@@ -59,7 +61,8 @@ export function planVariantBatch(s: InventorySnapshot, itemId: Id, input: string
     const values: { attributeId: Id; value: string }[] = []
     for (const [n, axis] of axes.entries()) {
       const parsed = parseAttributeInput(axis, row[n]!)
-      if ('error' in parsed) return fail(`errors.domain.${parsed.error}`)
+      // A list axis takes only its options: say which list, not the generic "Choose one of the available options".
+      if ('error' in parsed) return parsed.error === 'invalid_option' && axis.kind === 'enum' ? fail('variantsForm.notInList', axis.name) : fail(`errors.domain.${parsed.error}`)
       values.push({ attributeId: axis.id, value: parsed.value })
     }
     const byAxis = new Map(values.map((v) => [v.attributeId, v.value] as const))
@@ -71,6 +74,7 @@ export function planVariantBatch(s: InventorySnapshot, itemId: Id, input: string
       values,
       label: axes.map((a) => keepValuesTogether(formatAttributeValue(a, byAxis.get(a.id)!))).join(SEPARATOR),
       error: null,
+      errorAxis: null,
       duplicate: existing ? { variantId: existing.id, archived: existing.archivedAt !== null, archiveId: existing.archiveId } : null,
       repeat,
       quantity,

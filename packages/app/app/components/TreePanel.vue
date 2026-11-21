@@ -58,7 +58,7 @@ function key(e: KeyboardEvent): void {
     />
     <button
       type="button"
-      class="raised pressable mx-3 mt-4 mb-2 flex min-h-11 shrink-0 items-center gap-2 px-3 text-left text-sm font-semibold text-muted-foreground hover:text-accent-ink disabled:pointer-events-none disabled:opacity-50"
+      class="raised pressable m-2 flex min-h-11 shrink-0 items-center gap-2 px-3 text-left text-sm font-semibold text-muted-foreground hover:text-accent-ink disabled:pointer-events-none disabled:opacity-50"
       aria-haspopup="dialog"
       :aria-expanded="paletteOpen"
       :aria-keyshortcuts="mac ? 'Meta+K' : 'Control+K'"
@@ -82,7 +82,7 @@ function key(e: KeyboardEvent): void {
           <TooltipTrigger as-child>
             <button
               type="button"
-              class="pressable grid size-8 shrink-0 place-items-center rounded-chip disabled:pointer-events-none disabled:opacity-50"
+              class="pressable grid size-7 shrink-0 place-items-center rounded-chip disabled:pointer-events-none disabled:opacity-50"
               :aria-label="$t('folderMenu.new')"
               :disabled="locked"
               @click="open({ kind: 'create', parentId: null })"

@@ -208,21 +208,27 @@ const retryErrorKey = computed(() =>
   <main class="min-w-0">
     <ScreenHeader :title="title" :crumbs="crumbs" wrap-title>
       <template #actions="{ compact }">
-        <Button v-if="compact" variant="ghost" size="icon" class="size-11 disabled:opacity-35" :aria-label="$t('intakes.screen.details')" :disabled="readOnly" @click="editingHeader = true">
-          <Pencil class="size-5" aria-hidden="true" />
-        </Button>
-        <Button v-else variant="outline" class="h-9 rounded-field" :disabled="readOnly" @click="editingHeader = true">
-          <Pencil class="size-4" aria-hidden="true" />
-          {{ $t('intakes.screen.details') }}
-        </Button>
-        <Button v-if="compact" variant="ghost" size="icon" class="size-11 disabled:opacity-35" :aria-label="$t('intakes.screen.newFolder')" :disabled="readOnly" @click="openFolder(null)">
-          <FolderPlus class="size-5" aria-hidden="true" />
-        </Button>
-        <Button v-else variant="outline" class="h-9 rounded-field" :disabled="readOnly" @click="openFolder(null)">
-          <FolderPlus class="size-4" aria-hidden="true" />
-          {{ $t('intakes.screen.newFolder') }}
-        </Button>
-        <RowMenu :class="compact ? 'size-11' : 'size-9'" :label="title" :button-label="$t('intakes.screen.more')" :actions="menu" @select="confirmingDelete = true" />
+        <template v-if="compact">
+          <Button variant="ghost" size="icon" class="size-11 disabled:opacity-35" :aria-label="$t('intakes.screen.details')" :disabled="readOnly" @click="editingHeader = true">
+            <Pencil class="size-5" aria-hidden="true" />
+          </Button>
+          <Button variant="ghost" size="icon" class="size-11 disabled:opacity-35" :aria-label="$t('intakes.screen.newFolder')" :disabled="readOnly" @click="openFolder(null)">
+            <FolderPlus class="size-5" aria-hidden="true" />
+          </Button>
+          <RowMenu class="size-11" :label="title" :button-label="$t('intakes.screen.more')" :actions="menu" @select="confirmingDelete = true" />
+        </template>
+        <!-- The labelled buttons and the menu 6 px apart, as FolderActions: the header's room goes to the title. -->
+        <div v-else class="flex items-center gap-1.5">
+          <Button variant="outline" class="h-9 rounded-field" :disabled="readOnly" @click="editingHeader = true">
+            <Pencil class="size-4" aria-hidden="true" />
+            {{ $t('intakes.screen.details') }}
+          </Button>
+          <Button variant="outline" class="h-9 rounded-field" :disabled="readOnly" @click="openFolder(null)">
+            <FolderPlus class="size-4" aria-hidden="true" />
+            {{ $t('intakes.screen.newFolder') }}
+          </Button>
+          <RowMenu class="size-9" :label="title" :button-label="$t('intakes.screen.more')" :actions="menu" @select="confirmingDelete = true" />
+        </div>
       </template>
     </ScreenHeader>
     <ScreenBody>
@@ -244,7 +250,7 @@ const retryErrorKey = computed(() =>
 
       <button
         type="button"
-        class="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-field px-3 text-left text-sm text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none"
+        class="flex min-h-11 w-full min-w-0 items-center gap-2 rounded-row px-3 text-left text-sm text-muted-foreground transition-colors duration-(--dur-fast) hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none"
         :disabled="readOnly"
         @click="editingHeader = true"
       >

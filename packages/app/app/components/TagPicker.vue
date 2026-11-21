@@ -51,7 +51,7 @@ function create(): void {
     <Input v-model="query" :aria-label="$t('itemForm.filterTags')" :placeholder="$t('itemForm.filterTags')" autocomplete="off" class="h-11" @keydown.enter.prevent="matches.canCreate && !locked && create()" />
     <ul class="grid max-h-[28dvh] grid-cols-1 gap-0.5 overflow-x-hidden overflow-y-auto rounded-field border border-input bg-field p-1">
       <li v-for="tag in matches.tags" :key="tag.id" class="min-w-0">
-        <label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-chip px-3 text-sm transition-colors duration-(--dur-fast) hover:bg-hover has-focus-visible:ring-2 has-focus-visible:ring-ring">
+        <label class="flex min-h-11 cursor-pointer items-center gap-3 rounded-row px-3 text-sm transition-colors duration-(--dur-fast) hover:bg-hover has-focus-visible:ring-2 has-focus-visible:ring-ring">
           <Checkbox :model-value="tagPicked(selected, tag.id, aliases)" @update:model-value="toggle(tag.id, $event === true)" />
           <span v-if="tag.color" class="colored size-2 shrink-0 rounded-full bg-(--c)" :style="colorVars(tag.color)" aria-hidden="true" />
           <span class="min-w-0 flex-1 truncate">{{ tag.name }}</span>
@@ -64,7 +64,7 @@ function create(): void {
         <button
           type="button"
           :disabled="locked"
-          class="flex min-h-11 w-full items-center gap-2 rounded-chip px-3 text-left text-sm font-semibold outline-none transition-colors duration-(--dur-fast) hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+          class="flex min-h-11 w-full items-center gap-2 rounded-row px-3 text-left text-sm font-semibold outline-none transition-colors duration-(--dur-fast) hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
           @click="create"
         >
           <Plus class="size-4 shrink-0 text-icon" aria-hidden="true" />

@@ -718,11 +718,11 @@ const title = computed(() => t(editing.value ? 'intakes.line.editTitle' : 'intak
 // Like the app's list rows: a rounded highlight inside the column (its edges line up with the fields above, the text sits
 // 12 px in, like a field's text), and an inset divider between rows instead of a full-width border.
 const summaryRow =
-  "relative flex min-h-11 min-w-0 items-center gap-3 rounded-field px-3 py-2 text-left transition-colors duration-(--dur-fast) not-first:before:absolute not-first:before:top-0 not-first:before:right-3 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-[''] hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none"
+  "relative flex min-h-11 min-w-0 items-center gap-3 rounded-row px-3 py-2 text-left transition-colors duration-(--dur-fast) not-first:before:absolute not-first:before:top-0 not-first:before:right-3 not-first:before:left-3 not-first:before:h-px not-first:before:bg-divider not-first:before:content-[''] hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none"
 /** What a section row opens: inset under the row's title with a rule on its left, so it reads as inside that section. */
 const panel = 'mb-2 ml-3 min-w-0 border-l-2 border-input py-2 pl-3'
 const matchRow =
-  'flex min-h-11 w-full min-w-0 items-center gap-3 rounded-field px-3 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none'
+  'flex min-h-11 w-full min-w-0 items-center gap-3 rounded-row px-3 py-2 text-left transition-colors duration-(--dur-fast) hover:bg-hover focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:pointer-events-none'
 const banner = 'grid gap-1 rounded-field px-3 py-3 text-sm'
 const chip = 'inline-flex min-h-8 items-center gap-1 rounded-chip border px-3 py-1 text-sm font-semibold'
 </script>

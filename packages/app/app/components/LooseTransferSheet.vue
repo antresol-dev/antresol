@@ -80,7 +80,7 @@ async function move(): Promise<void> {
         <label
           v-for="v in shown?.variants ?? []"
           :key="v.id"
-          class="flex min-h-11 cursor-pointer items-center gap-3 rounded-chip px-3 text-sm transition-colors duration-(--dur-fast) hover:bg-hover"
+          class="flex min-h-11 cursor-pointer items-center gap-3 rounded-row px-3 text-sm transition-colors duration-(--dur-fast) hover:bg-hover"
         >
           <RadioGroupItem :value="v.id" />
           <span class="min-w-0 flex-1 truncate">{{ v.name }}</span>

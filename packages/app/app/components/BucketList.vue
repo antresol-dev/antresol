@@ -88,7 +88,8 @@ watch(() => props.highlight, reveal)
 <template>
   <section class="grid min-w-0 grid-cols-1" :aria-label="$t('item.variantsTitle')">
     <!-- A flat list on the page (rows divided by lines); the current variant is a selected row, 2 px off its
-         neighbours, and the lines next to it give way. -->
+         neighbours, and the lines next to it give way. A row is top-aligned with the padding that centred its 44 px
+         line before, so the pending chip opening under it doesn't lift the stepper. -->
     <ul ref="list" class="surface-list">
       <li
         v-for="(row, i) in rows"
@@ -96,7 +97,7 @@ watch(() => props.highlight, reveal)
         :data-variant="row.variantId ?? undefined"
         :aria-current="row.variantId !== null && row.variantId === highlight ? 'true' : undefined"
         :class="[
-          'relative grid min-h-14 min-w-0 content-center py-1 pr-3 pl-5',
+          'relative grid min-h-14 min-w-0 content-start py-1.5 pr-3 pl-5',
           isHighlight(row.variantId)
             ? 'row-selected row-inset my-0.5'
             : !isHighlight(rows[i - 1]?.variantId) &&

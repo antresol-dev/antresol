@@ -178,7 +178,7 @@ const percent = computed(() =>
       <RadioGroup v-if="picked" v-model="mode" :aria-label="$t('backup.mode')" :disabled="busy" class="grid gap-1">
         <label
           :class="[
-            'flex min-h-11 items-start gap-3 rounded-field px-3 py-2 text-sm transition-colors duration-(--dur-fast)',
+            'flex min-h-11 items-start gap-3 rounded-row px-3 py-2 text-sm transition-colors duration-(--dur-fast)',
             sameIdsAllowed && 'cursor-pointer hover:bg-hover',
           ]"
         >
@@ -188,7 +188,7 @@ const percent = computed(() =>
             <span class="text-subtle-foreground">{{ $t(sameIdsHint) }}</span>
           </span>
         </label>
-        <label class="flex min-h-11 cursor-pointer items-start gap-3 rounded-field px-3 py-2 text-sm transition-colors duration-(--dur-fast) hover:bg-hover">
+        <label class="flex min-h-11 cursor-pointer items-start gap-3 rounded-row px-3 py-2 text-sm transition-colors duration-(--dur-fast) hover:bg-hover">
           <RadioGroupItem value="new-ids" class="mt-0.5" />
           <span class="grid gap-0.5">
             <span class="font-semibold">{{ $t('backup.newIds') }}</span>
